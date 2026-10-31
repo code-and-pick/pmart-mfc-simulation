@@ -397,3 +397,115 @@ table.inv th {
   border-radius: 8px;
   display: none;
 }
+
+/* 구역 카드 */
+.card {
+  position: absolute;
+  background: rgba(12, 14, 17, 0.94);
+  border: 1px solid #3a3f48;
+  border-radius: 12px;
+  padding: 10px 12px 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.5);
+  display: none;
+}
+.card.show {
+  display: block;
+}
+.zonecard {
+  right: 376px;
+  bottom: 12px;
+  width: 330px;
+}
+.card .hd {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.card .hd b {
+  font-size: 14px;
+}
+.stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 8px;
+}
+.stats div {
+  background: #181b20;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+}
+.stats b {
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+.stats span {
+  color: var(--muted);
+  font-size: 10.5px;
+}
+.bar {
+  position: relative;
+  height: 8px;
+  border-radius: 4px;
+  background: #23262c;
+  overflow: hidden;
+  margin: 4px 0;
+}
+.bar.big {
+  height: 12px;
+  overflow: visible;
+}
+.bar i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 4px;
+}
+.bar em {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #fde293;
+}
+.lows {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.lows div {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1.4fr;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  background: #181b20;
+}
+.lows div[data-loc] {
+  cursor: pointer;
+}
+.lows div[data-loc]:hover,
+table.inv tr[data-loc]:hover {
+  background: #263043;
+}
+table.inv tr[data-loc] {
+  cursor: pointer;
+}
+.pda a[data-loc] {
+  color: #fde293;
+  cursor: pointer;
+  text-decoration: underline dotted;
+}
+.log .gap {
+  color: #fbbc04;
+}
+#zones button {
+  padding: 6px 8px;
+}

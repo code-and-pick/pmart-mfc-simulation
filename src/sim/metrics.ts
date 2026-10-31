@@ -18,6 +18,18 @@ export class Metrics {
   ordersBlockedStock = 0;
   shortageUnits = 0;
   apiErrors = 0;
+  readonly inbound = {
+    trucksArrived: 0,
+    trucksReceived: 0,
+    receivedUnits: 0,
+    putawayShelfUnits: 0,
+    putawayReserveUnits: 0,
+    replenishMoves: 0,
+    replenishUnits: 0,
+    /** 피킹 칸이 비어 보충을 기다린 횟수·시간 */
+    pickWaits: 0,
+    pickWaitSec: 0,
+  };
   readonly traces = new Map<string, OrderTrace>();
   private readonly readyTimes: number[] = [];
   private readonly handoverTimes: number[] = [];

@@ -4,12 +4,14 @@
 //  - 주문 유입·재고 예약·ConfirmOrder  → order-service / order-orchestration / mfc-inventory  (mock 모드에서만 시뮬이 대신)
 //  - 작업 배정(AssignmentPublished)    → mfc-capacity                                       (mock 모드에서만 시뮬이 대신)
 //  - 배차·라이더                      → delivery-dispatch / delivery-execution            (Delivery 미구현 — 가상 라이더)
+//  - 입고 차량·입고 예정(TRF)         → replenishment / CDC / TMS                         (mock 모드에서만 시뮬이 대신)
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
+//  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { DEFAULT_PARAMS, type SimParams } from '../config';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import type { ConfirmOrderRequest, Package, PackageContentLine, TemperatureZone } from '../domain/contract';
-import { buildLayout, type Layout } from '../domain/layout';
+import { buildLayout, type DockSlot, type Layout, type ReserveSpot } from '../domain/layout';
 import { NavGrid } from '../domain/navgrid';
 import { MockBackend } from '../backend/mock/MockBackend';
 import { HttpBackend } from '../backend/http/HttpBackend';
@@ -20,6 +22,7 @@ import { Metrics } from './metrics';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
 import { Worker } from './worker';
+import { InboundWorker, type DockItem, type InboundContext, type InboundJob, type Truck } from './inbound';
 
 const BASE_DATE = '2026-11-02';
 const SUBSTEP = 0.25;
@@ -42,6 +45,10 @@ export class Simulation {
   readonly stations: StationPool;
   readonly shipRack: ShippingRack;
   readonly workers: Worker[] = [];
+  readonly inboundWorkers: InboundWorker[] = [];
+  readonly reserveMap: Map<string, ReserveSpot>;
+  trucks: Truck[] = [];
+  readonly dockItems: DockItem[] = [];
   riders: Rider[] = [];
   readonly apiLog: ApiCallRecord[] = [];
   readonly events: DomainEventRecord[] = [];
@@ -69,6 +76,17 @@ export class Simulation {
   private readonly ctx: SiteContext;
   private readonly cumulativeByTemp: Record<TemperatureZone, { skus: Sku[]; cum: number[] }>;
   private lastPoll = -Infinity;
+  private inCtx!: InboundContext;
+  private nextTruckAt = Infinity;
+  private truckSeq = 0;
+  private lastReplenishScan = -Infinity;
+  private readonly dockUsed = new Set<string>();
+  private readonly replenishQueue: { sku: string; urgent: boolean }[] = [];
+  private readonly replenishActive = new Set<string>();
+  private readonly receiving = new Set<string>();
+  private readonly claimed = new Set<string>();
+  /** SKU → 이미 차량에 실려 오는 수량 (중복 발주 방지) */
+  private readonly inTransit = new Map<string, number>();
 
   constructor(
     readonly params: SimParams = { ...DEFAULT_PARAMS },
@@ -81,7 +99,8 @@ export class Simulation {
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     this.layout = buildLayout();
     this.nav = new NavGrid(this.layout);
-    this.catalog = buildCatalog(this.layout, params.skuCount, params.tempMix, params.seed);
+    this.catalog = buildCatalog(this.layout, params.skuFillRate, params.seed);
+    this.reserveMap = new Map(this.layout.reserves.map((r) => [r.id, r]));
     this.skuMap = new Map(this.catalog.map((s) => [s.sku, s]));
     this.stations = new StationPool(this.layout.stations, params.packingStations);
     this.shipRack = new ShippingRack(this.layout.shippingSlots);
@@ -95,7 +114,14 @@ export class Simulation {
 
     if (mode === 'mock') {
       const mock = new MockBackend({ mfcId: params.mfcId, now: () => this.time, baseDate: BASE_DATE, fenceTtlSec: params.fenceTtlSec });
-      for (const s of this.catalog) mock.inventory.seed(s.sku, params.initialStockPerSku);
+      // 시작 재고: 칸 한도의 일부 + 일부 SKU 는 보충재고 [시뮬] (실제는 승인된 초기 보유 반입, ADR-0014)
+      const stockRng = new Rng(params.seed ^ 0x1234567);
+      const [f0, f1] = params.initialShelfFill;
+      for (const s of this.catalog) {
+        const shelf = Math.max(1, Math.round(s.shelfCap * stockRng.range(f0, f1)));
+        const reserve = stockRng.next() < params.initialReserveShare ? s.caseQty * stockRng.int(1, 3) : 0;
+        mock.inventory.seed(s.sku, shelf, reserve);
+      }
       mock.onApi((r) => this.push(this.apiLog, r));
       mock.onEvent((e) => this.onEvent(e));
       this.mock = mock;
@@ -129,7 +155,28 @@ export class Simulation {
       orderOf: (f) => this.fulfillmentOrder.get(f),
       awaitPackAssignment: (s, w) => this.assignPack(s, w),
       stagePackages: (s, p) => this.onStaged(s, p),
+      shelfQty: (sku) => this.mock?.inventory.get(sku)?.shelf ?? Infinity,
+      requestReplenish: (sku) => this.requestReplenish(sku, true),
     };
+    if (this.mock) {
+      this.inCtx = {
+        runId: this.runId,
+        mock: this.mock,
+        layout: this.layout,
+        nav: this.nav,
+        skuMap: this.skuMap,
+        reserveMap: this.reserveMap,
+        metrics: this.metrics,
+        now: () => this.time,
+        log: (m) => this.log(m),
+        placeOnDock: (it) => this.placeOnDock(it),
+        releaseDock: (it) => this.releaseDock(it),
+        onReceived: (t) => this.onTruckReceived(t),
+        onReplenishDone: (sku) => this.replenishActive.delete(sku),
+      };
+      this.nextTruckAt = this.time + params.firstInboundAfterSec;
+      this.setInboundWorkers(params.inboundWorkers);
+    }
 
     const ids = mode === 'http' && http?.workerIds.length ? http.workerIds : null;
     this.setWorkers(ids ? ids.length : params.workers, ids ?? undefined);
@@ -157,6 +204,26 @@ export class Simulation {
     this.params.workers = this.workers.length;
   }
 
+  setInboundWorkers(n: number) {
+    if (!this.mock) return;
+    const target = Math.max(0, Math.min(this.layout.points.inboundIdle.length, n));
+    while (this.inboundWorkers.length < target) {
+      const i = this.inboundWorkers.length;
+      const w = new InboundWorker(`IB${i + 1}`, this.layout.points.inboundIdle[i], this.inCtx);
+      this.inboundWorkers.push(w);
+      void w.run();
+    }
+    for (let i = this.inboundWorkers.length - 1; i >= 0 && this.inboundWorkers.length > target; i--) {
+      const w = this.inboundWorkers[i];
+      if (w.idle) {
+        w.stop();
+        w.give(null);
+        this.inboundWorkers.splice(i, 1);
+      }
+    }
+    this.params.inboundWorkers = this.inboundWorkers.length;
+  }
+
   setStations(n: number) {
     this.stations.setActive(n);
     this.params.packingStations = this.stations.activeCount;
@@ -173,11 +240,13 @@ export class Simulation {
       if (this.mode === 'mock') {
         this.generateOrders();
         this.dispatch();
+        this.inboundTick(dt);
       } else {
         await this.pollHttp();
       }
       for (const w of this.workers) w.tick(dt);
       for (const r of this.riders) r.tick(dt);
+      for (const w of this.inboundWorkers) w.tick(dt);
       this.stations.tick(dt);
       this.spawnRiders();
       // 풀린 Promise 의 후속 코드(다음 walkTo/wait 등록)가 같은 시각에 이어지도록 마이크로태스크를 비운다
@@ -373,6 +442,173 @@ export class Simulation {
       this.riders.push(rider);
       void rider.run();
     }
+  }
+
+  // ── 입고·적치·보충 (mock) ────────────────────────────
+  /** 입고 차량을 지금 부른다 (화면 버튼). */
+  callTruck(): string | null {
+    if (!this.mock) return null;
+    const lines = this.planInbound();
+    if (lines.length === 0) {
+      this.log('입고 차량: 보충이 필요한 SKU 가 없어 출발하지 않음');
+      return null;
+    }
+    this.truckSeq += 1;
+    const trfId = `TRF-${String(this.truckSeq).padStart(4, '0')}`;
+    for (const l of lines) this.inTransit.set(l.sku, (this.inTransit.get(l.sku) ?? 0) + l.qty);
+    this.mock.inboundExpect(trfId, lines);
+    this.trucks.push({ trfId, lines, state: 'APPROACHING', x: 80, unloaded: 0, scheduledAt: this.time });
+    this.log(`${trfId} 입고 차량 출발 — ${lines.length}품목 ${lines.reduce((a, l) => a + l.qty, 0)}개`);
+    return trfId;
+  }
+
+  /**
+   * 보충 필요량 (시뮬 규칙): 목표 = 칸 한도 × 2 (칸 1개분 + 보충재고 1개분), 보유 = 선반 + 보충재고 + 미적치 + 수송 중.
+   * 실제 공급 계산은 SCM(replenishment) 의 S·IP·N 산식이다(flows/replenishment-transfer.md §1) — 여기서는 흉내만 낸다.
+   */
+  private planInbound(): { sku: string; qty: number }[] {
+    const inv = this.mock!.inventory;
+    const cand: { sku: string; qty: number; urgency: number }[] = [];
+    for (const s of this.catalog) {
+      const b = inv.get(s.sku)!;
+      const have = b.shelf + b.reserve + b.unstowed + (this.inTransit.get(s.sku) ?? 0);
+      const need = s.shelfCap * 2 - have;
+      if (need < s.shelfCap * 0.5) continue;
+      const qty = Math.ceil(need / s.caseQty) * s.caseQty;
+      cand.push({ sku: s.sku, qty, urgency: need / s.shelfCap + s.weight * 5 });
+    }
+    cand.sort((a, b) => b.urgency - a.urgency);
+    return cand.slice(0, this.params.inboundMaxLines).map(({ sku, qty }) => ({ sku, qty }));
+  }
+
+  private inboundTick(dt: number) {
+    // 정기 차량
+    if (this.time >= this.nextTruckAt) {
+      this.callTruck();
+      this.nextTruckAt = this.time + this.params.inboundIntervalHours * 3600;
+    }
+    // 차량 이동 (도로 → 입고 차량문)
+    const dockX = this.layout.points.truckDock.x;
+    for (const t of this.trucks) {
+      if (t.state === 'APPROACHING') {
+        t.x = Math.max(dockX, t.x - 7 * dt);
+        if (t.x <= dockX) {
+          t.state = 'DOCKED';
+          this.metrics.inbound.trucksArrived += 1;
+        }
+      } else if (t.state === 'DONE') {
+        t.state = 'LEAVING';
+      } else if (t.state === 'LEAVING') {
+        t.x += 7 * dt;
+        if (t.x > 85) t.state = 'GONE';
+      }
+    }
+    this.trucks = this.trucks.filter((t) => t.state !== 'GONE');
+    // 보충 점검 (15초마다): 피킹 칸 C ≤ min 이고 보충재고가 있으면 MOV (IV-04)
+    if (this.time - this.lastReplenishScan >= 15) {
+      this.lastReplenishScan = this.time;
+      const inv = this.mock!.inventory;
+      for (const s of this.catalog) {
+        const b = inv.get(s.sku)!;
+        if (b.shelf <= s.minQty && b.reserve > 0) this.requestReplenish(s.sku, false);
+      }
+    }
+    this.dispatchInbound();
+  }
+
+  private requestReplenish(sku: string, urgent: boolean) {
+    if (!this.mock) return;
+    const b = this.mock.inventory.get(sku);
+    if (!b || b.reserve <= 0 || this.replenishActive.has(sku)) return;
+    const q = this.replenishQueue.find((x) => x.sku === sku);
+    if (q) {
+      if (urgent && !q.urgent) {
+        q.urgent = true;
+        this.replenishQueue.splice(this.replenishQueue.indexOf(q), 1);
+        this.replenishQueue.unshift(q);
+      }
+      return;
+    }
+    if (urgent) this.replenishQueue.unshift({ sku, urgent });
+    else this.replenishQueue.push({ sku, urgent });
+    const meta = this.skuMap.get(sku);
+    this.onEvent({
+      at: this.time,
+      type: 'ReplenishmentMoveCreated',
+      summary: `${urgent ? '긴급 ' : ''}MOV ${sku} ${meta?.reserveId} → ${meta?.location.code}`,
+    });
+  }
+
+  /** 입고 작업 배정 우선순위: 하차·검수 → 긴급 보충 → 적치(냉동·냉장 먼저) → 일반 보충. [시뮬] */
+  private dispatchInbound() {
+    for (const w of this.inboundWorkers) {
+      if (!w.idle) continue;
+      const job = this.nextInboundJob();
+      if (!job) return;
+      w.give(job);
+    }
+  }
+
+  private nextInboundJob(): InboundJob | null {
+    const docked = this.trucks.find((t) => t.state === 'DOCKED' && !this.receiving.has(t.trfId));
+    if (docked) {
+      this.receiving.add(docked.trfId);
+      return { kind: 'RECEIVE', truck: docked };
+    }
+    const takeReplenish = (urgentOnly: boolean): InboundJob | null => {
+      const i = this.replenishQueue.findIndex((q) => !urgentOnly || q.urgent);
+      if (i < 0) return null;
+      const [q] = this.replenishQueue.splice(i, 1);
+      this.replenishActive.add(q.sku);
+      return { kind: 'REPLENISH', sku: q.sku, urgent: q.urgent };
+    };
+    const urgent = takeReplenish(true);
+    if (urgent) return urgent;
+    const ready = this.dockItems.filter((it) => it.state === 'RECEIVED' && !this.claimed.has(it.id));
+    if (ready.length) {
+      const rank = { FROZEN: 0, CHILLED: 1, AMBIENT: 2 } as const;
+      ready.sort((a, b) => rank[a.temp] - rank[b.temp]);
+      const temp = ready[0].temp;
+      const items = ready.filter((it) => it.temp === temp).slice(0, this.params.putawayCartLines);
+      for (const it of items) this.claimed.add(it.id);
+      return { kind: 'PUTAWAY', items };
+    }
+    return takeReplenish(false);
+  }
+
+  private placeOnDock(it: DockItem) {
+    const slot: DockSlot | undefined = this.layout.dockSlots.find((s) => !this.dockUsed.has(s.id));
+    if (slot) {
+      this.dockUsed.add(slot.id);
+      it.slot = slot;
+    } else {
+      it.floorPos = { x: 38.4 + (this.dockItems.length % 6) * 0.5, z: 21.8 };
+    }
+    this.dockItems.push(it);
+  }
+
+  private releaseDock(it: DockItem) {
+    if (it.slot) this.dockUsed.delete(it.slot.id);
+    const i = this.dockItems.indexOf(it);
+    if (i >= 0) this.dockItems.splice(i, 1);
+    this.claimed.delete(it.id);
+  }
+
+  private onTruckReceived(t: Truck) {
+    t.state = 'DONE';
+    this.receiving.delete(t.trfId);
+    this.metrics.inbound.trucksReceived += 1;
+    for (const l of t.lines) this.inTransit.set(l.sku, Math.max(0, (this.inTransit.get(l.sku) ?? 0) - l.qty));
+  }
+
+  inboundBoard() {
+    return {
+      putawayLines: this.dockItems.filter((d) => d.state !== 'TAKEN').length,
+      replenishQueued: this.replenishQueue.length,
+      replenishActive: this.replenishActive.size,
+      trucks: this.trucks.filter((t) => t.state !== 'LEAVING').length,
+      nextTruckAt: this.nextTruckAt,
+    };
   }
 
   // ── 기록 ───────────────────────────────────────────

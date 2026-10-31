@@ -57,6 +57,8 @@ export interface ApiCallRecord {
   status: number | 'ERR';
   code?: string;
   ms: number;
+  /** 계약 공백 등 표시 */
+  note?: string;
 }
 
 /** 계약 이벤트 이름 그대로의 사건 기록 (contracts/events/*.v1.json). */

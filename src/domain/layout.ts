@@ -56,8 +56,28 @@ export interface Location {
   slot: number;
   /** 작업자가 서는 지점(통로) */
   pick: { x: number; z: number };
-  /** 선반 위 실제 위치(표시용) */
+  /** 선반 위 실제 위치(표시용, 칸 중심·선반 윗면 높이) */
   shelf: { x: number; y: number; z: number };
+  /** 칸 배치 (적재 표현용) */
+  along: 'x' | 'z';
+  face: 1 | -1;
+  slotW: number;
+  levelH: number;
+}
+
+/** 보충재고 팔레트 자리 (입고창고 = 상온, 저온실 안 = 냉장·냉동). MFC 4-3, 5-1 */
+export interface ReserveSpot {
+  id: string;
+  temp: TemperatureZone;
+  rect: Rect;
+  /** 작업자가 서는 지점 */
+  stand: { x: number; z: number };
+}
+
+/** 입고·검수 구역의 하차 적치 칸 (롤테이너·박스) */
+export interface DockSlot {
+  id: string;
+  pos: { x: number; z: number };
 }
 
 export interface PackingStation {
@@ -83,7 +103,7 @@ export interface Wall {
 export interface Obstacle {
   rect: Rect;
   height: number;
-  kind: 'PALLET' | 'TABLE' | 'SHIP_RACK' | 'MATERIAL';
+  kind: 'PALLET' | 'RESERVE' | 'TABLE' | 'SHIP_RACK' | 'MATERIAL';
 }
 
 export interface Layout {
@@ -98,7 +118,14 @@ export interface Layout {
   obstacles: Obstacle[];
   stations: PackingStation[];
   shippingSlots: ShippingSlot[];
+  reserves: ReserveSpot[];
+  dockSlots: DockSlot[];
   points: {
+    /** 입고 차량문 안쪽(하차·검수 작업자 위치) */
+    truckDoor: { x: number; z: number };
+    /** 차량 정차 위치(건물 밖, 차량 뒷문이 문에 붙는 지점) */
+    truckDock: { x: number; z: number };
+    inboundIdle: { x: number; z: number }[];
     cartDepot: { x: number; z: number };
     idle: { x: number; z: number }[];
     packQueue: { x: number; z: number };
@@ -359,6 +386,10 @@ export function buildLayout(): Layout {
           slot: s,
           pick,
           shelf,
+          along: r.along,
+          face: r.face,
+          slotW: (RACK_LEN * 0.9) / r.slotsPerLevel,
+          levelH: (RACK_HEIGHT - 0.25) / r.levels,
         };
         locations.push(loc);
         locationsByTemp[r.temp].push(loc);
@@ -368,17 +399,30 @@ export function buildLayout(): Layout {
 
   // ── 장애물: 저온 보충재고 팔레트, 입고창고 적재, 패킹대 ─────
   const obstacles: Obstacle[] = [];
-  const pallets = (area: Rect, h: number) => {
-    for (let x = area.x0; x + 1.1 <= area.x1 + 1e-6; x += 1.5) {
-      for (let z = area.z0; z + 1.1 <= area.z1 + 1e-6; z += 1.5) {
-        obstacles.push({ rect: { x0: x, z0: z, x1: x + 1.1, z1: z + 1.1 }, height: h, kind: 'PALLET' });
-      }
-    }
+  const reserves: ReserveSpot[] = [];
+  const P = 1.1; // 팔레트 1.1×1.1m [가정] (MFC 5-1)
+  const addReserve = (id: string, temp: TemperatureZone, x0: number, z0: number, stand: { x: number; z: number }) => {
+    const rect = { x0, z0, x1: x0 + P, z1: z0 + P };
+    reserves.push({ id, temp, rect, stand });
+    obstacles.push({ rect, height: 0.15, kind: 'RESERVE' });
   };
-  pallets({ x0: 7.8, z0: 26.8, x1: 11.6, z1: 29.6 }, 1.4); // 냉동 보충재고
-  pallets({ x0: 19.4, z0: 26.8, x1: 22.6, z1: 29.6 }, 1.3); // 냉장 보충재고
-  pallets({ x0: 38.2, z0: 1.0, x1: 47.2, z1: 11.6 }, 1.6); // 입고창고
-  pallets({ x0: 38.4, z0: 17.6, x1: 43.4, z1: 19.2 }, 0.9); // 입고 검수 대기
+  // 냉동·냉장 보충재고: 저온실 안 랙 뒤 (MFC 4-3 "온도대별 보충재고"), 앞줄 통로에서 꺼낸다
+  [7.8, 9.4].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${i * 2 + j + 1}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 })));
+  [19.4, 21.0].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${i * 2 + j + 1}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 })));
+  // 입고창고 상온 보충재고: 6열 × 4줄 = 바닥 24자리 (MFC 5-1 예시 "약 24개 바닥 위치")
+  let wi = 0;
+  for (const z0 of [1.0, 3.7, 6.4, 9.1]) {
+    for (let c = 0; c < 6; c++) {
+      const x0 = 38.6 + c * 1.5;
+      wi += 1;
+      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 });
+    }
+  }
+  // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다
+  const dockSlots: DockSlot[] = [];
+  for (const z of [17.15, 17.9, 21.35, 22.1]) {
+    for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: 40.6 + c * 0.75, z } });
+  }
 
   const stations: PackingStation[] = [];
   for (let i = 0; i < 8; i++) {
@@ -429,7 +473,12 @@ export function buildLayout(): Layout {
     obstacles,
     stations,
     shippingSlots,
+    reserves,
+    dockSlots,
     points: {
+      truckDoor: { x: 47.2, z: 19.75 },
+      truckDock: { x: 52.6, z: 19.75 },
+      inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 38.3 + (i % 4) * 0.8, z: 19.2 + Math.floor(i / 4) * 0.9 })),
       cartDepot: { x: 33.2, z: 18.6 },
       idle: Array.from({ length: 24 }, (_, i) => ({ x: 24.2 + (i % 12) * 1.0, z: 16.4 + Math.floor(i / 12) * 0.8 })),
       packQueue: { x: 33.9, z: 19.4 },

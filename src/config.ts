@@ -29,10 +29,22 @@ export interface SimParams {
   /** 출하 준비 후 라이더 도착까지 [시뮬] — Delivery 미구현이라 가상 라이더 */
   riderArrivalMinSec: number;
   riderArrivalMaxSec: number;
-  /** SKU 수 (MFC 10,900 SKU [원본] 중 시뮬에 올리는 수) [시뮬] */
-  skuCount: number;
-  /** SKU당 초기 보유 [시뮬] */
-  initialStockPerSku: number;
+  /** 피킹 칸 중 상품을 놓는 비율. 85% 운영 상한 [가정] (MFC 3-3) */
+  skuFillRate: number;
+  /** 시작 시 선반 충족률 범위 [시뮬] — 낮을수록 첫 입고·적치가 많다 */
+  initialShelfFill: [number, number];
+  /** 시작 시 보충재고를 가진 SKU 비율 [시뮬] */
+  initialReserveShare: number;
+  /** 입고(검수·적치·보충) 작업자. 기준 3명(검수 2 + 이송 1) [가정] (MFC 10장) */
+  inboundWorkers: number;
+  /** 입고 차량 주기(시간). 실제는 매일 오전 1회 [확정] (MFC 10장) — 시뮬은 적치 과정을 보이려고 짧게 [시뮬] */
+  inboundIntervalHours: number;
+  /** 첫 입고 차량 도착(시작 후 초) [시뮬] */
+  firstInboundAfterSec: number;
+  /** 입고 차량 1대 최대 품목 수 [시뮬] */
+  inboundMaxLines: number;
+  /** 적치 카트 1회 최대 품목 수 [시뮬] */
+  putawayCartLines: number;
   /** 분할 기준: 총 상품중량 10,000g 초과 시 분할 [확정 정책] (overview §4) */
   splitOverWeightG: number;
   /** 인계 fence 유효시간 [시뮬] — 계약은 fenceExpiresAt 만 정의, 값은 미정 */
@@ -58,8 +70,14 @@ export const DEFAULT_PARAMS: SimParams = {
   pickSequence: 'DOC_B_A_C',
   riderArrivalMinSec: 90,
   riderArrivalMaxSec: 480,
-  skuCount: 900,
-  initialStockPerSku: 40,
+  skuFillRate: 0.85,
+  initialShelfFill: [0.5, 1],
+  initialReserveShare: 0.35,
+  inboundWorkers: 3,
+  inboundIntervalHours: 2,
+  firstInboundAfterSec: 120,
+  inboundMaxLines: 40,
+  putawayCartLines: 4,
   splitOverWeightG: 10_000,
   fenceTtlSec: 120,
   startHour: 9,

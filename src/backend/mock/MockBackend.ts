@@ -21,7 +21,7 @@ import {
   type TemperatureZone,
 } from '../../domain/contract';
 import type { ApiCallRecord, ApiListener, DomainEventRecord, EventListener, FulfillmentPort } from '../port';
-import { InventoryLedger } from './inventory';
+import { InventoryError, InventoryLedger } from './inventory';
 
 interface TaskRec {
   detail: TaskDetail;
@@ -105,11 +105,19 @@ export class MockBackend implements FulfillmentPort {
   }
 
   /** 가상 HTTP 호출 기록. 실서버 모드에서 같은 경로가 호출된다. */
-  private async call<T>(method: 'GET' | 'POST', path: string, okStatus: number, fn: () => T): Promise<T> {
+  private async call<T>(method: 'GET' | 'POST', path: string, okStatus: number, fn: () => T, note?: string): Promise<T> {
     const t0 = performance.now();
-    const rec: ApiCallRecord = { at: this.opt.now(), method, path, status: okStatus, ms: 0 };
+    const rec: ApiCallRecord = { at: this.opt.now(), method, path, status: okStatus, ms: 0, note };
     try {
-      const v = fn();
+      const v = (() => {
+        try {
+          return fn();
+        } catch (e) {
+          // mfc-inventory 거절은 계약의 422/409 로 바꿔 올린다
+          if (e instanceof InventoryError) throw problem(e.code === 'INSUFFICIENT_STOCK' ? 422 : 409, e.code, e.message);
+          throw e;
+        }
+      })();
       rec.ms = performance.now() - t0;
       for (const l of this.apiListeners) l(rec);
       return v;
@@ -357,10 +365,6 @@ export class MockBackend implements FulfillmentPort {
           if (!line) throw problem(400, 'VALIDATION_FAILED', `행 없음 ${l.orderLineId}`);
           const short = l.shortage?.qty ?? 0;
           if (l.pickedQty + short > line.remainingQty) throw problem(409, 'INVALID_STATE', '실적이 잔량을 넘는다(WK-03)');
-          line.completedQty += l.pickedQty;
-          line.cancelledQty += short;
-          line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
-          applied += l.pickedQty;
           if (body.executionType === 'PICK') {
             if (l.pickedQty > 0) commitId = this.inventory.commitPick([{ sku: l.sku, qty: l.pickedQty }]);
             if (short > 0) {
@@ -371,6 +375,10 @@ export class MockBackend implements FulfillmentPort {
             if (l.pickedQty > 0) commitId = this.inventory.commitPack([{ sku: l.sku, qty: l.pickedQty }]);
             sh.packedQty.set(l.orderLineId, (sh.packedQty.get(l.orderLineId) ?? 0) + l.pickedQty);
           }
+          line.completedQty += l.pickedQty;
+          line.cancelledQty += short;
+          line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
+          applied += l.pickedQty;
         }
         d.completedQty = d.lines.reduce((a, l) => a + l.completedQty, 0);
         d.remainingQty = d.lines.reduce((a, l) => a + l.remainingQty, 0);
@@ -571,6 +579,75 @@ export class MockBackend implements FulfillmentPort {
           handedOverAt: at,
         } satisfies HandoverCommitResult;
       }),
+    );
+  }
+
+  // ── mfc-inbound: 입고 예정·도착·수령 / 적치·보충 ─────────
+  private readonly promises = new Map<string, { trfId: string; state: 'EXPECTED' | 'RECEIVING' | 'TIN_POSTED'; lines: { sku: string; qty: number }[] }>();
+
+  /** [replenishment·CDC·TMS] 승인 이관이 출발해 입고 예정이 생긴다 (TransferDeparted → InboundPromise EXPECTED). */
+  inboundExpect(trfId: string, lines: { sku: string; qty: number }[]) {
+    this.promises.set(trfId, { trfId, state: 'EXPECTED', lines });
+    this.emit('TransferDeparted', `${trfId} (가상 CDC 출발) → 입고 예정 ${lines.length}품목 ${lines.reduce((a, l) => a + l.qty, 0)}개`);
+  }
+
+  recordArrival(trfId: string, body: { recordedBy: string; tripId?: string }, key: string): Promise<CommandResponse> {
+    return this.call('POST', `/inbound-promises/${trfId}/arrivals`, 202, () =>
+      this.idempotent(`arr:${trfId}`, key, body, () => {
+        const p = this.promises.get(trfId);
+        if (!p) throw problem(404, 'NOT_FOUND', trfId);
+        if (p.state !== 'EXPECTED') throw problem(409, 'INVALID_STATE', p.state);
+        p.state = 'RECEIVING';
+        this.emit('InboundArrivalRecorded', `${trfId} 차량 도착·하차 시작 (${body.recordedBy})`);
+        return { status: 'ACCEPTED', resultId: trfId } satisfies CommandResponse;
+      }),
+    );
+  }
+
+  /** 수령 등록 → ConfirmReceipt(TIN): H+q, E+q, 미적치(UNSTOWED)+q. */
+  recordReceipt(
+    trfId: string,
+    body: { receivedBy: string; lines: { sku: string; normalQty: number; quarantinedQty: number; pendingQty: number; toLocationCode?: string }[] },
+    key: string,
+  ): Promise<CommandResponse> {
+    return this.call('POST', `/inbound-promises/${trfId}/receipts`, 202, () =>
+      this.idempotent(`rcp:${trfId}`, key, body, () => {
+        const p = this.promises.get(trfId);
+        if (!p) throw problem(404, 'NOT_FOUND', trfId);
+        if (p.state !== 'RECEIVING') throw problem(409, 'INVALID_STATE', p.state);
+        const commitId = this.inventory.receipt(body.lines.map((l) => ({ sku: l.sku, qty: l.normalQty })));
+        p.state = 'TIN_POSTED';
+        const receiptId = this.id('RCP');
+        this.emit('MfcReceiptPosted', `${trfId} ${receiptId} TIN 전기 H+${body.lines.reduce((a, l) => a + l.normalQty, 0)} (${commitId}) — 적치 대기`);
+        return { status: 'APPLIED', resultId: receiptId } satisfies CommandResponse;
+      }),
+    );
+  }
+
+  /**
+   * 적치(PUTAWAY)·보충 이동(MOVE). mfc-inbound 계약에는 현장 단말용 적치 작업 API 가 없어
+   * mfc-inventory 내부 경로(CommitTaskExecution)로 기록한다 — backend-requests R-10.
+   */
+  commitStock(
+    taskId: string,
+    body: { executionType: 'PUTAWAY' | 'MOVE'; sku: string; qty: number; to: 'shelf' | 'reserve'; fromLocation?: string; toLocation: string },
+    key: string,
+  ): Promise<CommandResponse> {
+    return this.call(
+      'POST',
+      '/internal/task-executions',
+      201,
+      () =>
+        this.idempotent(`stock:${taskId}`, key, body, () => {
+          const commitId =
+            body.executionType === 'PUTAWAY' ? this.inventory.putaway(body.sku, body.qty, body.to) : this.inventory.move(body.sku, body.qty);
+          this.emit(
+            'InventoryExecutionApplied',
+            `${body.executionType} ${body.sku} ×${body.qty} → ${body.toLocation}${body.to === 'reserve' ? ' (보충재고)' : ''}`,
+          );
+          return { status: 'APPLIED', resultId: commitId } satisfies CommandResponse;
+        }),
+      `${body.executionType} · 계약 공백 R-10`,
     );
   }
 

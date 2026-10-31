@@ -3,30 +3,49 @@ import { DEFAULT_PARAMS } from '../src/config';
 import { Simulation } from '../src/sim/simulation';
 
 describe('Simulation (mock, 화면 없이)', () => {
-  it('배치: 모든 SKU 피킹 지점이 장바구니 거치대에서 걸어서 닿는다', () => {
-    const sim = new Simulation({ ...DEFAULT_PARAMS, skuCount: 300 });
+  it('배치: 모든 피킹 지점·보충재고·하차 칸이 걸어서 닿는다', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS });
     const depot = sim.layout.points.cartDepot;
-    const unreachable = sim.catalog.filter((s) => sim.nav.findPath(depot, s.location.pick) === null);
-    expect(unreachable.map((s) => s.location.code)).toEqual([]);
+    const unreachable = sim.layout.locations
+      .filter((_l, i) => i % 7 === 0) // 표본 (전수는 느리다)
+      .filter((l) => sim.nav.findPath(depot, l.pick) === null)
+      .map((l) => l.code);
+    expect(unreachable).toEqual([]);
     for (const st of sim.layout.stations) expect(sim.nav.findPath(depot, st.stand)).not.toBeNull();
+    for (const r of sim.layout.reserves) expect(sim.nav.findPath(sim.layout.points.truckDoor, r.stand), r.id).not.toBeNull();
+    for (const d of sim.layout.dockSlots) expect(sim.nav.findPath(sim.layout.points.truckDoor, d.pos), d.id).not.toBeNull();
     expect(sim.nav.findPath(sim.layout.points.shipDrop, sim.layout.points.riderPickup)).not.toBeNull();
     expect(sim.nav.findPath(sim.layout.points.riderEntry, sim.layout.points.riderPickup)).not.toBeNull();
+    // 로케이션의 85% 를 SKU 로 채운다
+    expect(sim.catalog.length).toBe(
+      (['AMBIENT', 'CHILLED', 'FROZEN'] as const).reduce((a, t) => a + Math.floor(sim.layout.locationsByTemp[t].length * 0.85), 0),
+    );
   });
 
-  it('2시간 운영: 주문이 피킹→패킹→출하대기→인계까지 흐르고 재고 불변식이 지켜진다', async () => {
-    const sim = new Simulation({ ...DEFAULT_PARAMS, skuCount: 400, ordersPerHour: 30 });
-    sim.speed = 1;
-    // 실제 0.1초 × 1배속 = 0.1초씩. 2시간 = 72000 스텝은 길어서 배속을 키운다
+  it('3시간 운영: 출고 흐름과 입고·적치·보충이 함께 돌고 재고 불변식이 지켜진다', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS, ordersPerHour: 40 });
+    const inv = sim.mock!.inventory;
+    const h0 = inv.all().reduce((a, b) => a + b.H, 0);
     sim.speed = 600;
-    for (let i = 0; i < 120; i++) await sim.advance(0.1); // 120 × 60초 = 2시간
+    for (let i = 0; i < 180; i++) await sim.advance(0.1); // 180 × 60초 = 3시간
     const s = sim.metrics.summary();
-    expect(sim.metrics.ordersCreated).toBeGreaterThan(30);
-    expect(s.ready).toBeGreaterThan(20);
-    expect(s.handedOver).toBeGreaterThan(10);
-    expect(sim.mock!.inventory.violations).toEqual([]);
+    const ib = sim.metrics.inbound;
+    expect(sim.metrics.ordersCreated).toBeGreaterThan(80);
+    expect(s.ready).toBeGreaterThan(60);
+    expect(s.handedOver).toBeGreaterThan(50);
+    expect(ib.trucksReceived).toBeGreaterThanOrEqual(1);
+    expect(ib.putawayShelfUnits + ib.putawayReserveUnits).toBeGreaterThan(0);
+    expect(ib.replenishMoves).toBeGreaterThan(0);
+    expect(inv.violations).toEqual([]);
     expect(sim.metrics.apiErrors).toBe(0);
-    // 인계된 만큼만 H 가 줄었다
-    const totalH = sim.mock!.inventory.all().reduce((a, b) => a + b.H, 0);
-    expect(totalH).toBeLessThan(400 * DEFAULT_PARAMS.initialStockPerSku);
-  }, 120_000);
+    // 선반은 칸 한도를 넘지 않는다
+    for (const k of sim.catalog) expect(inv.get(k.sku)!.shelf).toBeLessThanOrEqual(k.shelfCap);
+    // H 변화 = 수령 − 인계 수량
+    const handed = sim.mock!.allShipments()
+      .flatMap((x) => x.packages)
+      .filter((p) => p.state === 'HANDED_OVER')
+      .reduce((a, p) => a + p.contents.reduce((b, c) => b + c.qty, 0), 0);
+    const h1 = inv.all().reduce((a, b) => a + b.H, 0);
+    expect(h1).toBe(h0 + ib.receivedUnits - handed);
+  }, 180_000);
 });

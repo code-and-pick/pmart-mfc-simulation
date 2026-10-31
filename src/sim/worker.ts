@@ -166,8 +166,27 @@ export class Worker extends Agent {
       await this.walkTo(loc.pick);
       this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
       this.pda.step = '위치·상품 바코드 스캔';
-      await this.wait(ctx.params.pickScanSecPerLine + ctx.params.pickSecPerUnit * l.remainingQty);
-      const short = ctx.rng.next() < ctx.params.shortageRate ? Math.min(l.remainingQty, 1 + Math.floor(ctx.rng.next() * l.remainingQty)) : 0;
+      await this.wait(ctx.params.pickScanSecPerLine);
+      // 피킹 칸이 모자라면 보충(MOV)을 요청하고 기다린다 — 장부 재고는 있는데 칸이 빈 경우 (IV-04)
+      let waited = 0;
+      while (ctx.shelfQty(l.sku) < l.remainingQty && waited < 900) {
+        if (waited === 0) {
+          ctx.metrics.inbound.pickWaits += 1;
+          ctx.log(`${this.id} ${loc.code} 칸 부족(${ctx.shelfQty(l.sku)}/${l.remainingQty}) — 긴급 보충 요청`);
+        }
+        ctx.requestReplenish(l.sku);
+        this.pda.step = '칸 부족 — 보충 대기';
+        this.activity = `보충 대기 ${loc.code}`;
+        await this.wait(5);
+        waited += 5;
+        ctx.metrics.inbound.pickWaitSec += 5;
+      }
+      await this.wait(ctx.params.pickSecPerUnit * l.remainingQty);
+      const onShelf = ctx.shelfQty(l.sku);
+      const stockOut = Math.max(0, l.remainingQty - onShelf);
+      const randomShort =
+        stockOut === 0 && ctx.rng.next() < ctx.params.shortageRate ? Math.min(l.remainingQty, 1 + Math.floor(ctx.rng.next() * l.remainingQty)) : 0;
+      const short = stockOut || randomShort;
       const picked = l.remainingQty - short;
       await this.retry(() =>
         port.recordExecution(
