@@ -1,0 +1,23 @@
+{
+  "name": "pmart-mfc-simulation",
+  "version": "0.1.0",
+  "description": "PMart MFC 피킹·패킹 3D 가상 설비 시뮬레이터",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "type": "module",
+  "dependencies": {
+    "three": "^0.169.0"
+  },
+  "devDependencies": {
+    "@types/three": "^0.169.0",
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.2.4"
+  },
+  "private": true
+}
