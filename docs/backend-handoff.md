@@ -10,6 +10,7 @@
 | 백엔드 → 시뮬레이터 공지·회신 | `docs/handoff/simulator/` (첫 공지 `2026-11-09-simulator-notice-integration-decisions.md` — R-01~R-12 현황 포함) |
 | **시험 센터 칸 = 이 시뮬레이터 평면**(코드 대응·새 필드·고회전 칸) | `docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md` |
 | 고회전 칸 목록(백엔드·시뮬레이터 코드, 랙, 좌표) | `docs/simulator/mfc/layout/high-turnover.json` |
+| **회수 반입 자리 RTN-A-01**(평면에 없음 — 입고·검수 구역 안 x 38.6·z 22.0 m) | `docs/handoff/simulator/2026-11-09-simulator-notice-return-location.md`, 좌표 `docs/simulator/mfc/layout/backend-points.json` |
 | 실서버·실제 앱 연결 목표와 결정(SIM-1~11) | `docs/simulator/mfc/mfc-simulator-integration.md` |
 | 이 시뮬레이터 평면을 그린 도면 | `docs/simulator/mfc/layout/` (`buildLayout()` 실행 좌표로 그림, `floorplan.svg` — 고회전 랙은 빨간색) |
 | 백엔드 클라이언트 handoff(PDA 앱 등) | `docs/handoff/clients/` (2026-11-09 폴더 이동) |
