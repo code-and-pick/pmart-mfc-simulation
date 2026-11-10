@@ -1,7 +1,9 @@
 # CLAUDE.md — PMart MFC 가상 현장 (simulation)
 
 PMart MFC의 피킹·패킹·인계를 3D로 돌리는 **가상 현장**이다. 백엔드(`../pmart-backend`)에 대해 현장 단말(점원 PDA·라이더 앱)처럼 계약 API를 부른다.
-스택: Vite 6 + TypeScript 5 + Three.js 0.169 + Vitest. 프레임워크(React 등)는 쓰지 않는다.
+스택: Vite 6 + TypeScript 5 + React 19 + react-three-fiber 9 (Three.js 0.169) + Vitest. 화면 UI 는 React 컴포넌트(`src/ui`), 3D 장면은 react-three-fiber 컴포넌트(`src/render/scene`)로 만든다(2026-11-07 사용자 결정, 이전엔 바닐라 TS).
+- 시뮬레이션 엔진(`src/sim`)·백엔드 어댑터(`src/backend`)·도메인(`src/domain`)은 React 에 의존하지 않는다(테스트가 화면 없이 돈다).
+- 매 프레임 바뀌는 값(위치·수량)은 `useFrame` 안에서 three 객체를 직접 바꾸고, React 상태로 올리지 않는다. 패널은 `Ticker`(약 4Hz)·`ViewController` 변경 때만 다시 그린다.
 
 ## 절대 규칙
 - `../pmart-backend`, `../pmart-clients` 는 **읽기만** 한다. 백엔드에 필요한 변경은 `docs/backend-requests.md` 에 적고 사용자에게 보고한다.
