@@ -1,8 +1,10 @@
-import './ui/styles.css';
+import { createRoot } from 'react-dom/client';
+import { App } from './app/App';
+import type { AppCtx, PersistedSettings } from './app/context';
 import { DEFAULT_PARAMS } from './config';
-import { View3D } from './render/view3d';
+import { SceneRegistry, Ticker, ViewController } from './render/controller';
 import { Simulation } from './sim/simulation';
-import { Panel, type PersistedSettings } from './ui/panel';
+import './ui/styles.css';
 
 const KEY = 'pmart-sim-settings';
 
@@ -35,35 +37,21 @@ try {
   /* noop */
 }
 
+// 시뮬레이션·화면 상태는 React 바깥에서 한 번만 만든다 (렌더가 다시 돌아도 새로 만들지 않게)
 const sim = new Simulation({ ...DEFAULT_PARAMS }, settings.mode, settings.http);
-const view = new View3D(document.getElementById('viewport')!, sim);
-const panel = new Panel(document.getElementById('ui')!, sim, view, settings, (next) => {
-  save(next);
-  location.reload();
-});
+const app: AppCtx = {
+  sim,
+  controller: new ViewController(sim),
+  registry: new SceneRegistry(),
+  ticker: new Ticker(),
+  settings,
+  restart: (next) => {
+    save(next);
+    location.reload();
+  },
+};
 
-let last = performance.now();
-let lastUi = 0;
-let advancing = false;
-
-function frame(now: number) {
-  const dt = Math.min(0.1, (now - last) / 1000);
-  last = now;
-  if (!advancing) {
-    advancing = true;
-    sim
-      .advance(dt)
-      .catch((e) => console.error(e))
-      .finally(() => (advancing = false));
-  }
-  view.render(dt);
-  if (now - lastUi > 250) {
-    lastUi = now;
-    panel.refresh();
-  }
-  requestAnimationFrame(frame);
-}
-requestAnimationFrame(frame);
+createRoot(document.getElementById('root')!).render(<App app={app} />);
 
 // 개발 중 콘솔에서 상태를 볼 수 있게
-Object.assign(window as unknown as Record<string, unknown>, { sim, panel, view });
+Object.assign(window as unknown as Record<string, unknown>, { sim, view: app.controller });

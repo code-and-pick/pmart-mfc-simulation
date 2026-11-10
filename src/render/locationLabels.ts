@@ -32,6 +32,8 @@ function drawTag(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
 }
 
 export class LocationLabels {
+  /** 장면에 붙일 최상위 묶음(랙 번호판 + 칸 번호 풀) */
+  readonly root = new THREE.Group();
   readonly rackPlates: THREE.Mesh;
   private readonly pool: { mesh: THREE.Mesh; ctx: CanvasRenderingContext2D; tex: THREE.CanvasTexture; code: string | null }[] = [];
   private readonly slotGroup = new THREE.Group();
@@ -40,12 +42,11 @@ export class LocationLabels {
   slotVisible = true;
 
   constructor(
-    scene: THREE.Scene,
     private readonly layout: Layout,
     poolSize = 160,
   ) {
     this.rackPlates = this.buildRackPlates(layout.racks);
-    scene.add(this.rackPlates);
+    this.root.add(this.rackPlates);
     for (let i = 0; i < poolSize; i++) {
       const c = document.createElement('canvas');
       c.width = 256;
@@ -59,7 +60,7 @@ export class LocationLabels {
       this.slotGroup.add(mesh);
       this.pool.push({ mesh, ctx, tex, code: null });
     }
-    scene.add(this.slotGroup);
+    this.root.add(this.slotGroup);
   }
 
   private buildRackPlates(racks: Rack[]): THREE.Mesh {

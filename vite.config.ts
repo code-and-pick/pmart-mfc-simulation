@@ -1,3 +1,4 @@
+import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vitest/config';
 
 // 실서버 모드(HTTP 어댑터)는 브라우저에서 게이트웨이를 직접 부르면 CORS 에 막힐 수 있어
@@ -5,6 +6,7 @@ import { defineConfig } from 'vitest/config';
 const gateway = process.env.PMART_GATEWAY ?? 'http://D603-16:8080';
 
 export default defineConfig({
+  plugins: [react()],
   server: {
     port: 5180,
     proxy: {
@@ -12,7 +14,7 @@ export default defineConfig({
     },
   },
   build: {
-    chunkSizeWarningLimit: 800, // three.js 한 덩어리
+    chunkSizeWarningLimit: 1500, // three.js + react-three-fiber 한 덩어리
   },
   test: {
     environment: 'node',
