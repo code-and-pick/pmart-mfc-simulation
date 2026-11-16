@@ -81,6 +81,11 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 ### R-10 남은 질문 — 정기 입고 수령 뒤 입고 작업 (낮음)
 `/inbound-promises/*` 가 아직 501 이다(11-16 실측). 구현되면 수령(`…/receipts`) 뒤에도 같은 INSPECT·PUTAWAY 입고 작업(`/inbound-tasks`)이 생기는지 알려 달라 — 시뮬레이터 입고 흐름을 실서버로 돌릴 때 쓴다.
 
+### R-20 바코드를 채우기 전에 만든 작업은 지시 줄 바코드가 비어 PDA 상품 스캔이 안 맞음 — 중간 (2026-11-16 추가)
+실제 주문 `ORD-ac1fb73b-…-S1`(작업 07:14Z 생성) PICK 7줄 모두 `lines[].barcode = null`. 상품 조회는 바코드가 있음(`GET /skus/E-00000045` → `2990000000453`, 백엔드 `22e57579` 18:23 채움). PDA 앱은 찍은 값을 **작업 지시 줄 `barcode`** 와 비교하므로(`pmart-clients/apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`) 이 작업은 어떤 상품을 찍어도 "다른 상품".
+- 묻는 것: (1) 열린 작업의 줄 바코드를 다시 채울지(또는 조회 때 상품 정보에서 채울지), (2) 18:23 뒤에 만든 작업은 줄 바코드가 채워지는지.
+- 시뮬레이터는 스캔 판에 **작업 지시 바코드를 먼저** 보이고, 비어 있으면 경고와 함께 상품 정보 바코드를 참고로만 보인다.
+
 ### R-19 인계 끝난 출고에도 `Shipment.deliveryId` 가 비어 있음 — 낮음 (2026-11-16 추가)
 `GET /shipments/ORD-0e67de38-…-S1`(11-10 실제 주문, `HANDED_OVER`, 배차 MANUAL) → `deliveryId: null`. 같은 주문의 배송은 `GET /deliveries?mfcId=MFC-SEED-01` 에 `DLV-74422b51-…` `COMPLETED` 로 있다(11-16 실측).
 - 묻는 것: 계약 `Shipment.deliveryId` 는 언제 채워지나(배송 생성 `DeliveryCreated` 를 fulfillment 가 받아 적는지), 아니면 비워 두는 필드인가.

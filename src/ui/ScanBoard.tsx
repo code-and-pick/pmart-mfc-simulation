@@ -13,6 +13,8 @@ import { useScanFocus } from './scanFocus';
 const SCAN_STATES = new Set(['READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED']);
 
 /** 화면에 나온 PICK 의 상품 바코드를 서버에서 (SKU 마다 한 번) 읽게 한다 */
+const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
+
 export function useSkuBarcodes(tasks: (RealTask | undefined)[]) {
   const { sim } = useApp();
   const real = sim.real;
@@ -74,16 +76,27 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
             </div>
             <div className="bc-grid">
               {loc ? <Barcode value={loc} caption="위치" height={44} /> : <div className="note">지시 칸 없음</div>}
-              {bc === 'LOADING' || bc === undefined ? (
+              {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers scan) — 그 값을 먼저 보인다 */}
+              {l.barcode ? (
+                <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`상품 ${l.sku} (작업 지시 바코드)`} height={44} />
+              ) : bc === 'LOADING' || bc === undefined ? (
                 <div className="note">상품 바코드 읽는 중…</div>
               ) : bc === 'ERR' ? (
                 <div className="note warn">상품 조회 실패 ({l.sku})</div>
               ) : bc.length === 0 ? (
                 <div className="note warn">{l.sku} 바코드 없음(서버 상품 데이터)</div>
               ) : (
-                bc.map((v) => <Barcode key={v} value={v} kind={/^\d{13}$/.test(v) ? 'ean13' : 'code128'} caption={`상품 ${l.sku}`} height={44} />)
+                bc.map((v) => <Barcode key={v} value={v} kind={kindOf(v)} caption={`상품 ${l.sku} (상품 정보 — 참고)`} height={44} />)
               )}
             </div>
+            {!l.barcode && (
+              <div className="note warn">
+                이 작업 지시에는 상품 바코드가 비어 있습니다 — PDA 는 찍은 값을 작업 지시 바코드와 비교하므로 어떤 바코드를 찍어도 "다른 상품"이 됩니다(바코드를 채우기 전에 만든 작업). 위 바코드는 상품 정보의 값(참고)입니다.
+              </div>
+            )}
+            {l.barcode && Array.isArray(bc) && bc.length > 0 && !bc.includes(l.barcode) && (
+              <div className="note warn">작업 지시 바코드({l.barcode})가 지금 상품 정보 바코드({bc.join(', ')})와 다릅니다 — PDA 는 작업 지시 바코드로 비교합니다.</div>
+            )}
           </div>
         );
       })}
