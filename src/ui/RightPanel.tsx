@@ -3,6 +3,7 @@ import { useApp, useTick } from '../app/context';
 import { fmtClock, fmtDur } from '../sim/metrics';
 import { RealOrders, RealStockTable, RealSummary } from './RealPanel';
 import { ScanBoard } from './ScanBoard';
+import { ScanFocusContext } from './scanFocus';
 
 type Tab = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
 const REAL_TABS: { t: Tab; text: string }[] = [
@@ -229,7 +230,20 @@ export function RightPanel() {
   useTick();
   const real = !!sim.real;
   const [tab, setTab] = useState<Tab>(real ? 'orders' : 'api');
+  const [scanShipment, setScanShipment] = useState<string | null>(null);
+  const focus = useMemo(
+    () => ({
+      shipmentId: scanShipment,
+      show: (id: string) => {
+        setScanShipment(id);
+        setTab('scan');
+      },
+      clear: () => setScanShipment(null),
+    }),
+    [scanShipment],
+  );
   return (
+    <ScanFocusContext.Provider value={focus}>
     <div className="panel right">
       {real ? <RealSummary /> : <Kpis />}
       {!real && <Board />}
@@ -242,5 +256,6 @@ export function RightPanel() {
       </div>
       <Log tab={tab} />
     </div>
+    </ScanFocusContext.Provider>
   );
 }
