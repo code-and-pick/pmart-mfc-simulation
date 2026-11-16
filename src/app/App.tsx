@@ -1,5 +1,6 @@
 import { SiteScene } from '../render/scene/SiteScene';
 import { DetailCard, ZoneCard } from '../ui/Cards';
+import { ScanZoom } from '../ui/Barcode';
 import { LeftPanel } from '../ui/LeftPanel';
 import { RightPanel } from '../ui/RightPanel';
 import { TopBar } from '../ui/TopBar';
@@ -18,6 +19,7 @@ export function App({ app }: { app: AppCtx }) {
         <ZoneCard />
         <DetailCard />
       </div>
+      <ScanZoom />
     </AppContext.Provider>
   );
 }

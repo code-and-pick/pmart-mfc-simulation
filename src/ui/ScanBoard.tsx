@@ -9,6 +9,7 @@ import type { RealTask } from '../sim/realBoard';
 import { Barcode } from './Barcode';
 import { TASK_STATE_KO } from './RealPanel';
 import { useScanFocus } from './scanFocus';
+import { scanView, useScanView } from './scanView';
 
 const SCAN_STATES = new Set(['READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED']);
 
@@ -25,11 +26,17 @@ export function useSkuBarcodes(tasks: (RealTask | undefined)[]) {
   }, [real, skuKey]);
 }
 
+/** 위치 코드 바코드 — 누르면 3D 에서 그 칸(자리)으로 */
+function LocBarcode({ code, caption }: { code: string; caption: string }) {
+  const { controller } = useApp();
+  return <Barcode value={code} caption={caption} height={44} onGo={() => controller.focusBackendCode(code)} />;
+}
+
 export function CartBarcodes() {
   return (
     <div className="bc-grid">
       {BACKEND_FACTS.cartLocations.map((c) => (
-        <Barcode key={c.code} value={c.code} caption={c.label} height={44} />
+        <LocBarcode key={c.code} code={c.code} caption={c.label} />
       ))}
     </div>
   );
@@ -46,9 +53,9 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
     return (
       <div className="bc-grid">
         {(d.packingLocations ?? []).map((c) => (
-          <Barcode key={c} value={c} caption="포장 위치(집품분)" height={44} />
+          <LocBarcode key={c} code={c} caption="포장 위치(집품분)" />
         ))}
-        <Barcode value="DSP-A-01" caption="출하대기 랙 1" height={44} />
+        <LocBarcode code="DSP-A-01" caption="출하대기 랙 1" />
       </div>
     );
   }
@@ -75,7 +82,7 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
               {p.remainingQty === 0 ? ' (집음)' : ''}
             </div>
             <div className="bc-grid">
-              {loc ? <Barcode value={loc} caption="위치" height={44} /> : <div className="note">지시 칸 없음</div>}
+              {loc ? <LocBarcode code={loc} caption="위치 (누르면 3D 에서 그 칸)" /> : <div className="note">지시 칸 없음</div>}
               {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers scan) — 그 값을 먼저 보인다 */}
               {l.barcode ? (
                 <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`상품 ${l.sku} (작업 지시 바코드)`} height={44} />
@@ -107,6 +114,7 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
 export function ScanBoard() {
   const { sim } = useApp();
   const focus = useScanFocus();
+  const view = useScanView();
   const real = sim.real;
   // 실제 주문 줄에서 고른 출고면 그 출고의 PICK·PACK(끝난 것도), 아니면 진행 중 작업 전부
   const tasks = real
@@ -119,6 +127,15 @@ export function ScanBoard() {
 
   return (
     <div className="scan">
+      <div className="scan-mode">
+        <button className={view.mode === 'qr' ? 'on' : undefined} onClick={() => scanView.setMode('qr')}>
+          QR
+        </button>
+        <button className={view.mode === 'bar' ? 'on' : undefined} onClick={() => scanView.setMode('bar')}>
+          바코드
+        </button>
+        <span className="sub">값은 같음 · 위치 코드를 누르면 3D 에서 그 칸으로 · "크게" = 화면 가득</span>
+      </div>
       <div className="note">
         PDA 앱 입력칸의 카메라 버튼으로 화면을 찍거나, PC 브라우저라면 입력칸에 아래 글자를 치고 Enter. 인쇄용 전체 라벨:{' '}
         <a href="/labels/cart-labels-MFC-SEED-01.html" target="_blank" rel="noreferrer">

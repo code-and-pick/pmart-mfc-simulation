@@ -570,3 +570,15 @@ table.inv.real .muted {
 table.inv.real tr.clickable { cursor: pointer; }
 table.inv.real tr.clickable:hover, table.inv.real tr.clickable.on { background: rgba(66, 133, 244, 0.12); }
 .scan-focus { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 6px 0; font-size: 12px; }
+.bc-img { cursor: pointer; }
+.bc.go .bc-img { outline: 2px solid transparent; }
+.bc.go .bc-img:hover { outline-color: #ffd400; }
+.bc-val { display: flex; align-items: center; justify-content: center; gap: 6px; }
+.bc-zoom { font-size: 10px; padding: 0 5px; border: 1px solid #999; border-radius: 3px; background: #f3f3f3; color: #222; cursor: pointer; }
+.scan-mode { display: flex; align-items: center; gap: 4px; margin: 4px 0 6px; flex-wrap: wrap; }
+.scan-mode button { font-size: 12px; padding: 2px 10px; border: 1px solid rgba(127, 127, 127, 0.6); border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
+.scan-mode button.on { background: #1a73e8; border-color: #1a73e8; color: #fff; }
+.scan-zoom { position: fixed; inset: 0; z-index: 1000; background: rgba(0, 0, 0, 0.55); display: flex; align-items: center; justify-content: center; outline: none; }
+.scan-zoom-box { background: #fff; color: #000; padding: 24px 28px 16px; border-radius: 8px; display: flex; flex-direction: column; align-items: center; gap: 8px; max-width: 96vw; }
+.scan-zoom-box .note { color: #555; }
+.bc-val.big { font-size: 28px; letter-spacing: 3px; }
