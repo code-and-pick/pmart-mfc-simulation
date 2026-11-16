@@ -63,6 +63,11 @@ export interface Location {
   face: 1 | -1;
   slotW: number;
   levelH: number;
+  /**
+   * 칸 치수(mm) — 백엔드 LAN 등록값과 같은 식(deploy/lan/seed/mfc_layout_v2.py: 폭 = 랙 1.25 m 의 90 % ÷ 칸 수, 깊이 450, 높이 = 2.1 m ÷ 단 수).
+   * 11-16 실서버 표본(F 188·냉장 161·C 125·D 112·E 141·H 225 폭, 높이 420/350)과 같음. 칸 용량 계산용(그림의 levelH 와 다름)
+   */
+  dimMm: { w: number; d: number; h: number };
 }
 
 /** 보충재고 팔레트 자리 (입고창고 = 상온, 저온실 안 = 냉장·냉동). MFC 4-3, 5-1 */
@@ -242,6 +247,14 @@ export const SLOT_DESIGN: Record<string, readonly [levels: number, slots: number
   H: [5, 5],
 };
 
+/** Python round 와 같은 반올림(.5 는 짝수로) — 백엔드 등록 스크립트가 칸 폭을 이렇게 냈다(D 칸 112.5 → 112, 실서버 112) */
+function roundHalfEven(x: number): number {
+  const f = Math.floor(x);
+  const d = x - f;
+  if (Math.abs(d - 0.5) < 1e-9) return f % 2 === 0 ? f : f + 1;
+  return Math.round(x);
+}
+
 const dims = (g: string) => ({ levels: SLOT_DESIGN[g][0], slotsPerLevel: SLOT_DESIGN[g][1] });
 
 /** 상온 C~H 랙 수: 문서 10장 구역 면적(11.3/11.3/9.9/11.3/11.8/9.4평) 비례로 138개 [가정] */
@@ -406,6 +419,7 @@ export function buildLayout(): Layout {
           face: r.face,
           slotW: (RACK_LEN * 0.9) / r.slotsPerLevel,
           levelH: (RACK_HEIGHT - 0.25) / r.levels,
+          dimMm: { w: roundHalfEven((RACK_LEN * 900) / r.slotsPerLevel), d: Math.round(RACK_DEPTH * 1000), h: roundHalfEven((RACK_HEIGHT * 1000) / r.levels) },
         };
         locations.push(loc);
         locationsByTemp[r.temp].push(loc);

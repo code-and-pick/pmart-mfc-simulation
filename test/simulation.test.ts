@@ -16,10 +16,13 @@ describe('Simulation (mock, 화면 없이)', () => {
     for (const d of sim.layout.dockSlots) expect(sim.nav.findPath(sim.layout.points.truckDoor, d.pos), d.id).not.toBeNull();
     expect(sim.nav.findPath(sim.layout.points.shipDrop, sim.layout.points.riderPickup)).not.toBeNull();
     expect(sim.nav.findPath(sim.layout.points.riderEntry, sim.layout.points.riderPickup)).not.toBeNull();
-    // 로케이션의 85% 를 SKU 로 채운다
-    expect(sim.catalog.length).toBe(
-      (['AMBIENT', 'CHILLED', 'FROZEN'] as const).reduce((a, t) => a + Math.floor(sim.layout.locationsByTemp[t].length * 0.85), 0),
-    );
+    // MOCK 상품 수 = 백엔드 LAN 시험 상품 규모(온도대별), 한 칸에 한 SKU, 온도대 칸에만
+    const c = DEFAULT_PARAMS.mockSkuCount;
+    expect(sim.catalog.length).toBe(c.AMBIENT + c.CHILLED + c.FROZEN);
+    expect(new Set(sim.catalog.map((s) => s.location.code)).size).toBe(sim.catalog.length);
+    for (const s of sim.catalog) expect(s.location.temp).toBe(s.temp);
+    // 칸 한도 = 백엔드 칸 용량 식(칸 부피 × 0.8 ÷ 상품 부피) — 들어가는 칸에 둔다
+    expect(sim.catalog.every((s) => s.shelfCap >= 2)).toBe(true);
   }, 60_000); // 혼자 4~5초 — 다른 시험과 함께 돌면 기본 5초를 넘는다
 
   it('3시간 운영: 출고 흐름과 입고·적치·보충이 함께 돌고 재고 불변식이 지켜진다', async () => {

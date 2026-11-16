@@ -2,6 +2,8 @@
 // 근거 표기: [확정] = 업무 문서 확정 입력, [가정] = 업무 문서의 가정·산출값, [시뮬] = 이 시뮬레이터가 정한 값.
 // 업무 문서: pmart-backend/docs/business/MFC-business-logic.md (이하 MFC), overview.md §4.
 
+import type { TemperatureZone } from './domain/contract';
+
 export interface SimParams {
   mfcId: string;
   /** 시간당 주문 수. MFC 7-1 기준안 피크 약 40.1건/시간 [가정] */
@@ -31,8 +33,12 @@ export interface SimParams {
   /** 출하 준비 후 라이더 도착까지 [시뮬] — Delivery 미구현이라 가상 라이더 */
   riderArrivalMinSec: number;
   riderArrivalMaxSec: number;
-  /** 피킹 칸 중 상품을 놓는 비율. 85% 운영 상한 [가정] (MFC 3-3) */
-  skuFillRate: number;
+  /**
+   * MOCK 상품(SKU) 수 — 온도대별. 백엔드 LAN 시험 상품과 같은 규모 [가정]
+   * (백엔드 deploy/lan/seed/dimensions-estimated-2026-11-16.csv 503종: 상온 189·냉장 137·냉동 177. 이름·치수는 MOCK 이 지어냄).
+   * 예전엔 칸의 85%(MFC 3-3 운영 상한)를 채웠다 — 칸 14,559 로 늘어 약 12,400종이 되어 실제와 너무 달라 바꿈(2026-11-17).
+   */
+  mockSkuCount: Record<TemperatureZone, number>;
   /** 시작 시 선반 충족률 범위 [시뮬] — 낮을수록 첫 입고·적치가 많다 */
   initialShelfFill: [number, number];
   /** 시작 시 보충재고를 가진 SKU 비율 [시뮬] */
@@ -73,7 +79,7 @@ export const DEFAULT_PARAMS: SimParams = {
   pickSequence: 'DOC_B_A_C',
   riderArrivalMinSec: 90,
   riderArrivalMaxSec: 480,
-  skuFillRate: 0.85,
+  mockSkuCount: { AMBIENT: 189, CHILLED: 137, FROZEN: 177 },
   initialShelfFill: [0.5, 1],
   initialReserveShare: 0.35,
   inboundWorkers: 3,
@@ -92,6 +98,11 @@ export const DEFAULT_PARAMS: SimParams = {
  * 실서버 모드에서는 위치 조회(GET /locations) 결과가 정본이고, 여기 값은 MOCK 화면 표시용 사본이다.
  */
 export const BACKEND_FACTS = {
+  /**
+   * 칸 용량 = floor(칸 부피 × 이 값 ÷ 상품 부피), 어느 방향으로도 안 들어가면 0 [확정]
+   * (백엔드 mfc-inventory 0.18.0 UnitSize.capacity·SkuSize.FILL_RATE = 0.8, 2026-11-16 6423db75). MOCK 칸 한도도 같은 식.
+   */
+  slotFillRate: 0.8,
   /** E2E 시험용 고회전 칸 5개 [확정] (2026-11-09-simulator-notice-layout-bins.md, docs/simulator/mfc/layout/high-turnover.json). 그 밖의 선반은 일반 선반(임시) */
   highTurnoverBins: ['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'],
   /** 회수 반입 자리 RTN-A-01, 입고·검수 구역 안 x 38.6 · z 22.0 m [확정] (2026-11-09-simulator-notice-return-location.md, backend-points.json) */

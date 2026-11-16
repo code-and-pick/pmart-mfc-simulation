@@ -124,7 +124,7 @@ export class Simulation {
     this.codes = buildLocationCodeMap(this.layout);
     this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
-    this.catalog = buildCatalog(this.layout, params.skuFillRate, params.seed);
+    this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed);
     this.reserveMap = new Map(this.layout.reserves.map((r) => [r.id, r]));
     this.skuMap = new Map(this.catalog.map((s) => [s.sku, s]));
     this.stations = new StationPool(this.layout.stations, params.packingStations);

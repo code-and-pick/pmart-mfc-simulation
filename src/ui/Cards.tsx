@@ -45,7 +45,7 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
         <div className="stats">
           <Stat v={racks.length} k="랙" />
           <Stat v={locs.toLocaleString()} k="칸(로케이션)" />
-          <Stat v={skus.length.toLocaleString()} k="SKU (칸의 85%)" />
+          <Stat v={skus.length.toLocaleString()} k="SKU" />
           <Stat v={inv ? units.toLocaleString() : '—'} k="선반 상품" />
           <Stat v={inv ? reserve.toLocaleString() : '—'} k="보충재고" />
           <Stat v={inv ? lows.length : '—'} k="보충 필요 칸" />

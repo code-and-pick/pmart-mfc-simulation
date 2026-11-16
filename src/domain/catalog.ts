@@ -19,7 +19,7 @@ export interface Sku {
   containsAlcohol: boolean;
   /** 낱개 외형(m) — 선반 칸에 몇 개 들어가는지 계산 */
   unit: { w: number; d: number; h: number };
-  /** 피킹 칸 진열 한도 (칸 치수 ÷ 상품 치수) [시뮬] */
+  /** 피킹 칸 진열 한도 = slotCapacity(칸 치수, 상품 치수) — 백엔드 칸 용량 식과 같음 */
   shelfCap: number;
   /** 자동 보충 기준 C ≤ min (IV-04 의 min) [시뮬] */
   minQty: number;
@@ -74,21 +74,44 @@ function unitOf(weightG: number): { w: number; d: number; h: number } {
   return { w: 0.14, d: 0.13, h: 0.24 };
 }
 
-export const MAX_SHELF_CAP = 16;
+/**
+ * 칸에 이 상품이 몇 개 들어가나 — 백엔드 mfc-inventory UnitSize.capacity 와 같은 식:
+ * floor(칸 부피 × fill ÷ 상품 부피), 어느 방향(축 정렬 6가지)으로도 칸보다 크면 0. 칸 하중은 LAN 에 값이 없어 보지 않는다.
+ */
+export function slotCapacity(cell: { w: number; d: number; h: number }, unitMm: { w: number; d: number; h: number }, fill: number): number {
+  const a = [unitMm.w, unitMm.d, unitMm.h].sort((x, y) => x - y);
+  const c = [cell.w, cell.d, cell.h].sort((x, y) => x - y);
+  if (a[0] > c[0] || a[1] > c[1] || a[2] > c[2]) return 0;
+  return Math.floor((cell.w * cell.d * cell.h * fill) / (unitMm.w * unitMm.d * unitMm.h));
+}
 
-export function buildCatalog(layout: Layout, fillRate: number, seed: number): Sku[] {
+const mm = (u: { w: number; d: number; h: number }) => ({ w: Math.round(u.w * 1000), d: Math.round(u.d * 1000), h: Math.round(u.h * 1000) });
+
+/**
+ * MOCK 상품 목록. 온도대별 count 개를 그 온도대 칸에 무작위로 한 칸씩 둔다(문서에 슬로팅 규칙 없음).
+ * 상온은 좁은 칸에 안 들어가는 큰 상품을 H(큰 상품 구역)에 둔다 — 백엔드 LAN 재고 펼침(mfc_spread_stock.py)과 같은 생각.
+ */
+export function buildCatalog(layout: Layout, count: Record<TemperatureZone, number>, fill: number, seed: number): Sku[] {
   const rng = new Rng(seed);
   const temps: TemperatureZone[] = ['AMBIENT', 'CHILLED', 'FROZEN'];
   const skus: Sku[] = [];
   let serial = 1;
   for (const t of temps) {
     const pool = [...layout.locationsByTemp[t]];
-    const n = Math.floor(pool.length * fillRate);
-    // 칸 배정은 무작위 (문서에 슬로팅 규칙 없음)
+    const n = Math.min(pool.length, count[t]);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng.next() * (i + 1));
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
+    const used = new Set<string>();
+    /** 들어가는(용량 2 이상) 첫 빈 칸. 상온 큰 상품은 H 먼저 */
+    const pickSlot = (unitMm: { w: number; d: number; h: number }): Location => {
+      const ok = (l: Location) => !used.has(l.code) && slotCapacity(l.dimMm, unitMm, fill) >= 2;
+      const narrow = pool.find((l) => ok(l) && l.code[0] !== 'H');
+      const found = narrow ?? pool.find(ok) ?? pool.find((l) => !used.has(l.code))!;
+      used.add(found.code);
+      return found;
+    };
     const reserves = layout.reserves.filter((r) => r.temp === t);
     for (let i = 0; i < n; i++) {
       const [base, w] = rng.pick(NAMES[t]);
@@ -97,11 +120,8 @@ export function buildCatalog(layout: Layout, fillRate: number, seed: number): Sk
       serial += 1;
       const weightG = isB ? w * 4 : w;
       const unit = unitOf(weightG);
-      const loc = pool[i];
-      const cols = Math.max(1, Math.floor(loc.slotW / (unit.w + 0.012)));
-      const rows = Math.max(1, Math.floor(0.4 / (unit.d + 0.012)));
-      const layers = Math.max(1, Math.min(2, Math.floor((loc.levelH - 0.05) / (unit.h + 0.01))));
-      const shelfCap = Math.max(2, Math.min(MAX_SHELF_CAP, cols * rows * layers));
+      const loc = pickSlot(mm(unit));
+      const shelfCap = Math.max(1, slotCapacity(loc.dimMm, mm(unit), fill));
       skus.push({
         sku: code,
         name: `${base}${isB ? ' 묶음' : ''} #${i + 1}`,
@@ -110,7 +130,7 @@ export function buildCatalog(layout: Layout, fillRate: number, seed: number): Sk
         weightG,
         location: loc,
         reserveId: reserves[i % reserves.length].id,
-        weight: 1 / Math.pow(rng.int(1, n), 0.9),
+        weight: 1 / Math.pow(rng.int(1, Math.max(1, n)), 0.9),
         containsAlcohol: base.startsWith('맥주'),
         unit,
         shelfCap,

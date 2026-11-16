@@ -136,16 +136,19 @@ function Walls({ L }: { L: Layout }) {
   );
 }
 
-/** 랙: 기둥 + 선반 (인스턴스 2개). */
+/** 랙: 기둥 + 선반 + 칸막이 (인스턴스 3개). 칸막이 = 단마다 칸 사이 얇은 판 — 칸 수(MFC 문서 1장 설계)가 보이게 */
 function Racks({ L }: { L: Layout }) {
   const posts = useRef<THREE.InstancedMesh>(null!);
   const shelves = useRef<THREE.InstancedMesh>(null!);
+  const dividers = useRef<THREE.InstancedMesh>(null!);
   const shelfCount = L.racks.reduce((a, r) => a + r.levels, 0);
+  const dividerCount = L.racks.reduce((a, r) => a + r.levels * (r.slotsPerLevel - 1), 0);
   useLayoutEffect(() => {
     const mtx = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     let pi = 0;
     let si = 0;
+    let di = 0;
     for (const r of L.racks) {
       const lx = r.along === 'x' ? RACK_LEN : RACK_DEPTH;
       const lz = r.along === 'x' ? RACK_DEPTH : RACK_LEN;
@@ -154,12 +157,23 @@ function Racks({ L }: { L: Layout }) {
           mtx.compose(new THREE.Vector3(r.cx + (sx * (lx - 0.05)) / 2, RACK_HEIGHT / 2, r.cz + (sz * (lz - 0.05)) / 2), q, new THREE.Vector3(0.05, RACK_HEIGHT, 0.05));
           posts.current.setMatrixAt(pi++, mtx);
         }
+      const levelH = (RACK_HEIGHT - 0.25) / r.levels;
+      const slotW = (RACK_LEN * 0.9) / r.slotsPerLevel;
+      const dh = Math.min(0.12, levelH * 0.4); // 칸막이 높이 — 상품을 가리지 않게 낮게
       for (let lv = 0; lv < r.levels; lv++) {
         const y = 0.1 + (lv * (RACK_HEIGHT - 0.25)) / r.levels;
         mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, new THREE.Vector3(lx, 0.03, lz));
         shelves.current.setMatrixAt(si++, mtx);
+        for (let s = 1; s < r.slotsPerLevel; s++) {
+          const a = (s - r.slotsPerLevel / 2) * slotW; // 칸 경계(랙 중심 기준)
+          const p = new THREE.Vector3(r.along === 'x' ? r.cx + a : r.cx, y + 0.015 + dh / 2, r.along === 'x' ? r.cz : r.cz + a);
+          mtx.compose(p, q, r.along === 'x' ? new THREE.Vector3(0.008, dh, RACK_DEPTH * 0.96) : new THREE.Vector3(RACK_DEPTH * 0.96, dh, 0.008));
+          dividers.current.setMatrixAt(di++, mtx);
+        }
       }
     }
+    dividers.current.instanceMatrix.needsUpdate = true;
+    dividers.current.computeBoundingSphere();
     posts.current.instanceMatrix.needsUpdate = true;
     shelves.current.instanceMatrix.needsUpdate = true;
     posts.current.computeBoundingSphere();
@@ -174,6 +188,10 @@ function Racks({ L }: { L: Layout }) {
       <instancedMesh ref={shelves} args={[undefined, undefined, shelfCount]} castShadow receiveShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={0xb8bcc4} roughness={0.6} />
+      </instancedMesh>
+      <instancedMesh ref={dividers} args={[undefined, undefined, dividerCount]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={0x6f7580} roughness={0.6} />
       </instancedMesh>
     </>
   );
