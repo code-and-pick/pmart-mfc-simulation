@@ -320,7 +320,11 @@ export class RealBoard {
       budget--;
       try {
         const data = await this.reader.getShipment(r.shipmentId);
-        if (!hit || hit.data.version !== data.version || hit.data.state !== data.state) this.deliveryVersion++;
+        if (!hit || hit.data.version !== data.version || hit.data.state !== data.state) {
+          this.deliveryVersion++;
+          // 출고가 바뀌면(밀봉·인계) 그 SKU 재고도 바로 다시 — 포장대의 PACKED 가 인계로 빠지는 것을 늦지 않게 그린다
+          if (hit) for (const t of [r.pick, r.pack, r.ret]) for (const l of t?.detail?.lines ?? []) this.staleSkus.add(l.sku);
+        }
         this.shipmentInfo.set(r.shipmentId, { data, readMs: now, sig });
       } catch {
         /* 다음 조회에서 다시 */

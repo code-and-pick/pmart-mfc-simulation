@@ -22,6 +22,7 @@ import { Rng } from '../util/rng';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard } from './realBoard';
+import { RealRider, type SiteRider } from './realRider';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
@@ -61,7 +62,7 @@ export class Simulation {
   readonly reserveMap: Map<string, ReserveSpot>;
   trucks: Truck[] = [];
   readonly dockItems: DockItem[] = [];
-  riders: Rider[] = [];
+  riders: SiteRider[] = [];
   readonly apiLog: ApiCallRecord[] = [];
   readonly events: DomainEventRecord[] = [];
   readonly logs: { at: number; msg: string }[] = [];
@@ -278,6 +279,49 @@ export class Simulation {
     for (let i = active.length - 1; i >= target; i--) active[i].leaving = true;
   }
 
+  private realRiderVer = -1;
+  /**
+   * 앞마당 라이더(M-02, 그리기만): 배송 ARRIVED_AT_STORE 를 처음 보면 라이더를 세우고, 출고 인계됨·배송 픽업 뒤·배정 해제·화면에서 빠짐이면 떠나보낸다.
+   * 배차·배송 상태가 바뀔 때(deliveryVersion)만 본다.
+   */
+  private syncRealRiders() {
+    const real = this.real;
+    if (!real || real.deliveryVersion === this.realRiderVer) return;
+    this.realRiderVer = real.deliveryVersion;
+    const live = new Map<string, { arrived: boolean; gone: boolean; riderId: string | null; handed: number }>();
+    for (const r of real.shipments()) {
+      const d = r.delivery;
+      if (!d) continue;
+      const handed = (r.info?.packages ?? []).filter((p) => p.state === 'HANDED_OVER').length;
+      const shipmentDone = r.info?.state === 'HANDED_OVER';
+      live.set(d.deliveryId, {
+        arrived: d.state === 'ARRIVED_AT_STORE',
+        // 떠남: 출고 인계됨, 또는 배송이 도착·배정 상태를 벗어남(픽업 뒤·배정 해제 UNASSIGNED·취소)
+        gone: shipmentDone || !['ASSIGNED', 'ARRIVED_AT_STORE'].includes(d.state),
+        riderId: d.riderId,
+        handed,
+      });
+    }
+    const mine = this.riders.filter((x): x is RealRider => x instanceof RealRider);
+    for (const rr of mine) {
+      const s = live.get(rr.deliveryId);
+      if (!s) rr.depart(0);
+      else if (s.gone) rr.depart(s.handed);
+    }
+    for (const [deliveryId, s] of live) {
+      if (!s.arrived || s.gone || mine.some((x) => x.deliveryId === deliveryId)) continue;
+      const used = new Set(mine.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
+      const parking = this.layout.points.riderParking.find((p) => !used.has(`${p.x},${p.z}`)) ?? this.layout.points.riderParking[0];
+      let id = s.riderId ?? deliveryId.slice(0, 12);
+      if (this.riders.some((x) => x.id === id)) id = `${id} (${deliveryId.slice(4, 8)})`;
+      const rr = new RealRider(id, deliveryId, parking, this.layout.points.riderEntry, this.layout.points.riderPickup, this.nav);
+      this.riders.push(rr);
+      mine.push(rr);
+      void rr.run();
+      this.log(`라이더 ${id} 가게 도착 (배송 ${deliveryId.slice(0, 12)}…)`);
+    }
+  }
+
   get virtualWorkerCount(): number {
     return this.virtualWorkers.filter((w) => !w.leaving && !w.left).length;
   }
@@ -339,12 +383,15 @@ export class Simulation {
       const prev = this.time;
       this.time = wallClockSec();
       void this.real.tick();
-      if (this.virtualWorkers.length) {
-        // 가상 작업자는 실제 시간으로 걷고 기다린다(1×)
+      this.syncRealRiders();
+      if (this.virtualWorkers.length || this.riders.length) {
+        // 가상 작업자·앞마당 라이더는 실제 시간으로 걷고 기다린다(1×)
         const dt = Math.max(0, Math.min(this.time - prev, 0.25));
         for (const w of this.virtualWorkers) w.tick(dt);
+        for (const r of this.riders) r.tick(dt);
         this.stations.tick(dt);
         for (let i = 0; i < 40; i++) await Promise.resolve();
+        this.riders = this.riders.filter((r) => !r.done);
       }
       return;
     }
