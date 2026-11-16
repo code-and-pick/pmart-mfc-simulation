@@ -1,7 +1,7 @@
 # 가상 MFC 현장(시뮬레이터) → pmart-backend 요청 목록
 
 > 시뮬레이터는 `../pmart-backend` 를 **읽기만** 한다. 아래는 실서버 연동에 필요한 백엔드 쪽 변경·결정이다.
-> 백엔드 회신은 `pmart-backend/docs/handoff/simulator/` 에 R 번호로 온다(안내: `docs/backend-handoff.md`).
+> 백엔드 회신은 `pmart-backend/docs/handoff/simulator/mfc/` 에 R 번호로 온다(11-16 폴더 나눔)(안내: `docs/backend-handoff.md`).
 > 기준 시점: **2026-11-16 재정리**(최초 2026-10-31, 재검토 11-07·11-10). 백엔드 `main` `00845b9f` 기준. 회신 정본: `2026-11-09-simulator-notice-integration-decisions.md`, 연결 결정 SIM-1~11 `docs/simulator/mfc/mfc-simulator-integration.md`.
 > 계약 버전: mfc-fulfillment 0.4.11, mfc-capacity 0.14.0, mfc-inventory 0.16.0, mfc-location 0.7.1, mfc-inbound 0.9.0, employee-auth 0.9.0, product 0.1.0.
 > 원칙(백엔드 2026-11-09): **백엔드 계약이 정본, 시뮬레이터와 안 맞는 부분은 시뮬레이터가 맞춘다.**
@@ -47,13 +47,8 @@
 
 ## 열린 요청
 
-### R-14 시뮬레이터 토큰 발급 경로 확인 — 중간 (2026-11-16 추가)
-SIM-3 은 "로그인 API 로 토큰"이었는데 그 API(`/auth/operator-logins`)가 11-13 에 없어졌다. 지금 브라우저 없이 토큰을 받는 길은 LAN 시험 전용 `employee-auth /internal/dev-token-exchange` 하나뿐이라 시뮬레이터 Vite 서버가 그것을 쓴다(게이트웨이를 거치지 않는 내부 경로 — SIM-11 의 "공개 API 만" 원칙의 예외).
-- 질문: 시뮬레이터가 이 경로를 계속 써도 되는지(LAN 설정에서 꺼지거나 바뀔 계획이 있는지). 안 되면 시뮬레이터용 대안(예: 서비스 계정·장치 로그인)을 정해 달라.
-- `X-Source-System`·`X-Device-Id` 는 `mfc-simulator` 로 보낸다(로그 구분용).
-
 ### R-15 칸(위치) 단위 재고 조회 — 중간 (2026-11-16 추가)
-지금 재고 조회는 `GET /mfcs/{mfcId}/stock?sku=`(SKU 1개)뿐이라 "이 칸에 무엇이 몇 개" 를 물을 수 없다. 그래서 시뮬레이터 실서버 화면은 **열린 주문에 나온 SKU 의 칸만** 실제 수량으로 그리고, 나머지 6,700여 칸은 "수량 모름"(회색)으로 둔다. PDA 앱도 같은 공백이 있다(클라이언트 MB-1 — "칸으로 재고를 찾는 API 가 없어 상품부터 고른다").
+지금 재고 조회는 `GET /mfcs/{mfcId}/stock?sku=`(SKU 1개)뿐이라 "이 칸에 무엇이 몇 개" 를 물을 수 없다. 그래서 시뮬레이터 실서버 화면은 **열린 주문에 나온 SKU 의 칸만** 실제 수량으로 그리고, 나머지 1만 4천여 칸(11-16 칸 설계 뒤 선반 14,559)은 "수량 모름"(회색)으로 둔다. PDA 앱도 같은 공백이 있다(클라이언트 MB-1 — "칸으로 재고를 찾는 API 가 없어 상품부터 고른다").
 - 원하는 것(예): `GET /mfcs/{mfcId}/location-stock?zone=&temperatureZone=&cursor=` 또는 `?locationCode=` — 위치마다 SKU·LOT·업무 상태·품질·수량, 응답 `asOf`. 읽기 전용, 그 센터 운영자.
 - 쓰임: 실서버 화면에서 센터 전체 선반을 실제 수량으로 그리기(처음 한 번 + 주기 조회는 SIM-5 대로 바뀐 칸만), PDA 이동·실사의 칸 기준 조회.
 - 대안으로 받아들일 수 있는 것: 아래 R-16(SKU 여러 개)만 있어도 시험 센터 SKU 약 500개를 몇 번에 나눠 읽을 수 있다.
@@ -84,7 +79,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 ### R-19 인계 끝난 출고에도 `Shipment.deliveryId` 가 비어 있음 — 낮음 (2026-11-16 추가)
 `GET /shipments/ORD-0e67de38-…-S1`(11-10 실제 주문, `HANDED_OVER`, 배차 MANUAL) → `deliveryId: null`. 같은 주문의 배송은 `GET /deliveries?mfcId=MFC-SEED-01` 에 `DLV-74422b51-…` `COMPLETED` 로 있다(11-16 실측).
 - 묻는 것: 계약 `Shipment.deliveryId` 는 언제 채워지나(배송 생성 `DeliveryCreated` 를 fulfillment 가 받아 적는지), 아니면 비워 두는 필드인가.
-- 시뮬레이터는 그동안 **배송 찾기의 `orderId` 로 출고와 배송을 잇는다**(출고 조회의 `orderId` 와 대조). 채워지면 `deliveryId` 를 먼저 쓴다.
+- 시뮬레이터는 그동안 **배송 찾기의 `orderId` 로 후보를 고르고 배차 상세(`GET /deliveries/{id}/dispatch`)의 `shipmentId` 로 출고에 잇는다**(11-17 — 같은 주문의 재발송 출고 fulfillment 0.5.0 과 섞이지 않게. 실측: 배차 상세에 shipmentId 있음). 채워지면 `deliveryId` 를 먼저 쓴다.
 
 ### R-07 가상 라이더 배차 — 바뀜: 라이더는 rider 시뮬레이터 몫 (2026-11-16)
 배송 서비스(delivery-dispatch 0.3.3·delivery-execution 0.4.0)가 생겼고(백엔드 `rider_e2e.py` 11-16 첫 끝까지 실행), 실서버의 라이더 API 는 짝 시뮬레이터 `../pmart-rider-simulation` 이 부른다(그쪽 `docs/design.md` §2-1). 이 시뮬레이터는 **배차·배송 상태를 읽어 그리기만** 하고 실서버에서 인계 API 를 부르지 않는다 → 아래 "rider 시뮬레이터 요청". MOCK 의 가상 라이더는 그대로.
@@ -104,6 +99,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | R-09 | 상품·보관 기준정보 | 해소 — `GET /skus/{sku}` 에 무게·`logistics.storageType`·바코드, product 0.2.0 부터 `dimensions`(추정 503개). 쓰는 SKU 만 조회(SIM-5, PC 3 공지 §2) | product 0.1.0 |
 | R-11 | 칸 한도·최소량 | 일부 해소 — `replenishment-policies` 있음, 값은 Q-07 미결(기준 없는 칸은 `CONFIG_REQUIRED`). 칸 용량은 위치 `dimensions` ÷ 상품 `dimensions`(inventory 0.18.0). MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 에서만 | inventory 0.14.0~ |
 | R-20 | 작업 지시 줄 바코드가 비어 PDA 상품 스캔 "다른 상품" | 해소 — fulfillment 0.7.0(`122f03e3`, PC 3 배포): 조회 때 `barcodes[]`·`barcode`(첫 값) 채움, 이미 만든 작업도. 11-16 실측: 진행 중 PICK 7줄 모두 채워짐. 스캔 판은 첫 값 + 나머지 표시 | fulfillment 0.7.0 |
+| R-14 | 시뮬레이터 토큰 발급 경로 | 해소 — `dev-token-exchange` 계속 사용(SIM-11 예외, LAN 전용). 조건: 비밀번호 재설정 금지, 계정 `claude-mfc-wrk`·`mfcw-pp-01~10` 만, 토큰을 다시 받은 뒤에도 401 이면 그 계정 멈춤 → `RealWorker` 반영(11-17) | `…/mfc/2026-11-16-simulator-reply-token-r14.md`(`cb2bf317`) |
 | R-12 | OR-Tools·Chronos-2 | 회신 — OR-Tools 는 mfc-capacity(Java, JVM 실행 ADR-0053), Chronos-2 미적용. 시뮬레이터 할 일 없음 | 회신 11-09 |
 
 ## 시뮬레이터 쪽 후속 작업 (시뮬레이터가 맞출 것 — 백엔드 요청 아님)
@@ -112,7 +108,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 |---|---|---|
 | 계약 동기화 | `contract.ts`·MOCK 을 fulfillment 0.4.10 에 맞춤 | 11-10 완료 |
 | 칸 코드 | 시뮬레이터 ↔ 백엔드 코드 대응, 고회전 5칸·회수 반입 자리 표시 | 11-10 완료 (SIM-6, L-1) |
-| 로그인 | Vite 서버 `/sim-auth/tokens`(Keycloak → dev-token-exchange), 토큰 메모리만 | **11-16 완료** · R-14 확인 대기 |
+| 로그인 | Vite 서버 `/sim-auth/tokens`(Keycloak → dev-token-exchange), 토큰 메모리만 | **11-16 완료** · R-14 해소(11-17 401 재발 시 계정 멈춤) |
 | 실서버 관찰 | 열린 작업 3초 조회, 출고별 PICK·PACK·담당 이름, 진행 중 지시 칸·담당자 표시 | **11-16 완료** (화면 확인 전) |
 | 주문 상품 실제 재고 | 주문 SKU 의 선반 STORED·포장 구역 PICKED/PACKED 를 3D 에 | **11-16 완료** (화면 확인 전) · 전체 선반은 R-15 |
 | 계약 0.4.11 | 배차 자동 요청 없음 — `contract.ts` 머리 갱신, MOCK 은 아직 READY 때 라이더를 부름 | 일부 · 가상 작업자 단계에서 "패킹 시작 때 배차 요청"(사용자 11-16) |

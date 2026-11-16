@@ -8,7 +8,7 @@ const NODE_FS = 'node:fs';
 const fs = (await import(/* @vite-ignore */ NODE_FS)) as { existsSync(p: URL): boolean; readFileSync(p: URL, enc: 'utf-8'): string };
 const BACKEND_LAYOUT = new URL('../../pmart-backend/docs/simulator/mfc/layout/layout.json', import.meta.url);
 
-// 기대값 근거: pmart-backend docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md,
+// 기대값 근거: pmart-backend docs/handoff/simulator/mfc/2026-11-09-simulator-notice-layout-bins.md,
 // docs/simulator/mfc/layout/high-turnover.json, deploy/lan/seed/mfc_layout.py plan()
 describe('위치 코드 대응 (SIM-6)', () => {
   const L = buildLayout();

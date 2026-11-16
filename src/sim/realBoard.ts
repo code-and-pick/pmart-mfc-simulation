@@ -76,7 +76,7 @@ export interface RealShipment {
   createdAt: string;
   /** GET /shipments/{id} — 출고 상태·배차 요청·포장 */
   info?: Shipment;
-  /** 배송 찾기(GET /deliveries?mfcId=)에서 이 출고 주문의 정방향 배송 — 수행 상태 */
+  /** 배송 찾기(GET /deliveries?mfcId=)에서 이 출고의 배송(정방향·재발송) — 수행 상태 */
   delivery?: StaffDeliverySummary;
   /** GET /deliveries/{id}/dispatch — 배차 상태·시도 */
   dispatch?: DeliveryDispatch;
@@ -201,7 +201,10 @@ export class RealBoard {
   /** 출고 조회 결과 (shipmentId → 응답·읽은 시각·그때의 작업 version 서명) */
   readonly shipmentInfo = new Map<string, { data: Shipment; readMs: number; sig: string }>();
   /** 주문 ID → 정방향 배송(최신) */
+  /** 출고 ID → 배송. 배차 상세의 shipmentId 로 잇는다(재발송은 같은 주문의 두 번째 출고 — fulfillment 0.5.0) */
   readonly deliveries = new Map<string, StaffDeliverySummary>();
+  /** 배송 ID → 배차 상세의 shipmentId(바뀌지 않으므로 한 번 읽으면 둔다). 배차 상세에 없으면 null */
+  private readonly deliveryShipment = new Map<string, string | null>();
   readonly dispatches = new Map<string, { data: DeliveryDispatch; readMs: number }>();
   /** 출고·배차가 바뀔 때마다 올라간다 — 3D 이름표가 다시 그릴지 판단 */
   deliveryVersion = 0;
@@ -308,14 +311,16 @@ export class RealBoard {
     const info = this.shipmentInfo.get(shipmentId)?.data;
     if (!info) return false;
     if (SHIPMENT_PENDING.has(info.state)) return true;
-    const dl = this.deliveries.get(info.orderId);
+    const dl = this.deliveries.get(shipmentId);
     return !!dl && PRE_PICKUP.has(dl.state);
   }
 
   /**
    * 출고 → 배송 → 배차를 읽는다(읽기만). 출고는 작업 version 이 바뀌었거나 인계 전이면 shipmentRefreshSec 마다,
    * 배송 찾기는 배차 요청된 출고가 있을 때 조회마다 한 번, 배차 상세는 픽업 전 배송만.
-   * 출고의 deliveryId 가 비어 있어(R-19) 배송 찾기의 orderId 로 잇는다.
+   * 출고의 deliveryId 가 비어 있어(R-19) 배송 찾기의 orderId 로 후보를 고르고, 배차 상세의 shipmentId 로 출고에 잇는다.
+   * 같은 주문에 출고가 둘(원래 + 오배송 재발송, fulfillment 0.5.0)이어도 섞이지 않는다.
+   * 배차 상세에 shipmentId 가 없으면 그 주문에 배차 요청된 출고가 하나일 때만 정방향 배송을 잇는다.
    */
   private async refreshShipments(now: number) {
     const rows = this.shipments();
@@ -355,35 +360,54 @@ export class RealBoard {
       this.dispatches.clear();
       return;
     }
-    try {
-      const list = await this.reader.searchDeliveries(this.mfcId, 50);
-      const wanted = new Set(requested.map((v) => v.data.orderId));
-      // 최신순 — 주문마다 처음 나온 정방향 배송
-      const next = new Map<string, StaffDeliverySummary>();
-      for (const d of list) if (d.type === 'FORWARD' && d.orderId && wanted.has(d.orderId) && !next.has(d.orderId)) next.set(d.orderId, d);
-      for (const [o, d] of next) {
-        const old = this.deliveries.get(o);
-        if (!old || old.version !== d.version || old.state !== d.state) this.deliveryVersion++;
-      }
-      this.deliveries.clear();
-      for (const [o, d] of next) this.deliveries.set(o, d);
-    } catch {
-      /* 배송 표시만 못 한다 — 지난 값 유지 */
-    }
     let dBudget = this.opt.maxShipmentPerPoll;
-    for (const d of this.deliveries.values()) {
-      if (dBudget <= 0) break;
+    const readNow = new Set<string>(); // 이번 조회에서 이미 읽은 배송
+    const readDispatch = async (d: StaffDeliverySummary) => {
       const hit = this.dispatches.get(d.deliveryId);
-      if (hit && !PRE_PICKUP.has(d.state)) continue; // 픽업 뒤는 한 번 읽은 것으로 충분
+      if (readNow.has(d.deliveryId)) return;
+      if (hit && this.deliveryShipment.has(d.deliveryId) && !PRE_PICKUP.has(d.state)) return; // 픽업 뒤는 한 번 읽은 것으로 충분
+      if (dBudget <= 0) return;
       dBudget--;
+      readNow.add(d.deliveryId);
       try {
         const data = await this.reader.getDeliveryDispatch(d.deliveryId);
         if (!hit || hit.data.version !== data.version || hit.data.state !== data.state) this.deliveryVersion++;
         this.dispatches.set(d.deliveryId, { data, readMs: now });
+        this.deliveryShipment.set(d.deliveryId, data.shipmentId ?? null);
       } catch {
         /* 다음 조회에서 다시 */
       }
+    };
+    try {
+      const list = await this.reader.searchDeliveries(this.mfcId, 50);
+      const byShipment = new Map(requested.map((v) => [v.data.shipmentId, v.data]));
+      const perOrder = new Map<string, string[]>();
+      for (const v of requested) perOrder.set(v.data.orderId, [...(perOrder.get(v.data.orderId) ?? []), v.data.shipmentId]);
+      // 최신순 — 출고마다 처음 나온 배송
+      const candidates = list.filter((d) => (d.type === 'FORWARD' || d.type === 'RESHIPMENT') && d.orderId && perOrder.has(d.orderId));
+      for (const d of candidates) if (!this.deliveryShipment.has(d.deliveryId)) await readDispatch(d);
+      const next = new Map<string, StaffDeliverySummary>();
+      for (const d of candidates) {
+        let sid = this.deliveryShipment.get(d.deliveryId);
+        if (!sid) {
+          const only = perOrder.get(d.orderId!)!;
+          if (d.type !== 'FORWARD' || only.length !== 1) continue;
+          sid = only[0];
+        }
+        if (byShipment.has(sid) && !next.has(sid)) next.set(sid, d);
+      }
+      for (const [k, d] of next) {
+        const old = this.deliveries.get(k);
+        if (!old || old.version !== d.version || old.state !== d.state) this.deliveryVersion++;
+      }
+      this.deliveries.clear();
+      for (const [k, d] of next) this.deliveries.set(k, d);
+      const seen = new Set(list.map((d) => d.deliveryId));
+      for (const id of [...this.deliveryShipment.keys()]) if (!seen.has(id)) this.deliveryShipment.delete(id);
+    } catch {
+      /* 배송 표시만 못 한다 — 지난 값 유지 */
     }
+    for (const d of this.deliveries.values()) await readDispatch(d);
     const live = new Set([...this.deliveries.values()].map((d) => d.deliveryId));
     for (const id of [...this.dispatches.keys()]) if (!live.has(id)) this.dispatches.delete(id);
   }
@@ -481,7 +505,7 @@ export class RealBoard {
       const info = this.shipmentInfo.get(g.shipmentId)?.data;
       if (!info) continue;
       g.info = info;
-      g.delivery = this.deliveries.get(info.orderId);
+      g.delivery = this.deliveries.get(g.shipmentId);
       if (g.delivery) g.dispatch = this.dispatches.get(g.delivery.deliveryId)?.data;
     }
     return [...by.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));

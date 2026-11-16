@@ -7,18 +7,20 @@
 
 | 무엇 | 위치 |
 |---|---|
-| 백엔드 → 시뮬레이터 공지·회신 | `docs/handoff/simulator/` (첫 공지 `2026-11-09-simulator-notice-integration-decisions.md` — R-01~R-12 현황 포함) |
-| **시험 센터 칸 = 이 시뮬레이터 평면**(코드 대응·새 필드·고회전 칸) | `docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md` |
-| **피킹 방문 순서**(실서버 모드는 받은 `visitSeq` 순서로 걷기, MOCK 은 `DOC_B_A_C` 그대로) | `docs/handoff/simulator/2026-11-09-simulator-notice-pick-visit-order.md` |
+| 백엔드 → 시뮬레이터 공지·회신 | `docs/handoff/simulator/mfc/` (2026-11-16 mfc·rider 폴더로 나눔, 백엔드 `8e3c90e7`. 첫 공지 `2026-11-09-simulator-notice-integration-decisions.md` — R-01~R-12 현황 포함) |
+| **시험 센터 칸 = 이 시뮬레이터 평면**(코드 대응·새 필드·고회전 칸) | `docs/handoff/simulator/mfc/2026-11-09-simulator-notice-layout-bins.md` |
+| **피킹 방문 순서**(실서버 모드는 받은 `visitSeq` 순서로 걷기, MOCK 은 `DOC_B_A_C` 그대로) | `docs/handoff/simulator/mfc/2026-11-09-simulator-notice-pick-visit-order.md` |
 | 고회전 칸 목록(백엔드·시뮬레이터 코드, 랙, 좌표) | `docs/simulator/mfc/layout/high-turnover.json` |
-| **회수 반입 자리 RTN-A-01**(평면에 없음 — 입고·검수 구역 안 x 38.6·z 22.0 m) | `docs/handoff/simulator/2026-11-09-simulator-notice-return-location.md`, 좌표 `docs/simulator/mfc/layout/backend-points.json` |
+| **회수 반입 자리 RTN-A-01**(평면에 없음 — 입고·검수 구역 안 x 38.6·z 22.0 m) | `docs/handoff/simulator/mfc/2026-11-09-simulator-notice-return-location.md`, 좌표 `docs/simulator/mfc/layout/backend-points.json` |
 | 실서버·실제 앱 연결 목표와 결정(SIM-1~11) | `docs/simulator/mfc/mfc-simulator-integration.md` |
 | 이 시뮬레이터 평면을 그린 도면 | `docs/simulator/mfc/layout/` (`buildLayout()` 실행 좌표로 그림, `floorplan.svg` — 고회전 랙은 빨간색) |
 | 백엔드 클라이언트 handoff(PDA 앱 등) | `docs/handoff/clients/` (2026-11-09 폴더 이동) |
 | **LAN 시험 계정**(MFC 작업자 70명 `mfcw-*`, `claude-mfc-wrk`·`claude-mfc-sup`, 비밀번호 파일 이름) — 2026-11-16 확인 | `docs/operations/lan-test-accounts.md` |
 | 직원 토큰 받는 흐름(Keycloak → `/internal/dev-token-exchange`) | `deploy/lan/checks/staff_auth.py`(시뮬레이터 `server/simAuth.ts` 가 같은 흐름, 비밀번호 재설정 동작은 뺌) |
 | 시뮬레이터 범위·CDC 시뮬레이터(별도) | `docs/simulator/scope.md`, `docs/simulator/cdc/` |
-| 평면 데이터(칸 6,762·좌표) | `docs/simulator/mfc/layout/layout.json` |
+| 평면 데이터(랙·좌표) | `docs/simulator/mfc/layout/layout.json` — 칸 수는 11-09 값(6,762) 그대로, 11-16 칸 설계(14,559)는 공지 `…/mfc/2026-11-16-simulator-notice-layout-v2-slots.md`·평면도 범례(`94ef4144`) |
+| **R-14 회신**(시험 토큰 교환 계속 사용, LAN 전용, 계정 제한, 401 재발 시 멈춤) | `docs/handoff/simulator/mfc/2026-11-16-simulator-reply-token-r14.md` (`cb2bf317`, 11-16 15:35) |
+| **11-09 이후 바뀐 것 + R-05·R-08·R-09·R-11 점검**(PC 3) | `docs/handoff/simulator/mfc/2026-11-16-simulator-notice-recheck-and-changes.md` (`7398d179`) |
 
 ## 목표 (사용자 2026-11-09)
 
@@ -45,7 +47,7 @@
 
 ## 시뮬레이터 반영 (2026-11-10)
 
-- 계약 사본 `src/domain/contract.ts`·MOCK 을 fulfillment 0.4.10 에 맞춤, 칸 코드 대응 `src/domain/locationCodes.ts`(백엔드 `layout.json` 과 6,762칸 일치 확인), 고회전 5칸·회수 반입 자리 `RTN-A-01` 화면 표시, 작업자는 받은 `visitSeq` 가 있으면 그 순서로 걷기.
+- 계약 사본 `src/domain/contract.ts`·MOCK 을 fulfillment 0.4.10 에 맞춤, 칸 코드 대응 `src/domain/locationCodes.ts`(백엔드 `layout.json` 과 6,762칸 일치 — 11-16 칸 설계로 14,559칸, 실서버 위치 목록과 일치 확인), 고회전 5칸·회수 반입 자리 `RTN-A-01` 화면 표시, 작업자는 받은 `visitSeq` 가 있으면 그 순서로 걷기.
 - 백엔드 회신 대비 상태와 남은 일: `docs/backend-requests.md`.
 
 용어: 백엔드는 "감독자"를 **센터 관리자**로 부른다(역할 코드 `MFC_SUPERVISOR` 그대로).

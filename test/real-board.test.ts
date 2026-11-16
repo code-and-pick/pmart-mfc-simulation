@@ -369,6 +369,45 @@ describe('RealBoard — 배차·배송 표시(rider 시뮬레이터 요청 M-01)
     expect(b.shipments()).toHaveLength(0);
   });
 
+  it('같은 주문의 재발송 출고(fulfillment 0.5.0)는 배차 상세의 shipmentId 로 잇는다 — 원래 출고와 섞이지 않음', async () => {
+    const r = new FakeReader();
+    const req = (sid: string) => ({ shipmentId: sid, trigger: 'MANUAL' as const, estimatedReadyAt: '2026-11-16T03:10:00Z', requestedAt: '2026-11-16T03:05:00Z' });
+    const p1 = summary({ taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'IN_PROGRESS', version: 2 });
+    const p2 = summary({ taskId: 'ORD-1-S2-PACK', taskType: 'PACK', state: 'IN_PROGRESS', version: 2, shipmentId: 'ORD-1-S2' });
+    r.list = [p1, p2];
+    r.details.set(p1.taskId, detail(p1, []));
+    r.details.set(p2.taskId, detail(p2, []));
+    r.ships.set('ORD-1-S1', ship({ state: 'HANDED_OVER', dispatchRequest: req('ORD-1-S1') }));
+    r.ships.set('ORD-1-S2', ship({ shipmentId: 'ORD-1-S2', fulfillmentId: 'FUL-1R', dispatchRequest: req('ORD-1-S2') }));
+    // 최신순: 재발송 배송이 먼저
+    r.dels = [dl({ deliveryId: 'DLV-2', type: 'RESHIPMENT', state: 'ASSIGNED', riderId: 'RD-2' }), dl({ deliveryId: 'DLV-1', state: 'COMPLETED', riderId: 'RD-1' })];
+    r.disp.set('DLV-1', { deliveryId: 'DLV-1', version: 1, shipmentId: 'ORD-1-S1', state: 'ASSIGNED', assignment: { riderId: 'RD-1', state: 'COMPLETED' } });
+    r.disp.set('DLV-2', { deliveryId: 'DLV-2', version: 1, shipmentId: 'ORD-1-S2', state: 'ASSIGNED', assignment: { riderId: 'RD-2', state: 'ASSIGNED' } });
+    const b = board(r, { ms: 0 });
+    await b.poll();
+    const by = new Map(b.shipments().map((g) => [g.shipmentId, g]));
+    expect(by.get('ORD-1-S1')?.delivery?.deliveryId).toBe('DLV-1');
+    expect(by.get('ORD-1-S2')?.delivery?.deliveryId).toBe('DLV-2');
+    expect(dispatchView(by.get('ORD-1-S2')!).riderId).toBe('RD-2');
+  });
+
+  it('배차 상세에 shipmentId 가 없고 그 주문 출고가 둘이면 잇지 않는다(추측하지 않음)', async () => {
+    const r = new FakeReader();
+    const req = (sid: string) => ({ shipmentId: sid, trigger: 'MANUAL' as const, estimatedReadyAt: '2026-11-16T03:10:00Z', requestedAt: '2026-11-16T03:05:00Z' });
+    const p1 = summary({ taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'IN_PROGRESS', version: 2 });
+    const p2 = summary({ taskId: 'ORD-1-S2-PACK', taskType: 'PACK', state: 'IN_PROGRESS', version: 2, shipmentId: 'ORD-1-S2' });
+    r.list = [p1, p2];
+    r.details.set(p1.taskId, detail(p1, []));
+    r.details.set(p2.taskId, detail(p2, []));
+    r.ships.set('ORD-1-S1', ship({ dispatchRequest: req('ORD-1-S1') }));
+    r.ships.set('ORD-1-S2', ship({ shipmentId: 'ORD-1-S2', dispatchRequest: req('ORD-1-S2') }));
+    r.dels = [dl({})];
+    r.disp.set('DLV-1', { deliveryId: 'DLV-1', version: 1, state: 'DISPATCHING' });
+    const b = board(r, { ms: 0 });
+    await b.poll();
+    expect(b.shipments().every((g) => !g.delivery)).toBe(true);
+  });
+
   it('출고 조회 전이면 UNKNOWN, 출고 취소면 SHIPMENT_CANCELLED', () => {
     expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '' }).stage).toBe('UNKNOWN');
     expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '', info: ship({ state: 'CANCELLED' }) }).stage).toBe('SHIPMENT_CANCELLED');

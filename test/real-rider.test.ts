@@ -61,12 +61,12 @@ describe('앞마당 라이더(실서버 관찰, M-02)', () => {
     const sync = () => (sim as unknown as { syncRealRiders(): void }).syncRealRiders();
 
     // 오는 중(ASSIGNED)은 rider 시뮬레이터 화면 몫 — MFC 에는 세우지 않는다
-    real.deliveries.set('ORD-1', dl('ASSIGNED'));
+    real.deliveries.set('ORD-1-S1', dl('ASSIGNED'));
     real.deliveryVersion++;
     sync();
     expect(sim.riders).toHaveLength(0);
 
-    real.deliveries.set('ORD-1', dl('ARRIVED_AT_STORE'));
+    real.deliveries.set('ORD-1-S1', dl('ARRIVED_AT_STORE'));
     real.deliveryVersion++;
     sync();
     expect(sim.riders).toHaveLength(1);
@@ -77,7 +77,7 @@ describe('앞마당 라이더(실서버 관찰, M-02)', () => {
     expect(r.carrying).toBe(0);
 
     real.shipmentInfo.set('ORD-1-S1', { data: ship('HANDED_OVER', true), readMs: 0, sig: '' });
-    real.deliveries.set('ORD-1', dl('PICKED_UP'));
+    real.deliveries.set('ORD-1-S1', dl('PICKED_UP'));
     real.deliveryVersion++;
     sync();
     await walk(sim, 5);
@@ -91,7 +91,7 @@ describe('앞마당 라이더(실서버 관찰, M-02)', () => {
     const real = sim.real!;
     real.tasks.set(packTask.taskId, { summary: packTask, detail: packTask, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
     real.shipmentInfo.set('ORD-1-S1', { data: ship('HANDED_OVER', true), readMs: 0, sig: '' });
-    real.deliveries.set('ORD-1', dl('PICKED_UP'));
+    real.deliveries.set('ORD-1-S1', dl('PICKED_UP'));
     real.deliveryVersion++;
     (sim as unknown as { syncRealRiders(): void }).syncRealRiders();
     expect(sim.riders).toHaveLength(0);

@@ -60,6 +60,13 @@ export class RealWorker extends Agent {
   leaving = false;
   /** 멈춤(퇴근 끝) */
   left = false;
+  /**
+   * 계정 멈춤 — 토큰을 새로 받은 뒤에도 401(R-14 회신 조건: "다시 받은 뒤에도 401 이면 그 계정은 멈춘다").
+   * 다시 켜지 않는다(새로 고침 전까지). 화면에는 남겨 둔다.
+   */
+  halted = false;
+  /** 401 을 받고 토큰을 새로 받았는데 아직 성공한 호출이 없음 */
+  private reauthed = false;
   /** 이 작업자가 집어 내려놓은 SKU → 포장 위치·온도대 (밀봉 때 씀) */
   private readonly dropped = new Map<string, { loc: string; temp: TemperatureZone | null }>();
   private pulls = 0;
@@ -86,12 +93,26 @@ export class RealWorker extends Agent {
     return `${this.ctx.runId}:${this.account}:${op}:${id}${extra}`;
   }
 
-  /** 결과 불명·재시도 가능 거절은 같은 키로 다시 보낸다. 업무 거절은 그대로 올린다 */
+  /**
+   * 결과 불명·재시도 가능 거절은 같은 키로 다시 보낸다. 업무 거절은 그대로 올린다.
+   * 401: 토큰을 버리고 새로 받아 한 번만 같은 키로 다시 보낸다. 그래도 401 이면 AccountHalted(R-14).
+   */
   private async retry<T>(fn: () => Promise<T>): Promise<T> {
     for (let attempt = 0; ; attempt++) {
       try {
-        return await fn();
+        const r = await fn();
+        this.reauthed = false;
+        return r;
       } catch (e) {
+        if (e instanceof ApiProblem && e.problem.status === 401) {
+          if (this.reauthed) throw new AccountHalted();
+          this.reauthed = true;
+          this.tokens.invalidate();
+          this.activity = '401 — 토큰 다시 받는 중';
+          this.ctx.log(`${this.account} 401 — 토큰을 새로 받아 한 번 다시 보냄`);
+          attempt--;
+          continue;
+        }
         const retryable = e instanceof ResultUnknown || (e instanceof ApiProblem && e.problem.retryable === true);
         if (!retryable || attempt >= 4) throw e;
         this.activity = `응답 확인 중… (재전송 ${attempt + 1})`;
@@ -124,6 +145,10 @@ export class RealWorker extends Agent {
         const k = this.key('pull', String(this.pulls));
         a = await this.retry(() => this.be.pullNextTask(this.ctx.mfcId, this.workerId!, 'PICK_PACK', k));
       } catch (e) {
+        if (e instanceof AccountHalted) {
+          this.halt(null);
+          break;
+        }
         const code = e instanceof ApiProblem ? e.problem.code : (e as Error).message;
         if (code === 'NO_TASK_AVAILABLE') {
           this.lastProblem = null;
@@ -151,6 +176,10 @@ export class RealWorker extends Agent {
         }
         this.lastProblem = null;
       } catch (e) {
+        if (e instanceof AccountHalted) {
+          this.halt(a);
+          break;
+        }
         this.state = 'ERROR';
         this.lastProblem = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}` : (e as Error).message;
         this.activity = `오류: ${this.lastProblem}`;
@@ -164,16 +193,27 @@ export class RealWorker extends Agent {
         await this.walkTo(this.home);
       }
     }
+    if (this.halted) return;
     this.idle = true;
     this.state = 'IDLE';
     this.activity = '퇴근';
     this.left = true;
   }
 
+  /** R-14: 이 계정을 멈춘다. 들고 있던 작업은 서버에 그대로 남는다(센터 관리자가 풀거나 다시 배정) */
+  private halt(a: CapacityAssignment | null) {
+    this.halted = true;
+    this.idle = true;
+    this.state = 'ERROR';
+    this.lastProblem = '401 반복 — 계정 멈춤(R-14)';
+    this.activity = '계정 멈춤 — 토큰을 새로 받은 뒤에도 401';
+    this.ctx.log(`${this.account} 토큰을 새로 받은 뒤에도 401 — 계정 멈춤(R-14)${a ? `, 작업 ${a.taskType} ${a.taskId} 는 서버에 그대로` : ''}`);
+  }
+
   /** 배정이 작업에 반영(ASSIGNED, 담당 = 나)되기를 기다린다. 이미 시작했으면(IN_PROGRESS) 이어서 한다 */
   private async awaitAssigned(a: CapacityAssignment): Promise<{ task: TaskDetail; started: boolean }> {
     for (let i = 0; ; i++) {
-      const t = await this.be.getTask(a.taskId);
+      const t = await this.retry(() => this.be.getTask(a.taskId));
       const mine = t.assignment?.workerId === this.workerId;
       if (mine && t.state === 'IN_PROGRESS') return { task: t, started: true };
       if (mine && t.state === 'ASSIGNED') return { task: t, started: false };
@@ -200,7 +240,7 @@ export class RealWorker extends Agent {
     this.hasCart = true;
 
     // 시작 뒤 상세의 visitSeq 가 방문 순서(fulfillment 0.4.10, ADR-0050). 없으면 줄 순서
-    task = await be.getTask(task.taskId);
+    task = await this.retry(() => be.getTask(task.taskId));
     const stops = task.lines
       .flatMap((l) =>
         (l.picks ?? [])
@@ -377,3 +417,6 @@ export class RealWorker extends Agent {
     };
   }
 }
+
+/** 토큰을 새로 받은 뒤에도 401 — 이 계정은 멈춘다(R-14) */
+class AccountHalted extends Error {}

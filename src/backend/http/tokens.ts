@@ -25,6 +25,11 @@ export class TokenSource {
     return this.token?.operatorId ?? null;
   }
 
+  /** 들고 있는 토큰을 버린다 — 다음 get() 이 개발 서버에서 새로 받는다(401 을 받았을 때 한 번) */
+  invalidate() {
+    this.token = null;
+  }
+
   /** 쓸 수 있는 토큰. 받지 못하면 null (호출 쪽은 401 로 보게 된다). */
   async get(): Promise<string | null> {
     if (this.serverInjected) return null;

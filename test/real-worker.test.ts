@@ -71,8 +71,14 @@ class FakeBe {
   queue: (CapacityAssignment | 'NONE')[] = [];
   tasks = new Map<string, TaskDetail>();
   dispatchFails = false;
+  /** 앞으로 몇 번 401 을 돌려줄지(다음 작업 받기) */
+  unauthorized = 0;
   async pullNextTask(_m: string, w: string, area: string) {
     this.calls.push(`pull ${w} ${area}`);
+    if (this.unauthorized > 0) {
+      this.unauthorized--;
+      throw new ApiProblem({ status: 401, code: 'UNAUTHENTICATED' });
+    }
     const n = this.queue.shift() ?? 'NONE';
     if (n === 'NONE') throw new ApiProblem({ status: 409, code: 'NO_TASK_AVAILABLE' });
     return n;
@@ -123,9 +129,9 @@ function setup() {
     point: () => null,
   };
   const be = new FakeBe();
-  const tokens = { get: async () => 'tok', operatorId: ME, lastError: null } as unknown as TokenSource;
-  const w = new RealWorker('mfcw-pp-01', layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens);
-  return { w, be };
+  const tokens = { get: async () => 'tok', operatorId: ME, lastError: null, invalidated: 0, invalidate() { this.invalidated++; } };
+  const w = new RealWorker('mfcw-pp-01', layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens as unknown as TokenSource);
+  return { w, be, tokens };
 }
 
 async function runFor(w: RealWorker, sec: number) {
@@ -192,5 +198,28 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(w.lastProblem).toBeNull();
     expect(w.state).toBe('IDLE');
     w.stop();
+  });
+
+  it('R-14: 401 이면 토큰을 새로 받아 한 번 다시 보낸다 — 그다음 성공하면 계속', async () => {
+    const { w, be, tokens } = setup();
+    be.unauthorized = 1;
+    void w.run();
+    await runFor(w, 12);
+    expect(tokens.invalidated).toBe(1);
+    expect(w.halted).toBe(false);
+    expect(be.calls.filter((x) => x.startsWith('pull')).length).toBeGreaterThanOrEqual(3); // 401 → 다시(NO_TASK) → 대기 뒤 또
+    w.stop();
+  });
+
+  it('R-14: 토큰을 새로 받은 뒤에도 401 이면 그 계정은 멈추고 더 부르지 않는다', async () => {
+    const { w, be, tokens } = setup();
+    be.unauthorized = 5;
+    void w.run();
+    await runFor(w, 120);
+    expect(tokens.invalidated).toBe(1);
+    expect(be.calls.filter((x) => x.startsWith('pull')).length).toBe(2);
+    expect(w.halted).toBe(true);
+    expect(w.left).toBe(false); // 화면에 남겨 사유를 보인다
+    expect(w.lastProblem).toMatch(/R-14/);
   });
 });

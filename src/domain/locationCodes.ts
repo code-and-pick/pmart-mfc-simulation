@@ -1,5 +1,5 @@
 // 시뮬레이터 평면 코드 ↔ 백엔드 위치 코드(ADR-0042) 대응.
-// 근거: pmart-backend docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md,
+// 근거: pmart-backend docs/handoff/simulator/mfc/2026-11-09-simulator-notice-layout-bins.md, …/mfc/2026-11-16-simulator-notice-layout-v2-slots.md,
 //       deploy/lan/seed/mfc_layout.py plan() — 백엔드는 이 평면(buildLayout)을 그대로 MFC-SEED-01 에 등록했다(SIM-6 보완).
 // 실서버 모드에서는 백엔드 코드가 정본이다. 화면·MOCK 은 시뮬레이터 코드를 그대로 쓴다.
 

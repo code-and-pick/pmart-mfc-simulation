@@ -88,7 +88,7 @@ export const DEFAULT_PARAMS: SimParams = {
 };
 
 /**
- * 백엔드 시험 센터(MFC-SEED-01)가 정한 값 — 백엔드 공지가 근거다(pmart-backend docs/handoff/simulator/).
+ * 백엔드 시험 센터(MFC-SEED-01)가 정한 값 — 백엔드 공지가 근거다(pmart-backend docs/handoff/simulator/mfc/).
  * 실서버 모드에서는 위치 조회(GET /locations) 결과가 정본이고, 여기 값은 MOCK 화면 표시용 사본이다.
  */
 export const BACKEND_FACTS = {
