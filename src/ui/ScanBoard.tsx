@@ -85,7 +85,7 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
             </div>
             <div className="bc-grid">
               {loc ? <LocBarcode code={loc} caption="위치 (누르면 3D 에서 그 칸)" /> : <div className="note">지시 칸 없음</div>}
-              {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers scan, 클라이언트 3cab409 기준 첫 값만) — 그 값을 먼저 보인다 */}
+              {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers.dart:368, 클라이언트 c7498f8 기준 첫 값만 — backend-requests C-1) — 그 값을 먼저 보인다 */}
               {l.barcode ? (
                 <>
                   <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`상품 ${l.sku} (작업 지시 바코드)`} height={44} />
@@ -151,7 +151,7 @@ export function ScanBoard() {
         </a>{' '}
         ·{' '}
         <a href="/labels/locations/index.html" target="_blank" rel="noreferrer">
-          위치 6,811곳 목록
+          위치 {BACKEND_FACTS.labelLocationCount.toLocaleString()}곳 목록
         </a>
         (백엔드 deploy/lan/seed/labels)
       </div>

@@ -114,6 +114,8 @@ export const BACKEND_FACTS = {
     { code: 'CRT-C-01', label: '카트 냉장' },
     { code: 'CRT-F-01', label: '카트 냉동' },
   ],
+  /** 백엔드 인쇄용 위치 라벨 수(목차 합계) — 시뮬레이터 선반 14,559 + 그 밖 49 와 모두 맞음(11-17 대조) [확정] (deploy/lan/seed/labels/README.md·locations/index.html, ece5a2ad 2026-11-17) */
+  labelLocationCount: 14608,
 } as const;
 
 export const SPEEDS = [0, 1, 5, 15, 30, 60, 120] as const;

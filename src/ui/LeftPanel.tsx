@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useApp, useTick } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { REAL_LINK } from '../config';
+import { BACKEND_FACTS, REAL_LINK } from '../config';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import type { InboundState } from '../sim/inbound';
 import { fmtClock } from '../sim/metrics';
@@ -174,6 +174,11 @@ function VirtualWorkers() {
         hint="mfcw-pp-01부터 켭니다. 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
         apply={(v) => sim.setVirtualWorkers(v)}
       />
+      {ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length && (
+        <p className="note warn">
+          카트가 {BACKEND_FACTS.cartLocations.length}대뿐입니다(백엔드 라벨 README) — 현장에서는 {BACKEND_FACTS.cartLocations.length}명 넘게 동시에 피킹할 수 없습니다. 서버는 카트 수를 막지 않으므로 화면에서는 그대로 돕니다.
+        </p>
+      )}
       {ws.length > 0 && (
         <div className="probe">
           {ws.map((w) => (
