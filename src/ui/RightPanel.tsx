@@ -2,11 +2,13 @@ import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'reac
 import { useApp, useTick } from '../app/context';
 import { fmtClock, fmtDur } from '../sim/metrics';
 import { RealOrders, RealStockTable, RealSummary } from './RealPanel';
+import { ScanBoard } from './ScanBoard';
 
-type Tab = 'orders' | 'api' | 'events' | 'logs' | 'inventory';
+type Tab = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
 const REAL_TABS: { t: Tab; text: string }[] = [
   { t: 'orders', text: '실제 주문' },
   { t: 'inventory', text: '주문 상품 재고' },
+  { t: 'scan', text: '바코드' },
   { t: 'api', text: 'API 호출' },
 ];
 const TABS: { t: Tab; text: string }[] = [
@@ -14,6 +16,7 @@ const TABS: { t: Tab; text: string }[] = [
   { t: 'events', text: '계약 이벤트' },
   { t: 'logs', text: '현장' },
   { t: 'inventory', text: '재고' },
+  { t: 'scan', text: '바코드' },
 ];
 
 function Kpis() {
@@ -95,6 +98,7 @@ function LogBody({ tab }: { tab: Tab }): ReactNode {
   const { sim: s, controller } = useApp();
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
   if (tab === 'orders') return s.real ? <RealOrders /> : null;
+  if (tab === 'scan') return <ScanBoard />;
   if (tab === 'api') {
     return s.apiLog.slice(-150).map((r, i) => {
       const ok = typeof r.status === 'number' && r.status < 400;
@@ -195,7 +199,7 @@ function Log({ tab }: { tab: Tab }) {
   const box = useRef<HTMLDivElement>(null);
   // 바닥에 붙어 있었으면 새 행이 와도 바닥을 따라간다
   const stick = useRef(true);
-  const key = `${tab}:${tab === 'orders' ? (s.real?.polls ?? 0) : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
+  const key = `${tab}:${tab === 'orders' || tab === 'scan' ? (s.real?.polls ?? 0) : ''}:${tab === 'scan' ? (s.real?.skuVersion ?? 0) : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
   // 내용이 바뀔 때만 다시 만든다 (4Hz 갱신마다 150행을 새로 그리지 않게)
   const body = useMemo(() => <LogBody tab={tab} />, [key]);
   const lastTab = useRef(tab);
@@ -204,7 +208,7 @@ function Log({ tab }: { tab: Tab }) {
     if (!el) return;
     const tabChanged = lastTab.current !== tab;
     lastTab.current = tab;
-    if (tab !== 'inventory' && tab !== 'orders' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
+    if (tab !== 'inventory' && tab !== 'orders' && tab !== 'scan' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
   }, [key, tab]);
   return (
     <div

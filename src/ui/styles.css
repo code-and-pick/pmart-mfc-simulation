@@ -556,3 +556,14 @@ table.inv.real .muted {
 .warn {
   color: #fbbc04;
 }
+
+/* 스캔 판·바코드 (PDA 카메라로 모니터를 찍는 용도 — 흰 바탕 고정) */
+.scan h4 { margin: 10px 0 4px; font-size: 12px; }
+.scan-task { border-top: 1px solid rgba(127, 127, 127, 0.3); margin-top: 8px; padding-top: 4px; }
+.scan-stop { margin: 6px 0; }
+.bc-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.bc { background: #fff; color: #000; border-radius: 4px; padding: 6px 8px 4px; display: inline-block; margin: 4px 0; }
+.bc svg { display: block; }
+.bc-cap { font-size: 11px; color: #444; margin-bottom: 2px; }
+.bc-val { font: 600 13px/1.3 Consolas, monospace; letter-spacing: 1px; text-align: center; }
+.bc.bad { color: #b00020; font-size: 12px; }

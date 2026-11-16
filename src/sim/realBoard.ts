@@ -10,6 +10,7 @@ import type {
   DispatchState,
   ExecutionState,
   Shipment,
+  SkuBarcodes,
   StaffDeliverySummary,
   StockQualityState,
   StockWorkState,
@@ -26,6 +27,7 @@ export interface RealReader {
   getShipment(shipmentId: string): Promise<Shipment>;
   searchDeliveries(mfcId: string, size?: number): Promise<StaffDeliverySummary[]>;
   getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch>;
+  getSku(sku: string): Promise<SkuBarcodes>;
 }
 
 export interface RealBoardOptions {
@@ -282,6 +284,21 @@ export class RealBoard {
       this.lastError = describe(e);
     } finally {
       this.busy = false;
+    }
+  }
+
+  /** 상품 바코드(스캔 판) — SKU → 서버 barcodes, 못 읽었으면 'ERR'. 화면이 볼 때만 한 번 읽는다(주기 조회 없음) */
+  readonly skuBarcodes = new Map<string, string[] | 'ERR' | 'LOADING'>();
+  skuVersion = 0;
+  requestSkuBarcodes(skus: Iterable<string>) {
+    for (const sku of skus) {
+      if (this.skuBarcodes.has(sku)) continue;
+      this.skuBarcodes.set(sku, 'LOADING');
+      this.reader
+        .getSku(sku)
+        .then((d) => this.skuBarcodes.set(sku, d.barcodes ?? []))
+        .catch(() => this.skuBarcodes.set(sku, 'ERR'))
+        .finally(() => this.skuVersion++);
     }
   }
 

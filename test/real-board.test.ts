@@ -86,6 +86,9 @@ class FakeReader implements RealReader {
     this.dcalls.search++;
     return this.dels;
   }
+  async getSku(sku: string) {
+    return { sku, barcodes: [] };
+  }
   async getDeliveryDispatch(id: string) {
     this.dcalls.dispatch++;
     const d = this.disp.get(id);

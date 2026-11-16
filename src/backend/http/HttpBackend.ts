@@ -16,6 +16,7 @@ import {
   type Package,
   type Problem,
   type SealPackageRequest,
+  type SkuBarcodes,
   type StaffDeliverySummary,
   type Shipment,
   type TaskDetail,
@@ -125,6 +126,11 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
+  }
+
+  /** product-service SKU 조회 — 스캔 판의 상품 바코드(서버 값이 정본, CSV 사본 아님) */
+  getSku(sku: string): Promise<SkuBarcodes> {
+    return this.request('GET', `/skus/${enc(sku)}`);
   }
 
   /** mfc-capacity 다음 작업 받기 — 작업자 본인 토큰(주체 = workerId). 들고 있는 작업이 있으면 그것(200) */

@@ -390,6 +390,12 @@ export interface CapacityAssignment {
   warnings?: string[];
 }
 
+/** product-service SkuDetail 일부 (GET /skus/{sku}) — 바코드만 쓴다(스캔 판) */
+export interface SkuBarcodes {
+  sku: string;
+  barcodes?: string[];
+}
+
 // ── 배송(읽기만) — 라이더 API 는 rider 시뮬레이터만 부른다(backend-requests.md "rider 시뮬레이터 요청") ──
 
 /** delivery-dispatch DispatchState — 배차 관점. 수행 상태(ExecutionState)와 다른 서비스의 다른 값이라 합치지 않는다 */

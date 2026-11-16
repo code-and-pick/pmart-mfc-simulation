@@ -96,6 +96,13 @@ export const BACKEND_FACTS = {
   highTurnoverBins: ['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'],
   /** 회수 반입 자리 RTN-A-01, 입고·검수 구역 안 x 38.6 · z 22.0 m [확정] (2026-11-09-simulator-notice-return-location.md, backend-points.json) */
   returnIntake: { code: 'RTN-A-01', x: 38.6, z: 22.0 },
+  /** 이동 카트 위치 4개 — PDA 카트 스캔 값 = 위치 코드 [확정] (백엔드 deploy/lan/seed/mfc_layout.py, 라벨 cart-labels-MFC-SEED-01.html 2026-11-16) */
+  cartLocations: [
+    { code: 'CRT-A-01', label: '카트 상온 1' },
+    { code: 'CRT-A-02', label: '카트 상온 2' },
+    { code: 'CRT-C-01', label: '카트 냉장' },
+    { code: 'CRT-F-01', label: '카트 냉동' },
+  ],
 } as const;
 
 export const SPEEDS = [0, 1, 5, 15, 30, 60, 120] as const;
