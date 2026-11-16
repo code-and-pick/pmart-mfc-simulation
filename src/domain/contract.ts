@@ -1,5 +1,6 @@
 // pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.4.11) 의 부분 사본 + _common.yaml 공통 형
-// + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부.
+// + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부
+// + delivery-dispatch-service.yaml (0.3.3)·delivery-execution-service.yaml (0.4.0) 의 조회 형 일부(실서버 관찰, rider 시뮬레이터 요청 M-01·M-02).
 // 이 파일의 이름·상태값은 계약을 그대로 따른다. 계약이 바뀌면 여기를 먼저 맞춘다.
 // 시뮬레이터가 쓰지 않는 경로(중지·재포장·인계 판정 등)의 형은 옮기지 않았다.
 // 0.4.11(2026-11-13): 배차 자동 요청 없음 — 점원 요청(MANUAL)만. 형 변화 없음(AUTO_ON_READY 는 예전 기록 때문에 남음).
@@ -370,3 +371,64 @@ export class ApiProblem extends Error {
 
 /** 응답을 받지 못함 — 실패로 단정하지 않는다(같은 키 재전송 또는 원결과 조회로 해소). */
 export class ResultUnknown extends Error {}
+
+// ── 배송(읽기만) — 라이더 API 는 rider 시뮬레이터만 부른다(backend-requests.md "rider 시뮬레이터 요청") ──
+
+/** delivery-dispatch DispatchState — 배차 관점. 수행 상태(ExecutionState)와 다른 서비스의 다른 값이라 합치지 않는다 */
+export type DispatchState = 'CREATED' | 'DISPATCHING' | 'ASSIGNED' | 'PICKED_UP' | 'CANCELLED_BEFORE_PICKUP' | 'DISPATCH_FAILED' | 'CLOSED' | 'BLOCKED';
+
+/** delivery-execution ExecutionState — 배송 수행 관점 */
+export type ExecutionState =
+  | 'UNASSIGNED'
+  | 'ASSIGNED'
+  | 'ARRIVED_AT_STORE'
+  | 'PICKED_UP'
+  | 'ARRIVED_AT_CUSTOMER'
+  | 'FAILURE_REPORTED'
+  | 'COMPLETED'
+  | 'FAILED'
+  | 'SUSPENDED'
+  | 'RETURN_IN_PROGRESS'
+  | 'RETURN_PICKED_UP'
+  | 'RETURNED_TO_STORE'
+  | 'CANCELLED';
+
+/** delivery-execution StaffDeliverySummary (GET /deliveries?mfcId= — 센터 직원은 mfcId 필수). 개인정보 없음 */
+export interface StaffDeliverySummary {
+  deliveryId: string;
+  version: number;
+  type: 'FORWARD' | 'RETURN' | 'RESHIPMENT';
+  orderId: string | null;
+  mfcId: string | null;
+  riderId: string | null;
+  state: ExecutionState;
+  assignedAt: string | null;
+  pickedUpAt: string | null;
+  completedAt: string | null;
+  createdAt: string;
+}
+
+/** delivery-dispatch DispatchAttempt 일부 */
+export interface DispatchAttempt {
+  attemptId: string;
+  trigger?: 'AUTO' | 'STORE_STAFF' | 'REASSIGN' | 'RETRY';
+  state: 'SEARCHING' | 'OFFERING' | 'ASSIGNED' | 'FAILED' | 'CANCELLED';
+  currentRadiusKm?: number;
+  retryCount?: number;
+  startedAt?: string;
+  deadlineAt?: string;
+  failureReason?: 'NO_RIDER' | 'REPEATED_REJECTION' | 'EXPIRED' | 'SYSTEM_FAILURE';
+}
+
+/** delivery-dispatch Delivery (GET /deliveries/{deliveryId}/dispatch) 일부 */
+export interface DeliveryDispatch {
+  deliveryId: string;
+  version: number;
+  orderId?: string;
+  shipmentId?: string;
+  mfcId?: string;
+  state: DispatchState;
+  assignment?: { riderId: string; state: 'ASSIGNED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED'; assignedAt?: string; pickedUpAt?: string } | null;
+  attempts?: DispatchAttempt[];
+  updatedAt?: string;
+}

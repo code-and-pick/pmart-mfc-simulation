@@ -2,7 +2,7 @@
 import { useApp } from '../app/context';
 import { REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
-import type { RealTask } from '../sim/realBoard';
+import { dispatchText, dispatchView, type DispatchStage, type RealShipment, type RealTask } from '../sim/realBoard';
 
 export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
   WAITING: '대기',
@@ -72,6 +72,31 @@ function TaskCell({ t }: { t?: RealTask }) {
   );
 }
 
+const STAGE_CLASS: Partial<Record<DispatchStage, string>> = {
+  REQUESTED: 'st-wait',
+  WAITING_DISPATCH: 'st-wait',
+  DISPATCHING: 'st-ready',
+  ASSIGNED: 'st-asg',
+  AT_STORE: 'st-run',
+  OUT_FOR_DELIVERY: 'st-done',
+  DELIVERED: 'st-done',
+  ENDED: 'st-done',
+  DISPATCH_FAILED: 'st-bad',
+  SHIPMENT_CANCELLED: 'st-done',
+};
+
+function DispatchCell({ r }: { r: RealShipment }) {
+  const v = dispatchView(r);
+  // 배차(delivery-dispatch)와 배송 수행(delivery-execution)은 다른 서비스의 다른 상태 — 둘 다 출처를 붙여 보인다
+  const src = [v.dispatchState && `배차 ${v.dispatchState}`, v.execState && `배송 ${v.execState}`].filter(Boolean).join(' · ');
+  return (
+    <td>
+      <span className={`st ${STAGE_CLASS[v.stage] ?? ''}`}>{dispatchText(r)}</span>
+      <div className="sub">{src || (r.info ? `출고 ${r.info.state}` : '')}</div>
+    </td>
+  );
+}
+
 /** 실제 주문(출고) 목록 */
 export function RealOrders() {
   const { sim } = useApp();
@@ -93,6 +118,7 @@ export function RealOrders() {
           <th>출고 · 상품</th>
           <th>PICK</th>
           <th>PACK</th>
+          <th>배차</th>
         </tr>
       </thead>
       <tbody>
@@ -110,6 +136,7 @@ export function RealOrders() {
               </td>
               <TaskCell t={r.pick} />
               <TaskCell t={r.pack ?? r.ret} />
+              <DispatchCell r={r} />
             </tr>
           );
         })}

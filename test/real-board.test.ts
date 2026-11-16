@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { keycloakUsername, passwordFileFor } from '../src/backend/http/accounts';
 import { TokenSource } from '../src/backend/http/tokens';
-import type { CapacityWorker, CenterStock, TaskDetail, TaskState, TaskSummary } from '../src/domain/contract';
-import { RealBoard, type RealReader } from '../src/sim/realBoard';
+import type { CapacityWorker, CenterStock, DeliveryDispatch, Shipment, StaffDeliverySummary, TaskDetail, TaskState, TaskSummary } from '../src/domain/contract';
+import { RealBoard, dispatchView, type RealReader } from '../src/sim/realBoard';
 
 function summary(p: Partial<TaskSummary> & { taskId: string }): TaskSummary {
   return {
@@ -72,6 +72,61 @@ class FakeReader implements RealReader {
     this.calls.workers++;
     return [{ mfcId: 'MFC-SEED-01', workerId: 'OP-a', displayName: 'MFC시험 피킹포장 11', state: 'ACTIVE' }];
   }
+  ships = new Map<string, Shipment>();
+  dels: StaffDeliverySummary[] = [];
+  disp = new Map<string, DeliveryDispatch>();
+  dcalls = { ship: 0, search: 0, dispatch: 0 };
+  async getShipment(id: string) {
+    this.dcalls.ship++;
+    const s = this.ships.get(id);
+    if (!s) throw new Error('404');
+    return s;
+  }
+  async searchDeliveries() {
+    this.dcalls.search++;
+    return this.dels;
+  }
+  async getDeliveryDispatch(id: string) {
+    this.dcalls.dispatch++;
+    const d = this.disp.get(id);
+    if (!d) throw new Error('404');
+    return d;
+  }
+}
+
+function ship(p: Partial<Shipment>): Shipment {
+  return {
+    shipmentId: 'ORD-1-S1',
+    fulfillmentId: 'FUL-1',
+    orderId: 'ORD-1',
+    deliveryId: null,
+    version: 1,
+    state: 'PREPARING',
+    holdReason: null,
+    packages: [],
+    bagCount: 1,
+    weightG: 500,
+    readyAt: null,
+    dispatchRequest: null,
+    ...p,
+  };
+}
+
+function dl(p: Partial<StaffDeliverySummary>): StaffDeliverySummary {
+  return {
+    deliveryId: 'DLV-1',
+    version: 1,
+    type: 'FORWARD',
+    orderId: 'ORD-1',
+    mfcId: 'MFC-SEED-01',
+    riderId: null,
+    state: 'UNASSIGNED',
+    assignedAt: null,
+    pickedUpAt: null,
+    completedAt: null,
+    createdAt: '2026-11-16T03:05:00Z',
+    ...p,
+  };
 }
 
 const OPEN: TaskState[] = ['WAITING', 'READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'];
@@ -80,7 +135,17 @@ function board(r: FakeReader, now: { ms: number }) {
   return new RealBoard(
     r,
     'MFC-SEED-01',
-    { pollSec: 3, workerRefreshSec: 60, recentKeepSec: 600, openStates: OPEN, stockRefreshSec: 30, maxStockPerPoll: 10 },
+    {
+      pollSec: 3,
+      workerRefreshSec: 60,
+      recentKeepSec: 600,
+      openStates: OPEN,
+      stockRefreshSec: 30,
+      maxStockPerPoll: 10,
+      shipmentRefreshSec: 3,
+      maxShipmentPerPoll: 5,
+      handoverKeepSec: 3 * 3600,
+    },
     () => now.ms,
   );
 }
@@ -237,6 +302,73 @@ describe('시험 계정 — 비밀번호 파일 대응', () => {
     expect(passwordFileFor('claude-mfc-sup')).toBeNull();
     expect(passwordFileFor('../keycloak-admin')).toBeNull();
     expect(keycloakUsername('claude-mfc-wrk')).toBe('claude-mfc-wrk@pmart.com');
+  });
+});
+
+describe('RealBoard — 배차·배송 표시(rider 시뮬레이터 요청 M-01)', () => {
+  it('배차 요청 전 → 요청됨 → 배차 중(반경) → 배정 → 가게 도착 → 픽업, 인계 전에는 작업이 끝나도 남는다', async () => {
+    const r = new FakeReader();
+    const pack = summary({ taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'IN_PROGRESS', version: 2 });
+    r.list = [pack];
+    r.details.set(pack.taskId, detail(pack, []));
+    r.ships.set('ORD-1-S1', ship({}));
+    const now = { ms: 0 };
+    const b = board(r, now);
+    await b.poll();
+    expect(dispatchView(b.shipments()[0]).stage).toBe('NOT_REQUESTED');
+    expect(r.dcalls.search).toBe(0); // 배차 요청된 출고가 없으면 배송을 찾지 않는다
+
+    // 점원(PDA)이 배차 요청 — 배송은 아직 안 보임
+    r.ships.set('ORD-1-S1', ship({ version: 2, dispatchRequest: { shipmentId: 'ORD-1-S1', trigger: 'MANUAL', estimatedReadyAt: '2026-11-16T03:10:00Z', requestedAt: '2026-11-16T03:05:00Z' } }));
+    now.ms = 3500;
+    await b.poll();
+    expect(dispatchView(b.shipments()[0]).stage).toBe('REQUESTED');
+
+    // 배송 생김(주문 ID 로 잇는다 — 출고 deliveryId 는 비어 있음, R-19), 배차 중 반경 2km
+    r.dels = [dl({ orderId: 'ORD-OTHER', deliveryId: 'DLV-X' }), dl({})];
+    r.disp.set('DLV-1', { deliveryId: 'DLV-1', version: 1, state: 'DISPATCHING', attempts: [{ attemptId: 'A1', state: 'OFFERING', currentRadiusKm: 2, retryCount: 0 }] });
+    now.ms = 7000;
+    await b.poll();
+    let v = dispatchView(b.shipments()[0]);
+    expect(v.stage).toBe('DISPATCHING');
+    expect(v.radiusKm).toBe(2);
+    expect(b.shipments()[0].delivery?.deliveryId).toBe('DLV-1');
+
+    // 포장 끝 → PACK 이 목록에서 빠짐, 출고 READY. 라이더 배정
+    r.list = [];
+    r.details.set(pack.taskId, { ...detail(pack, []), state: 'COMPLETED', version: 3 });
+    r.ships.set('ORD-1-S1', ship({ version: 3, state: 'READY', dispatchRequest: { shipmentId: 'ORD-1-S1', trigger: 'MANUAL', estimatedReadyAt: '2026-11-16T03:10:00Z', requestedAt: '2026-11-16T03:05:00Z' } }));
+    r.dels = [dl({ version: 2, state: 'ASSIGNED', riderId: 'RD-sim-1' })];
+    r.disp.set('DLV-1', { deliveryId: 'DLV-1', version: 2, state: 'ASSIGNED', assignment: { riderId: 'RD-sim-1', state: 'ASSIGNED' } });
+    now.ms = 10_500;
+    await b.poll();
+    v = dispatchView(b.shipments()[0]);
+    expect(v.stage).toBe('ASSIGNED');
+    expect(v.riderId).toBe('RD-sim-1');
+    expect(v.dispatchState).toBe('ASSIGNED');
+    expect(v.execState).toBe('ASSIGNED');
+
+    // 작업이 끝난 지 recentKeepSec(10분)이 넘어도 인계 전이면 남는다
+    r.dels = [dl({ version: 3, state: 'ARRIVED_AT_STORE', riderId: 'RD-sim-1' })];
+    now.ms = 10_500 + 700_000;
+    await b.poll();
+    expect(b.shipments()).toHaveLength(1);
+    expect(dispatchView(b.shipments()[0]).stage).toBe('AT_STORE');
+
+    // 인계 확정 → 출고 HANDED_OVER, 배송 PICKED_UP → 이제 recentKeepSec 기준으로 빠진다
+    r.ships.set('ORD-1-S1', ship({ version: 4, state: 'HANDED_OVER', dispatchRequest: { shipmentId: 'ORD-1-S1', trigger: 'MANUAL', estimatedReadyAt: '2026-11-16T03:10:00Z', requestedAt: '2026-11-16T03:05:00Z' } }));
+    r.dels = [dl({ version: 4, state: 'PICKED_UP', riderId: 'RD-sim-1' })];
+    now.ms += 3500;
+    await b.poll(); // 인계 전 출고라 다시 읽음 → HANDED_OVER
+    expect(dispatchView(b.shipments()[0]).stage).toBe('OUT_FOR_DELIVERY');
+    now.ms += 3500;
+    await b.poll();
+    expect(b.shipments()).toHaveLength(0);
+  });
+
+  it('출고 조회 전이면 UNKNOWN, 출고 취소면 SHIPMENT_CANCELLED', () => {
+    expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '' }).stage).toBe('UNKNOWN');
+    expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '', info: ship({ state: 'CANCELLED' }) }).stage).toBe('SHIPMENT_CANCELLED');
   });
 });
 

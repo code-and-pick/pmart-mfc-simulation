@@ -5,7 +5,7 @@ import { People, Riders, Trucks } from './Agents';
 import { CameraRig, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
 import { Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
-import { RealMarkers, RealStock } from './Real';
+import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { Goods, Reserves } from './Stock';
 
 export function SiteScene({ app }: { app: AppCtx }) {
@@ -25,6 +25,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <TargetMarkers />
         {app.sim.real && <RealMarkers />}
         {app.sim.real && <RealStock />}
+        {app.sim.real && <RealShipLabels />}
         <People />
         <Riders />
         <Trucks />

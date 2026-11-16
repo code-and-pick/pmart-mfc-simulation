@@ -161,6 +161,9 @@ export class Simulation {
         openStates: REAL_LINK.openStates,
         stockRefreshSec: REAL_LINK.stockRefreshSec,
         maxStockPerPoll: REAL_LINK.maxStockPerPoll,
+        shipmentRefreshSec: REAL_LINK.shipmentRefreshSec,
+        maxShipmentPerPoll: REAL_LINK.maxShipmentPerPoll,
+        handoverKeepSec: REAL_LINK.handoverKeepSec,
       });
       this.time = wallClockSec();
       this.speed = 1;

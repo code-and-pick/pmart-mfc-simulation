@@ -121,6 +121,12 @@ export const REAL_LINK = {
   stockRefreshSec: 30,
   /** 한 번 조회에서 재고를 새로 읽는 최대 SKU 수 — SKU 하나씩만 조회할 수 있어 상한을 둔다 [시뮬] */
   maxStockPerPoll: 10,
+  /** 인계 전 출고의 출고·배차 상태를 작업이 안 바뀌어도 다시 읽는 간격(초) — 배차 중 반경·라이더 도착 반영 [시뮬] */
+  shipmentRefreshSec: 3,
+  /** 한 번 조회에서 출고·배차 상세를 새로 읽는 최대 건수(각각) [시뮬] */
+  maxShipmentPerPoll: 5,
+  /** 작업이 끝난 뒤에도 인계 전(출하 대기·픽업 전) 출고를 화면에 두는 최대 시간(초) — 배차 시도 10분 × 재시도 2회 넉넉히 [시뮬] */
+  handoverKeepSec: 3 * 3600,
   /** 열린 작업 상태 — 이 상태들만 주기 조회한다(완료 이력은 읽지 않음) [시뮬] */
   openStates: ['WAITING', 'READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'] as const,
 };

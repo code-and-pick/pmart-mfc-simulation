@@ -20,7 +20,7 @@ describe('Simulation (mock, 화면 없이)', () => {
     expect(sim.catalog.length).toBe(
       (['AMBIENT', 'CHILLED', 'FROZEN'] as const).reduce((a, t) => a + Math.floor(sim.layout.locationsByTemp[t].length * 0.85), 0),
     );
-  });
+  }, 60_000); // 혼자 4~5초 — 다른 시험과 함께 돌면 기본 5초를 넘는다
 
   it('3시간 운영: 출고 흐름과 입고·적치·보충이 함께 돌고 재고 불변식이 지켜진다', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS, ordersPerHour: 40 });

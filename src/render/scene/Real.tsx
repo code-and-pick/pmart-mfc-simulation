@@ -8,6 +8,7 @@ import type { StockWorkState, TaskState } from '../../domain/contract';
 import { RACK_DEPTH, type Location } from '../../domain/layout';
 import { TEMP_COLOR } from '../colors';
 import { makeLabel } from '../sprites';
+import { dispatchText, dispatchView } from '../../sim/realBoard';
 
 const RING_COLOR: Partial<Record<TaskState, number>> = { IN_PROGRESS: 0x34a853, ASSIGNED: 0x4285f4, BLOCKED: 0xea4335 };
 const MAX = 128;
@@ -84,6 +85,47 @@ export function RealMarkers() {
       <primitive object={labels} />
     </>
   );
+}
+
+/** 출하대기 랙(DSP-A-01) 위 이름표에 보이는 단계 — 포장 뒤 인계 전 출고 */
+const SHIP_LABEL_STAGES = new Set(['NOT_REQUESTED', 'REQUESTED', 'WAITING_DISPATCH', 'DISPATCHING', 'DISPATCH_FAILED', 'ASSIGNED', 'AT_STORE']);
+const MAX_SHIP_LABELS = 6;
+
+/**
+ * 출하대기 랙 이름표: 인계 전 출고마다 "출고 · 배차 단계"(rider 시뮬레이터 요청 M-01). 포장은 위치를 주지 않아 랙 1(DSP-A-01) 위에 쌓아 보인다.
+ * 서버가 준 출고·배차·배송 상태만 쓴다.
+ */
+export function RealShipLabels() {
+  const { sim } = useApp();
+  const labels = useMemo(() => new THREE.Group(), []);
+  const ver = useRef('');
+  useFrame(() => {
+    const real = sim.real;
+    if (!real) return;
+    const rows = real
+      .shipments()
+      .filter((r) => r.info && ['READY', 'PARTIALLY_HANDED_OVER', 'PREPARING'].includes(r.info.state) && SHIP_LABEL_STAGES.has(dispatchView(r).stage))
+      .filter((r) => r.info!.state !== 'PREPARING' || !!r.info!.dispatchRequest);
+    const texts = rows.slice(0, MAX_SHIP_LABELS).map((r) => `${r.info!.orderId.slice(0, 12)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
+    if (rows.length > MAX_SHIP_LABELS) texts.push(`외 ${rows.length - MAX_SHIP_LABELS}건`);
+    const key = texts.join('|');
+    if (key === ver.current) return;
+    ver.current = key;
+    for (const c of [...labels.children]) {
+      const s = c as THREE.Sprite;
+      s.material.map?.dispose();
+      s.material.dispose();
+      labels.remove(s);
+    }
+    const p = sim.backendPoint('DSP-A-01');
+    if (!p) return;
+    texts.forEach((t, i) => {
+      const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18 });
+      s.position.set(p.x, 2.4 + i * 0.45, p.z);
+      labels.add(s);
+    });
+  });
+  return <primitive object={labels} />;
 }
 
 const BOX = 0.1;

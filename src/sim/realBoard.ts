@@ -3,13 +3,29 @@
 // 근거: SIM-5(주기 조회, 3초), SIM-2a(PDA 작업자는 서버 기록으로 추적). 서버가 준 상태만 그린다 — 목록에서 빠진 작업은
 // 상세를 다시 읽어 확정된 최종 상태를 받기 전까지 "확인 중"으로 둔다.
 
-import type { CapacityWorker, CenterStock, StockQualityState, StockWorkState, TaskDetail, TaskState, TaskSummary } from '../domain/contract';
+import type {
+  CapacityWorker,
+  CenterStock,
+  DeliveryDispatch,
+  DispatchState,
+  ExecutionState,
+  Shipment,
+  StaffDeliverySummary,
+  StockQualityState,
+  StockWorkState,
+  TaskDetail,
+  TaskState,
+  TaskSummary,
+} from '../domain/contract';
 
 export interface RealReader {
   listTasks(mfcId: string, states: TaskState[]): Promise<TaskSummary[]>;
   getTask(taskId: string): Promise<TaskDetail>;
   listWorkers(mfcId: string): Promise<CapacityWorker[]>;
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock>;
+  getShipment(shipmentId: string): Promise<Shipment>;
+  searchDeliveries(mfcId: string, size?: number): Promise<StaffDeliverySummary[]>;
+  getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch>;
 }
 
 export interface RealBoardOptions {
@@ -23,6 +39,12 @@ export interface RealBoardOptions {
   stockRefreshSec: number;
   /** 한 번 조회에서 재고를 새로 읽는 최대 SKU 수 */
   maxStockPerPoll: number;
+  /** 인계 전 출고(출고·배차 상태)를 작업이 안 바뀌어도 다시 읽는 간격(초) */
+  shipmentRefreshSec: number;
+  /** 한 번 조회에서 출고·배차 상세를 새로 읽는 최대 건수(각각) */
+  maxShipmentPerPoll: number;
+  /** 작업이 끝난 뒤에도 인계 전 출고를 화면에 두는 최대 시간(초) */
+  handoverKeepSec: number;
 }
 
 /** 실서버 재고 단위 행(주문에 나온 SKU 만) */
@@ -50,6 +72,71 @@ export interface RealShipment {
   pack?: RealTask;
   ret?: RealTask;
   createdAt: string;
+  /** GET /shipments/{id} — 출고 상태·배차 요청·포장 */
+  info?: Shipment;
+  /** 배송 찾기(GET /deliveries?mfcId=)에서 이 출고 주문의 정방향 배송 — 수행 상태 */
+  delivery?: StaffDeliverySummary;
+  /** GET /deliveries/{id}/dispatch — 배차 상태·시도 */
+  dispatch?: DeliveryDispatch;
+}
+
+/** 출고 줄에 보이는 배차·배송 단계 — 서버 상태에서만 정한다(추측해서 앞서 그리지 않음) */
+export type DispatchStage =
+  | 'UNKNOWN' // 출고 조회 전
+  | 'NOT_REQUESTED' // 점원 배차 요청 전(0.4.11 자동 요청 없음)
+  | 'REQUESTED' // 배차 요청됨, 배송 아직 안 보임
+  | 'WAITING_DISPATCH' // 배송 생김, 배차 시작 전(CREATED) 또는 다시 배차 대기
+  | 'DISPATCHING' // 라이더 찾는 중
+  | 'DISPATCH_FAILED'
+  | 'ASSIGNED' // 라이더 확정 — MFC 로 오는 중
+  | 'AT_STORE' // 라이더 가게 도착
+  | 'OUT_FOR_DELIVERY' // 픽업 뒤 배송 중
+  | 'DELIVERED'
+  | 'ENDED' // 배송 실패·취소 등 끝
+  | 'SHIPMENT_CANCELLED';
+
+export interface DispatchView {
+  stage: DispatchStage;
+  riderId: string | null;
+  radiusKm: number | null;
+  retryCount: number | null;
+  failureReason: string | null;
+  dispatchState: DispatchState | null;
+  execState: ExecutionState | null;
+  estimatedReadyAt: string | null;
+}
+
+const PRE_PICKUP: ReadonlySet<ExecutionState> = new Set(['UNASSIGNED', 'ASSIGNED', 'ARRIVED_AT_STORE']);
+const OUT: ReadonlySet<ExecutionState> = new Set(['PICKED_UP', 'ARRIVED_AT_CUSTOMER', 'FAILURE_REPORTED', 'SUSPENDED']);
+/** 아직 인계 전이라 화면에 남겨 둘 출고 상태 */
+const SHIPMENT_PENDING: ReadonlySet<string> = new Set(['PREPARING', 'READY', 'PARTIALLY_HANDED_OVER']);
+
+export function dispatchView(r: RealShipment): DispatchView {
+  const d = r.dispatch;
+  const last = d?.attempts?.length ? d.attempts[d.attempts.length - 1] : null;
+  const v: DispatchView = {
+    stage: 'UNKNOWN',
+    riderId: r.delivery?.riderId ?? d?.assignment?.riderId ?? null,
+    radiusKm: last?.currentRadiusKm ?? null,
+    retryCount: last?.retryCount ?? null,
+    failureReason: last?.failureReason ?? null,
+    dispatchState: d?.state ?? null,
+    execState: r.delivery?.state ?? null,
+    estimatedReadyAt: r.info?.dispatchRequest?.estimatedReadyAt ?? null,
+  };
+  const info = r.info;
+  if (!info) return v;
+  if (info.state === 'CANCELLED') return { ...v, stage: 'SHIPMENT_CANCELLED' };
+  const ex = r.delivery?.state;
+  if (!ex) return { ...v, stage: info.dispatchRequest ? 'REQUESTED' : 'NOT_REQUESTED' };
+  if (ex === 'ARRIVED_AT_STORE') return { ...v, stage: 'AT_STORE' };
+  if (ex === 'ASSIGNED') return { ...v, stage: 'ASSIGNED' };
+  if (OUT.has(ex)) return { ...v, stage: 'OUT_FOR_DELIVERY' };
+  if (ex === 'COMPLETED') return { ...v, stage: 'DELIVERED' };
+  if (ex !== 'UNASSIGNED') return { ...v, stage: 'ENDED' };
+  if (d?.state === 'DISPATCHING') return { ...v, stage: 'DISPATCHING' };
+  if (d?.state === 'DISPATCH_FAILED') return { ...v, stage: 'DISPATCH_FAILED' };
+  return { ...v, stage: 'WAITING_DISPATCH' };
 }
 
 export interface PickTarget {
@@ -63,6 +150,41 @@ export interface PickTarget {
 
 const DETAIL_STATES: ReadonlySet<TaskState> = new Set(['ASSIGNED', 'IN_PROGRESS', 'BLOCKED']);
 
+const hhmm = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
+
+/** 배차·배송 단계 한 줄 (출고 줄 · 3D 출하대기 이름표 같이 씀). 서버 상태 그대로 */
+export function dispatchText(r: RealShipment): string {
+  const v = dispatchView(r);
+  const rider = v.riderId ?? '';
+  switch (v.stage) {
+    case 'UNKNOWN':
+      return '확인 중';
+    case 'NOT_REQUESTED':
+      return '배차 요청 전';
+    case 'REQUESTED':
+      return `배차 요청됨 · 준비 ${hhmm(v.estimatedReadyAt)}`;
+    case 'WAITING_DISPATCH':
+      return '배차 대기';
+    case 'DISPATCHING':
+      return `배차 중${v.radiusKm != null ? ` (반경 ${v.radiusKm} km${v.retryCount ? `, 재시도 ${v.retryCount}` : ''})` : ''}`;
+    case 'DISPATCH_FAILED':
+      return `배차 실패${v.failureReason ? ` ${v.failureReason}` : ''}`;
+    case 'ASSIGNED':
+      return `오는 중 ${rider}`;
+    case 'AT_STORE':
+      return `가게 도착 ${rider}`;
+    case 'OUT_FOR_DELIVERY':
+      return `픽업 완료 ${rider}`;
+    case 'DELIVERED':
+      return '전달 완료';
+    case 'ENDED':
+      return `배송 ${v.execState ?? ''}`;
+    case 'SHIPMENT_CANCELLED':
+      return '출고 취소';
+  }
+}
+
+
 export class RealBoard {
   readonly tasks = new Map<string, RealTask>();
   readonly workers = new Map<string, CapacityWorker>();
@@ -74,6 +196,13 @@ export class RealBoard {
   /** 재고가 바뀔 때마다 올라간다 — 화면이 다시 그릴지 판단 */
   stockVersion = 0;
   private readonly staleSkus = new Set<string>();
+  /** 출고 조회 결과 (shipmentId → 응답·읽은 시각·그때의 작업 version 서명) */
+  readonly shipmentInfo = new Map<string, { data: Shipment; readMs: number; sig: string }>();
+  /** 주문 ID → 정방향 배송(최신) */
+  readonly deliveries = new Map<string, StaffDeliverySummary>();
+  readonly dispatches = new Map<string, { data: DeliveryDispatch; readMs: number }>();
+  /** 출고·배차가 바뀔 때마다 올라간다 — 3D 이름표가 다시 그릴지 판단 */
+  deliveryVersion = 0;
   private lastPollMs = -Infinity;
   private lastWorkersMs = -Infinity;
   private busy = false;
@@ -138,8 +267,13 @@ export class RealBoard {
         }
       }
       for (const [id, t] of this.tasks) {
-        if (t.closed && t.closed.state !== 'CHECKING' && now - t.closed.atMs > this.opt.recentKeepSec * 1000) this.tasks.delete(id);
+        if (!t.closed || t.closed.state === 'CHECKING') continue;
+        const age = now - t.closed.atMs;
+        // 인계 전 출고(출하 대기·배차 중)는 작업이 끝나도 남긴다 — 배차·라이더 표시(rider 시뮬레이터 요청 M-01·M-02)
+        const keep = this.pendingHandover(t.summary.shipmentId) ? this.opt.handoverKeepSec : this.opt.recentKeepSec;
+        if (age > keep * 1000) this.tasks.delete(id);
       }
+      await this.refreshShipments(now);
       await this.refreshStock(now);
       this.lastOkMs = now;
       this.lastError = null;
@@ -149,6 +283,88 @@ export class RealBoard {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** 인계 전인가 — 출고 상태가 PREPARING·READY·부분 인계이거나, 배송이 픽업 전 */
+  private pendingHandover(shipmentId: string | null | undefined): boolean {
+    if (!shipmentId) return false;
+    const info = this.shipmentInfo.get(shipmentId)?.data;
+    if (!info) return false;
+    if (SHIPMENT_PENDING.has(info.state)) return true;
+    const dl = this.deliveries.get(info.orderId);
+    return !!dl && PRE_PICKUP.has(dl.state);
+  }
+
+  /**
+   * 출고 → 배송 → 배차를 읽는다(읽기만). 출고는 작업 version 이 바뀌었거나 인계 전이면 shipmentRefreshSec 마다,
+   * 배송 찾기는 배차 요청된 출고가 있을 때 조회마다 한 번, 배차 상세는 픽업 전 배송만.
+   * 출고의 deliveryId 가 비어 있어(R-19) 배송 찾기의 orderId 로 잇는다.
+   */
+  private async refreshShipments(now: number) {
+    const rows = this.shipments();
+    const onBoard = new Set(rows.map((r) => r.shipmentId));
+    for (const id of [...this.shipmentInfo.keys()]) {
+      if (!onBoard.has(id)) {
+        this.shipmentInfo.delete(id);
+        this.deliveryVersion++;
+      }
+    }
+    let budget = this.opt.maxShipmentPerPoll;
+    for (const r of rows) {
+      if (budget <= 0) break;
+      if (!(r.pick ?? r.pack ?? r.ret)?.summary.shipmentId) continue; // 출고 ID 없는 작업
+      const sig = [r.pick, r.pack, r.ret].map((t) => (t ? `${t.summary.version}:${t.closed?.state ?? ''}` : '-')).join('|');
+      const hit = this.shipmentInfo.get(r.shipmentId);
+      const due = !hit || hit.sig !== sig || (this.pendingHandover(r.shipmentId) && now - hit.readMs > this.opt.shipmentRefreshSec * 1000);
+      if (!due) continue;
+      budget--;
+      try {
+        const data = await this.reader.getShipment(r.shipmentId);
+        if (!hit || hit.data.version !== data.version || hit.data.state !== data.state) this.deliveryVersion++;
+        this.shipmentInfo.set(r.shipmentId, { data, readMs: now, sig });
+      } catch {
+        /* 다음 조회에서 다시 */
+      }
+    }
+
+    const requested = [...this.shipmentInfo.values()].filter((v) => v.data.dispatchRequest);
+    if (!requested.length) {
+      if (this.deliveries.size || this.dispatches.size) this.deliveryVersion++;
+      this.deliveries.clear();
+      this.dispatches.clear();
+      return;
+    }
+    try {
+      const list = await this.reader.searchDeliveries(this.mfcId, 50);
+      const wanted = new Set(requested.map((v) => v.data.orderId));
+      // 최신순 — 주문마다 처음 나온 정방향 배송
+      const next = new Map<string, StaffDeliverySummary>();
+      for (const d of list) if (d.type === 'FORWARD' && d.orderId && wanted.has(d.orderId) && !next.has(d.orderId)) next.set(d.orderId, d);
+      for (const [o, d] of next) {
+        const old = this.deliveries.get(o);
+        if (!old || old.version !== d.version || old.state !== d.state) this.deliveryVersion++;
+      }
+      this.deliveries.clear();
+      for (const [o, d] of next) this.deliveries.set(o, d);
+    } catch {
+      /* 배송 표시만 못 한다 — 지난 값 유지 */
+    }
+    let dBudget = this.opt.maxShipmentPerPoll;
+    for (const d of this.deliveries.values()) {
+      if (dBudget <= 0) break;
+      const hit = this.dispatches.get(d.deliveryId);
+      if (hit && !PRE_PICKUP.has(d.state)) continue; // 픽업 뒤는 한 번 읽은 것으로 충분
+      dBudget--;
+      try {
+        const data = await this.reader.getDeliveryDispatch(d.deliveryId);
+        if (!hit || hit.data.version !== data.version || hit.data.state !== data.state) this.deliveryVersion++;
+        this.dispatches.set(d.deliveryId, { data, readMs: now });
+      } catch {
+        /* 다음 조회에서 다시 */
+      }
+    }
+    const live = new Set([...this.deliveries.values()].map((d) => d.deliveryId));
+    for (const id of [...this.dispatches.keys()]) if (!live.has(id)) this.dispatches.delete(id);
   }
 
   /** 화면에 남아 있는 작업(열림 + 최근 끝남)에 나온 SKU */
@@ -239,6 +455,13 @@ export class RealBoard {
       else if (s.taskType === 'PACK') g.pack = t;
       else if (s.taskType === 'RETURN') g.ret = t;
       if (s.createdAt < g.createdAt) g.createdAt = s.createdAt;
+    }
+    for (const g of by.values()) {
+      const info = this.shipmentInfo.get(g.shipmentId)?.data;
+      if (!info) continue;
+      g.info = info;
+      g.delivery = this.deliveries.get(info.orderId);
+      if (g.delivery) g.dispatch = this.dispatches.get(g.delivery.deliveryId)?.data;
     }
     return [...by.values()].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
   }

@@ -8,11 +8,13 @@ import {
   type CapacityWorker,
   type CenterStock,
   type CommandResponse,
+  type DeliveryDispatch,
   type HandoverAuthorization,
   type HandoverCommitResult,
   type Package,
   type Problem,
   type SealPackageRequest,
+  type StaffDeliverySummary,
   type Shipment,
   type TaskDetail,
   type TaskExecution,
@@ -120,6 +122,17 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
+  }
+
+  /** delivery-execution 직원용 배송 찾기 — 그 센터 배송 최신순(배송 생긴 시각). 센터 직원은 mfcId 필수 */
+  async searchDeliveries(mfcId: string, size = 50): Promise<StaffDeliverySummary[]> {
+    const r: { items?: StaffDeliverySummary[] } = await this.request('GET', `/deliveries?${new URLSearchParams({ mfcId, size: String(size), sort: 'NEWEST' })}`);
+    return r.items ?? [];
+  }
+
+  /** delivery-dispatch 배차 조회 — 배차 상태·배정 라이더·시도(반경) */
+  getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch> {
+    return this.request('GET', `/deliveries/${enc(deliveryId)}/dispatch`);
   }
 
   getTask(taskId: string): Promise<TaskDetail> {
