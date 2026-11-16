@@ -38,6 +38,9 @@ describe('Simulation (mock, 화면 없이)', () => {
     expect(ib.replenishMoves).toBeGreaterThan(0);
     expect(inv.violations).toEqual([]);
     expect(sim.metrics.apiErrors).toBe(0);
+    // 결품 보고 → BLOCKED → 결품 사가 해결 경로가 실제로 돌았고, 사가 대기로 남은 작업이 오래 걸려 있지 않다
+    expect(sim.metrics.shortageUnits).toBeGreaterThan(0);
+    expect(sim.mock!.blockedForShortage().length).toBeLessThanOrEqual(1);
     // 선반은 칸 한도를 넘지 않는다
     for (const k of sim.catalog) expect(inv.get(k.sku)!.shelf).toBeLessThanOrEqual(k.shelfCap);
     // H 변화 = 수령 − 인계 수량

@@ -9,12 +9,12 @@ import './ui/styles.css';
 const KEY = 'pmart-sim-settings';
 
 function load(): PersistedSettings {
-  const fallback: PersistedSettings = { mode: 'mock', http: { baseUrl: '/api/v1', token: '', workerIds: [] } };
+  const fallback: PersistedSettings = { mode: 'mock', http: { baseUrl: '/api/v1' } };
   try {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fallback;
     const s = JSON.parse(raw) as Partial<PersistedSettings>;
-    return { mode: s.mode === 'http' ? 'http' : 'mock', http: { ...fallback.http, ...s.http, token: '' } };
+    return { mode: s.mode === 'http' ? 'http' : 'mock', http: { baseUrl: s.http?.baseUrl || fallback.http.baseUrl } };
   } catch {
     return fallback;
   }
@@ -22,9 +22,8 @@ function load(): PersistedSettings {
 
 function save(s: PersistedSettings) {
   try {
-    // 토큰은 저장하지 않는다 — 비밀값은 브라우저 세션 동안만 둔다
-    localStorage.setItem(KEY, JSON.stringify({ ...s, http: { ...s.http, token: '' } }));
-    sessionStorage.setItem(`${KEY}-token`, s.http.token);
+    // 토큰은 어디에도 저장하지 않는다 — 실서버 모드는 개발 서버가 시험 계정 토큰을 그때그때 준다(SIM-11)
+    localStorage.setItem(KEY, JSON.stringify({ mode: s.mode, http: { baseUrl: s.http.baseUrl } }));
   } catch {
     /* 저장소를 못 쓰면 기본값으로 다시 시작한다 */
   }
@@ -32,7 +31,7 @@ function save(s: PersistedSettings) {
 
 const settings = load();
 try {
-  settings.http.token = sessionStorage.getItem(`${KEY}-token`) ?? '';
+  sessionStorage.removeItem(`${KEY}-token`); // 예전 판이 넣던 직접 입력 토큰 지우기
 } catch {
   /* noop */
 }

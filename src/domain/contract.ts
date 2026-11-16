@@ -1,5 +1,8 @@
-// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.1.0) 의 부분 사본.
+// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.4.11) 의 부분 사본 + _common.yaml 공통 형
+// + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부.
 // 이 파일의 이름·상태값은 계약을 그대로 따른다. 계약이 바뀌면 여기를 먼저 맞춘다.
+// 시뮬레이터가 쓰지 않는 경로(중지·재포장·인계 판정 등)의 형은 옮기지 않았다.
+// 0.4.11(2026-11-13): 배차 자동 요청 없음 — 점원 요청(MANUAL)만. 형 변화 없음(AUTO_ON_READY 는 예전 기록 때문에 남음).
 
 export type TaskState =
   | 'WAITING'
@@ -12,7 +15,8 @@ export type TaskState =
   | 'CANCELLED'
   | 'CLOSED_PARTIAL';
 
-export type TaskType = 'PICK' | 'PACK' | 'DISPATCH';
+/** RETURN(0.3.0) = 집품 뒤 취소의 복귀 작업(포장 위치 → 선반) */
+export type TaskType = 'PICK' | 'PACK' | 'DISPATCH' | 'RETURN';
 export type ShipmentState =
   | 'PREPARING'
   | 'READY'
@@ -26,25 +30,18 @@ export type TemperatureZone = 'AMBIENT' | 'CHILLED' | 'FROZEN';
 export type ShortageReason = 'SHORT' | 'DAMAGED' | 'BLOCKED';
 export type CommandStatus = 'ACCEPTED' | 'APPLIED' | 'REJECTED' | 'UNKNOWN_RESULT';
 
+/** _common.yaml AsOf — 조회 사본의 기준시각·신선도. 조회 결과로 성공을 확정하지 않는다. */
+export interface AsOf {
+  asOf?: string;
+  sourceVersion?: number;
+  freshness?: 'CURRENT' | 'STALE' | 'UNAVAILABLE';
+}
+
+/** mfc-capacity 배정 정본의 투영 */
 export interface TaskAssignment {
   workerId: string | null;
   assignmentVersion: number;
-}
-
-export interface TaskLine {
-  taskLineId: string;
-  orderLineId: string;
-  sku: string;
-  productName?: string;
-  barcode: string | null;
-  locationId: string | null;
-  lotId: string | null;
-  expiresOn: string | null;
-  plannedQty: number;
-  completedQty: number;
-  cancelledQty: number;
-  remainingQty: number;
-  pendingQty: number;
+  asOf?: AsOf;
 }
 
 export interface TaskSummary {
@@ -62,12 +59,112 @@ export interface TaskSummary {
   remainingQty: number;
   promisedReadyAt: string | null;
   createdAt: string;
+  /** (0.4.8) 시작 뒤 예상 시간의 2배를 넘김 — 표시만 */
+  late?: boolean;
+  /** (0.4.8) 진행 중인데 30분 동안 실적 없음 — 알림만 */
+  idle?: boolean;
+  /** (0.4.8) 시작 또는 마지막 실적 시각 */
+  lastActivityAt?: string | null;
+  /** (0.4.9) 목록 표시용 "상품명 외 N건" */
+  headline?: { productName: string | null; otherLineCount: number };
 }
+
+/** mfc-inventory WorkState (0.16.0) — 단위 행의 업무 상태 */
+export type StockWorkState = 'UNSTOWED' | 'STORED' | 'PICKED' | 'PACKED' | 'CANCEL_RETURN_PENDING';
+export type StockQualityState = 'PENDING_INSPECTION' | 'NORMAL' | 'QUARANTINED' | 'DISPOSAL_PENDING';
+
+/** mfc-inventory CenterStock (GET /mfcs/{mfcId}/stock?sku=) — SKU 하나의 LOT 요약과 위치·상태별 단위 행 */
+export interface CenterStock {
+  mfcId: string;
+  sku: string;
+  lots: { lotId: string; onHand: number; quarantined: number; sellable: number; reserved: number; available: number; expiryDate?: string | null }[];
+  units: { locationCode: string; lotId: string; qualityState: StockQualityState; workState: StockWorkState; qty: number }[];
+}
+
+/** mfc-capacity Worker (GET /mfcs/{mfcId}/workers) — 시뮬레이터는 표시 이름만 쓴다. */
+export interface CapacityWorker {
+  mfcId: string;
+  /** 로그인 계정(운영자 ID, OP-…) */
+  workerId: string;
+  displayName: string;
+  state: 'ACTIVE' | 'SUSPENDED' | 'LEFT';
+  /** capacity TaskType(RECEIVE·INSPECT·PUTAWAY·REPLENISH·MOVE 포함) — fulfillment TaskType 보다 넓다 */
+  effectiveTaskTypes?: string[];
+  onBreak?: boolean;
+}
+
+export type PickStatus = 'OK' | 'PARTIAL' | 'NOT_FOUND' | 'DONE';
+
+/** PICK 지시(0.2.0) — 한 줄이 여러 LOT 예약 조각으로 나뉠 수 있다. RETURN 은 복귀량·포장 위치. */
+export interface TaskPick {
+  lotId: string;
+  expiresOn: string | null;
+  /** 이 LOT 조각에서 더 집을 양 */
+  remainingQty: number;
+  locations: {
+    locationCode: string;
+    /** 그 위치의 LOT 선반 잔량(이 주문 몫만이 아님) */
+    qty: number;
+    /** (0.4.3) 그 위치에서 이 주문 몫으로 배정된 남은 양 — 배정된 위치가 앞에 온다 */
+    allocatedQty?: number;
+  }[];
+  /** (0.4.10, PICK 만) 방문 순서(1부터). 줄·조각은 이 순서로 온다 */
+  visitSeq?: number | null;
+  /** (0.4.6, RETURN 만) 돌려놓을 추천 선반 */
+  suggestedToLocations?: string[];
+  /** (0.4.9, PICK 만) 칸을 못 정한 양 */
+  unallocatedQty?: number | null;
+  /** (0.4.9, PICK 만) 화면 표시용 */
+  pickStatus?: PickStatus | null;
+  /** (0.4.9) 화면에 그대로 보일 짧은 안내 */
+  notice?: string | null;
+}
+
+export interface TaskLine {
+  taskLineId: string;
+  orderLineId: string;
+  sku: string;
+  productName?: string;
+  barcode: string | null;
+  /** 지시 로케이션(첫 지시의 사본). PACK·DISPATCH 는 null 일 수 있음 */
+  locationId: string | null;
+  lotId: string | null;
+  expiresOn: string | null;
+  /** 재고 조회가 안 되면 빈 배열(asOf freshness STALE). MOCK 은 LOT 이 없어 채우지 않는다 */
+  picks?: TaskPick[];
+  plannedQty: number;
+  completedQty: number;
+  cancelledQty: number;
+  remainingQty: number;
+  pendingQty: number;
+}
+
+export type RouteMethod = 'ROUTING' | 'NEAREST_FALLBACK' | 'CODE_ORDER';
 
 export interface TaskDetail extends TaskSummary {
   lines: TaskLine[];
+  /** 성공한 시작 점유. IN_PROGRESS 일 때만 */
   activeStart?: { requestId: string; workerId: string; deviceId: string | null; startedAt: string };
+  /** 재고 확정 전 실행 결과 */
+  pendingExecutions?: { executionId: string; state: 'RECORDED' | 'INVENTORY_PENDING' | 'UNKNOWN_RESULT'; recordedAt: string }[];
   blockReason: string | null;
+  /** PACK — 이 출고의 집품분이 놓인 포장 위치(PICK 실적의 도착지, 0.2.0) */
+  packingLocations?: string[];
+  /** (0.4.10, PICK 만) 방문 순서를 정한 방법. 피킹 시작 때 정한다 */
+  routeMethod?: RouteMethod | null;
+  asOf?: AsOf;
+}
+
+/** GET /tasks/{id}/starts/{requestId} */
+export interface TaskStart {
+  requestId: string;
+  taskId: string;
+  outcome: 'STARTED' | 'REJECTED';
+  rejectCode: 'ALREADY_STARTED' | 'NOT_ASSIGNEE' | 'PREDECESSOR_NOT_COMPLETED' | 'INVALID_STATE' | 'VERSION_CONFLICT' | null;
+  workerId: string;
+  assignmentVersion: number;
+  taskVersion: number;
+  decidedAt: string;
 }
 
 export interface PackageContentLine {
@@ -77,29 +174,65 @@ export interface PackageContentLine {
   lotId?: string;
 }
 
+/** 출고 행(2026-11-07 — PackageContentLine 에 단말 표시용 사본을 더함) */
+export interface ConfirmOrderLine extends PackageContentLine {
+  productName?: string;
+  unitsPerSku?: number;
+  /** 행 전체 중량 */
+  weightG?: number;
+}
+
 export interface ConfirmOrderRequest {
   orderId: string;
   orderVersion?: number;
+  /** 작업 버전(2026-11-07). 첫 요청 1, 같은 MFC 재시도마다 1씩 증가 */
+  workVersion?: number;
+  sagaId?: string;
   mfcId: string;
   reservationId: string;
   capacityHoldId?: string;
   deliveryMode?: 'SINGLE' | 'BUNDLED' | 'SCHEDULED';
+  outOfStockPreference?: string;
+  arrivalWindow?: { start: string; end: string };
   promisedReadyAt?: string;
-  shipments: { shipmentId: string; deliveryId?: string; weightG?: number; lines: PackageContentLine[] }[];
+  shipments: { shipmentId: string; deliveryId?: string; weightG?: number; lines: ConfirmOrderLine[] }[];
+}
+
+/** retryable(같은 MFC 재시도 대상) = INVENTORY_MISMATCH·OPERATION_RESTRICTED */
+export type WorkRejectReason = 'INVENTORY_MISMATCH' | 'OPERATION_RESTRICTED' | 'CAPACITY_EXCEEDED' | 'LOT_INELIGIBLE' | 'ALREADY_STOPPED';
+
+/** ConfirmOrder 결정(2026-11-07). 업무 거절도 201 + REJECTED 로 온다 */
+export interface WorkOrderDecision {
+  fulfillmentId?: string;
+  orderId: string;
+  workVersion: number;
+  decision: 'ACCEPTED' | 'REJECTED';
+  rejectReason?: WorkRejectReason;
+  retryable?: boolean;
+  message?: string;
+  shipmentIds?: string[];
+  taskIds?: string[];
+  decidedAt: string;
 }
 
 export interface TaskExecutionRequest {
-  executionType: 'PICK' | 'PACK';
+  /** PICK·RETURN 만 받는다. PACK 실적은 포장 밀봉(POST /shipments/{id}/packages) — PACK 은 422 UNSUPPORTED_EXECUTION */
+  executionType: 'PICK' | 'PACK' | 'RETURN';
   workerId: string;
   assignmentVersion?: number;
+  /** PICK — 집은 선반(한 실행 = 한 선반). RETURN — 복귀 대상이 놓인 포장 위치 */
   fromLocation?: string;
+  /** PICK — 내려놓은 포장 위치(구역 PACKING). RETURN — 되돌린 선반 */
   toLocation?: string;
+  /** 결품 보고는 집품과 섞지 않은 한 줄(pickedQty 0 + shortage, lotId·fromLocation 필수) — 서버 규칙(ADR-0044) */
   lines: {
     orderLineId: string;
     sku: string;
     lotId?: string;
     pickedQty: number;
-    shortage?: { qty: number; reason: ShortageReason; note?: string };
+    /** RETURN 만 */
+    resultQuality?: 'NORMAL' | 'QUARANTINED';
+    shortage?: { qty: number; reason: ShortageReason; note?: string; evidenceRef?: string };
   }[];
   durationSec?: number;
 }
@@ -115,6 +248,8 @@ export interface TaskExecution {
 }
 
 export interface SealPackageRequest {
+  /** 포장 위치. 없으면 이 출고 집품분의 포장 위치가 하나일 때 그 위치(0.2.0) */
+  packingLocation?: string;
   contents: PackageContentLine[];
   bagCount: number;
   containsAlcohol?: boolean;
@@ -143,12 +278,23 @@ export interface Package {
   contents: PackageContentLine[];
   bagCount: number;
   containsAlcohol: boolean;
+  /** 계약은 string. 시뮬레이터는 세 온도대만 만든다 */
   temperatureZone: TemperatureZone;
   weightG: number;
   fence: PackageFence;
   sealedAt: string | null;
   handedOverAt: string | null;
   invalidatedReason: string | null;
+}
+
+/** 0.4.5 배차 요청 */
+export interface DispatchRequest {
+  shipmentId: string;
+  trigger: 'MANUAL' | 'AUTO_ON_READY';
+  estimatedPackMinutes?: number | null;
+  estimatedReadyAt: string;
+  requestedAt: string;
+  requestedBy?: string | null;
 }
 
 export interface Shipment {
@@ -160,9 +306,15 @@ export interface Shipment {
   state: ShipmentState;
   holdReason: string | null;
   packages: Package[];
+  packingDurationSec?: number;
   bagCount: number;
+  containsAlcohol?: boolean;
   weightG: number;
+  volumeCm3?: number;
   readyAt: string | null;
+  dispatchRequest?: DispatchRequest | null;
+  /** 점원 화면용 ETA 투영 (delivery 사본) */
+  riderEta?: { eta: string; asOf?: AsOf };
 }
 
 export interface HandoverAuthorization {
@@ -185,12 +337,19 @@ export interface HandoverCommitResult {
   shipmentState: ShipmentState;
   handedOverAt: string;
   nextAction?: string;
+  /** 0.4.1 — REJECTED 사유(코드: 상세) */
+  rejectReason?: string | null;
 }
 
+/** _common.yaml CommandResponse */
 export interface CommandResponse {
   status: CommandStatus;
+  requestId: string;
+  /** 소유 서비스가 발급한 결과 식별자 (commitId / executionId 등) */
   resultId?: string;
+  appliedQty?: number;
   version?: number;
+  retryable?: boolean;
   nextAction?: string;
 }
 

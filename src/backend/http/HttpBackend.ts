@@ -1,10 +1,12 @@
-// 게이트웨이(/api/v1) 실호출 어댑터. 계약 mfc-fulfillment-service.yaml 그대로 부른다.
-// 2026-10-31 현재 백엔드 슬라이스 6(이행)이 501 이라 이 어댑터는 계약 기준으로만 작성했고 실서버 검증 전이다.
-// 막힌 지점은 docs/backend-requests.md 참조 (작업자 인증 BR-02, 센터 전체 작업 목록, 수동 배정 등).
+// 게이트웨이(/api/v1) 실호출 어댑터. 계약 mfc-fulfillment-service.yaml·mfc-capacity-service.yaml 그대로 부른다.
+// 2026-11-16: 작업 목록·상세·작업자 목록(읽기)은 LAN 실서버로 확인. 쓰기(시작·실적·밀봉·인계)는 아직 실서버 검증 전.
+// 토큰은 Vite 개발 서버가 LAN 시험 계정으로 받아 준다(TokenSource, SIM-11).
 
 import {
   ApiProblem,
   ResultUnknown,
+  type CapacityWorker,
+  type CenterStock,
   type CommandResponse,
   type HandoverAuthorization,
   type HandoverCommitResult,
@@ -23,8 +25,8 @@ import type { ApiListener, FulfillmentPort } from '../port';
 export interface HttpOptions {
   /** 기본 '/api/v1' — vite 개발 서버가 게이트웨이로 넘긴다 */
   baseUrl: string;
-  /** 작업자/단말 토큰 (BR-02 결정 전에는 발급 경로가 없다) */
-  token: () => string | null;
+  /** 작업자 토큰 — TokenSource.get (만료 전에 새로 받는다) */
+  token: () => string | null | Promise<string | null>;
   sourceSystem: string;
   now: () => number;
   timeoutMs: number;
@@ -46,7 +48,7 @@ export class HttpBackend implements FulfillmentPort {
     init: { body?: unknown; idempotencyKey?: string; expectedVersion?: number } = {},
   ): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
-    const token = this.opt.token();
+    const token = await this.opt.token();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
@@ -93,11 +95,31 @@ export class HttpBackend implements FulfillmentPort {
     return json as T;
   }
 
-  async listTasks(mfcId: string, states: TaskState[]): Promise<TaskSummary[]> {
-    const q = new URLSearchParams({ mfcId });
-    for (const s of states) q.append('state', s);
-    const r = await this.request<{ items: TaskSummary[] }>('GET', `/tasks?${q}`);
+  /** 센터 작업 목록 — 페이지를 끝까지 따라간다(최대 maxPages). */
+  async listTasks(mfcId: string, states: TaskState[], maxPages = 10): Promise<TaskSummary[]> {
+    const out: TaskSummary[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < maxPages; i++) {
+      const q = new URLSearchParams({ mfcId, pageSize: '100' });
+      for (const s of states) q.append('state', s);
+      if (cursor) q.set('cursor', cursor);
+      const r: { items?: TaskSummary[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/tasks?${q}`);
+      out.push(...(r.items ?? []));
+      cursor = r.page?.nextCursor ?? null;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
+  /** mfc-capacity listWorkers — 담당자 표시 이름용(그 센터 운영자면 읽을 수 있다). */
+  async listWorkers(mfcId: string): Promise<CapacityWorker[]> {
+    const r = await this.request<{ items?: CapacityWorker[] }>('GET', `/mfcs/${enc(mfcId)}/workers`);
     return r.items ?? [];
+  }
+
+  /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
+  getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
+    return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
   }
 
   getTask(taskId: string): Promise<TaskDetail> {
@@ -153,9 +175,9 @@ export class HttpBackend implements FulfillmentPort {
     } catch (e) {
       if (e instanceof ApiProblem) {
         const p = e.problem;
-        if (p.status === 401) return '401 — 토큰 없음/만료 (작업자 인증 BR-02 결정 대기)';
+        if (p.status === 401) return '401 — 토큰 없음/만료 (개발 서버 /sim-auth/tokens 확인)';
         if (p.status === 403) return '403 — 이 센터 권한 없음';
-        if (p.status === 501) return '501 — 백엔드 이행 슬라이스 6 미구현';
+        if (p.status === 501) return '501 — 백엔드 미구현';
         return `${p.status} ${p.code}`;
       }
       return `응답 없음 — 게이트웨이 주소 확인 (${(e as Error).message})`;

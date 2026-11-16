@@ -4,6 +4,7 @@ import { useApp, useTick, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import { INBOUND_KO, STATE_KO, TEMP_KO } from './text';
+import { BACKEND_FACTS } from '../config';
 
 function Stat({ v, k }: { v: ReactNode; k: string }) {
   return (
@@ -213,6 +214,8 @@ function DetailBody() {
           <Row k="상품" v={k.name} />
           <Row k="SKU · 바코드" v={`${k.sku} · ${k.barcode}`} />
           <Row k="보관" v={`${TEMP_KO[k.temp]} · ${k.location.level}단 ${k.location.slot}번 칸`} />
+          <Row k="백엔드 위치 코드" v={sim.codes.toBackend(k.location.code) ?? '—'} />
+          <Row k="칸 종류" v={(BACKEND_FACTS.highTurnoverBins as readonly string[]).includes(k.location.code) ? '고회전(시험용)' : '일반 선반'} />
         </dl>
         {b ? (
           <>

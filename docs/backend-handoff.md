@@ -9,11 +9,16 @@
 |---|---|
 | 백엔드 → 시뮬레이터 공지·회신 | `docs/handoff/simulator/` (첫 공지 `2026-11-09-simulator-notice-integration-decisions.md` — R-01~R-12 현황 포함) |
 | **시험 센터 칸 = 이 시뮬레이터 평면**(코드 대응·새 필드·고회전 칸) | `docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md` |
+| **피킹 방문 순서**(실서버 모드는 받은 `visitSeq` 순서로 걷기, MOCK 은 `DOC_B_A_C` 그대로) | `docs/handoff/simulator/2026-11-09-simulator-notice-pick-visit-order.md` |
 | 고회전 칸 목록(백엔드·시뮬레이터 코드, 랙, 좌표) | `docs/simulator/mfc/layout/high-turnover.json` |
 | **회수 반입 자리 RTN-A-01**(평면에 없음 — 입고·검수 구역 안 x 38.6·z 22.0 m) | `docs/handoff/simulator/2026-11-09-simulator-notice-return-location.md`, 좌표 `docs/simulator/mfc/layout/backend-points.json` |
 | 실서버·실제 앱 연결 목표와 결정(SIM-1~11) | `docs/simulator/mfc/mfc-simulator-integration.md` |
 | 이 시뮬레이터 평면을 그린 도면 | `docs/simulator/mfc/layout/` (`buildLayout()` 실행 좌표로 그림, `floorplan.svg` — 고회전 랙은 빨간색) |
 | 백엔드 클라이언트 handoff(PDA 앱 등) | `docs/handoff/clients/` (2026-11-09 폴더 이동) |
+| **LAN 시험 계정**(MFC 작업자 70명 `mfcw-*`, `claude-mfc-wrk`·`claude-mfc-sup`, 비밀번호 파일 이름) — 2026-11-16 확인 | `docs/operations/lan-test-accounts.md` |
+| 직원 토큰 받는 흐름(Keycloak → `/internal/dev-token-exchange`) | `deploy/lan/checks/staff_auth.py`(시뮬레이터 `server/simAuth.ts` 가 같은 흐름, 비밀번호 재설정 동작은 뺌) |
+| 시뮬레이터 범위·CDC 시뮬레이터(별도) | `docs/simulator/scope.md`, `docs/simulator/cdc/` |
+| 평면 데이터(칸 6,762·좌표) | `docs/simulator/mfc/layout/layout.json` |
 
 ## 목표 (사용자 2026-11-09)
 
@@ -36,5 +41,11 @@
 | SIM-9 | 실행 끝에 API 로 정리 | 열린 작업 중지·복귀, 되돌리는 이동(본보기 백엔드 `deploy/lan/checks/mfc_e2e.py`) |
 | SIM-10 | LAN 서비스 배치 그대로 | 가상 작업자 수는 조회 부하 보며 늘리기 |
 | SIM-11 | Vite 개발 서버 프록시로만 접속 | 가상 작업자 비밀번호는 Vite 서버 쪽 비밀 파일(Git 금지), 브라우저에는 토큰만 |
+| 방문 순서 | 냉장 B → 냉동 A → 상온 C~H, 그룹 안 걷는 거리 최단(ADR-0050), 출발 `CRT-A-01` | 피킹 시작 뒤 `GET /tasks/{id}` 의 `picks[].visitSeq`·`routeMethod`(fulfillment 0.4.10) 순서로 걷기 |
+
+## 시뮬레이터 반영 (2026-11-10)
+
+- 계약 사본 `src/domain/contract.ts`·MOCK 을 fulfillment 0.4.10 에 맞춤, 칸 코드 대응 `src/domain/locationCodes.ts`(백엔드 `layout.json` 과 6,762칸 일치 확인), 고회전 5칸·회수 반입 자리 `RTN-A-01` 화면 표시, 작업자는 받은 `visitSeq` 가 있으면 그 순서로 걷기.
+- 백엔드 회신 대비 상태와 남은 일: `docs/backend-requests.md`.
 
 용어: 백엔드는 "감독자"를 **센터 관리자**로 부른다(역할 코드 `MFC_SUPERVISOR` 그대로).

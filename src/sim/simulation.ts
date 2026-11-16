@@ -8,17 +8,20 @@
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
-import { DEFAULT_PARAMS, type SimParams } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, type SimParams } from '../config';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import type { ConfirmOrderRequest, Package, PackageContentLine, TemperatureZone } from '../domain/contract';
-import { buildLayout, type DockSlot, type Layout, type ReserveSpot } from '../domain/layout';
+import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
+import { buildLocationCodeMap, SIM_POINT, type LocationCodeMap } from '../domain/locationCodes';
 import { NavGrid } from '../domain/navgrid';
 import { MockBackend } from '../backend/mock/MockBackend';
 import { HttpBackend } from '../backend/http/HttpBackend';
+import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
+import { RealBoard } from './realBoard';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
 import { Worker } from './worker';
@@ -32,12 +35,19 @@ export type Mode = 'mock' | 'http';
 
 export interface HttpSettings {
   baseUrl: string;
-  token: string;
-  workerIds: string[];
+}
+
+/** 실서버 모드의 시계: 그 PC 의 오늘 자정부터 지난 초 (SIM-1 — 실제 시각 1×) */
+function wallClockSec(): number {
+  const d = new Date();
+  return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000;
 }
 
 export class Simulation {
   readonly layout: Layout;
+  /** 시뮬레이터 평면 코드 ↔ 백엔드 위치 코드 (SIM-6) */
+  readonly codes: LocationCodeMap;
+  private readonly locByCode: Map<string, Location>;
   readonly nav: NavGrid;
   readonly catalog: Sku[];
   readonly skuMap: Map<string, Sku>;
@@ -55,6 +65,9 @@ export class Simulation {
   readonly logs: { at: number; msg: string }[] = [];
   readonly mock: MockBackend | null;
   readonly port: FulfillmentPort;
+  /** 실서버 관찰(읽기 전용). MOCK 모드에서는 null */
+  readonly real: RealBoard | null = null;
+  readonly realTokens: TokenSource | null = null;
   readonly runId = Math.random().toString(36).slice(2, 8);
 
   time: number;
@@ -75,7 +88,6 @@ export class Simulation {
   private readonly packOwner = new Map<string, string>(); // shipmentId → PICK 작업자
   private readonly ctx: SiteContext;
   private readonly cumulativeByTemp: Record<TemperatureZone, { skus: Sku[]; cum: number[] }>;
-  private lastPoll = -Infinity;
   private inCtx!: InboundContext;
   private nextTruckAt = Infinity;
   private truckSeq = 0;
@@ -98,6 +110,8 @@ export class Simulation {
     this.time = params.startHour * 3600;
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     this.layout = buildLayout();
+    this.codes = buildLocationCodeMap(this.layout);
+    this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
     this.catalog = buildCatalog(this.layout, params.skuFillRate, params.seed);
     this.reserveMap = new Map(this.layout.reserves.map((r) => [r.id, r]));
@@ -127,9 +141,11 @@ export class Simulation {
       this.mock = mock;
       this.port = mock;
     } else {
+      // 실서버 관찰: 시험 계정 토큰(개발 서버가 발급) + 주기 조회. 가상 작업자·가짜 주문 없음(SIM-4), 실제 시각(SIM-1)
+      const tokens = new TokenSource(REAL_LINK.observerAccount, REAL_LINK.tokenRefreshMarginSec);
       const h = new HttpBackend({
         baseUrl: http?.baseUrl ?? '/api/v1',
-        token: () => http?.token || null,
+        token: () => tokens.get(),
         sourceSystem: 'mfc-simulator',
         now: () => this.time,
         timeoutMs: 8000,
@@ -137,6 +153,17 @@ export class Simulation {
       h.onApi((r) => this.push(this.apiLog, r));
       this.mock = null;
       this.port = h;
+      this.realTokens = tokens;
+      this.real = new RealBoard(h, params.mfcId, {
+        pollSec: REAL_LINK.pollSec,
+        workerRefreshSec: REAL_LINK.workerRefreshSec,
+        recentKeepSec: REAL_LINK.recentKeepSec,
+        openStates: REAL_LINK.openStates,
+        stockRefreshSec: REAL_LINK.stockRefreshSec,
+        maxStockPerPoll: REAL_LINK.maxStockPerPoll,
+      });
+      this.time = wallClockSec();
+      this.speed = 1;
     }
 
     this.ctx = {
@@ -153,6 +180,8 @@ export class Simulation {
       now: () => this.time,
       log: (m) => this.log(m),
       orderOf: (f) => this.fulfillmentOrder.get(f),
+      wireCode: (c) => (this.mode === 'mock' ? c : (this.codes.toBackend(c) ?? c)),
+      simLocation: (c) => this.locByCode.get(this.mode === 'mock' ? c : (this.codes.toSim(c) ?? c)) ?? null,
       awaitPackAssignment: (s, w) => this.assignPack(s, w),
       stagePackages: (s, p) => this.onStaged(s, p),
       shelfQty: (sku) => this.mock?.inventory.get(sku)?.shelf ?? Infinity,
@@ -178,16 +207,18 @@ export class Simulation {
       this.setInboundWorkers(params.inboundWorkers);
     }
 
-    const ids = mode === 'http' && http?.workerIds.length ? http.workerIds : null;
-    this.setWorkers(ids ? ids.length : params.workers, ids ?? undefined);
+    // 실서버 관찰 모드에서는 가상 작업자를 두지 않는다 — 실서버에 쓰는 단계에서 REAL_LINK.virtualAccounts 로 붙인다
+    if (mode === 'mock') this.setWorkers(params.workers);
+    else this.params.workers = 0;
   }
 
   // ── 설정 변경 ───────────────────────────────────────
-  setWorkers(n: number, ids?: string[]) {
+  setWorkers(n: number) {
+    if (this.mode !== 'mock') return;
     const target = Math.max(1, Math.min(this.layout.points.idle.length, n));
     while (this.workers.length < target) {
       const i = this.workers.length;
-      const id = ids?.[i] ?? `W${String(i + 1).padStart(2, '0')}`;
+      const id = `W${String(i + 1).padStart(2, '0')}`;
       const w = new Worker(id, this.layout.points.idle[i], this.ctx);
       this.workers.push(w);
       void w.run();
@@ -232,6 +263,13 @@ export class Simulation {
   // ── 진행 ───────────────────────────────────────────
   /** 실제 경과 dtReal(초)에 배속을 곱해 진행한다. */
   async advance(dtReal: number) {
+    if (this.real) {
+      // 실서버 관찰: 시계는 실제 시각, 일시정지(0×)면 조회도 멈춘다. 조회는 기다리지 않는다(화면이 멈추지 않게)
+      if (this.speed === 0) return;
+      this.time = wallClockSec();
+      void this.real.tick();
+      return;
+    }
     let remain = Math.min(dtReal, 0.1) * this.speed;
     while (remain > 1e-6) {
       const dt = Math.min(SUBSTEP, remain);
@@ -240,9 +278,8 @@ export class Simulation {
       if (this.mode === 'mock') {
         this.generateOrders();
         this.dispatch();
+        this.resolveShortages();
         this.inboundTick(dt);
-      } else {
-        await this.pollHttp();
       }
       for (const w of this.workers) w.tick(dt);
       for (const r of this.riders) r.tick(dt);
@@ -315,7 +352,12 @@ export class Simulation {
       temps.set(l.sku, s.temp);
       meta.set(l.sku, { code: s.location.code, name: s.name, barcode: s.barcode });
     }
-    const fulfillmentId = mock.orchestrationConfirmOrder(req, temps, meta);
+    const decision = mock.orchestrationConfirmOrder(req, temps, meta);
+    if (decision.decision !== 'ACCEPTED' || !decision.fulfillmentId) {
+      this.log(`${orderId} 작업 거절 ${decision.rejectReason ?? ''}`);
+      return;
+    }
+    const fulfillmentId = decision.fulfillmentId;
     this.fulfillmentOrder.set(fulfillmentId, orderId);
     this.orderShipments.set(orderId, new Set(shipments.map((s) => s.shipmentId)));
     for (const s of shipments) this.shipmentOrder.set(s.shipmentId, orderId);
@@ -345,6 +387,21 @@ export class Simulation {
       weightG: Math.round(b.w),
       lines: [...b.qty].map(([orderLineId, qty]) => ({ orderLineId, sku: lines.find((l) => l.orderLineId === orderLineId)!.sku, qty })),
     }));
+  }
+
+  // ── 결품 사가 (mock: order-orchestration 역할) ──────────
+  /** 결품 보고로 BLOCKED 된 PICK 을 사가 지연 뒤 CANCEL_ITEM 으로 푼다(고객 사전 선택 "품절 상품만 취소"). */
+  private readonly blockedSince = new Map<string, number>();
+  private resolveShortages() {
+    const mock = this.mock!;
+    for (const taskId of mock.blockedForShortage()) {
+      const since = this.blockedSince.get(taskId);
+      if (since === undefined) this.blockedSince.set(taskId, this.time);
+      else if (this.time - since >= this.params.shortageSagaSec) {
+        this.blockedSince.delete(taskId);
+        mock.orchestrationResolveShortages(taskId);
+      }
+    }
   }
 
   // ── 작업 배정 (mock: mfc-capacity 역할) ───────────────
@@ -380,29 +437,6 @@ export class Simulation {
       await this.workers.find((w) => w.id === workerId)!.wait(5);
     }
     return null;
-  }
-
-  // ── 실서버 모드: 배정된 작업 받아오기 ──────────────────
-  private polling = false;
-  private async pollHttp() {
-    if (this.polling || this.time - this.lastPoll < 5) return;
-    this.polling = true;
-    this.lastPoll = this.time;
-    try {
-      const items = await this.port.listTasks(this.params.mfcId, ['ASSIGNED']);
-      for (const t of items) {
-        if (t.taskType !== 'PICK') continue;
-        const w = this.workers.find((x) => x.id === t.assignment.workerId && x.idle);
-        if (w) {
-          this.fulfillmentOrder.set(t.fulfillmentId, t.fulfillmentId);
-          w.give({ taskId: t.taskId, assignmentVersion: t.assignment.assignmentVersion });
-        }
-      }
-    } catch {
-      // API 로그에 남는다. 다음 주기에 다시 본다
-    } finally {
-      this.polling = false;
-    }
   }
 
   // ── 출하대기·라이더 ─────────────────────────────────
@@ -624,6 +658,37 @@ export class Simulation {
   }
 
   /** 작업 상태별 개수 (mock: 원장 투영) */
+  /**
+   * 선반이 아닌 백엔드 위치(패킹대·패킹 대기·출하대기·입고·회수 자리) → 바닥 좌표. 선반 칸·평면에 없는 위치는 null.
+   * 대응은 locationCodes.ts(백엔드 mfc_layout.py) 그대로.
+   */
+  backendPoint(code: string): { x: number; z: number } | null {
+    const simCode = this.codes.toSim(code);
+    if (!simCode) return null;
+    const P = this.layout.points;
+    const st = this.layout.stations.find((x) => x.id === simCode);
+    if (st) return st.table;
+    if (simCode === SIM_POINT.packQueue) return P.packQueue;
+    if (simCode === SIM_POINT.packQueueFrozen) return { x: P.packQueue.x, z: P.packQueue.z + 0.9 };
+    if (simCode === SIM_POINT.cartDepot) return P.cartDepot;
+    if (simCode === SIM_POINT.receiving) return P.truckDoor;
+    if (simCode === SIM_POINT.returnIntake) return { x: BACKEND_FACTS.returnIntake.x, z: BACKEND_FACTS.returnIntake.z };
+    const rs = this.reserveMap.get(simCode);
+    if (rs) return { x: (rs.rect.x0 + rs.rect.x1) / 2, z: (rs.rect.z0 + rs.rect.z1) / 2 };
+    const rack = /^SHIP-RACK-(\d+)$/.exec(simCode);
+    if (rack) {
+      const slot = this.layout.shippingSlots.find((x) => x.rackIndex === Number(rack[1]) - 1);
+      if (slot) return { x: slot.pos.x, z: slot.pos.z };
+    }
+    return null;
+  }
+
+  /** 백엔드 위치 코드 → 평면의 선반 칸 (실서버 관찰 표시용). 평면에 없는 위치면 null */
+  backendLocation(code: string): Location | null {
+    const sim = this.codes.toSim(code);
+    return sim ? (this.locByCode.get(sim) ?? null) : null;
+  }
+
   taskBoard(): Record<string, number> {
     const out: Record<string, number> = {};
     for (const t of this.mock?.allTasks() ?? []) {

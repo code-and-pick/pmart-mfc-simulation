@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
+import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { ZONE_COLOR } from '../colors';
 import { makeLabel } from '../sprites';
@@ -200,6 +201,49 @@ function Obstacles({ L }: { L: Layout }) {
   );
 }
 
+/**
+ * 고회전 칸: 백엔드 시험 센터의 E2E 시험용 고회전 5칸(H01-01 랙)을 빨간 띠로 표시한다.
+ * 그 밖의 선반은 일반 선반(임시) — 근거 BACKEND_FACTS.highTurnoverBins.
+ */
+function HighTurnover({ L }: { L: Layout }) {
+  const bins = useMemo(() => L.locations.filter((l) => (BACKEND_FACTS.highTurnoverBins as readonly string[]).includes(l.code)), [L]);
+  const rack = useMemo(() => L.racks.find((r) => r.id === bins[0]?.rackId), [L, bins]);
+  if (!rack) return null;
+  return (
+    <>
+      {bins.map((loc) => {
+        const w = loc.slotW * 0.92;
+        const [sx, sz] = loc.along === 'x' ? [w, RACK_DEPTH + 0.04] : [RACK_DEPTH + 0.04, w];
+        return (
+          <mesh key={loc.code} position={[loc.shelf.x, loc.shelf.y - 0.02, loc.shelf.z]}>
+            <boxGeometry args={[sx, 0.035, sz]} />
+            <meshStandardMaterial color={0xe53935} emissive={0x7f1010} roughness={0.5} />
+          </mesh>
+        );
+      })}
+      <Label
+        text="고회전(시험) H01-01"
+        position={[rack.cx, RACK_HEIGHT + 0.5, rack.cz]}
+        opts={{ size: 28, bg: 'rgba(160,20,20,0.75)', screenPx: 14 }}
+      />
+    </>
+  );
+}
+
+/** 회수(반품) 반입 자리 RTN-A-01 — 평면에 회수 구역이 없어 백엔드가 입고·검수 구역 안에 정한 자리. */
+function ReturnIntake() {
+  const p = BACKEND_FACTS.returnIntake;
+  return (
+    <>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[p.x, 0.012, p.z]} receiveShadow>
+        <planeGeometry args={[1.2, 1.2]} />
+        <meshStandardMaterial color={0x2e7d32} roughness={0.9} transparent opacity={0.9} />
+      </mesh>
+      <Label text={`회수 반입 ${p.code}`} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(20,90,30,0.75)', screenPx: 14 }} />
+    </>
+  );
+}
+
 /** 패킹대: 꺼짐 회색 · 비어 있음 초록 · 사용 중 주황. */
 function Stations({ L }: { L: Layout }) {
   const { sim } = useApp();
@@ -243,6 +287,8 @@ export function Facility() {
       <Zones L={L} />
       <Walls L={L} />
       <Racks L={L} />
+      <HighTurnover L={L} />
+      <ReturnIntake />
       <Obstacles L={L} />
       <Stations L={L} />
       <Box size={[1.6, 0.9, 0.7]} color={0x4a90d9} position={[L.points.cartDepot.x, 0.45, L.points.cartDepot.z - 0.6]} />
