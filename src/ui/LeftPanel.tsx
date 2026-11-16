@@ -148,9 +148,43 @@ function BackendSettings() {
           MOCK 모드로 돌아가기
         </button>
       )}
+      {!mock && <VirtualWorkers />}
       <p className="note">
-        실서버 모드는 지금 <b>보기만</b> 합니다 — 고객 앱 주문으로 생긴 작업과 PDA 작업자의 진행을 {REAL_LINK.pollSec}초마다 읽어 그립니다. 가상 작업자·가짜 주문은 없고, 실서버 재고·작업을 바꾸지 않습니다. 시계는 실제 시각(1×)입니다.
+        실서버 모드는 고객 앱 주문으로 생긴 작업과 PDA 작업자의 진행을 {REAL_LINK.pollSec}초마다 읽어 그립니다. 가짜 주문은 없습니다. 가상 작업자를 켜지 않으면 실서버 재고·작업을 바꾸지 않습니다. 시계는 실제 시각(1×)입니다.
       </p>
+    </>
+  );
+}
+
+/** 실서버 가상 작업자(mfcw-pp-01~10) — 켜면 실제 주문을 집고 포장한다(실서버 작업·재고가 바뀜) */
+function VirtualWorkers() {
+  const { sim } = useApp();
+  useTick();
+  if (sim.realTokens?.serverInjected) return <p className="note">다른 기기에서는 가상 작업자를 켤 수 없습니다(조회만).</p>;
+  const ws = sim.virtualWorkers.filter((w) => !w.left);
+  return (
+    <>
+      <h3>가상 작업자 (실서버)</h3>
+      <Slider
+        name="가상 피킹·포장 작업자"
+        initial={sim.virtualWorkerCount}
+        min={0}
+        max={REAL_LINK.virtualAccounts.length}
+        step={1}
+        hint="mfcw-pp-01부터 켭니다. 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
+        apply={(v) => sim.setVirtualWorkers(v)}
+      />
+      {ws.length > 0 && (
+        <div className="probe">
+          {ws.map((w) => (
+            <div key={w.account}>
+              {w.account.replace('mfcw-', '')} · {w.leaving ? '퇴근 예정 · ' : ''}
+              {w.activity}
+              {w.lastProblem && <span className="warn"> · {w.lastProblem}</span>}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }

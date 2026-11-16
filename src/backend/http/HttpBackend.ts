@@ -6,7 +6,9 @@ import {
   ApiProblem,
   ResultUnknown,
   type CapacityWorker,
+  type CapacityAssignment,
   type CenterStock,
+  type DispatchRequest,
   type CommandResponse,
   type DeliveryDispatch,
   type HandoverAuthorization,
@@ -21,6 +23,7 @@ import {
   type TaskExecutionRequest,
   type TaskState,
   type TaskSummary,
+  type WorkArea,
 } from '../../domain/contract';
 import type { ApiListener, FulfillmentPort } from '../port';
 
@@ -122,6 +125,16 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
+  }
+
+  /** mfc-capacity 다음 작업 받기 — 작업자 본인 토큰(주체 = workerId). 들고 있는 작업이 있으면 그것(200) */
+  pullNextTask(mfcId: string, workerId: string, workArea: WorkArea, idempotencyKey: string): Promise<CapacityAssignment> {
+    return this.request('POST', `/mfcs/${enc(mfcId)}/workers/${enc(workerId)}/next-tasks`, { body: { workArea }, idempotencyKey });
+  }
+
+  /** mfc-fulfillment 배차 요청 — 점원(포장 시작 때, 사용자 2026-11-16). 출고당 한 번, 이미 요청됐으면 그 요청(200) */
+  requestDispatch(shipmentId: string, estimatedPackMinutes: number, idempotencyKey: string): Promise<DispatchRequest> {
+    return this.request('POST', `/shipments/${enc(shipmentId)}/dispatch-requests`, { body: { estimatedPackMinutes }, idempotencyKey });
   }
 
   /** delivery-execution 직원용 배송 찾기 — 그 센터 배송 최신순(배송 생긴 시각). 센터 직원은 mfcId 필수 */

@@ -277,7 +277,7 @@ function DetailBody() {
       </>
     );
   }
-  const w = sim.workers.find((x) => x.id === sel.id);
+  const w = sim.siteWorkers().find((x) => x.id === sel.id);
   if (!w) return null;
   const d = w.pda;
   const locSku = w.currentTarget ? sim.catalog.find((k) => k.location === w.currentTarget)?.sku : undefined;
@@ -331,6 +331,6 @@ export function DetailCard() {
   const exists =
     !!sel &&
     (sel.kind === 'location' ||
-      (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.workers.some((x) => x.id === sel.id)));
+      (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;
 }

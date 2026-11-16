@@ -104,10 +104,21 @@ export const SPEEDS = [0, 1, 5, 15, 30, 60, 120] as const;
  * 실서버 연결(관찰) — 근거: pmart-backend docs/simulator/mfc/mfc-simulator-integration.md (SIM-1~11),
  * docs/operations/lan-test-accounts.md (2026-11-16).
  */
+/** 실서버 가상 작업자(mfcw-pp-01~10) 동작 값 */
+export const REAL_WORKERS = {
+  /** 다음 작업 받기가 NO_TASK_AVAILABLE 이면 다시 묻는 간격(초) [시뮬] */
+  noTaskRetrySec: 5,
+  /** 거절·오류 뒤 다시 하기까지(초) [시뮬] */
+  errorBackoffSec: 30,
+  /** 배정이 작업(ASSIGNED)에 반영되기를 기다리는 최대 초 — 백엔드 E2E 도 30초 [시뮬] */
+  assignWaitSec: 30,
+  /** 한 번에 켤 수 있는 최대 인원 = REAL_LINK.virtualAccounts 수(10) [확정 사용자 2026-11-16] */
+};
+
 export const REAL_LINK = {
   /** 실서버 읽기(작업 목록·상세·작업자 목록)에 쓰는 계정. 백엔드 문서의 "시뮬레이터 작업자" [확정] */
   observerAccount: 'claude-mfc-wrk',
-  /** 가상 작업자 계정 — 실서버에 쓰는 단계에서 쓴다(아직 안 씀). 사용자 결정 2026-11-16 [확정] */
+  /** 가상 작업자 계정 — 앞에서부터 켠다(기본 0명, 화면에서 켬). 사용자 결정 2026-11-16 [확정] */
   virtualAccounts: Array.from({ length: 10 }, (_, i) => `mfcw-pp-${String(i + 1).padStart(2, '0')}`),
   /** 작업 목록 주기 조회 간격(초). SIM-5 "시작 3초" [확정] */
   pollSec: 3,

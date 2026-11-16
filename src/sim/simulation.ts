@@ -22,6 +22,8 @@ import { Rng } from '../util/rng';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard } from './realBoard';
+import { RealWorker, type RealSiteContext } from './realWorker';
+import type { SiteWorker } from './worker';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
 import { Worker } from './worker';
@@ -68,6 +70,10 @@ export class Simulation {
   /** 실서버 관찰(읽기 전용). MOCK 모드에서는 null */
   readonly real: RealBoard | null = null;
   readonly realTokens: TokenSource | null = null;
+  /** 실서버 가상 작업자(mfcw-pp-01~10) — 기본 0명, setVirtualWorkers 로 켠다 */
+  readonly virtualWorkers: RealWorker[] = [];
+  private realCtx: RealSiteContext | null = null;
+  private realBaseUrl = '/api/v1';
   readonly runId = Math.random().toString(36).slice(2, 8);
 
   time: number;
@@ -167,6 +173,7 @@ export class Simulation {
       });
       this.time = wallClockSec();
       this.speed = 1;
+      this.realBaseUrl = http?.baseUrl ?? '/api/v1';
     }
 
     this.ctx = {
@@ -210,9 +217,69 @@ export class Simulation {
       this.setInboundWorkers(params.inboundWorkers);
     }
 
-    // 실서버 관찰 모드에서는 가상 작업자를 두지 않는다 — 실서버에 쓰는 단계에서 REAL_LINK.virtualAccounts 로 붙인다
+    // 실서버 모드의 가상 작업자는 기본 0명 — 실서버 작업·재고를 바꾸므로 화면에서 켤 때만(setVirtualWorkers)
     if (mode === 'mock') this.setWorkers(params.workers);
-    else this.params.workers = 0;
+    else {
+      this.params.workers = 0;
+      this.realCtx = {
+        runId: this.runId,
+        mfcId: params.mfcId,
+        layout: this.layout,
+        nav: this.nav,
+        stations: this.stations,
+        params: this.params,
+        now: () => this.time,
+        log: (m) => this.log(m),
+        location: (c) => this.backendLocation(c),
+        point: (c) => this.backendPoint(c),
+      };
+    }
+  }
+
+  /** 화면이 그리는 작업자 — MOCK 작업자 + 실서버 가상 작업자 */
+  siteWorkers(): SiteWorker[] {
+    return this.virtualWorkers.length ? [...this.workers, ...this.virtualWorkers.filter((w) => !w.left)] : this.workers;
+  }
+
+  /** 가상 작업자 운영자 ID — 실제 작업 표시(PDA 기둥)에서 뺀다 */
+  virtualWorkerIds(): Set<string> {
+    return new Set(this.virtualWorkers.map((w) => w.workerId).filter((x): x is string => !!x));
+  }
+
+  /**
+   * 실서버 가상 작업자 수(0~10). 늘리면 REAL_LINK.virtualAccounts 앞에서부터 각자 토큰으로 일을 시작한다.
+   * 줄이면 들고 있는 작업을 마친 뒤 멈춘다(작업을 버려 두지 않음). 다른 기기(조회 전용)에서는 켜지 않는다.
+   */
+  setVirtualWorkers(n: number) {
+    const ctx = this.realCtx;
+    if (!ctx || this.realTokens?.serverInjected) return;
+    const target = Math.max(0, Math.min(REAL_LINK.virtualAccounts.length, this.layout.points.idle.length, n));
+    const active = this.virtualWorkers.filter((w) => !w.leaving);
+    for (let i = 0; i < REAL_LINK.virtualAccounts.length && active.length < target; i++) {
+      const account = REAL_LINK.virtualAccounts[i];
+      const existing = this.virtualWorkers.find((w) => w.account === account);
+      if (existing && !existing.left) {
+        if (existing.leaving) {
+          existing.leaving = false;
+          active.push(existing);
+        }
+        continue;
+      }
+      if (existing) this.virtualWorkers.splice(this.virtualWorkers.indexOf(existing), 1);
+      const tokens = new TokenSource(account, REAL_LINK.tokenRefreshMarginSec);
+      const be = new HttpBackend({ baseUrl: this.realBaseUrl, token: () => tokens.get(), sourceSystem: 'mfc-simulator', now: () => this.time, timeoutMs: 8000 });
+      be.onApi((r) => this.push(this.apiLog, { ...r, note: account }));
+      const w = new RealWorker(account, this.layout.points.idle[i], ctx, be, tokens);
+      this.virtualWorkers.push(w);
+      active.push(w);
+      void w.run();
+    }
+    // 뒤에서부터 퇴근 요청
+    for (let i = active.length - 1; i >= target; i--) active[i].leaving = true;
+  }
+
+  get virtualWorkerCount(): number {
+    return this.virtualWorkers.filter((w) => !w.leaving && !w.left).length;
   }
 
   // ── 설정 변경 ───────────────────────────────────────
@@ -269,8 +336,16 @@ export class Simulation {
     if (this.real) {
       // 실서버 관찰: 시계는 실제 시각, 일시정지(0×)면 조회도 멈춘다. 조회는 기다리지 않는다(화면이 멈추지 않게)
       if (this.speed === 0) return;
+      const prev = this.time;
       this.time = wallClockSec();
       void this.real.tick();
+      if (this.virtualWorkers.length) {
+        // 가상 작업자는 실제 시간으로 걷고 기다린다(1×)
+        const dt = Math.max(0, Math.min(this.time - prev, 0.25));
+        for (const w of this.virtualWorkers) w.tick(dt);
+        this.stations.tick(dt);
+        for (let i = 0; i < 40; i++) await Promise.resolve();
+      }
       return;
     }
     let remain = Math.min(dtReal, 0.1) * this.speed;

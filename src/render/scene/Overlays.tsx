@@ -76,7 +76,7 @@ export function TargetMarkers() {
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color(STATE_COLOR.PICKING);
     let n = 0;
-    for (const w of sim.workers) {
+    for (const w of sim.siteWorkers()) {
       if (w.currentTarget && w.state === 'PICKING' && n < 64) {
         mtx.makeTranslation(w.currentTarget.pick.x, 0.03, w.currentTarget.pick.z);
         m.setMatrixAt(n, mtx);
@@ -104,7 +104,7 @@ export function PathLine() {
   );
   useFrame(() => {
     const s = controller.selection;
-    const p = s && s.kind !== 'location' ? [...sim.workers, ...sim.inboundWorkers].find((x) => x.id === s.id) : undefined;
+    const p = s && s.kind !== 'location' ? [...sim.siteWorkers(), ...sim.inboundWorkers].find((x) => x.id === s.id) : undefined;
     if (!p || p.path.length === 0) {
       line.visible = false;
       return;

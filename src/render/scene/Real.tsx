@@ -26,6 +26,7 @@ export function RealMarkers() {
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color();
     const targets = real.pickTargets();
+    const virtualIds = sim.virtualWorkerIds(); // 가상 작업자는 사람으로 따로 그린다 — PDA 기둥은 실제 작업자만
     let n = 0;
     // 작업마다 첫 지시 칸 = 담당자를 세울 자리
     const firstByTask = new Map<string, { x: number; z: number; name: string; state: TaskState }>();
@@ -38,7 +39,7 @@ export function RealMarkers() {
         rings.current.setColorAt(n, col.setHex(RING_COLOR[t.state] ?? 0xbdc1c6));
         n++;
       }
-      if (!firstByTask.has(t.taskId)) firstByTask.set(t.taskId, { x: loc.pick.x, z: loc.pick.z, name: real.workerName(t.workerId), state: t.state });
+      if (!firstByTask.has(t.taskId) && !(t.workerId && virtualIds.has(t.workerId))) firstByTask.set(t.taskId, { x: loc.pick.x, z: loc.pick.z, name: real.workerName(t.workerId), state: t.state });
     }
     rings.current.count = n;
     rings.current.instanceMatrix.needsUpdate = true;

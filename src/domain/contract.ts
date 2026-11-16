@@ -372,6 +372,24 @@ export class ApiProblem extends Error {
 /** 응답을 받지 못함 — 실패로 단정하지 않는다(같은 키 재전송 또는 원결과 조회로 해소). */
 export class ResultUnknown extends Error {}
 
+// ── mfc-capacity 다음 작업 받기 (0.14.0) — 가상 작업자(mfcw-pp-01~10) 본인 토큰으로 부른다 ──
+
+/** PDA 에서 고르는 업무. 가상 작업자는 PICK_PACK(= PICK·PACK) 만 */
+export type WorkArea = 'INBOUND' | 'INSPECTION' | 'STOCK_MOVE' | 'STOCK_COUNT' | 'PICK_PACK';
+
+/** capacity Assignment 일부 — POST /mfcs/{mfcId}/workers/{workerId}/next-tasks 응답(200 들고 있던 작업, 201 새 배정) */
+export interface CapacityAssignment {
+  assignmentId: string;
+  mfcId: string;
+  taskId: string;
+  taskType: string;
+  workerId: string;
+  assignmentVersion: number;
+  state: 'ACTIVE' | 'SUPERSEDED' | 'RELEASED';
+  source?: 'MANUAL' | 'PLAN' | 'SYSTEM' | null;
+  warnings?: string[];
+}
+
 // ── 배송(읽기만) — 라이더 API 는 rider 시뮬레이터만 부른다(backend-requests.md "rider 시뮬레이터 요청") ──
 
 /** delivery-dispatch DispatchState — 배차 관점. 수행 상태(ExecutionState)와 다른 서비스의 다른 값이라 합치지 않는다 */

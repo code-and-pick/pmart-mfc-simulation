@@ -26,6 +26,24 @@ export interface PdaView {
   pickedQty: number | null;
 }
 
+/** 화면(3D·카드·요약)이 보는 작업자 모양 — MOCK 작업자(Worker)와 실서버 가상 작업자(RealWorker) 공통 */
+export interface SiteWorker {
+  readonly id: string;
+  pos: P;
+  heading: number;
+  path: P[];
+  distance: number;
+  activity: string;
+  state: WorkerState;
+  pda: PdaView | null;
+  hasCart: boolean;
+  carrying: TemperatureZone[];
+  busySeconds: number;
+  ordersDone: number;
+  currentTarget: Location | null;
+  readonly idle: boolean;
+}
+
 export interface Job {
   taskId: string;
   assignmentVersion: number;
