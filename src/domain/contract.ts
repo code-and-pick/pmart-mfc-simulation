@@ -1,9 +1,11 @@
-// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.4.11) 의 부분 사본 + _common.yaml 공통 형
+// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.7.0) 의 부분 사본 + _common.yaml 공통 형
 // + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부
 // + delivery-dispatch-service.yaml (0.3.3)·delivery-execution-service.yaml (0.4.0) 의 조회 형 일부(실서버 관찰, rider 시뮬레이터 요청 M-01·M-02).
 // 이 파일의 이름·상태값은 계약을 그대로 따른다. 계약이 바뀌면 여기를 먼저 맞춘다.
 // 시뮬레이터가 쓰지 않는 경로(중지·재포장·인계 판정 등)의 형은 옮기지 않았다.
 // 0.4.11(2026-11-13): 배차 자동 요청 없음 — 점원 요청(MANUAL)만. 형 변화 없음(AUTO_ON_READY 는 예전 기록 때문에 남음).
+// 0.5.0·0.6.0(2026-11-16): 재발송 작업 지시(ConfirmOrder kind)·예약 시간 변경 — 내부 경로라 옮긴 형 변화 없음.
+// 0.7.0(2026-11-16): 작업 상세 TaskLine.barcodes(활성 바코드 전부), barcode 는 그 첫 값(조회 때 채움, R-20 해소).
 
 export type TaskState =
   | 'WAITING'
@@ -126,7 +128,10 @@ export interface TaskLine {
   orderLineId: string;
   sku: string;
   productName?: string;
+  /** 필수 스캔 대조값 — barcodes 의 첫 값(0.7.0 부터 채움). 모르면 null */
   barcode: string | null;
+  /** (0.7.0) 그 SKU 의 활성 바코드 전부(선행 0 보존). 스캔 값이 이 중 하나면 같은 상품. 모르면 빈 배열. MOCK·0.6 이하는 없음 */
+  barcodes?: string[];
   /** 지시 로케이션(첫 지시의 사본). PACK·DISPATCH 는 null 일 수 있음 */
   locationId: string | null;
   lotId: string | null;

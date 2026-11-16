@@ -74,6 +74,8 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
     <>
       {stops.map(({ l, p, loc }) => {
         const bc = real.skuBarcodes.get(l.sku);
+        // 작업 지시 바코드 중 첫 값 말고 나머지(0.7.0 barcodes) — 계약은 "barcodes 중 하나면 같은 상품"
+        const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
         return (
           <div className="scan-stop" key={`${l.orderLineId}:${p.lotId}`}>
             <div className="sub">
@@ -83,9 +85,14 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
             </div>
             <div className="bc-grid">
               {loc ? <LocBarcode code={loc} caption="위치 (누르면 3D 에서 그 칸)" /> : <div className="note">지시 칸 없음</div>}
-              {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers scan) — 그 값을 먼저 보인다 */}
+              {/* PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers scan, 클라이언트 3cab409 기준 첫 값만) — 그 값을 먼저 보인다 */}
               {l.barcode ? (
-                <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`상품 ${l.sku} (작업 지시 바코드)`} height={44} />
+                <>
+                  <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`상품 ${l.sku} (작업 지시 바코드)`} height={44} />
+                  {more.map((v) => (
+                    <Barcode key={v} value={v} kind={kindOf(v)} caption={`상품 ${l.sku} (같은 상품 다른 바코드)`} height={44} />
+                  ))}
+                </>
               ) : bc === 'LOADING' || bc === undefined ? (
                 <div className="note">상품 바코드 읽는 중…</div>
               ) : bc === 'ERR' ? (
@@ -98,9 +105,10 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
             </div>
             {!l.barcode && (
               <div className="note warn">
-                이 작업 지시에는 상품 바코드가 비어 있습니다 — PDA 는 찍은 값을 작업 지시 바코드와 비교하므로 어떤 바코드를 찍어도 "다른 상품"이 됩니다(바코드를 채우기 전에 만든 작업). 위 바코드는 상품 정보의 값(참고)입니다.
+                이 작업 지시 줄에 상품 바코드가 비어 있습니다 — PDA 는 찍은 값을 작업 지시 바코드와 비교하므로 "다른 상품"이 됩니다. 서버(0.7.0)는 조회 때 채우므로 비어 있으면 재고 서비스 조회 실패이거나 그 상품의 바코드가 없는 것입니다. 위 바코드는 상품 정보의 값(참고)입니다.
               </div>
             )}
+            {more.length > 0 && <div className="note">PDA 앱은 지금 첫 바코드({l.barcode})로만 비교합니다 — 다른 바코드는 앱이 barcodes 전체로 비교하게 바뀌면 맞습니다.</div>}
             {l.barcode && Array.isArray(bc) && bc.length > 0 && !bc.includes(l.barcode) && (
               <div className="note warn">작업 지시 바코드({l.barcode})가 지금 상품 정보 바코드({bc.join(', ')})와 다릅니다 — PDA 는 작업 지시 바코드로 비교합니다.</div>
             )}

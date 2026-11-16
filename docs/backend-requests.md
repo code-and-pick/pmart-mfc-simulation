@@ -81,11 +81,6 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 ### R-10 남은 질문 — 정기 입고 수령 뒤 입고 작업 (낮음)
 `/inbound-promises/*` 가 아직 501 이다(11-16 실측). 구현되면 수령(`…/receipts`) 뒤에도 같은 INSPECT·PUTAWAY 입고 작업(`/inbound-tasks`)이 생기는지 알려 달라 — 시뮬레이터 입고 흐름을 실서버로 돌릴 때 쓴다.
 
-### R-20 바코드를 채우기 전에 만든 작업은 지시 줄 바코드가 비어 PDA 상품 스캔이 안 맞음 — 중간 (2026-11-16 추가)
-실제 주문 `ORD-ac1fb73b-…-S1`(작업 07:14Z 생성) PICK 7줄 모두 `lines[].barcode = null`. 상품 조회는 바코드가 있음(`GET /skus/E-00000045` → `2990000000453`, 백엔드 `22e57579` 18:23 채움). PDA 앱은 찍은 값을 **작업 지시 줄 `barcode`** 와 비교하므로(`pmart-clients/apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`) 이 작업은 어떤 상품을 찍어도 "다른 상품".
-- 묻는 것: (1) 열린 작업의 줄 바코드를 다시 채울지(또는 조회 때 상품 정보에서 채울지), (2) 18:23 뒤에 만든 작업은 줄 바코드가 채워지는지.
-- 시뮬레이터는 스캔 판에 **작업 지시 바코드를 먼저** 보이고, 비어 있으면 경고와 함께 상품 정보 바코드를 참고로만 보인다.
-
 ### R-19 인계 끝난 출고에도 `Shipment.deliveryId` 가 비어 있음 — 낮음 (2026-11-16 추가)
 `GET /shipments/ORD-0e67de38-…-S1`(11-10 실제 주문, `HANDED_OVER`, 배차 MANUAL) → `deliveryId: null`. 같은 주문의 배송은 `GET /deliveries?mfcId=MFC-SEED-01` 에 `DLV-74422b51-…` `COMPLETED` 로 있다(11-16 실측).
 - 묻는 것: 계약 `Shipment.deliveryId` 는 언제 채워지나(배송 생성 `DeliveryCreated` 를 fulfillment 가 받아 적는지), 아니면 비워 두는 필드인가.
@@ -103,11 +98,12 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | R-02 | 가상 작업자 인증 | 해소 — LAN 시험 계정 70명(`mfcw-*`, 공용 비밀번호) 발급 끝(11-16 확인). 토큰 경로는 R-14 | `docs/operations/lan-test-accounts.md` |
 | R-03 | 가상 설비 출처 표시 | 결정 — 시뮬 센터·시뮬 계정으로 구분(SIM-8) | 회신 11-09 |
 | R-04 | 센터 전체 작업·배정 조회 | 해소 — `GET /tasks?mfcId&state=`·`GET /assignments`(11-16 실측 200) | 회신 11-09 |
-| R-05 | 재고 조회(읽기) | 해소 — `GET /mfcs/{mfcId}/stock?sku=` 로 주문 SKU 재고를 그린다(11-16 사용 시작). 칸 단위·여러 SKU 는 R-15·R-16 | inventory 0.16.0 |
+| R-05 | 재고 조회(읽기) | 해소·닫힘 — `GET /mfcs/{mfcId}/stock?sku=` 로 주문 SKU 재고를 그린다(11-16 사용 시작). 센터 전체 목록 API 는 만들지 않음(SIM-5, PC 3 공지 `2026-11-16-simulator-notice-recheck-and-changes.md` §2). 칸 단위·여러 SKU 는 R-15·R-16 | inventory 0.16.0 |
 | R-06 | 작업 배정 경로 | 해소 — 수동 배정·추천(OR-Tools)·다음 작업 받기. PICK 담당에게 PACK 이어서(`TaskStore.releasePack`) | capacity 0.14.0 |
 | R-08 | MFC 로케이션 정본 | 해소(SIM-6) — 평면대로 등록, 코드 대응 `locationCodes.ts` 6,762칸 일치 → 11-16 칸 설계 변경 후 14,559칸(백엔드 설계 규칙과 대조 테스트) | layout-bins 공지 |
-| R-09 | 상품·보관 기준정보 | 해소 — `GET /skus/{sku}` 에 무게·`logistics.storageType`·바코드(11-16 실측 200, 그 SKU 는 바코드 빈 배열) | product 0.1.0 |
-| R-11 | 칸 한도·최소량 | 일부 해소 — 자동 보충 기준 API 있음(등록 0건), 칸 용량은 위치 `dimensions`. MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 표현 | inventory 0.14.0~ |
+| R-09 | 상품·보관 기준정보 | 해소 — `GET /skus/{sku}` 에 무게·`logistics.storageType`·바코드, product 0.2.0 부터 `dimensions`(추정 503개). 쓰는 SKU 만 조회(SIM-5, PC 3 공지 §2) | product 0.1.0 |
+| R-11 | 칸 한도·최소량 | 일부 해소 — `replenishment-policies` 있음, 값은 Q-07 미결(기준 없는 칸은 `CONFIG_REQUIRED`). 칸 용량은 위치 `dimensions` ÷ 상품 `dimensions`(inventory 0.18.0). MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 에서만 | inventory 0.14.0~ |
+| R-20 | 작업 지시 줄 바코드가 비어 PDA 상품 스캔 "다른 상품" | 해소 — fulfillment 0.7.0(`122f03e3`, PC 3 배포): 조회 때 `barcodes[]`·`barcode`(첫 값) 채움, 이미 만든 작업도. 11-16 실측: 진행 중 PICK 7줄 모두 채워짐. 스캔 판은 첫 값 + 나머지 표시 | fulfillment 0.7.0 |
 | R-12 | OR-Tools·Chronos-2 | 회신 — OR-Tools 는 mfc-capacity(Java, JVM 실행 ADR-0053), Chronos-2 미적용. 시뮬레이터 할 일 없음 | 회신 11-09 |
 
 ## 시뮬레이터 쪽 후속 작업 (시뮬레이터가 맞출 것 — 백엔드 요청 아님)
@@ -125,7 +121,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | 방문 순서 | 받은 `visitSeq` 순서로 걷기 | 11-10 코드 완료 — 실서버 확인 전 |
 | 수령 의미 | 재고 v2: 수령 = H 만, 품질검사 → 적치 때 E+. MOCK 의 "수령 = H+E" 를 바꾼다 | 남음 · ADR-0040 |
 | LOT | MOCK 에 LOT 조각(FEFO), 결품 보고 `lotId` | 남음 · R-01 |
-| 위치 | 평면을 `GET /locations?state=ACTIVE`(cursor 끝까지)로 대조 | 남음 · R-08 |
+| 위치 | 평면을 `GET /locations`(cursor 끝까지)로 대조 | 11-16 한 번 대조(선반 14,559 일치·좌표 0.5cm 안, 임시 스크립트). 화면이 매번 읽지는 않음 · R-08 |
 | 입고·보충 | HttpBackend 에 `/inbound-tasks`·`/move-orders` | 남음 · R-10 |
 | 회수 | `ReturnItemReceived`·`ReturnInspected` 를 회수 반입 자리에 | 남음 · return-location 공지 |
 | 실행 끝 정리 | 열린 작업 중지·복귀, 되돌리는 이동, 인계 안 된 포장 | 남음 · SIM-9, R-07 |
