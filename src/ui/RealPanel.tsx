@@ -1,7 +1,10 @@
 // 실서버 관찰 화면: 실제 주문(출고)별 PICK·PACK 상태와 담당 작업자. 서버가 준 값만 보인다.
+// 주문 줄을 누르면 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)가 줄 아래에 펼쳐진다.
+import { Fragment, useState } from 'react';
 import { useApp } from '../app/context';
 import { REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
+import { CartBarcodes, TaskBarcodes, useSkuBarcodes } from './ScanBoard';
 import { dispatchText, dispatchView, type DispatchStage, type RealShipment, type RealTask } from '../sim/realBoard';
 
 export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
@@ -102,6 +105,9 @@ export function RealOrders() {
   const { sim } = useApp();
   const real = sim.real!;
   const rows = real.shipments();
+  const [open, setOpen] = useState<string | null>(null);
+  const opened = rows.find((r) => r.shipmentId === open);
+  useSkuBarcodes(opened ? [opened.pick, opened.pack] : []);
   if (!rows.length) {
     return (
       <div className="note">
@@ -126,7 +132,12 @@ export function RealOrders() {
           const head = (r.pick ?? r.pack ?? r.ret)!.summary.headline;
           const created = new Date((r.pick ?? r.pack ?? r.ret)!.summary.createdAt);
           return (
-            <tr key={r.shipmentId} title={`${r.shipmentId}\n${r.fulfillmentId}`}>
+            <Fragment key={r.shipmentId}>
+            <tr
+              title={`${r.shipmentId}\n${r.fulfillmentId}\n누르면 이 주문의 바코드`}
+              className={`clickable${open === r.shipmentId ? ' on' : ''}`}
+              onClick={() => setOpen(open === r.shipmentId ? null : r.shipmentId)}
+            >
               <td>
                 <div>{shortId(r.shipmentId)}</div>
                 <div className="sub">
@@ -138,6 +149,31 @@ export function RealOrders() {
               <TaskCell t={r.pack ?? r.ret} />
               <DispatchCell r={r} />
             </tr>
+            {open === r.shipmentId && (
+              <tr className="scan-row">
+                <td colSpan={4}>
+                  <div className="scan">
+                    <h4>카트 (피킹 때 찍은 카트를 패킹 때 다시 찍음)</h4>
+                    <CartBarcodes />
+                    {r.pick && (
+                      <>
+                        <h4>
+                          PICK · {TASK_STATE_KO[r.pick.closed ? r.pick.closed.state : r.pick.summary.state]} · {real.workerName(r.pick.summary.assignment?.workerId)}
+                        </h4>
+                        <TaskBarcodes t={r.pick} />
+                      </>
+                    )}
+                    {r.pack && (
+                      <>
+                        <h4>PACK · {TASK_STATE_KO[r.pack.closed ? r.pack.closed.state : r.pack.summary.state]}</h4>
+                        <TaskBarcodes t={r.pack} />
+                      </>
+                    )}
+                  </div>
+                </td>
+              </tr>
+            )}
+            </Fragment>
           );
         })}
       </tbody>

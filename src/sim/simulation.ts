@@ -23,6 +23,7 @@ import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
+import { ObservedWorker } from './observedWorker';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
@@ -71,6 +72,9 @@ export class Simulation {
   /** 실서버 관찰(읽기 전용). MOCK 모드에서는 null */
   readonly real: RealBoard | null = null;
   readonly realTokens: TokenSource | null = null;
+  /** 실서버의 실제 PDA 작업자 — 서버가 확정한 마지막 집품 칸에 세운다(그리기만, SIM-2a) */
+  readonly observedWorkers: ObservedWorker[] = [];
+  private observedPoll = -1;
   /** 실서버 가상 작업자(mfcw-pp-01~10) — 기본 0명, setVirtualWorkers 로 켠다 */
   readonly virtualWorkers: RealWorker[] = [];
   private realCtx: RealSiteContext | null = null;
@@ -239,7 +243,8 @@ export class Simulation {
 
   /** 화면이 그리는 작업자 — MOCK 작업자 + 실서버 가상 작업자 */
   siteWorkers(): SiteWorker[] {
-    return this.virtualWorkers.length ? [...this.workers, ...this.virtualWorkers.filter((w) => !w.left)] : this.workers;
+    if (!this.virtualWorkers.length && !this.observedWorkers.length) return this.workers;
+    return [...this.workers, ...this.virtualWorkers.filter((w) => !w.left), ...this.observedWorkers];
   }
 
   /** 가상 작업자 운영자 ID — 실제 작업 표시(PDA 기둥)에서 뺀다 */
@@ -277,6 +282,106 @@ export class Simulation {
     }
     // 뒤에서부터 퇴근 요청
     for (let i = active.length - 1; i >= target; i--) active[i].leaving = true;
+  }
+
+  /**
+   * 실제 PDA 작업자(가상 작업자 아님)를 열린 PICK·PACK 의 서버 상태로 세운다. 조회(polls)가 바뀔 때만 맞춘다.
+   * PICK: 집품 등록된 칸 중 방문 순서가 가장 늦은 칸 앞(없으면 카트 자리), PACK: 패킹 대기 지점. 열린 작업이 없어지면 2분 뒤 뺀다.
+   */
+  private syncObservedWorkers() {
+    const real = this.real;
+    if (!real || real.polls === this.observedPoll) return;
+    this.observedPoll = real.polls;
+    const now = Date.now();
+    const virtualIds = this.virtualWorkerIds();
+    const rank: Record<string, number> = { IN_PROGRESS: 0, BLOCKED: 1, ASSIGNED: 2 };
+    const byWorker = new Map<string, ReturnType<typeof real.tasks.get> & object>();
+    for (const t of real.tasks.values()) {
+      const s = t.summary;
+      const wid = s.assignment?.workerId;
+      if (t.closed || !wid || virtualIds.has(wid) || !(s.state in rank) || (s.taskType !== 'PICK' && s.taskType !== 'PACK')) continue;
+      const cur = byWorker.get(wid);
+      if (!cur || rank[s.state] < rank[cur.summary.state]) byWorker.set(wid, t);
+    }
+    const cart = this.backendPoint('CRT-A-01') ?? this.layout.points.cartDepot;
+    for (const [wid, t] of byWorker) {
+      const s = t.summary;
+      let w = this.observedWorkers.find((x) => x.workerId === wid);
+      const name = real.workerName(wid);
+      const view = {
+        taskId: s.taskId,
+        taskType: s.taskType as 'PICK' | 'PACK',
+        orderId: s.fulfillmentId,
+        shipmentId: s.shipmentId ?? '',
+        step: '',
+        progress: '',
+        location: null as string | null,
+        nextLocation: null as string | null,
+        temp: null as string | null,
+        productName: null as string | null,
+        barcode: null as string | null,
+        plannedQty: null as number | null,
+        pickedQty: null as number | null,
+      };
+      let target = cart;
+      let key = `${s.taskId}:cart`;
+      if (s.taskType === 'PICK') {
+        const stops = (t.detail?.lines ?? [])
+          .flatMap((l) =>
+            (l.picks ?? []).map((p) => {
+              const locs = p.locations ?? [];
+              const code = (locs.find((x) => (x.allocatedQty ?? 0) > 0) ?? locs[0])?.locationCode ?? l.locationId ?? null;
+              return { l, p, code, seq: p.visitSeq ?? 9999 };
+            }),
+          )
+          .sort((a, b) => a.seq - b.seq);
+        const done = stops.filter((x) => x.p.remainingQty <= 0);
+        const last = done[done.length - 1];
+        const next = stops.find((x) => x.p.remainingQty > 0);
+        const lastLoc = last?.code ? this.backendLocation(last.code) : null;
+        if (lastLoc) {
+          target = lastLoc.pick;
+          key = `${s.taskId}:${last.code}`;
+        }
+        if (!w) {
+          w = new ObservedWorker(`PDA ${name}`, wid, target, this.nav, this.params.walkSpeed);
+          this.observedWorkers.push(w);
+        }
+        w.state = s.state === 'IN_PROGRESS' ? 'PICKING' : s.state === 'BLOCKED' ? 'ERROR' : 'TO_CART';
+        w.hasCart = s.state === 'IN_PROGRESS';
+        w.currentTarget = next?.code ? this.backendLocation(next.code) : null;
+        view.progress = `${done.length} / ${stops.length}`;
+        view.location = last?.code ?? null;
+        view.nextLocation = next?.code ?? null;
+        view.productName = next?.l.productName ?? null;
+        view.plannedQty = next?.p.remainingQty ?? null;
+        view.step = s.state === 'ASSIGNED' ? '배정됨 — 시작 전' : s.state === 'BLOCKED' ? '막힘(결품 등)' : last ? `집품 등록 ${last.code}` : '시작 — 카트';
+        w.activity = `${s.state === 'IN_PROGRESS' ? '피킹' : view.step} ${view.progress}${last?.code ? ` · 마지막 ${last.code}` : ''}`;
+      } else {
+        target = this.layout.points.packQueue;
+        key = `${s.taskId}:pack`;
+        if (!w) {
+          w = new ObservedWorker(`PDA ${name}`, wid, target, this.nav, this.params.walkSpeed);
+          this.observedWorkers.push(w);
+        }
+        w.state = s.state === 'IN_PROGRESS' ? 'PACKING' : 'WAIT_STATION';
+        w.hasCart = false;
+        w.currentTarget = null;
+        view.step = s.state === 'IN_PROGRESS' ? '포장 중' : '패킹 대기';
+        w.activity = view.step;
+      }
+      w.pda = view;
+      w.lastSeenMs = now;
+      w.aim(target, key);
+    }
+    for (let i = this.observedWorkers.length - 1; i >= 0; i--) {
+      const w = this.observedWorkers[i];
+      if (byWorker.has(w.workerId)) continue;
+      w.state = 'IDLE';
+      w.currentTarget = null;
+      w.activity = '열린 작업 없음(서버)';
+      if (now - w.lastSeenMs > 120_000) this.observedWorkers.splice(i, 1);
+    }
   }
 
   private realRiderVer = -1;
@@ -384,11 +489,13 @@ export class Simulation {
       this.time = wallClockSec();
       void this.real.tick();
       this.syncRealRiders();
-      if (this.virtualWorkers.length || this.riders.length) {
+      this.syncObservedWorkers();
+      if (this.virtualWorkers.length || this.riders.length || this.observedWorkers.length) {
         // 가상 작업자·앞마당 라이더는 실제 시간으로 걷고 기다린다(1×)
         const dt = Math.max(0, Math.min(this.time - prev, 0.25));
         for (const w of this.virtualWorkers) w.tick(dt);
         for (const r of this.riders) r.tick(dt);
+        for (const w of this.observedWorkers) w.tick(dt);
         this.stations.tick(dt);
         for (let i = 0; i < 40; i++) await Promise.resolve();
         this.riders = this.riders.filter((r) => !r.done);
