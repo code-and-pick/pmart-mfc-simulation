@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { BACKEND_FACTS } from '../src/config';
-import { buildLayout } from '../src/domain/layout';
+import { SLOT_DESIGN, buildLayout } from '../src/domain/layout';
 import { SIM_POINT, buildLocationCodeMap, packDropPoint } from '../src/domain/locationCodes';
+
+// node 형 선언 없이 쓴다(barcode.test.ts 와 같은 방식) — 백엔드 저장소가 형제 폴더에 있을 때만 대조
+const NODE_FS = 'node:fs';
+const fs = (await import(/* @vite-ignore */ NODE_FS)) as { existsSync(p: URL): boolean; readFileSync(p: URL, enc: 'utf-8'): string };
+const BACKEND_LAYOUT = new URL('../../pmart-backend/docs/simulator/mfc/layout/layout.json', import.meta.url);
 
 // 기대값 근거: pmart-backend docs/handoff/simulator/2026-11-09-simulator-notice-layout-bins.md,
 // docs/simulator/mfc/layout/high-turnover.json, deploy/lan/seed/mfc_layout.py plan()
@@ -9,9 +14,9 @@ describe('위치 코드 대응 (SIM-6)', () => {
   const L = buildLayout();
   const m = buildLocationCodeMap(L);
 
-  it('선반 칸 6,762개가 모두 서로 다른 백엔드 코드로 오가며 돌아온다', () => {
-    expect(L.locations.length).toBe(6762);
-    expect(m.shelfCount).toBe(6762);
+  it('선반 칸 14,559개가 모두 서로 다른 백엔드 코드로 오가며 돌아온다', () => {
+    expect(L.locations.length).toBe(14559);
+    expect(m.shelfCount).toBe(14559);
     const seen = new Set<string>();
     for (const loc of L.locations) {
       const b = m.toBackend(loc.code)!;
@@ -19,7 +24,26 @@ describe('위치 코드 대응 (SIM-6)', () => {
       expect(m.toSim(b)).toBe(loc.code);
       seen.add(b);
     }
-    expect(seen.size).toBe(6762);
+    expect(seen.size).toBe(14559);
+  });
+
+  // 백엔드 mfc_layout_v2.py plan(): layout.json 의 랙(그룹·랙 번호·온도) × DESIGN 표 = 등록한 선반 칸(2026-11-16 칸 설계 공지)
+  it.runIf(fs.existsSync(BACKEND_LAYOUT))('백엔드 칸 설계(랙 × 단·칸)와 칸 코드 집합이 같다', () => {
+    const lj = JSON.parse(fs.readFileSync(BACKEND_LAYOUT, 'utf-8')) as {
+      racks: { group: string; rackNo: number; temp: 'FROZEN' | 'CHILLED' | 'AMBIENT' }[];
+    };
+    const T = { FROZEN: 'F', CHILLED: 'C', AMBIENT: 'A' } as const;
+    const want = new Set<string>();
+    for (const r of lj.racks) {
+      const [levels, slots] = SLOT_DESIGN[r.group[0]];
+      const area = r.group[0] + String(Number(r.group.slice(1)));
+      for (let lv = 1; lv <= levels; lv++)
+        for (let sl = 1; sl <= slots; sl++) want.add(`${T[r.temp]}-${area}-${String(r.rackNo).padStart(2, '0')}-${lv}-${String(sl).padStart(2, '0')}`);
+    }
+    expect(want.size).toBe(14559);
+    const mine = new Set(L.locations.map((l) => m.toBackend(l.code)!));
+    expect([...want].filter((c) => !mine.has(c))).toEqual([]);
+    expect([...mine].filter((c) => !want.has(c))).toEqual([]);
   });
 
   it('공지의 예와 고회전 5칸이 맞는다', () => {

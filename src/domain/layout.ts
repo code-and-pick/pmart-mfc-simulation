@@ -226,6 +226,24 @@ function fillRacks(opts: {
   return racks;
 }
 
+/**
+ * 그룹 첫 글자 → [단, 칸] — MFC-business-logic 1장 3-3(상온 슬롯 수용량)·4-2(저온 피킹 랙) 설계 [확정].
+ * 백엔드 LAN MFC-SEED-01 이 2026-11-16 이 설계로 바꿈(선반 14,559칸, deploy/lan/seed/mfc_layout_v2.py DESIGN,
+ * docs/handoff/simulator/mfc/2026-11-16-simulator-notice-layout-v2-slots.md). 이전 시뮬레이터 값은 냉동·냉장 5×3, 상온 6×4.
+ */
+export const SLOT_DESIGN: Record<string, readonly [levels: number, slots: number]> = {
+  A: [5, 6],
+  B: [5, 7],
+  C: [6, 9],
+  D: [6, 10],
+  E: [6, 8],
+  F: [6, 10],
+  G: [6, 9],
+  H: [5, 5],
+};
+
+const dims = (g: string) => ({ levels: SLOT_DESIGN[g][0], slotsPerLevel: SLOT_DESIGN[g][1] });
+
 /** 상온 C~H 랙 수: 문서 10장 구역 면적(11.3/11.3/9.9/11.3/11.8/9.4평) 비례로 138개 [가정] */
 const AMBIENT_GROUPS: [string, number][] = [
   ['C', 24],
@@ -315,8 +333,7 @@ export function buildLayout(): Layout {
     along: 'z',
     crossAisleAt: 13,
     target: 105,
-    levels: 5,
-    slotsPerLevel: 3,
+    ...dims('A'),
     groupOf: (row) => `A${String(row + 1).padStart(2, '0')}`,
     rowPriority: (c) => Math.abs(c - 6),
     idPrefix: 'RA',
@@ -327,8 +344,7 @@ export function buildLayout(): Layout {
     along: 'z',
     crossAisleAt: 13,
     target: 125,
-    levels: 5,
-    slotsPerLevel: 3,
+    ...dims('B'),
     groupOf: (row) => `B${String(row + 1).padStart(2, '0')}`,
     rowPriority: (c) => Math.abs(c - 17.8),
     idPrefix: 'RB',
@@ -338,8 +354,7 @@ export function buildLayout(): Layout {
     area: { x0: 24.0, z0: 0.8, x1: 36.4, z1: 14.6 },
     along: 'x',
     target: 138,
-    levels: 6,
-    slotsPerLevel: 4,
+    ...dims('C'), // 그룹(C~H)이 정해진 뒤 SLOT_DESIGN 으로 다시 맞춘다
     groupOf: () => '',
     idPrefix: 'RC',
   });
@@ -362,6 +377,7 @@ export function buildLayout(): Layout {
     r.rackNo = n;
   }
   const racks = [...frozen, ...chilled, ...ambient];
+  for (const r of racks) Object.assign(r, dims(r.group[0]));
 
   // ── 로케이션 ─────────────────────────────────────────
   const locations: Location[] = [];

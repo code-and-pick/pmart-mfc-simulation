@@ -15,7 +15,7 @@
   - `staff_auth.py` 의 "비밀번호 파일이 없으면 Keycloak 관리 API 로 비밀번호를 새로 정함"은 쓰지 않는다 — 70명 공용 비밀번호가 깨진다.
 - **원칙**: 계약에 있는 API 만 부른다. 응답이 없으면 결과 불명으로 보고 같은 `Idempotency-Key` 로 재전송한다. 서버가 확정한 결과만 화면에 확정으로 그린다.
 - **데이터**: 실서버 모드에서 정본은 백엔드. 가짜 실적은 시뮬 센터·시뮬 계정으로 구분한다(SIM-8).
-- **시험 센터**: `MFC-SEED-01`. 칸은 이 시뮬레이터 평면대로 등록돼 있다(6,762칸, SIM-6 보완 L-1).
+- **시험 센터**: `MFC-SEED-01`. 칸은 이 시뮬레이터 평면(랙 위치·좌표)대로 등록돼 있다(SIM-6 보완 L-1). 칸 수는 2026-11-16 MFC 문서 설계로 바뀜 — 선반 14,559칸(백엔드 `handoff/simulator/mfc/2026-11-16-simulator-notice-layout-v2-slots.md`), 시뮬레이터 `layout.ts` `SLOT_DESIGN` 반영.
 
 ## 백엔드에 이미 있는 기능 (2026-11-16 확인)
 
@@ -105,7 +105,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | R-04 | 센터 전체 작업·배정 조회 | 해소 — `GET /tasks?mfcId&state=`·`GET /assignments`(11-16 실측 200) | 회신 11-09 |
 | R-05 | 재고 조회(읽기) | 해소 — `GET /mfcs/{mfcId}/stock?sku=` 로 주문 SKU 재고를 그린다(11-16 사용 시작). 칸 단위·여러 SKU 는 R-15·R-16 | inventory 0.16.0 |
 | R-06 | 작업 배정 경로 | 해소 — 수동 배정·추천(OR-Tools)·다음 작업 받기. PICK 담당에게 PACK 이어서(`TaskStore.releasePack`) | capacity 0.14.0 |
-| R-08 | MFC 로케이션 정본 | 해소(SIM-6) — 평면대로 등록, 코드 대응 `locationCodes.ts` 6,762칸 일치 | layout-bins 공지 |
+| R-08 | MFC 로케이션 정본 | 해소(SIM-6) — 평면대로 등록, 코드 대응 `locationCodes.ts` 6,762칸 일치 → 11-16 칸 설계 변경 후 14,559칸(백엔드 설계 규칙과 대조 테스트) | layout-bins 공지 |
 | R-09 | 상품·보관 기준정보 | 해소 — `GET /skus/{sku}` 에 무게·`logistics.storageType`·바코드(11-16 실측 200, 그 SKU 는 바코드 빈 배열) | product 0.1.0 |
 | R-11 | 칸 한도·최소량 | 일부 해소 — 자동 보충 기준 API 있음(등록 0건), 칸 용량은 위치 `dimensions`. MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 표현 | inventory 0.14.0~ |
 | R-12 | OR-Tools·Chronos-2 | 회신 — OR-Tools 는 mfc-capacity(Java, JVM 실행 ADR-0053), Chronos-2 미적용. 시뮬레이터 할 일 없음 | 회신 11-09 |
