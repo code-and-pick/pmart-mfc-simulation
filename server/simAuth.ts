@@ -9,6 +9,7 @@ import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { Plugin } from 'vite';
 import { keycloakUsername, passwordFileFor, type SimToken } from '../src/backend/http/accounts';
+import { lanReadAllowed } from '../src/backend/http/lanAllow';
 import { REAL_LINK } from '../src/config';
 
 const SECRETS_DIR = process.env.PMART_SECRETS_DIR ?? resolve(process.cwd(), '../pmart-backend/deploy/lan/.secrets');
@@ -101,12 +102,13 @@ export function simAuthPlugin(): Plugin {
     name: 'pmart-sim-auth',
     configureServer(server) {
       // 다른 기기에서 보는 화면(server.host): 브라우저에 토큰을 주지 않고, 개발 서버가 /api 요청에 관찰 계정 토큰을 붙여 넘긴다.
-      // 읽기(GET·HEAD)만 넘기고 나머지는 403 — 다른 기기는 화면을 보기만 하고 작업·재고를 바꾸지 못한다.
+      // 읽기(GET·HEAD)만, 그것도 관찰 화면이 읽는 경로만(lanAllow.ts 허용 목록 — 개인정보 경로 차단) 넘기고 나머지는 403.
       // 이 PC(루프백) 요청은 건드리지 않는다(브라우저가 /sim-auth/tokens 로 받은 토큰을 직접 붙인다).
       // Vite 프록시보다 먼저 돈다(configureServer 에서 바로 등록한 미들웨어).
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/') || isLoopback(req)) return next();
         if (!LAN_METHODS.has(req.method ?? '')) return send(res, 403, { code: 'LAN_READ_ONLY', detail: '다른 기기에서는 조회만 됩니다' });
+        if (!lanReadAllowed(req.url ?? '')) return send(res, 403, { code: 'LAN_PATH_NOT_ALLOWED', detail: '다른 기기에서는 관찰 화면이 읽는 경로만 됩니다' });
         delete req.headers.authorization;
         issue(REAL_LINK.observerAccount)
           .then((t) => {

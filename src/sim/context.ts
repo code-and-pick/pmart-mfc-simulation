@@ -31,6 +31,8 @@ export interface SiteContext {
   awaitPackAssignment(shipmentId: string, workerId: string): Promise<{ taskId: string; assignmentVersion: number } | null>;
   /** 출하대기 랙에 포장을 올렸다 — 배송(라이더) 쪽으로 넘어간다. */
   stagePackages(shipmentId: string, pkgs: Package[]): void;
+  /** 점원이 배차를 요청했다(fulfillment 0.4.11 — MOCK 라이더는 이때부터 온다) */
+  dispatchRequested(shipmentId: string): void;
   /** 피킹 칸 현재 수량 (실서버 모드는 알 수 없어 Infinity) */
   shelfQty(sku: string): number;
   /** 피킹 칸이 모자라 보충을 요청한다 (긴급). */

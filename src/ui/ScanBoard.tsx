@@ -9,6 +9,7 @@ import { BACKEND_FACTS } from '../config';
 import type { TaskLine, TaskPick } from '../domain/contract';
 import type { RealTask } from '../sim/realBoard';
 import { Barcode } from './Barcode';
+import { OrderTimeline } from './OrderTimeline';
 import { TASK_STATE_KO } from './RealPanel';
 import { useScanFocus } from './scanFocus';
 import { scanView, useScanView } from './scanView';
@@ -79,6 +80,32 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
         ))}
         <LocBarcode code="DSP-A-01" caption="출하대기 랙 1" />
       </div>
+    );
+  }
+  if (s.taskType === 'RETURN') {
+    // 취소품 복귀: 조각마다 출발 위치(장바구니·패킹대) → 상품 → 돌려놓을 추천 선반 칸(PDA 복귀 화면 순서)
+    const pieces = d.lines.flatMap((l) => (l.picks ?? []).filter((p) => (p.remainingQty ?? 0) > 0).map((p) => ({ l, p })));
+    if (!pieces.length) return <div className="note">옮길 조각이 없습니다(다 옮겼거나 확정 대기).</div>;
+    return (
+      <>
+        {pieces.map(({ l, p }) => {
+          const from = p.locations.find((c) => (c.qty ?? 0) > 0)?.locationCode;
+          return (
+            <div className="scan-stop" key={`${l.orderLineId}:${p.lotId}`}>
+              <div className="sub">
+                {l.productName ?? l.sku} × {p.remainingQty} 복귀
+              </div>
+              <div className="bc-grid">
+                {from ? <LocBarcode code={from} caption="① 출발 위치(취소된 집품분)" /> : <div className="note">출발 위치 없음</div>}
+                {l.barcode ? <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`② 상품 ${l.sku} (싣기)`} height={44} /> : <div className="note warn">상품 바코드 없음</div>}
+                {(p.suggestedToLocations ?? []).map((c, i) => (
+                  <LocBarcode key={c} code={c} caption={i === 0 ? '③ 돌려놓을 선반 칸(추천)' : '다른 추천 칸'} />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </>
     );
   }
   if (s.taskType !== 'PICK') return <div className="note">{s.taskType} 작업은 바코드 판이 없습니다.</div>;
@@ -152,7 +179,7 @@ export function ScanBoard() {
   const tasks =
     real && focus.shipmentId
       ? [...real.tasks.values()]
-          .filter((t) => (t.summary.taskType === 'PICK' || t.summary.taskType === 'PACK') && t.detail)
+          .filter((t) => (t.summary.taskType === 'PICK' || t.summary.taskType === 'PACK' || t.summary.taskType === 'RETURN') && t.detail)
           .filter((t) => t.summary.shipmentId === focus.shipmentId)
           .sort((a, b) => a.summary.createdAt.localeCompare(b.summary.createdAt) || (a.summary.taskType === b.summary.taskType ? 0 : a.summary.taskType === 'PICK' ? -1 : 1))
       : [];
@@ -189,6 +216,7 @@ export function ScanBoard() {
           </button>
         </div>
       )}
+      {real && focus.shipmentId && <OrderTimeline shipmentId={focus.shipmentId} />}
       <h4>카트 (피킹 때 찍은 카트를 패킹 때 다시 찍음 · 온도 구분 없음)</h4>
       <CartBarcodes />
 

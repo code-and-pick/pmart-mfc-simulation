@@ -26,6 +26,7 @@ import { RealRider, type SiteRider } from './realRider';
 import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { SUGGESTED_CART, nextPickStop } from '../domain/pickStop';
+import { nextReturnPiece } from '../domain/returnPiece';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
@@ -182,6 +183,8 @@ export class Simulation {
         shipmentRefreshSec: REAL_LINK.shipmentRefreshSec,
         maxShipmentPerPoll: REAL_LINK.maxShipmentPerPoll,
         handoverKeepSec: REAL_LINK.handoverKeepSec,
+        returnPickupRefreshSec: REAL_LINK.returnPickupRefreshSec,
+        returnShownMin: REAL_LINK.returnShownMin,
       });
       this.time = wallClockSec();
       this.speed = 1;
@@ -206,6 +209,7 @@ export class Simulation {
       simLocation: (c) => this.locByCode.get(this.mode === 'mock' ? c : (this.codes.toSim(c) ?? c)) ?? null,
       awaitPackAssignment: (s, w) => this.assignPack(s, w),
       stagePackages: (s, p) => this.onStaged(s, p),
+      dispatchRequested: (s) => this.onDispatchRequested(s),
       shelfQty: (sku) => this.mock?.inventory.get(sku)?.shelf ?? Infinity,
       requestReplenish: (sku) => this.requestReplenish(sku, true),
     };
@@ -308,7 +312,7 @@ export class Simulation {
     for (const t of real.tasks.values()) {
       const s = t.summary;
       const wid = s.assignment?.workerId;
-      if (t.closed || !wid || virtualIds.has(wid) || !(s.state in rank) || (s.taskType !== 'PICK' && s.taskType !== 'PACK')) continue;
+      if (t.closed || !wid || virtualIds.has(wid) || !(s.state in rank) || (s.taskType !== 'PICK' && s.taskType !== 'PACK' && s.taskType !== 'RETURN')) continue;
       const cur = byWorker.get(wid);
       if (!cur || rank[s.state] < rank[cur.summary.state]) byWorker.set(wid, t);
     }
@@ -319,7 +323,7 @@ export class Simulation {
       const name = real.workerName(wid);
       const view = {
         taskId: s.taskId,
-        taskType: s.taskType as 'PICK' | 'PACK',
+        taskType: s.taskType as 'PICK' | 'PACK' | 'RETURN',
         orderId: s.fulfillmentId,
         shipmentId: s.shipmentId ?? '',
         step: '',
@@ -388,6 +392,46 @@ export class Simulation {
         view.plannedQty = stop?.qty ?? next?.p.remainingQty ?? null;
         view.step = s.state === 'ASSIGNED' ? '배정됨 — 시작 전' : s.state === 'BLOCKED' ? '막힘(결품 등)' : last ? `집품 등록 ${last.code}` : '시작 — 카트';
         w.activity = `${s.state === 'IN_PROGRESS' ? '피킹' : view.step} ${view.progress}${last?.code ? ` · 마지막 ${last.code}` : ''}`;
+      } else if (s.taskType === 'RETURN') {
+        // 취소품 복귀: PDA 복귀 화면과 같은 조각(nextReturnPiece) — 출발 위치(장바구니·패킹대)에서 싣고 추천 선반 칸으로
+        const lines = t.detail?.lines ?? [];
+        const piece = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? nextReturnPiece(lines) : null;
+        if (!w) {
+          w = new ObservedWorker(`PDA ${name}`, wid, (piece && this.backendPoint(piece.from)) ?? cart, this.nav, this.params.walkSpeed);
+          this.observedWorkers.push(w);
+        }
+        w.cue = null;
+        w.hasCart = false;
+        w.currentTarget = null;
+        target = cart;
+        key = `${s.taskId}:ret`;
+        const total = lines.reduce((a, l) => a + l.plannedQty - l.cancelledQty, 0);
+        const left = lines.reduce((a, l) => a + l.remainingQty, 0);
+        if (piece) {
+          // "실었어요"는 서버가 모른다 — 화면에서 넘긴 표시(passScan). 실적이 서버에 오면 다음 조각으로 넘어간다
+          const loaded = w.passed.has(`${s.taskId}:${piece.line.orderLineId}:${piece.lotId}:LOADED`);
+          const to = piece.suggested[0] ?? null;
+          const toLoc = to ? this.backendLocation(to) : null;
+          if (loaded && toLoc) {
+            target = toLoc.pick;
+            key = `${s.taskId}:${to}:${piece.line.orderLineId}`;
+            w.currentTarget = toLoc;
+            w.hasCart = true;
+          } else {
+            target = this.backendPoint(piece.from) ?? cart;
+            key = `${s.taskId}:${piece.from}:${piece.line.orderLineId}`;
+          }
+          w.cue = { kind: 'RETURN', taskId: s.taskId, step: loaded && toLoc ? 'TO' : 'FROM', piece, index: total - left + 1, total };
+          view.location = piece.from;
+          view.nextLocation = to;
+          view.productName = piece.line.productName ?? null;
+          view.barcode = piece.line.barcode ?? null;
+          view.plannedQty = piece.left;
+        }
+        w.state = s.state === 'IN_PROGRESS' ? 'PICKING' : 'TO_CART';
+        view.progress = `${total - left} / ${total}`;
+        view.step = !piece ? (s.state === 'ASSIGNED' ? '복귀 배정됨' : '복귀 확정 대기') : w.cue?.kind === 'RETURN' && w.cue.step === 'TO' ? '복귀 ③ 선반 칸' : '복귀 ①② 출발 위치·싣기';
+        w.activity = `${view.step} ${view.progress}`;
       } else {
         target = this.layout.points.packQueue;
         key = `${s.taskId}:pack`;
@@ -435,7 +479,7 @@ export class Simulation {
   }
 
   /**
-   * 스캔 안내: 서버가 모르는 스캔(피킹 카트, 포장의 패킹대·카트)을 실제 PDA 로 찍었다고 화면에서 넘긴다.
+   * 스캔 안내: 서버가 모르는 스캔(피킹 카트, 포장의 패킹대·카트, 복귀의 "실었어요")을 실제 PDA 로 찍었다고 화면에서 넘긴다.
    * 서버를 부르지 않는다 — 다음 단계를 그리기 위한 표시일 뿐이다.
    */
   passScan(workerId: string) {
@@ -444,6 +488,7 @@ export class Simulation {
     if (!w || !c) return;
     if (c.kind === 'CART') w.passed.add(`${c.taskId}:CART`);
     else if (c.kind === 'PACK' && (c.step === 'STATION' || c.step === 'CART')) w.passed.add(`${c.taskId}:PACK-${c.step}`);
+    else if (c.kind === 'RETURN' && c.step === 'FROM') w.passed.add(`${c.taskId}:${c.piece.line.orderLineId}:${c.piece.lotId}:LOADED`);
     else return;
     this.observedPoll = -1;
     this.syncObservedWorkers();
@@ -790,10 +835,16 @@ export class Simulation {
       const all = this.orderShipments.get(orderId);
       if (all && [...all].every((s) => this.stagedShipments.has(s) || this.isCancelled(s))) this.metrics.markReady(orderId, this.time);
     }
-    if (this.mode === 'mock') {
-      const delay = this.opsRng.range(this.params.riderArrivalMinSec, this.params.riderArrivalMaxSec);
-      this.pendingRiders.push({ at: this.time + delay, shipmentId });
-    }
+  }
+
+  /**
+   * MOCK: 점원이 배차를 요청하면(패킹 시작 때 — fulfillment 0.4.11, 자동 요청 없음) 그때부터 라이더가 온다.
+   * 라이더는 도착 시각이 지나고 출고가 출하대기(READY)일 때 들어와 인계한다 — 포장이 늦으면 그동안 기다린다(spawnRiders).
+   */
+  private onDispatchRequested(shipmentId: string) {
+    if (this.mode !== 'mock' || this.pendingRiders.some((p) => p.shipmentId === shipmentId)) return;
+    const delay = this.opsRng.range(this.params.riderArrivalMinSec, this.params.riderArrivalMaxSec);
+    this.pendingRiders.push({ at: this.time + delay, shipmentId });
   }
 
   private isCancelled(shipmentId: string): boolean {
@@ -803,7 +854,11 @@ export class Simulation {
   private spawnRiders() {
     for (let i = this.pendingRiders.length - 1; i >= 0; i--) {
       const p = this.pendingRiders[i];
-      if (this.time < p.at) continue;
+      if (this.isCancelled(p.shipmentId)) {
+        this.pendingRiders.splice(i, 1); // 출고 취소 — 배차도 끝(MOCK)
+        continue;
+      }
+      if (this.time < p.at || !this.stagedShipments.has(p.shipmentId)) continue; // 배차 요청 뒤 도착 + 출하대기
       this.pendingRiders.splice(i, 1);
       this.riderSeq += 1;
       const riderId = `R${String(this.riderSeq).padStart(3, '0')}`;

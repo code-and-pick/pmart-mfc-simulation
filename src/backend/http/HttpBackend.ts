@@ -1,4 +1,4 @@
-// 게이트웨이(/api/v1) 실호출 어댑터. 계약 mfc-fulfillment-service.yaml·mfc-capacity-service.yaml 그대로 부른다.
+// 게이트웨이(/api/v1) 실호출 어댑터. 계약 mfc-fulfillment-service.yaml·mfc-capacity-service.yaml(·가상 작업자 재고 이동·품질검사용 mfc-inbound·mfc-location) 그대로 부른다.
 // 2026-11-16: 작업 목록·상세·작업자 목록(읽기)은 LAN 실서버로 확인. 쓰기(시작·실적·밀봉·인계)는 아직 실서버 검증 전.
 // 토큰은 Vite 개발 서버가 LAN 시험 계정으로 받아 준다(TokenSource, SIM-11).
 
@@ -7,13 +7,19 @@ import {
   ResultUnknown,
   type CapacityWorker,
   type CapacityAssignment,
+  type OrderFulfillmentView,
   type CenterStock,
   type DispatchRequest,
   type CommandResponse,
   type DeliveryDispatch,
   type HandoverAuthorization,
   type HandoverCommitResult,
+  type InboundTask,
+  type InboundTaskExecution,
+  type InspectionResult,
+  type MoveOrder,
   type Package,
+  type PutawayCandidate,
   type Problem,
   type SealPackageRequest,
   type SkuBarcodes,
@@ -24,6 +30,7 @@ import {
   type TaskExecutionRequest,
   type TaskState,
   type TaskSummary,
+  type TemperatureZone,
   type WorkArea,
 } from '../../domain/contract';
 import type { ApiListener, FulfillmentPort } from '../port';
@@ -154,6 +161,11 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('GET', `/deliveries/${enc(deliveryId)}/dispatch`);
   }
 
+  /** 주문 번호로 현장 상태(fulfillment 0.10.0) — 작업 지시·출고별 작업·작업자·시작/끝·결품·포장·인계. 개인정보 없음 */
+  getOrderFulfillment(orderId: string): Promise<OrderFulfillmentView> {
+    return this.request('GET', `/work-orders?${new URLSearchParams({ orderId })}`);
+  }
+
   getTask(taskId: string): Promise<TaskDetail> {
     return this.request('GET', `/tasks/${enc(taskId)}`);
   }
@@ -197,6 +209,47 @@ export class HttpBackend implements FulfillmentPort {
     idempotencyKey: string,
   ): Promise<HandoverCommitResult> {
     return this.request('POST', `/packages/${enc(packageId)}/handover-commits`, { body, idempotencyKey });
+  }
+
+  // ── 재고 이동·품질검사 업무(가상 작업자 STOCK_MOVE·INSPECTION) — mfc-inbound 0.9.0, mfc-location ──
+
+  /** mfc-inbound getInboundTask — 품질검사·적치 작업 한 건(배정 taskId) */
+  getInboundTask(taskId: string): Promise<InboundTask> {
+    return this.request('GET', `/inbound-tasks/${enc(taskId)}`);
+  }
+
+  /** mfc-inbound inspectInboundTask — 정상/격리 판정. CAPTURED·503 UNKNOWN_RESULT 는 같은 키로 다시 */
+  inspectInboundTask(taskId: string, results: InspectionResult[], idempotencyKey: string): Promise<InboundTaskExecution> {
+    return this.request('POST', `/inbound-tasks/${enc(taskId)}/inspections`, { body: { results }, idempotencyKey });
+  }
+
+  /** mfc-inbound putawayInboundTask — 선반 위치·수량(목적지 검사는 mfc-inventory) */
+  putawayInboundTask(taskId: string, body: { toLocationCode: string; qty: number }, idempotencyKey: string): Promise<InboundTaskExecution> {
+    return this.request('POST', `/inbound-tasks/${enc(taskId)}/putaways`, { body, idempotencyKey });
+  }
+
+  /** mfc-location listPutawayCandidates — 적치 후보(온도대·구역 적합, rank 순) */
+  async listPutawayCandidates(mfcId: string, sku: string, qty?: number, temperatureZone?: TemperatureZone): Promise<PutawayCandidate[]> {
+    const q = new URLSearchParams({ mfcId, sku });
+    if (qty !== undefined) q.set('qty', String(qty));
+    if (temperatureZone) q.set('temperatureZone', temperatureZone);
+    const r: { items?: PutawayCandidate[] } = await this.request('GET', `/putaway-candidates?${q}`);
+    return r.items ?? [];
+  }
+
+  /** mfc-inbound getMoveOrder — 이동·보충 지시(배정 taskId = moveId) */
+  getMoveOrder(moveId: string): Promise<MoveOrder> {
+    return this.request('GET', `/move-orders/${enc(moveId)}`);
+  }
+
+  /** mfc-inbound pickUpMoveOrder — 출발 칸 → 카트 */
+  pickUpMoveOrder(moveId: string, body: { cartLocation: string; qty: number }, idempotencyKey: string): Promise<MoveOrder> {
+    return this.request('POST', `/move-orders/${enc(moveId)}/pickups`, { body, idempotencyKey });
+  }
+
+  /** mfc-inbound dropMoveOrder — 카트 → 도착 칸(취소 뒤에는 출발 칸) */
+  dropMoveOrder(moveId: string, body: { toLocation: string; qty: number }, idempotencyKey: string): Promise<MoveOrder> {
+    return this.request('POST', `/move-orders/${enc(moveId)}/drops`, { body, idempotencyKey });
   }
 
   /** 연결 점검: 게이트웨이 도달·인증·구현 여부를 한 번에 본다. */

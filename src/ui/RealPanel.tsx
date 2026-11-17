@@ -2,7 +2,7 @@
 // 주문 줄을 누르면 "바코드" 탭으로 넘어가 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)를 보인다.
 import { Fragment } from 'react';
 import { useApp } from '../app/context';
-import { REAL_LINK } from '../config';
+import { BACKEND_FACTS, REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
 import { useScanFocus } from './scanFocus';
 import { dispatchText, dispatchView, type DispatchStage, type RealShipment, type RealTask } from '../sim/realBoard';
@@ -100,6 +100,52 @@ function DispatchCell({ r }: { r: RealShipment }) {
   );
 }
 
+const RETURN_STATE_KO: Partial<Record<string, string>> = {
+  UNASSIGNED: '배차 대기',
+  ASSIGNED: '라이더 배정 — 회수지로',
+  ARRIVED_AT_CUSTOMER: '회수지 도착',
+  FAILURE_REPORTED: '회수 실패 보고',
+  RETURN_IN_PROGRESS: '회수 중',
+  RETURN_PICKED_UP: '회수함 — MFC 로 오는 중',
+  PICKED_UP: '회수함 — 오는 중',
+  RETURNED_TO_STORE: 'MFC 반납(회수 반입 자리)',
+  COMPLETED: '끝남',
+};
+
+/** 이 센터로 오는 회수 배송(고객 반품·오배송 회수, type RETURN) — 배송 찾기 요약만(회수지 좌표는 읽지 않음) */
+function ReturnPickups() {
+  const { sim } = useApp();
+  const rp = sim.real!.returnPickups;
+  if (!rp.length) return null;
+  return (
+    <>
+      <h4>회수 배송 → {sim.params.mfcId} (회수 반입 {BACKEND_FACTS.returnIntake.code})</h4>
+      <table className="inv real">
+        <thead>
+          <tr>
+            <th>배송 · 주문</th>
+            <th>상태</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rp.map((d) => (
+            <tr key={d.deliveryId} title={`${d.deliveryId}\n${d.orderId ?? ''}`}>
+              <td>
+                <div>{shortId(d.deliveryId)}</div>
+                <div className="sub">{d.orderId ? shortId(d.orderId) : '—'}</div>
+              </td>
+              <td>
+                {RETURN_STATE_KO[d.state] ?? d.state}
+                <div className="sub">{d.riderId ? `라이더 ${d.riderId}` : '라이더 없음'}</div>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 /** 실제 주문(출고) 목록 */
 export function RealOrders() {
   const { sim } = useApp();
@@ -108,14 +154,18 @@ export function RealOrders() {
   const focus = useScanFocus();
   if (!rows.length) {
     return (
-      <div className="note">
-        {real.lastOkMs
-          ? `${sim.params.mfcId} 에 열린 작업이 없습니다. 고객 앱에서 주문하면 ${REAL_LINK.pollSec}초 안팎에 여기 나타나고, 피킹이 시작되면 3D 선반에 지시 칸이 표시됩니다.`
-          : '실서버 첫 조회 중…'}
-      </div>
+      <>
+        <div className="note">
+          {real.lastOkMs
+            ? `${sim.params.mfcId} 에 열린 작업이 없습니다. 고객 앱에서 주문하면 ${REAL_LINK.pollSec}초 안팎에 여기 나타나고, 피킹이 시작되면 3D 선반에 지시 칸이 표시됩니다.`
+            : '실서버 첫 조회 중…'}
+        </div>
+        <ReturnPickups />
+      </>
     );
   }
   return (
+    <>
     <table className="inv real">
       <thead>
         <tr>
@@ -152,6 +202,8 @@ export function RealOrders() {
         })}
       </tbody>
     </table>
+    <ReturnPickups />
+    </>
   );
 }
 

@@ -385,7 +385,7 @@ export class ResultUnknown extends Error {}
 
 // ── mfc-capacity 다음 작업 받기 (0.14.0) — 가상 작업자(mfcw-pp-01~10) 본인 토큰으로 부른다 ──
 
-/** PDA 에서 고르는 업무. 가상 작업자는 PICK_PACK(= PICK·PACK) 만 */
+/** PDA 에서 고르는 업무. 가상 작업자는 PICK_PACK(PICK·PACK) → STOCK_MOVE(PUTAWAY·REPLENISH·MOVE·RETURN) → INSPECTION(INSPECT) 순으로 묻는다 */
 export type WorkArea = 'INBOUND' | 'INSPECTION' | 'STOCK_MOVE' | 'STOCK_COUNT' | 'PICK_PACK';
 
 /** capacity Assignment 일부 — POST /mfcs/{mfcId}/workers/{workerId}/next-tasks 응답(200 들고 있던 작업, 201 새 배정) */
@@ -399,12 +399,55 @@ export interface CapacityAssignment {
   state: 'ACTIVE' | 'SUPERSEDED' | 'RELEASED';
   source?: 'MANUAL' | 'PLAN' | 'SYSTEM' | null;
   warnings?: string[];
+  /** (capacity 0.9.1) 다음 작업 받기 응답에만 — 받은 작업의 상세(NextTaskDetail, 아래). 다른 응답은 null */
+  detail?: NextTaskDetail | null;
 }
 
 /** product-service SkuDetail 일부 (GET /skus/{sku}) — 바코드만 쓴다(스캔 판) */
 export interface SkuBarcodes {
   sku: string;
   barcodes?: string[];
+}
+
+// ── 주문 번호로 현장 상태(fulfillment 0.10.0 GET /work-orders?orderId= — 백오피스 통합 조회 MFC 칸, 개인정보 없음) ──
+
+export interface OrderFulfillmentView {
+  orderId: string;
+  workOrders: {
+    fulfillmentId: string;
+    kind: 'ORIGINAL' | 'RESHIPMENT';
+    mfcId: string;
+    workVersion: number;
+    acceptance: 'ACCEPTED' | 'REJECTED';
+    rejectReason?: string | null;
+    decidedAt?: string | null;
+    /** 첫 PICK 시작(준비 시작) */
+    preparationStartedAt?: string | null;
+    createdAt: string;
+    shipments: {
+      shipmentId: string;
+      state: Shipment['state'];
+      readyAt?: string | null;
+      dispatchRequestedAt?: string | null;
+      tasks: {
+        taskId: string;
+        taskType: 'PICK' | 'PACK' | 'RETURN' | 'DISPATCH';
+        state: TaskState;
+        workerId?: string | null;
+        startedBy?: string | null;
+        startedAt?: string | null;
+        endedAt?: string | null;
+        blockReason?: string | null;
+        plannedQty: number;
+        completedQty: number;
+        cancelledQty: number;
+        remainingQty: number;
+      }[];
+      shortages: { taskId: string; orderLineId: string; sku: string; qty: number; reason?: string | null; reportedAt: string; executionState: string }[];
+      packages: { packageId: string; state: string; sealedAt?: string | null; fenceState: string; handoverAuthorizedAt?: string | null; handoverStatus?: string | null }[];
+    }[];
+  }[];
+  stopRequests: unknown[];
 }
 
 // ── 배송(읽기만) — 라이더 API 는 rider 시뮬레이터만 부른다(backend-requests.md "rider 시뮬레이터 요청") ──
@@ -466,4 +509,106 @@ export interface DeliveryDispatch {
   assignment?: { riderId: string; state: 'ASSIGNED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED'; assignedAt?: string; pickedUpAt?: string } | null;
   attempts?: DispatchAttempt[];
   updatedAt?: string;
+}
+
+// ── 재고 이동·품질검사 업무(가상 작업자 STOCK_MOVE·INSPECTION) — capacity 0.14.0 NextTaskDetail, mfc-inbound 0.9.0, mfc-location 적치 후보 ──
+
+/** capacity NextTaskDetail (0.9.1) — 다음 작업 받기 응답의 받은 작업 상세. 정본은 각 서비스 상세 */
+export interface NextTaskDetail {
+  /** 상세를 읽었나(false 면 나머지는 비어 있음) */
+  available: boolean;
+  promisedReadyAt?: string | null;
+  urgent?: boolean;
+  packingLocations?: string[];
+  lines?: {
+    sku: string;
+    productName?: string | null;
+    lotId?: string | null;
+    expiresOn?: string | null;
+    /** 남은 양 */
+    qty: number;
+    /** 집을 칸(PICK 배정 칸·RETURN 포장 위치·이동 출발 칸) */
+    fromLocation?: string | null;
+    /** 놓을 칸(RETURN 추천 칸·이동 도착 칸) */
+    toLocation?: string | null;
+    notice?: string | null;
+  }[];
+}
+
+/** mfc-inbound InboundTask (0.9.0) — 품질검사(INSPECT)·적치(PUTAWAY). 담당(assigneeId)이 있으면 담당만 실행(409 NOT_ASSIGNEE) */
+export interface InboundTask {
+  taskId: string;
+  taskType: 'INSPECT' | 'PUTAWAY';
+  mfcId: string;
+  receiptId: string;
+  parentTaskId?: string | null;
+  sku: string;
+  productName?: string | null;
+  barcodes?: string[];
+  /** 품질검사 = 수령 LOT, 적치 = 나뉜 LOT */
+  lotId: string;
+  /** 출발 위치 */
+  locationCode: string;
+  plannedQty: number;
+  doneQty: number;
+  state: 'READY' | 'COMPLETED';
+  version: number;
+  assigneeId?: string | null;
+  createdAt?: string;
+}
+
+/** mfc-inbound InboundTaskExecution — CAPTURED·UNKNOWN_RESULT 는 같은 Idempotency-Key 로 다시 보내 확정한다 */
+export interface InboundTaskExecution {
+  executionId: string;
+  taskId: string;
+  applyStatus: 'CAPTURED' | 'APPLIED' | 'REJECTED' | 'UNKNOWN_RESULT';
+  inventoryCommitId?: string | null;
+  rejectReason?: string | null;
+  /** 품질검사가 만든 적치 작업 */
+  createdTaskIds?: string[];
+  task?: InboundTask;
+}
+
+/** POST /inbound-tasks/{taskId}/inspections 결과 줄(qty·resultQuality 필수, 나머지 선택). 합계 ≤ 작업 잔량 */
+export interface InspectionResult {
+  qty: number;
+  resultQuality: 'NORMAL' | 'QUARANTINED';
+  sourceLotRef?: string;
+  expiryDate?: string;
+  manufactureDate?: string;
+}
+
+/** mfc-inbound MoveOrder (0.7.1) — MOVE 센터 관리자 재배치, REPLENISH 자동 보충. 배정 taskId = moveId */
+export interface MoveOrder {
+  moveId: string;
+  kind: 'MOVE' | 'REPLENISH';
+  mfcId: string;
+  sku: string;
+  productName?: string | null;
+  barcodes?: string[];
+  lotId: string;
+  fromLocation: string;
+  toLocation: string;
+  cartLocation: string | null;
+  qty: number;
+  pickedQty: number;
+  droppedQty: number;
+  onCartQty: number;
+  state: 'ACTIVE' | 'CANCEL_PENDING' | 'COMPLETED' | 'CANCELLED';
+  reason?: string | null;
+  urgent?: boolean;
+  /** 담당 — 있으면 담당만 집어 올림 */
+  assigneeId?: string | null;
+  /** 카트에 실은 사람 — 그 사람만 내려놓음 */
+  pickedBy?: string | null;
+}
+
+/** mfc-location GET /putaway-candidates 항목(rank 순) */
+export interface PutawayCandidate {
+  locationId?: string;
+  locationCode: string;
+  zone?: string;
+  /** V 사본. null 은 불명 */
+  remainingSpace?: number | null;
+  rank?: number;
 }

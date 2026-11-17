@@ -2,10 +2,22 @@
 // 다음 작업 받기(업무 PICK_PACK) → 시작 → 장바구니 → 받은 방문 순서(visitSeq)대로 걸어 집품 실적(도착지 = 장바구니, fulfillment 0.8.0)
 // → 패킹대 → PACK 시작과 함께 배차 요청(점원 MANUAL) → 밀봉(장바구니 → 패킹대) → 출하대기 랙. 서버가 확정한 결과만 진행으로 본다. 응답이 없으면 같은 Idempotency-Key 로 다시 보낸다.
 // 실서버에서는 결품을 지어내지 않는다(MOCK 의 무작위 결품 없음). 인계는 rider 시뮬레이터 몫(backend-requests "rider 시뮬레이터 요청").
+// 피패킹이 없으면 재고 이동(STOCK_MOVE — 적치·보충·이동·취소품 복귀), 품질검사(INSPECTION) 순으로 묻는다(capacity 0.14.0).
+// 품질검사는 모두 정상(NORMAL)으로 낸다 — 실서버에서 품질 불량을 지어내지 않는다.
 
 import type { HttpBackend } from '../backend/http/HttpBackend';
 import type { TokenSource } from '../backend/http/tokens';
-import { ApiProblem, ResultUnknown, type CapacityAssignment, type TaskDetail, type TemperatureZone } from '../domain/contract';
+import {
+  ApiProblem,
+  ResultUnknown,
+  type CapacityAssignment,
+  type InboundTask,
+  type InboundTaskExecution,
+  type TaskDetail,
+  type TaskLine,
+  type TemperatureZone,
+  type WorkArea,
+} from '../domain/contract';
 import type { Layout, Location } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
 import { REAL_WORKERS } from '../config';
@@ -75,6 +87,8 @@ export class RealWorker extends Agent {
   /** 이 작업자가 집어 내려놓은 SKU → 포장 위치·온도대 (밀봉 때 씀) */
   private readonly dropped = new Map<string, { loc: string; temp: TemperatureZone | null }>();
   private pulls = 0;
+  /** 422 WORK_AREA_NOT_ALLOWED 를 받은 업무 — 이 작업자에게 다시 묻지 않는다 */
+  private readonly deniedAreas = new Set<WorkArea>();
 
   private readonly home: P;
 
@@ -118,6 +132,8 @@ export class RealWorker extends Agent {
           attempt--;
           continue;
         }
+        // 401 아닌 응답(업무 거절 등)도 인증은 통과한 것 — 다음 401 은 다시 한 번 토큰을 새로 받는다
+        if (e instanceof ApiProblem) this.reauthed = false;
         const retryable = e instanceof ResultUnknown || (e instanceof ApiProblem && e.problem.retryable === true);
         if (!retryable || attempt >= 4) throw e;
         this.activity = `응답 확인 중… (재전송 ${attempt + 1})`;
@@ -143,38 +159,40 @@ export class RealWorker extends Agent {
           continue;
         }
       }
-      let a: CapacityAssignment;
+      let a: CapacityAssignment | null;
       try {
         this.activity = '다음 작업 받기';
-        this.pulls++;
-        const k = this.key('pull', String(this.pulls));
-        a = await this.retry(() => this.be.pullNextTask(this.ctx.mfcId, this.workerId!, 'PICK_PACK', k));
+        a = await this.pull();
       } catch (e) {
         if (e instanceof AccountHalted) {
           this.halt(null);
           break;
         }
         const code = e instanceof ApiProblem ? e.problem.code : (e as Error).message;
-        if (code === 'NO_TASK_AVAILABLE') {
-          this.lastProblem = null;
-          this.activity = '작업 없음 — 대기';
-          await this.wait(REAL_WORKERS.noTaskRetrySec);
-        } else {
-          this.lastProblem = code;
-          this.activity = `작업 받기 거절 ${code}`;
-          this.ctx.log(`${this.account} 다음 작업 받기 거절 ${code}`);
-          await this.wait(REAL_WORKERS.errorBackoffSec);
-        }
+        this.lastProblem = code;
+        this.activity = `작업 받기 거절 ${code}`;
+        this.ctx.log(`${this.account} 다음 작업 받기 거절 ${code}`);
+        await this.wait(REAL_WORKERS.errorBackoffSec);
+        continue;
+      }
+      if (!a) {
+        this.lastProblem = null;
+        this.activity = '작업 없음 — 대기';
+        await this.wait(REAL_WORKERS.noTaskRetrySec);
         continue;
       }
       this.idle = false;
       try {
         if (a.taskType === 'PICK') await this.doPick(a);
         else if (a.taskType === 'PACK') await this.doPack(a);
+        else if (a.taskType === 'RETURN') await this.doReturn(a);
+        else if (a.taskType === 'INSPECT') await this.doInspect(a);
+        else if (a.taskType === 'PUTAWAY') await this.doPutaway(a);
+        else if (a.taskType === 'REPLENISH' || a.taskType === 'MOVE') await this.doMove(a);
         else {
-          // 업무 PICK_PACK 이면 오지 않는다 — 온다면 손대지 않고 알린다(센터 관리자가 풀어야 함)
+          // 묻는 업무(PICK_PACK·STOCK_MOVE·INSPECTION)면 오지 않는다(RECEIVE 등) — 온다면 손대지 않고 알린다(센터 관리자가 풀어야 함)
           this.lastProblem = `처리 안 하는 작업 유형 ${a.taskType}`;
-          this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 받음 — 가상 작업자는 PICK·PACK 만`);
+          this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 받음 — 가상 작업자는 PICK·PACK·RETURN·INSPECT·PUTAWAY·REPLENISH·MOVE 만`);
           this.state = 'ERROR';
           this.activity = this.lastProblem;
           await this.wait(REAL_WORKERS.errorBackoffSec * 4);
@@ -203,6 +221,34 @@ export class RealWorker extends Agent {
     this.state = 'IDLE';
     this.activity = '퇴근';
     this.left = true;
+  }
+
+  /**
+   * 다음 작업 받기 — 업무 순서(REAL_WORKERS.workAreas)대로 묻는다. 모두 409 NO_TASK_AVAILABLE 이면 null.
+   * 422 WORK_AREA_NOT_ALLOWED(그 업무 권한 없음)는 이 작업자에게 다시 묻지 않는다. 들고 있는 작업이 있으면 어느 업무든 그것(200).
+   */
+  private async pull(): Promise<CapacityAssignment | null> {
+    this.pulls++;
+    let asked = 0;
+    for (const area of REAL_WORKERS.workAreas) {
+      if (this.deniedAreas.has(area)) continue;
+      asked++;
+      const k = this.key('pull', String(this.pulls), `:${area}`);
+      try {
+        return await this.retry(() => this.be.pullNextTask(this.ctx.mfcId, this.workerId!, area, k));
+      } catch (e) {
+        const code = e instanceof ApiProblem ? e.problem.code : null;
+        if (code === 'NO_TASK_AVAILABLE') continue;
+        if (code === 'WORK_AREA_NOT_ALLOWED') {
+          this.deniedAreas.add(area);
+          this.ctx.log(`${this.account} 업무 ${area} 권한 없음(422 WORK_AREA_NOT_ALLOWED) — 이제 묻지 않음`);
+          continue;
+        }
+        throw e;
+      }
+    }
+    if (asked === 0) throw new Error('맡을 업무 없음(모두 WORK_AREA_NOT_ALLOWED)');
+    return null;
   }
 
   /** R-14: 이 계정을 멈춘다. 들고 있던 작업은 서버에 그대로 남는다(센터 관리자가 풀거나 다시 배정) */
@@ -419,7 +465,300 @@ export class RealWorker extends Agent {
     ctx.log(`${this.account} 포장 완료 ${shipmentId}`);
   }
 
-  private view(t: TaskDetail, type: 'PICK' | 'PACK', step: string): PdaView {
+  // ── 취소품 복귀(RETURN) — PDA return_screen nextReturnPiece·returnPayload 와 같은 순서: 한 번에 한 조각 ──
+
+  private async doReturn(a: CapacityAssignment) {
+    const { ctx, be } = this;
+    let { task, started } = await this.awaitAssigned(a);
+    const av = task.assignment?.assignmentVersion ?? a.assignmentVersion;
+    this.pda = this.view(task, 'RETURN', '작업 시작');
+    if (!started) {
+      await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
+    }
+    const skipped = new Set<string>();
+    const sent = new Set<string>();
+    let waited = 0;
+    let n = 0;
+    for (;;) {
+      task = await this.retry(() => be.getTask(task.taskId));
+      const p = nextReturnPiece(task, skipped);
+      if (p && !p.to) {
+        // 추천 선반이 없으면(조회 실패 등) 지어내지 않는다 — 그 조각은 건너뛰고 알린다
+        skipped.add(p.id);
+        this.lastProblem = `${p.line.sku} 돌려놓을 추천 선반 없음`;
+        ctx.log(`${this.account} RETURN ${task.taskId} ${p.line.sku} ${p.from} — 추천 선반(suggestedToLocations) 없음, 건너뜀`);
+        continue;
+      }
+      const k = p ? this.key('return', task.taskId, `:${p.line.orderLineId}:${p.lotId}:${p.from}:${p.to}:${p.left}`) : null;
+      if (!p || sent.has(k!)) {
+        if (task.lines.every((l) => l.remainingQty <= 0)) break;
+        // 보낸 실적이 아직 반영(pendingQty) 전이면 잠깐 기다린다. 같은 조각을 같은 키로 두 번 보내지 않는다
+        if (waited < REAL_WORKERS.returnConfirmWaitSec && (sent.size > 0 || task.lines.some((l) => l.pendingQty > 0))) {
+          this.activity = '복귀 반영 대기';
+          waited++;
+          await this.wait(1);
+          continue;
+        }
+        if (skipped.size > 0) throw new Error(`복귀 못 한 조각 ${skipped.size}개(추천 선반 없음) — 센터 관리자 확인`);
+        break;
+      }
+      waited = 0;
+      n++;
+      const loc = ctx.location(p.to!);
+      const temp = tempOfCode(p.to!);
+      // ① 놓인 곳(장바구니·패킹대)
+      this.state = 'TO_CART';
+      this.activity = `복귀 ${n} → ${p.from}`;
+      this.pda = {
+        ...this.view(task, 'RETURN', `${p.from} 스캔`),
+        progress: `${n}`,
+        location: p.from,
+        nextLocation: p.to,
+        temp: temp ? TEMP_KO[temp] : null,
+        productName: p.line.productName ?? null,
+        plannedQty: p.qty,
+        pickedQty: 0,
+      };
+      await this.walkTo(ctx.point(p.from) ?? ctx.layout.points.packQueue);
+      this.pda.step = '상품 스캔 → 실었어요';
+      await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
+      this.hasCart = p.from.startsWith('CRT-');
+      for (let i = 0; i < p.qty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
+      // ② 돌려놓을 선반
+      this.state = 'PICKING';
+      this.currentTarget = loc;
+      this.activity = `복귀 ${n} → ${p.to}`;
+      this.pda.step = '선반 스캔 → 내려놓기';
+      this.pda.location = p.to;
+      this.pda.nextLocation = null;
+      if (loc) {
+        await this.walkTo(loc.pick);
+        this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
+      }
+      await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
+      const r = await this.retry(() =>
+        unknownAsResend(() =>
+          be.recordExecution(
+            task.taskId,
+            {
+              executionType: 'RETURN',
+              workerId: this.workerId!,
+              assignmentVersion: av,
+              fromLocation: p.from,
+              toLocation: p.to!,
+              lines: [{ orderLineId: p.line.orderLineId, sku: p.line.sku, lotId: p.lotId, pickedQty: p.qty }],
+            },
+            k!,
+          ),
+        ),
+      );
+      if (r.status === 'REJECTED') throw new Error(`복귀 거절 ${r.nextAction ?? ''}`.trim());
+      sent.add(k!);
+      this.pda.pickedQty = p.qty;
+      this.pda.step = '복귀 등록됨';
+      this.hasCart = false;
+      this.carrying = [];
+      this.currentTarget = null;
+    }
+    ctx.log(`${this.account} 취소품 복귀 완료 ${task.taskId}`);
+  }
+
+  // ── 품질검사(INSPECT)·적치(PUTAWAY) — mfc-inbound 입고 작업. 담당이 있으면 담당만(409 NOT_ASSIGNEE) ──
+
+  /** 받은 입고 작업 — 끝났으면 null. 담당이 남이면 손대지 않는다 */
+  private async inboundTask(a: CapacityAssignment): Promise<InboundTask | null> {
+    const t = await this.retry(() => this.be.getInboundTask(a.taskId));
+    if (t.state === 'COMPLETED' || t.plannedQty - t.doneQty <= 0) {
+      this.ctx.log(`${this.account} ${t.taskType} ${t.taskId} 이미 끝남`);
+      return null;
+    }
+    if (t.assigneeId && t.assigneeId !== this.workerId) throw new Error(`${t.taskId} 담당 ${t.assigneeId} — 내 작업 아님`);
+    return t;
+  }
+
+  /** 입고 작업 실행 — APPLIED 만 확정. CAPTURED·UNKNOWN_RESULT(503 포함)는 같은 키로 다시, REJECTED 는 오류 */
+  private async applied(op: string, key: string, call: (k: string) => Promise<InboundTaskExecution>): Promise<InboundTaskExecution> {
+    for (let i = 0; ; i++) {
+      const r = await this.retry(() => unknownAsResend(() => call(key)));
+      if (r.applyStatus === 'APPLIED') return r;
+      if (r.applyStatus === 'REJECTED') throw new Error(`${op} 거절 ${r.rejectReason ?? ''}`.trim());
+      if (i >= REAL_WORKERS.unconfirmedResendMax) throw new ResultUnknown(`${op} 결과 불명(${r.applyStatus}) — 다음에 같은 키로 다시`);
+      this.activity = `${op} 반영 확인 중 (${r.applyStatus})`;
+      await this.wait(REAL_WORKERS.unconfirmedResendSec);
+    }
+  }
+
+  private async doInspect(a: CapacityAssignment) {
+    const { ctx, be } = this;
+    const t = await this.inboundTask(a);
+    if (!t) return;
+    const qty = t.plannedQty - t.doneQty;
+    this.state = 'PICKING';
+    this.activity = `품질검사 → ${t.locationCode}`;
+    this.pda = this.inboundView(t, 'INSPECT', `${t.locationCode} 로 이동`, qty);
+    await this.walkTo(ctx.point(t.locationCode) ?? ctx.layout.points.inboundIdle[0]);
+    this.pda.step = '라벨·기한 확인 → 정상';
+    this.activity = `품질검사 ${t.sku} ${qty}개`;
+    await this.wait(REAL_WORKERS.inspectBaseSec + REAL_WORKERS.inspectSecPerUnit * qty);
+    // 전량 정상. 제조 LOT 표기·소비기한은 시뮬레이터가 모른다 — 지어내지 않고 보내지 않는다(계약상 선택)
+    const r = await this.applied('품질검사', this.key('inspect', t.taskId, `:${qty}`), (k) => be.inspectInboundTask(t.taskId, [{ qty, resultQuality: 'NORMAL' }], k));
+    this.pda.pickedQty = qty;
+    this.pda.step = '품질검사 반영됨';
+    ctx.log(`${this.account} 품질검사 ${t.taskId} ${t.sku} 정상 ${qty}${r.createdTaskIds?.length ? ` → 적치 ${r.createdTaskIds.join(', ')}` : ''}`);
+  }
+
+  private async doPutaway(a: CapacityAssignment) {
+    const { ctx, be } = this;
+    const t = await this.inboundTask(a);
+    if (!t) return;
+    const qty = t.plannedQty - t.doneQty;
+    this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
+    // 놓을 선반 = 적치 후보(mfc-location, rank 순) 첫 칸. 온도대는 서버가 SKU 로 정하게 보내지 않는다
+    const cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty));
+    const to = cands.find((c) => c.locationCode && c.locationCode !== t.locationCode && !c.locationCode.startsWith('CRT-'))?.locationCode;
+    if (!to) {
+      this.lastProblem = `${t.sku} 적치 후보 없음`;
+      ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 적치 후보 없음, 손대지 않음`);
+      throw new Error(`${t.sku} 적치 후보 없음 — 센터 관리자 확인`);
+    }
+    const temp = tempOfCode(to);
+    this.state = 'PICKING';
+    this.activity = `적치 → ${t.locationCode}`;
+    this.pda.location = t.locationCode;
+    this.pda.nextLocation = to;
+    this.pda.temp = temp ? TEMP_KO[temp] : null;
+    this.pda.step = `${t.locationCode} 스캔 → 상품 싣기`;
+    await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+    for (let i = 0; i < qty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
+    const loc = ctx.location(to);
+    this.currentTarget = loc;
+    this.activity = `적치 ${t.sku} → ${to}`;
+    this.pda.location = to;
+    this.pda.nextLocation = null;
+    this.pda.step = '선반 스캔 → 내려놓기';
+    if (loc) {
+      await this.walkTo(loc.pick);
+      this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
+    }
+    await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+    await this.applied('적치', this.key('putaway', t.taskId, `:${to}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: to, qty }, k));
+    this.carrying = [];
+    this.currentTarget = null;
+    this.pda.pickedQty = qty;
+    this.pda.step = '적치 반영됨';
+    ctx.log(`${this.account} 적치 ${t.taskId} ${t.sku} ${qty} → ${to}`);
+  }
+
+  // ── 보충(REPLENISH)·이동(MOVE) — mfc-inbound 이동 지시: 카트 → 출발 칸에서 싣기(pickups) → 도착 칸에 내려놓기(drops) ──
+
+  private async doMove(a: CapacityAssignment) {
+    const { ctx, be } = this;
+    let m = await this.retry(() => be.getMoveOrder(a.taskId));
+    if (m.state === 'COMPLETED' || m.state === 'CANCELLED') {
+      ctx.log(`${this.account} ${m.kind} ${m.moveId} 이미 ${m.state}`);
+      return;
+    }
+    if (m.assigneeId && m.assigneeId !== this.workerId && m.pickedBy !== this.workerId) throw new Error(`${m.moveId} 담당 ${m.assigneeId} — 내 작업 아님`);
+    if (m.onCartQty > 0 && m.pickedBy && m.pickedBy !== this.workerId) throw new Error(`${m.moveId} 카트에 실은 사람 ${m.pickedBy} — 그 사람만 내려놓음`);
+    const type = m.kind === 'REPLENISH' ? 'REPLENISH' : 'MOVE';
+    const label = m.kind === 'REPLENISH' ? '보충' : '이동';
+    // 카트 — 이미 실었으면 그 카트(서버 cartLocation), 아니면 빈 카트 하나(장바구니와 같은 풀, 키 MOVE:{moveId})
+    const cartKey = `MOVE:${m.moveId}`;
+    if (m.cartLocation) ctx.carts.bind(cartKey, m.cartLocation);
+    const cart = m.cartLocation ?? ctx.carts.take(cartKey);
+    const temp = tempOfCode(m.toLocation) ?? tempOfCode(m.fromLocation);
+    this.pda = {
+      ...this.plainView(m.moveId, type, `카트 ${cart} 스캔`),
+      location: m.fromLocation,
+      nextLocation: m.toLocation,
+      temp: temp ? TEMP_KO[temp] : null,
+      productName: m.productName ?? null,
+      plannedQty: m.qty,
+      pickedQty: m.pickedQty,
+    };
+    try {
+      this.state = 'TO_CART';
+      this.activity = `${label} 카트 ${cart} 가지러`;
+      await this.walkTo(ctx.point(cart) ?? ctx.layout.points.cartDepot);
+      await this.wait(REAL_WORKERS.shelveBaseSec);
+      this.hasCart = true;
+      const toPick = m.state === 'ACTIVE' ? m.qty - m.pickedQty : 0;
+      if (toPick > 0) {
+        const from = ctx.location(m.fromLocation);
+        this.state = 'PICKING';
+        this.currentTarget = from;
+        this.activity = `${label} ${m.sku} ← ${m.fromLocation}`;
+        this.pda.step = `${m.fromLocation} 스캔 → 상품 싣기`;
+        if (from) {
+          await this.walkTo(from.pick);
+          this.heading = Math.atan2(from.shelf.x - this.pos.x, from.shelf.z - this.pos.z);
+        }
+        await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * toPick);
+        m = await this.retry(() => unknownAsResend(() => be.pickUpMoveOrder(m.moveId, { cartLocation: cart, qty: toPick }, this.key('pickup', m.moveId, `:${cart}:${toPick}`))));
+        this.pda.pickedQty = m.pickedQty;
+      }
+      if (m.onCartQty > 0) {
+        for (let i = 0; i < m.onCartQty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
+        // 취소 뒤(CANCEL_PENDING)에는 출발 칸으로 되돌린다
+        const to = m.state === 'CANCEL_PENDING' ? m.fromLocation : m.toLocation;
+        const qty = m.onCartQty;
+        const loc = ctx.location(to);
+        this.state = 'PICKING';
+        this.currentTarget = loc;
+        this.activity = `${label} ${m.sku} → ${to}`;
+        this.pda.location = to;
+        this.pda.nextLocation = null;
+        this.pda.step = '도착 칸 스캔 → 내려놓기';
+        if (loc) {
+          await this.walkTo(loc.pick);
+          this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
+        }
+        await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+        m = await this.retry(() => unknownAsResend(() => be.dropMoveOrder(m.moveId, { toLocation: to, qty }, this.key('drop', m.moveId, `:${to}:${qty}`))));
+        this.pda.step = `${label} 반영됨`;
+      }
+    } finally {
+      this.hasCart = false;
+      this.carrying = [];
+      this.currentTarget = null;
+      if (m.onCartQty <= 0) ctx.carts.release(cartKey); // 카트가 비었을 때만 — 남았으면 다음에 같은 카트로
+    }
+    ctx.log(`${this.account} ${label} ${m.moveId} ${m.sku} ${m.state}`);
+  }
+
+  private inboundView(t: InboundTask, type: 'INSPECT' | 'PUTAWAY', step: string, qty: number): PdaView {
+    const temp = tempOfCode(t.locationCode);
+    return {
+      ...this.plainView(t.taskId, type, step),
+      location: t.locationCode,
+      temp: temp ? TEMP_KO[temp] : null,
+      productName: t.productName ?? null,
+      barcode: t.barcodes?.[0] ?? null,
+      plannedQty: qty,
+      pickedQty: 0,
+    };
+  }
+
+  private plainView(taskId: string, type: PdaView['taskType'], step: string): PdaView {
+    return {
+      taskId,
+      taskType: type,
+      orderId: '',
+      shipmentId: '',
+      step,
+      progress: '',
+      location: null,
+      nextLocation: null,
+      temp: null,
+      productName: null,
+      barcode: null,
+      plannedQty: null,
+      pickedQty: null,
+    };
+  }
+
+  private view(t: TaskDetail, type: PdaView['taskType'], step: string): PdaView {
     return {
       taskId: t.taskId,
       taskType: type,
@@ -440,3 +779,47 @@ export class RealWorker extends Agent {
 
 /** 토큰을 새로 받은 뒤에도 401 — 이 계정은 멈춘다(R-14) */
 class AccountHalted extends Error {}
+
+/** 503(UNKNOWN_RESULT·의존 서비스 응답 없음)은 결과 불명 — 같은 Idempotency-Key 로 다시 보낸다(retry) */
+async function unknownAsResend<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (e) {
+    if (e instanceof ApiProblem && (e.problem.status === 503 || e.problem.code === 'UNKNOWN_RESULT')) throw new ResultUnknown(`${e.problem.status} ${e.problem.code}`);
+    throw e;
+  }
+}
+
+export interface ReturnPiece {
+  /** 건너뛸 때 쓰는 조각 식별(줄·LOT·놓인 곳) */
+  id: string;
+  line: TaskLine;
+  lotId: string;
+  /** 놓인 곳(장바구니 CRT-·패킹대 PAK-) */
+  from: string;
+  /** 돌려놓을 선반 = 첫 추천 칸. 없으면 null(건너뜀) */
+  to: string | null;
+  /** 줄의 남은 양 − 확정 대기 */
+  left: number;
+  /** 이번에 옮길 양 = min(줄 남은 양, 조각 남은 양, 그 위치 양) */
+  qty: number;
+}
+
+/**
+ * 남은 첫 복귀 조각(PDA return_screen nextReturnPiece 와 같은 순서): 남은 양 − 확정 대기 > 0 인 첫 줄 → 남은 양 > 0 인 첫 LOT 조각
+ * → 양 > 0 인 첫 위치. 건너뛴 조각은 빼고 다음 줄로. 없으면 null(다 옮김 또는 확정 대기).
+ */
+export function nextReturnPiece(t: TaskDetail, skip: ReadonlySet<string> = new Set()): ReturnPiece | null {
+  for (const l of t.lines) {
+    const left = l.remainingQty - l.pendingQty;
+    if (left <= 0) continue;
+    const p = (l.picks ?? []).find((x) => x.remainingQty > 0);
+    const at = p?.locations.find((c) => c.qty > 0);
+    const lot = p?.lotId ?? l.lotId;
+    if (!p || !at || !lot) continue;
+    const id = `${l.orderLineId}:${lot}:${at.locationCode}`;
+    if (skip.has(id)) continue;
+    return { id, line: l, lotId: lot, from: at.locationCode, to: p.suggestedToLocations?.[0] ?? null, left, qty: Math.min(left, p.remainingQty, at.qty) };
+  }
+  return null;
+}

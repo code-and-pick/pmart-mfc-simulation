@@ -148,6 +148,48 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(Math.hypot(w.pos.x - rack.x, w.pos.z - rack.z)).toBeLessThan(0.5);
   });
 
+  it('복귀(RETURN): 출발 위치(장바구니)에서 상품 싣기 → (실었어요) → 추천 선반 칸, 실적이 서버에 오면 다음 조각', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const ret = (rem: [number, number]): TaskDetail => {
+      const line = (sku: string, shelf: string, q: number, r: number) => ({
+        taskLineId: sku, orderLineId: sku, sku, productName: `상품 ${sku}`, barcode: '2990000004963', locationId: 'CRT-C-01', lotId: `LOT-${sku}`, expiresOn: null,
+        plannedQty: q, completedQty: q - r, cancelledQty: 0, remainingQty: r, pendingQty: 0,
+        picks: [{ lotId: `LOT-${sku}`, expiresOn: null, remainingQty: r, locations: [{ locationCode: 'CRT-C-01', qty: r, allocatedQty: 0 }], suggestedToLocations: [shelf] }],
+      });
+      return {
+        taskId: 'ORD-9-S1-RETURN', taskType: 'RETURN', state: 'IN_PROGRESS', version: 2, mfcId: 'MFC-SEED-01', fulfillmentId: 'FUL-9', shipmentId: 'ORD-9-S1',
+        assignment: { workerId: 'OP-ret', assignmentVersion: 1 }, lineCount: 2, plannedQty: 3, completedQty: 0, remainingQty: rem[0] + rem[1],
+        promisedReadyAt: null, createdAt: '2026-11-17T06:30:00Z', blockReason: null,
+        lines: [line('B-1', 'A-F3-01-3-01', 1, rem[0]), line('E-2', 'A-C1-04-6-02', 2, rem[1])],
+      } as unknown as TaskDetail;
+    };
+    const d = ret([1, 2]);
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    sync();
+    const w = sim.observedWorkers[0];
+    expect(w.cue).toMatchObject({ kind: 'RETURN', step: 'FROM', index: 1, total: 3, piece: { from: 'CRT-C-01', left: 1, suggested: ['A-F3-01-3-01'] } });
+    expect(w.hasCart).toBe(false);
+    const cartPt = sim.backendPoint('CRT-C-01')!;
+    expect(Math.hypot(w.pos.x - cartPt.x, w.pos.z - cartPt.z)).toBeLessThan(0.5);
+    // "실었어요" → 추천 선반 칸으로
+    sim.passScan('OP-ret');
+    expect(w.cue).toMatchObject({ kind: 'RETURN', step: 'TO' });
+    expect(w.hasCart).toBe(true);
+    await walk(sim, 180);
+    const shelf = sim.backendLocation('A-F3-01-3-01')!;
+    expect(Math.hypot(w.pos.x - shelf.pick.x, w.pos.z - shelf.pick.z)).toBeLessThan(0.3);
+    // 복귀 실적 반영(서버) → 다음 조각은 다시 출발 위치부터
+    const d2 = ret([0, 2]);
+    real.tasks.set(d2.taskId, { summary: d2, detail: d2, firstSeenMs: 0, closed: null });
+    sync();
+    expect(w.cue).toMatchObject({ kind: 'RETURN', step: 'FROM', index: 2, piece: { line: { sku: 'E-2' }, left: 2, suggested: ['A-C1-04-6-02'] } });
+  });
+
   it('가상 작업자가 맡은 작업은 실제 작업자로 따로 세우지 않는다', () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     (sim as unknown as { virtualWorkerIds(): Set<string> }).virtualWorkerIds = () => new Set(['OP-990d2c09']);

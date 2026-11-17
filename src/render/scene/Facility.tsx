@@ -2,7 +2,7 @@
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
-import { useApp } from '../../app/context';
+import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { ZONE_COLOR } from '../colors';
@@ -248,16 +248,31 @@ function HighTurnover({ L }: { L: Layout }) {
   );
 }
 
-/** 회수(반품) 반입 자리 RTN-A-01 — 평면에 회수 구역이 없어 백엔드가 입고·검수 구역 안에 정한 자리. */
+/**
+ * 회수(반품) 반입 자리 RTN-A-01 — 평면에 회수 구역이 없어 백엔드가 입고·검수 구역 안에 정한 자리.
+ * 실서버: 이 센터로 오는 회수 배송(고객 반품·오배송 회수, delivery-dispatch 0.5.0) 수 — 오는 중 / 반납됨.
+ */
 function ReturnIntake() {
   const p = BACKEND_FACTS.returnIntake;
+  const { sim } = useApp();
+  useTick();
+  const rp = sim.real?.returnPickups ?? [];
+  const arrived = rp.filter((d) => d.state === 'RETURNED_TO_STORE' || d.state === 'COMPLETED').length;
+  const coming = rp.length - arrived;
+  const text = `회수 반입 ${p.code}${coming ? ` · 오는 중 ${coming}` : ''}${arrived ? ` · 반납 ${arrived}` : ''}`;
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[p.x, 0.012, p.z]} receiveShadow>
         <planeGeometry args={[1.2, 1.2]} />
         <meshStandardMaterial color={0x2e7d32} roughness={0.9} transparent opacity={0.9} />
       </mesh>
-      <Label text={`회수 반입 ${p.code}`} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(20,90,30,0.75)', screenPx: 14 }} />
+      <Label text={text} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(20,90,30,0.75)', screenPx: 14 }} />
+      {arrived > 0 && (
+        <mesh position={[p.x, 0.25, p.z]} castShadow>
+          <boxGeometry args={[0.5, 0.5, 0.4]} />
+          <meshStandardMaterial color={0xb98c5a} roughness={0.8} />
+        </mesh>
+      )}
     </>
   );
 }

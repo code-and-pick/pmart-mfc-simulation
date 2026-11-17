@@ -2,6 +2,7 @@
 // 서버는 작업자 위치를 주지 않는다(R-17). 그래서 서버가 확정한 마지막 실적으로만 세운다(SIM-2a "마지막 버튼 기준"):
 // - PICK: 작업 상세에서 남은 수량이 0 이 된(집품 등록된) 칸 중 방문 순서가 가장 늦은 칸 앞. 아직 없으면 카트 자리(시작 = 카트를 찍음)
 // - PACK: 패킹 대기 지점
+// - RETURN(취소품 복귀): 지금 옮길 조각의 출발 위치(장바구니·패킹대), "실었어요" 뒤에는 돌려놓을 선반 칸 앞
 // 다음 지시 칸은 바닥 고리(RealMarkers)와 PDA 카드로 보인다. 그리기만 한다 — API 를 부르지 않는다.
 // 스캔 안내(사용자 2026-11-17 "카트, 상품이 있는 칸까지 움직였을때 바코드를 찍을수있게"): 진행 중 PICK 이면 PDA 와 같은 순서로
 // 카트 → 지금 갈 칸으로 걸어가 서고, 도착하면 그 자리에 찍을 바코드(cue)를 띄운다. 이때 서 있는 자리는 "찍을 곳"이지 실제 위치가 아니다(R-17).
@@ -10,6 +11,7 @@ import type { TaskLine, TemperatureZone } from '../domain/contract';
 import type { Location } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
 import type { PickStop } from '../domain/pickStop';
+import type { ReturnPiece } from '../domain/returnPiece';
 import { Agent } from './agent';
 import type { PdaView, SiteWorker, WorkerState } from './worker';
 
@@ -19,7 +21,9 @@ export type ScanCue =
   | { kind: 'CART'; taskId: string; cart: string; next: PickStop }
   | { kind: 'PICK'; taskId: string; stop: PickStop; index: number; total: number }
   /** 포장 — PDA 포장 화면 단계(패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙) */
-  | { kind: 'PACK'; taskId: string; shipmentId: string; step: PackStep; station: string; cart: string; rack: string; bag: { line: TaskLine; left: number }[] };
+  | { kind: 'PACK'; taskId: string; shipmentId: string; step: PackStep; station: string; cart: string; rack: string; bag: { line: TaskLine; left: number }[] }
+  /** 취소품 복귀 — PDA 복귀 화면 단계(① 출발 위치 → ② 상품 싣기 → "실었어요" → ③ 선반 칸) */
+  | { kind: 'RETURN'; taskId: string; step: 'FROM' | 'TO'; piece: ReturnPiece; index: number; total: number };
 
 export class ObservedWorker extends Agent implements SiteWorker {
   state: WorkerState = 'IDLE';

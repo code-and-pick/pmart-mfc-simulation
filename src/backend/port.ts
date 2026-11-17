@@ -1,5 +1,6 @@
 import type {
   CommandResponse,
+  DispatchRequest,
   HandoverAuthorization,
   HandoverCommitResult,
   Package,
@@ -35,6 +36,8 @@ export interface FulfillmentPort {
   // mfc-fulfillment: 출하·포장
   getShipment(shipmentId: string): Promise<Shipment>;
   sealPackage(shipmentId: string, body: SealPackageRequest, idempotencyKey: string): Promise<Package>;
+  /** 배차 요청(fulfillment 0.4.11 — 점원 요청 MANUAL 만, 자동 요청 없음). 출고당 한 번, 이미 있으면 그 요청 */
+  requestDispatch(shipmentId: string, estimatedPackMinutes: number, idempotencyKey: string): Promise<DispatchRequest>;
 
   // mfc-fulfillment: 라이더 QR 인계 fence
   authorizeHandover(

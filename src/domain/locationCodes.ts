@@ -92,7 +92,8 @@ export function buildLocationCodeMap(L: Layout): LocationCodeMap {
 
   return {
     toBackend: (c) => toB.get(c) ?? null,
-    toSim: (c) => toS.get(c) ?? null,
+    // 카트는 모두 카트 보관소 한 자리 — 목록 밖 카트(옛 냉장·냉동 CRT-C-01 처럼 재고가 남아 열린 카트, 0cbfecaa)도 같은 자리
+    toSim: (c) => toS.get(c) ?? (/^CRT-[A-Z]-\d+$/.test(c) ? SIM_POINT.cartDepot : null),
     shelfCount,
   };
 }

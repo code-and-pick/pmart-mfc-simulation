@@ -151,6 +151,9 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
   return null;
 }
 
+
+/** PDA 카드의 작업 종류 이름 */
+const TASK_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '취소품 복귀', PUTAWAY: '적치', REPLENISH: '보충', MOVE: '재고 이동', INSPECT: '품질검사' };
 export function ZoneCard() {
   const { sim } = useApp();
   const view = useView();
@@ -295,7 +298,7 @@ function DetailBody() {
       </div>
       {d ? (
         <dl>
-          <Row k="작업" v={`${d.taskType === 'PICK' ? '피킹' : '패킹'} ${d.taskId}`} />
+          <Row k="작업" v={`${TASK_KO[d.taskType] ?? d.taskType} ${d.taskId}`} />
           <Row k="주문" v={d.orderId} />
           <Row k="진행" v={d.progress} />
           <Row

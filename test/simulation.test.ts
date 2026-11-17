@@ -36,6 +36,10 @@ describe('Simulation (mock, 화면 없이)', () => {
     expect(sim.metrics.ordersCreated).toBeGreaterThan(80);
     expect(s.ready).toBeGreaterThan(60);
     expect(s.handedOver).toBeGreaterThan(50);
+    // 배차는 점원 요청(MANUAL)만 — 인계된 출고는 모두 패킹 시작 때 배차 요청이 있었다(fulfillment 0.4.11, MOCK 도 같게)
+    const shipped = sim.mock!.allShipments().filter((x) => x.state === 'HANDED_OVER');
+    expect(shipped.length).toBeGreaterThan(0);
+    expect(shipped.every((x) => x.dispatchRequest?.trigger === 'MANUAL')).toBe(true);
     expect(ib.trucksReceived).toBeGreaterThanOrEqual(1);
     expect(ib.putawayShelfUnits + ib.putawayReserveUnits).toBeGreaterThan(0);
     expect(ib.replenishMoves).toBeGreaterThan(0);

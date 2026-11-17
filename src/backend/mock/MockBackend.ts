@@ -7,6 +7,7 @@ import {
   ApiProblem,
   type CommandResponse,
   type ConfirmOrderRequest,
+  type DispatchRequest,
   type HandoverAuthorization,
   type HandoverCommitResult,
   type Package,
@@ -520,6 +521,34 @@ export class MockBackend implements FulfillmentPort {
 
   getShipment(shipmentId: string): Promise<Shipment> {
     return this.call('GET', `/shipments/${shipmentId}`, 200, () => structuredClone(this.mustShipment(shipmentId).shipment));
+  }
+
+  /**
+   * 배차 요청(fulfillment 0.4.11, BR-51) — 점원 요청(MANUAL)만. 출고당 한 번 — 이미 있으면 그 요청을 돌려준다.
+   * PACK 이 시작됐거나 출고 READY 여야(아니면 409 INVALID_STATE). 예상 포장 분 1~180.
+   */
+  requestDispatch(shipmentId: string, estimatedPackMinutes: number, key: string): Promise<DispatchRequest> {
+    return this.call('POST', `/shipments/${shipmentId}/dispatch-requests`, 201, () =>
+      this.idempotent('dispatch', key, { shipmentId, estimatedPackMinutes }, () => {
+        const sh = this.mustShipment(shipmentId);
+        if (sh.shipment.dispatchRequest) return structuredClone(sh.shipment.dispatchRequest);
+        if (!Number.isInteger(estimatedPackMinutes) || estimatedPackMinutes < 1 || estimatedPackMinutes > 180)
+          throw problem(400, 'VALIDATION_FAILED', 'estimatedPackMinutes 는 1~180 입니다.');
+        const packStarted = [...this.tasks.values()].some((t) => t.detail.shipmentId === shipmentId && t.detail.taskType === 'PACK' && t.detail.state !== 'WAITING' && t.detail.state !== 'READY' && t.detail.state !== 'ASSIGNED');
+        if (!packStarted && sh.shipment.state !== 'READY') throw problem(409, 'INVALID_STATE', 'PACK 이 시작됐거나 출고가 READY 여야 합니다.');
+        const now = this.iso();
+        const req: DispatchRequest = {
+          shipmentId,
+          trigger: 'MANUAL',
+          estimatedPackMinutes,
+          estimatedReadyAt: this.iso(this.opt.now() + estimatedPackMinutes * 60),
+          requestedAt: now,
+        };
+        sh.shipment.dispatchRequest = req;
+        sh.shipment.version++;
+        return structuredClone(req);
+      }),
+    );
   }
 
   /**

@@ -132,6 +132,21 @@ export const REAL_WORKERS = {
   errorBackoffSec: 30,
   /** 배정이 작업(ASSIGNED)에 반영되기를 기다리는 최대 초 — 백엔드 E2E 도 30초 [시뮬] */
   assignWaitSec: 30,
+  /** 다음 작업 받기에서 묻는 업무 순서 — 피패킹 먼저, 없으면 재고 이동(적치·보충·이동·취소품 복귀), 품질검사 [시뮬] */
+  workAreas: ['PICK_PACK', 'STOCK_MOVE', 'INSPECTION'] as const,
+  /** 카트·출발 칸에서 싣거나 선반에 놓는 기본 시간(초, 스캔 포함) [시뮬] */
+  shelveBaseSec: 6,
+  /** 한 개 싣거나 놓는 데(초) [시뮬] */
+  shelveSecPerUnit: 1.5,
+  /** 품질검사 기본 시간(초, 라벨·기한 확인) [시뮬] */
+  inspectBaseSec: 20,
+  /** 품질검사 한 개당(초) [시뮬] */
+  inspectSecPerUnit: 2,
+  /** 입고 작업 실행이 CAPTURED·UNKNOWN_RESULT 로 오면 같은 키로 다시 보내는 최대 횟수와 간격(초) [시뮬] */
+  unconfirmedResendMax: 5,
+  unconfirmedResendSec: 3,
+  /** RETURN 실적 뒤 서버 반영(pendingQty)을 기다리는 최대 초 [시뮬] */
+  returnConfirmWaitSec: 30,
   /** 한 번에 켤 수 있는 최대 인원 = REAL_LINK.virtualAccounts 수(10) [확정 사용자 2026-11-16] */
 };
 
@@ -156,6 +171,10 @@ export const REAL_LINK = {
   shipmentRefreshSec: 3,
   /** 한 번 조회에서 출고·배차 상세를 새로 읽는 최대 건수(각각) [시뮬] */
   maxShipmentPerPoll: 5,
+  /** 회수 배송(고객 반품·오배송 회수 → MFC, delivery-dispatch 0.5.0 type RETURN)을 찾는 간격(초) — 열린 출고가 없어도 [시뮬] */
+  returnPickupRefreshSec: 15,
+  /** MFC 에 반납된(RETURNED_TO_STORE) 회수 배송을 회수 반입 자리에 두는 시간(분) — 점원 수령 확인 API 가 없어 [시뮬] */
+  returnShownMin: 60,
   /** 작업이 끝난 뒤에도 인계 전(출하 대기·픽업 전) 출고를 화면에 두는 최대 시간(초) — 배차 시도 10분 × 재시도 2회 넉넉히 [시뮬] */
   handoverKeepSec: 3 * 3600,
   /** 열린 작업 상태 — 이 상태들만 주기 조회한다(완료 이력은 읽지 않음) [시뮬] */

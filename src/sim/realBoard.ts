@@ -4,6 +4,7 @@
 // 상세를 다시 읽어 확정된 최종 상태를 받기 전까지 "확인 중"으로 둔다.
 
 import type {
+  OrderFulfillmentView,
   CapacityWorker,
   CenterStock,
   DeliveryDispatch,
@@ -28,6 +29,8 @@ export interface RealReader {
   searchDeliveries(mfcId: string, size?: number): Promise<StaffDeliverySummary[]>;
   getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch>;
   getSku(sku: string): Promise<SkuBarcodes>;
+  /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
+  getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
 }
 
 export interface RealBoardOptions {
@@ -47,6 +50,10 @@ export interface RealBoardOptions {
   maxShipmentPerPoll: number;
   /** 작업이 끝난 뒤에도 인계 전 출고를 화면에 두는 최대 시간(초) */
   handoverKeepSec: number;
+  /** 회수 배송을 찾는 간격(초). 없으면 배차 요청된 출고가 있을 때만(그 배송 찾기 결과로) */
+  returnPickupRefreshSec?: number;
+  /** 반납된 회수 배송을 두는 시간(분). 없으면 60 */
+  returnShownMin?: number;
 }
 
 /** 실서버 재고 단위 행(주문에 나온 SKU 만) */
@@ -208,6 +215,12 @@ export class RealBoard {
   readonly dispatches = new Map<string, { data: DeliveryDispatch; readMs: number }>();
   /** 출고·배차가 바뀔 때마다 올라간다 — 3D 이름표가 다시 그릴지 판단 */
   deliveryVersion = 0;
+  /**
+   * 이 센터로 오는 회수 배송(type RETURN — 고객 반품 CLAIM_RETURN·오배송 회수, delivery-dispatch 0.5.0). 진행 중 + 최근 반납.
+   * 배송 찾기 요약만 쓴다 — 배차 상세에는 회수지(고객 집) 좌표가 같이 와서 읽지 않는다(개인정보).
+   */
+  returnPickups: StaffDeliverySummary[] = [];
+  private lastReturnMs = -Infinity;
   private lastPollMs = -Infinity;
   private lastWorkersMs = -Infinity;
   private busy = false;
@@ -293,6 +306,21 @@ export class RealBoard {
   /** 상품 바코드(스캔 판) — SKU → 서버 barcodes, 못 읽었으면 'ERR'. 화면이 볼 때만 한 번 읽는다(주기 조회 없음) */
   readonly skuBarcodes = new Map<string, string[] | 'ERR' | 'LOADING'>();
   skuVersion = 0;
+  /** 주문 번호 → 현장 기록(GET /work-orders?orderId=) — 화면이 그 주문을 고르면 읽고, 고른 동안 orderViewRefreshSec 마다 다시 */
+  readonly orderViews = new Map<string, { data: OrderFulfillmentView | null; error: string | null; readMs: number; loading: boolean }>();
+  orderViewVersion = 0;
+
+  requestOrderView(orderId: string, refreshSec = 15) {
+    const hit = this.orderViews.get(orderId);
+    if (!this.reader.getOrderFulfillment || hit?.loading || (hit && this.nowMs() - hit.readMs < refreshSec * 1000)) return;
+    this.orderViews.set(orderId, { data: hit?.data ?? null, error: hit?.error ?? null, readMs: hit?.readMs ?? 0, loading: true });
+    this.reader
+      .getOrderFulfillment(orderId)
+      .then((d) => this.orderViews.set(orderId, { data: d, error: null, readMs: this.nowMs(), loading: false }))
+      .catch((e: unknown) => this.orderViews.set(orderId, { data: hit?.data ?? null, error: (e as Error).message, readMs: this.nowMs(), loading: false }))
+      .finally(() => this.orderViewVersion++);
+  }
+
   requestSkuBarcodes(skus: Iterable<string>) {
     for (const sku of skus) {
       if (this.skuBarcodes.has(sku)) continue;
@@ -356,6 +384,13 @@ export class RealBoard {
     }
 
     const requested = [...this.shipmentInfo.values()].filter((v) => v.data.dispatchRequest);
+    if (!requested.length && this.opt.returnPickupRefreshSec != null && now - this.lastReturnMs > this.opt.returnPickupRefreshSec * 1000) {
+      try {
+        this.setReturnPickups(await this.reader.searchDeliveries(this.mfcId, 50), now);
+      } catch {
+        /* 다음에 다시 */
+      }
+    }
     if (!requested.length) {
       if (this.deliveries.size || this.dispatches.size) this.deliveryVersion++;
       this.deliveries.clear();
@@ -382,6 +417,7 @@ export class RealBoard {
     };
     try {
       const list = await this.reader.searchDeliveries(this.mfcId, 50);
+      this.setReturnPickups(list, now);
       const byShipment = new Map(requested.map((v) => [v.data.shipmentId, v.data]));
       const perOrder = new Map<string, string[]>();
       for (const v of requested) perOrder.set(v.data.orderId, [...(perOrder.get(v.data.orderId) ?? []), v.data.shipmentId]);
@@ -412,6 +448,22 @@ export class RealBoard {
     for (const d of this.deliveries.values()) await readDispatch(d);
     const live = new Set([...this.deliveries.values()].map((d) => d.deliveryId));
     for (const id of [...this.dispatches.keys()]) if (!live.has(id)) this.dispatches.delete(id);
+  }
+
+  /** 회수 배송만 골라 둔다 — 진행 중(취소·실패 아님) + 반납 뒤 returnShownMin 분 */
+  private setReturnPickups(list: StaffDeliverySummary[], now: number) {
+    this.lastReturnMs = now;
+    const keepMs = (this.opt.returnShownMin ?? 60) * 60_000;
+    const next = list.filter(
+      (d) =>
+        d.type === 'RETURN' &&
+        d.state !== 'CANCELLED' &&
+        d.state !== 'FAILED' &&
+        (d.state !== 'RETURNED_TO_STORE' && d.state !== 'COMPLETED' ? true : !!d.completedAt && now - Date.parse(d.completedAt) < keepMs),
+    );
+    const sig = (x: StaffDeliverySummary[]) => x.map((d) => `${d.deliveryId}:${d.version}:${d.state}`).join(',');
+    if (sig(next) !== sig(this.returnPickups)) this.deliveryVersion++;
+    this.returnPickups = next;
   }
 
   /** 화면에 남아 있는 작업(열림 + 최근 끝남)에 나온 SKU */

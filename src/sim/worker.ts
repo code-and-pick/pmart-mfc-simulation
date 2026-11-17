@@ -12,7 +12,8 @@ export type WorkerState = 'IDLE' | 'TO_CART' | 'PICKING' | 'WAIT_STATION' | 'PAC
 
 export interface PdaView {
   taskId: string;
-  taskType: 'PICK' | 'PACK';
+  /** MOCK 작업자는 PICK·PACK 만. 실서버 가상 작업자는 재고 이동·품질검사(RETURN·PUTAWAY·REPLENISH·MOVE·INSPECT)도, 실제 PDA 작업자 표시는 RETURN 도 */
+  taskType: 'PICK' | 'PACK' | 'RETURN' | 'PUTAWAY' | 'REPLENISH' | 'MOVE' | 'INSPECT';
   orderId: string;
   shipmentId: string;
   step: string;
@@ -295,6 +296,18 @@ export class Worker extends Agent {
     await this.retry(() =>
       port.startTask(pack.taskId, { workerId: this.id, assignmentVersion: pack.assignmentVersion, deviceId: station.id }, this.key('start', pack.taskId)),
     );
+    // 패킹 시작 때 배차 요청(fulfillment 0.4.11·BR-51 — 서버는 READY 때 자동 요청하지 않는다, 실서버 가상 작업자와 같게)
+    {
+      const t0 = await port.getTask(pack.taskId);
+      const units0 = t0.lines.reduce((a, l) => a + l.remainingQty, 0);
+      const minutes = Math.min(180, Math.max(1, Math.ceil((ctx.params.packBaseSec + ctx.params.packPerUnitSec * units0) / 60)));
+      try {
+        await this.retry(() => port.requestDispatch(shipmentId, minutes, this.key('dispatch', shipmentId)));
+        ctx.dispatchRequested(shipmentId);
+      } catch {
+        /* 배차 요청 거절은 포장을 막지 않는다 */
+      }
+    }
     if (trace) trace.packStartAt = ctx.now();
     this.state = 'PACKING';
     const packTask = await port.getTask(pack.taskId);

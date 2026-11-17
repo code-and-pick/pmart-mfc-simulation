@@ -103,6 +103,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
     );
   }
   if (c.kind === 'PACK') return <PackBubble w={w} c={c} />;
+  if (c.kind === 'RETURN') return <ReturnBubble w={w} c={c} />;
   const { stop, index, total } = c;
   const l = stop.line;
   const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
@@ -121,6 +122,43 @@ function Bubble({ w }: { w: ObservedWorker }) {
       {more.length > 0 && <div className="note">같은 상품 다른 바코드 {more.join(', ')} — PDA 는 첫 값만 비교(C-1)</div>}
       {stop.pick && <LotLabel l={l} p={stop.pick} height={36} />}
       {stop.otherLocations.length > 0 && <div className="note">지시 칸이 비었으면 같은 LOT 칸: {stop.otherLocations.join(', ')}</div>}
+    </>
+  );
+}
+
+/** 취소품 복귀 — PDA 복귀 화면(① 출발 위치 → ② 상품 싣기 → "실었어요" → ③ 선반 칸 → 실적) */
+function ReturnBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: 'RETURN' }> }) {
+  const { sim, controller } = useApp();
+  const p = c.piece;
+  const l = p.line;
+  const to = p.suggested[0];
+  return (
+    <>
+      <div className="sb-head">
+        {w.id} · 복귀 {c.index}/{c.total} · {l.productName ?? l.sku} × {p.left}
+        <Close />
+      </div>
+      {c.step === 'FROM' ? (
+        <>
+          <Barcode value={p.from} caption={`① 출발 위치 ${p.from} (취소된 집품분이 놓인 곳)`} height={36} onGo={() => controller.focusBackendCode(p.from)} />
+          {l.barcode ? (
+            <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`② 상품 ${l.sku} — ${p.left}번 찍어 싣기`} height={36} />
+          ) : (
+            <div className="note warn">작업 지시 줄에 상품 바코드가 없습니다 — PDA 에서 수량을 직접 넣습니다.</div>
+          )}
+          <button className="btn" onClick={() => sim.passScan(w.workerId)} title='서버는 싣기를 모릅니다 — PDA 에서 "실었어요"를 눌렀으면 눌러 선반으로. 실적이 서버에 오면 저절로 다음 조각'>
+            실었어요 → 선반 칸으로
+          </button>
+        </>
+      ) : to ? (
+        <>
+          <Barcode value={to} caption="③ 돌려놓을 선반 칸(추천 — PDA 는 다른 칸도 받음, 판정은 서버)" height={36} onGo={() => controller.focusBackendCode(to)} />
+          <div className="note">찍으면 PDA 가 복귀 실적을 보냅니다 — 서버에 반영되면 다음 조각으로 넘어갑니다.</div>
+        </>
+      ) : (
+        <div className="note warn">추천 선반 칸이 없습니다 — PDA 에서 돌려놓을 칸을 직접 찍습니다.</div>
+      )}
+      {p.suggested.length > 1 && <div className="note">다른 추천 칸: {p.suggested.slice(1).join(', ')}</div>}
     </>
   );
 }

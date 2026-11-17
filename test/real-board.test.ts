@@ -408,6 +408,34 @@ describe('RealBoard — 배차·배송 표시(rider 시뮬레이터 요청 M-01)
     expect(b.shipments().every((g) => !g.delivery)).toBe(true);
   });
 
+  it('회수 배송(type RETURN): 열린 출고가 없어도 간격마다 찾고, 진행 중 + 반납 뒤 정해진 시간만 둔다. 배차 상세는 읽지 않는다', async () => {
+    const r = new FakeReader();
+    const now = { ms: Date.parse('2026-11-17T07:00:00Z') };
+    const b = new RealBoard(
+      r,
+      'MFC-SEED-01',
+      { pollSec: 3, workerRefreshSec: 60, recentKeepSec: 600, openStates: OPEN, stockRefreshSec: 30, maxStockPerPoll: 10, shipmentRefreshSec: 3, maxShipmentPerPoll: 5, handoverKeepSec: 3600, returnPickupRefreshSec: 15, returnShownMin: 60 },
+      () => now.ms,
+    );
+    r.dels = [
+      dl({ deliveryId: 'DLV-R1', type: 'RETURN', state: 'RETURN_PICKED_UP', riderId: 'RD-1' }),
+      dl({ deliveryId: 'DLV-R2', type: 'RETURN', state: 'RETURNED_TO_STORE', completedAt: '2026-11-17T06:30:00Z' }),
+      dl({ deliveryId: 'DLV-R3', type: 'RETURN', state: 'RETURNED_TO_STORE', completedAt: '2026-11-17T05:00:00Z' }), // 2시간 전 — 뺌
+      dl({ deliveryId: 'DLV-R4', type: 'RETURN', state: 'CANCELLED' }),
+      dl({ deliveryId: 'DLV-F1', type: 'FORWARD', state: 'COMPLETED' }),
+    ];
+    await b.poll();
+    expect(b.returnPickups.map((d) => d.deliveryId)).toEqual(['DLV-R1', 'DLV-R2']);
+    expect(r.dcalls.search).toBe(1);
+    expect(r.dcalls.dispatch).toBe(0); // 회수지(고객 집) 좌표가 오는 배차 상세는 읽지 않는다
+    now.ms += 5_000;
+    await b.poll();
+    expect(r.dcalls.search).toBe(1); // 15초 간격 전
+    now.ms += 15_000;
+    await b.poll();
+    expect(r.dcalls.search).toBe(2);
+  });
+
   it('출고 조회 전이면 UNKNOWN, 출고 취소면 SHIPMENT_CANCELLED', () => {
     expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '' }).stage).toBe('UNKNOWN');
     expect(dispatchView({ shipmentId: 'S', fulfillmentId: 'F', createdAt: '', info: ship({ state: 'CANCELLED' }) }).stage).toBe('SHIPMENT_CANCELLED');

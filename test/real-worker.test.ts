@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { HttpBackend } from '../src/backend/http/HttpBackend';
 import type { TokenSource } from '../src/backend/http/tokens';
 import { BACKEND_FACTS, DEFAULT_PARAMS } from '../src/config';
-import { ApiProblem, type CapacityAssignment, type TaskDetail, type TaskState } from '../src/domain/contract';
+import { ApiProblem, type CapacityAssignment, type InboundTask, type InboundTaskExecution, type MoveOrder, type TaskDetail, type TaskState } from '../src/domain/contract';
 import { buildLayout } from '../src/domain/layout';
 import { buildLocationCodeMap } from '../src/domain/locationCodes';
 import { NavGrid } from '../src/domain/navgrid';
@@ -13,7 +13,7 @@ import { StationPool } from '../src/sim/site';
 
 const ME = 'OP-pp01';
 
-function task(id: string, type: 'PICK' | 'PACK', state: TaskState, extra: Partial<TaskDetail> = {}): TaskDetail {
+function task(id: string, type: TaskDetail['taskType'], state: TaskState, extra: Partial<TaskDetail> = {}): TaskDetail {
   return {
     taskId: id,
     taskType: type,
@@ -74,14 +74,66 @@ class FakeBe {
   dispatchFails = false;
   /** 앞으로 몇 번 401 을 돌려줄지(다음 작업 받기) */
   unauthorized = 0;
+  /** PICK_PACK 밖 업무의 받을 작업 — DENY = 422 WORK_AREA_NOT_ALLOWED */
+  areaQueue: Record<string, (CapacityAssignment | 'NONE' | 'DENY')[]> = {};
   async pullNextTask(_m: string, w: string, area: string) {
     this.calls.push(`pull ${w} ${area}`);
     if (this.unauthorized > 0) {
       this.unauthorized--;
       throw new ApiProblem({ status: 401, code: 'UNAUTHENTICATED' });
     }
-    const n = this.queue.shift() ?? 'NONE';
+    const n = (area === 'PICK_PACK' ? this.queue.shift() : this.areaQueue[area]?.shift()) ?? 'NONE';
     if (n === 'NONE') throw new ApiProblem({ status: 409, code: 'NO_TASK_AVAILABLE' });
+    if (n === 'DENY') throw new ApiProblem({ status: 422, code: 'WORK_AREA_NOT_ALLOWED' });
+    return n;
+  }
+  // ── 입고 작업·이동 지시(mfc-inbound)·적치 후보(mfc-location) ──
+  inbound = new Map<string, InboundTask>();
+  /** 실행 응답 차례(앞에서부터) — 비면 APPLIED */
+  applyStatuses: (InboundTaskExecution['applyStatus'] | 503)[] = [];
+  candidates: { locationCode: string }[] = [];
+  moves = new Map<string, MoveOrder>();
+  keys: string[] = [];
+  async getInboundTask(id: string) {
+    return this.inbound.get(id)!;
+  }
+  private execInbound(id: string, qty: number, key: string): InboundTaskExecution {
+    this.keys.push(key);
+    const s = this.applyStatuses.shift() ?? 'APPLIED';
+    if (s === 503) throw new ApiProblem({ status: 503, code: 'UNKNOWN_RESULT' });
+    const t = this.inbound.get(id)!;
+    if (s === 'APPLIED') this.inbound.set(id, { ...t, doneQty: t.doneQty + qty, state: t.doneQty + qty >= t.plannedQty ? 'COMPLETED' : 'READY' });
+    return { executionId: `EX-${id}`, taskId: id, applyStatus: s, createdTaskIds: s === 'APPLIED' && t.taskType === 'INSPECT' ? ['PUT-1'] : [] };
+  }
+  async inspectInboundTask(id: string, results: { qty: number; resultQuality: string; expiryDate?: string; sourceLotRef?: string }[], key: string) {
+    this.calls.push(`inspect ${id} ${results.map((r) => `${r.resultQuality}×${r.qty}${r.expiryDate ? ` exp=${r.expiryDate}` : ''}${r.sourceLotRef ? ` ref=${r.sourceLotRef}` : ''}`).join(',')}`);
+    return this.execInbound(id, results.reduce((s, r) => s + r.qty, 0), key);
+  }
+  async putawayInboundTask(id: string, body: { toLocationCode: string; qty: number }, key: string) {
+    this.calls.push(`putaway ${id} ${body.qty}→${body.toLocationCode}`);
+    return this.execInbound(id, body.qty, key);
+  }
+  async listPutawayCandidates(mfcId: string, sku: string, qty?: number) {
+    this.calls.push(`candidates ${mfcId} ${sku} ${qty}`);
+    return this.candidates;
+  }
+  async getMoveOrder(id: string) {
+    return this.moves.get(id)!;
+  }
+  async pickUpMoveOrder(id: string, body: { cartLocation: string; qty: number }, key: string) {
+    this.calls.push(`pickup ${id} ${body.cartLocation} ${body.qty}`);
+    this.keys.push(key);
+    const m = this.moves.get(id)!;
+    const n = { ...m, cartLocation: body.cartLocation, pickedQty: m.pickedQty + body.qty, onCartQty: m.onCartQty + body.qty, pickedBy: ME };
+    this.moves.set(id, n);
+    return n;
+  }
+  async dropMoveOrder(id: string, body: { toLocation: string; qty: number }, key: string) {
+    this.calls.push(`drop ${id} ${body.toLocation} ${body.qty}`);
+    this.keys.push(key);
+    const m = this.moves.get(id)!;
+    const n = { ...m, droppedQty: m.droppedQty + body.qty, onCartQty: m.onCartQty - body.qty, state: 'COMPLETED' as const };
+    this.moves.set(id, n);
     return n;
   }
   async getTask(id: string) {
@@ -95,7 +147,32 @@ class FakeBe {
   }
   /** 이 출고가 이미 쓰는 장바구니(이어 하기) — 다른 toLocation 이면 409 CART_MISMATCH */
   cartInUse: string | null = null;
-  async recordExecution(id: string, body: { fromLocation: string; toLocation: string; lines: { sku: string; lotId: string; pickedQty: number }[] }, key: string) {
+  async recordExecution(
+    id: string,
+    body: { executionType: string; workerId: string; assignmentVersion?: number; fromLocation: string; toLocation: string; lines: { orderLineId: string; sku: string; lotId: string; pickedQty: number }[] },
+    key: string,
+  ) {
+    if (body.executionType === 'RETURN') {
+      // 복귀 실적 — 바로 반영된 것으로(줄·조각·위치 양을 줄인다)
+      this.calls.push(`return ${id} ${body.lines[0].sku}×${body.lines[0].pickedQty} ${body.fromLocation}→${body.toLocation} lot=${body.lines[0].lotId}`);
+      this.bodies.push(body);
+      const t = this.tasks.get(id)!;
+      const q = body.lines[0].pickedQty;
+      this.tasks.set(id, {
+        ...t,
+        lines: t.lines.map((l) =>
+          l.orderLineId !== body.lines[0].orderLineId
+            ? l
+            : {
+                ...l,
+                remainingQty: l.remainingQty - q,
+                completedQty: l.completedQty + q,
+                picks: l.picks?.map((p) => ({ ...p, remainingQty: p.remainingQty - q, locations: p.locations.map((c) => (c.locationCode === body.fromLocation ? { ...c, qty: c.qty - q } : c)) })),
+              },
+        ),
+      });
+      return { status: 'ACCEPTED' };
+    }
     this.calls.push(`pick ${id} ${body.lines[0].sku}×${body.lines[0].pickedQty} ${body.fromLocation}→${body.toLocation} lot=${body.lines[0].lotId}`);
     if (this.cartInUse && body.toLocation !== this.cartInUse)
       throw new ApiProblem({ status: 409, code: 'CART_MISMATCH', detail: `이 출고는 장바구니 ${this.cartInUse} 를 씁니다.` });
@@ -138,7 +215,15 @@ function setup() {
   const be = new FakeBe();
   const tokens = { get: async () => 'tok', operatorId: ME, lastError: null, invalidated: 0, invalidate() { this.invalidated++; } };
   const w = new RealWorker('mfcw-pp-01', layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens as unknown as TokenSource);
-  return { w, be, tokens };
+  return { w, be, tokens, ctx };
+}
+
+function assign(taskId: string, taskType: string): CapacityAssignment {
+  return { assignmentId: `AS-${taskId}`, mfcId: 'MFC-SEED-01', taskId, taskType, workerId: ME, assignmentVersion: 1, state: 'ACTIVE' };
+}
+
+function inboundTask(id: string, type: 'INSPECT' | 'PUTAWAY', qty: number): InboundTask {
+  return { taskId: id, taskType: type, mfcId: 'MFC-SEED-01', receiptId: 'RC-1', sku: 'B-1', lotId: 'LOT-R', locationCode: 'RCV-A-01', plannedQty: qty, doneQty: 0, state: 'READY', version: 1, assigneeId: ME };
 }
 
 async function runFor(w: RealWorker, sec: number) {
@@ -255,5 +340,173 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(w.halted).toBe(true);
     expect(w.left).toBe(false); // 화면에 남겨 사유를 보인다
     expect(w.lastProblem).toMatch(/R-14/);
+  });
+});
+
+describe('RealWorker — 재고 이동·품질검사 업무', () => {
+  function returnTask(): TaskDetail {
+    return task('R1', 'RETURN', 'ASSIGNED', {
+      lines: [
+        {
+          taskLineId: 'TL1',
+          orderLineId: 'L1',
+          sku: 'B-1',
+          barcode: null,
+          locationId: null,
+          lotId: null,
+          expiresOn: null,
+          plannedQty: 2,
+          completedQty: 0,
+          cancelledQty: 0,
+          remainingQty: 2,
+          pendingQty: 0,
+          picks: [{ lotId: 'LOT-B', expiresOn: null, remainingQty: 2, locations: [{ locationCode: 'CRT-A-05', qty: 2 }], suggestedToLocations: ['A-C1-04-2-02', 'A-C1-04-2-03'] }],
+        },
+      ],
+    });
+  }
+
+  it('피패킹이 없으면 재고 이동을 묻고, 받은 취소품 복귀(RETURN)는 시작 → 장바구니 → 첫 추천 선반으로 RETURN 실적', async () => {
+    const { w, be } = setup();
+    be.tasks.set('R1', returnTask());
+    be.areaQueue.STOCK_MOVE = [assign('R1', 'RETURN')];
+    void w.run();
+    await runFor(w, 300);
+    const c = be.calls;
+    expect(c.slice(0, 4)).toEqual([`pull ${ME} PICK_PACK`, `pull ${ME} STOCK_MOVE`, `start R1 ${ME} v1`, 'return R1 B-1×2 CRT-A-05→A-C1-04-2-02 lot=LOT-B']);
+    expect(be.bodies[0]).toEqual({
+      executionType: 'RETURN',
+      workerId: ME,
+      assignmentVersion: 1,
+      fromLocation: 'CRT-A-05',
+      toLocation: 'A-C1-04-2-02',
+      lines: [{ orderLineId: 'L1', sku: 'B-1', lotId: 'LOT-B', pickedQty: 2 }],
+    });
+    expect(c.filter((x) => x.startsWith('return'))).toHaveLength(1);
+    expect(w.lastProblem).toBeNull();
+    w.stop();
+  });
+
+  it('추천 선반이 없는 복귀 조각은 지어내지 않고 건너뛰며 사유를 남긴다', async () => {
+    const { w, be } = setup();
+    const t = returnTask();
+    t.lines[0].picks![0].suggestedToLocations = [];
+    be.tasks.set('R1', t);
+    be.areaQueue.STOCK_MOVE = [assign('R1', 'RETURN')];
+    void w.run();
+    await runFor(w, 20);
+    expect(be.calls.filter((x) => x.startsWith('return'))).toHaveLength(0);
+    expect(w.lastProblem).toMatch(/추천 선반/);
+    w.stop();
+  });
+
+  it('품질검사(INSPECTION)는 남은 양 전부 NORMAL — 기한·LOT 표기는 지어내지 않는다. CAPTURED 면 같은 키로 다시', async () => {
+    const { w, be } = setup();
+    be.inbound.set('IN1', inboundTask('IN1', 'INSPECT', 10));
+    be.applyStatuses = ['CAPTURED'];
+    be.areaQueue.INSPECTION = [assign('IN1', 'INSPECT')];
+    void w.run();
+    await runFor(w, 200);
+    const c = be.calls;
+    expect(c.slice(0, 3)).toEqual([`pull ${ME} PICK_PACK`, `pull ${ME} STOCK_MOVE`, `pull ${ME} INSPECTION`]);
+    expect(c.filter((x) => x.startsWith('inspect'))).toEqual(['inspect IN1 NORMAL×10', 'inspect IN1 NORMAL×10']);
+    expect(new Set(be.keys).size).toBe(1); // 같은 Idempotency-Key
+    expect(be.inbound.get('IN1')!.state).toBe('COMPLETED');
+    w.stop();
+  });
+
+  it('적치(PUTAWAY)는 적치 후보 첫 칸으로 남은 양 전부 — 503 UNKNOWN_RESULT 면 같은 키로 다시', async () => {
+    const { w, be } = setup();
+    const t = inboundTask('PUT-1', 'PUTAWAY', 6);
+    be.inbound.set('PUT-1', { ...t, doneQty: 2 });
+    be.candidates = [{ locationCode: 'A-C1-04-2-02' }, { locationCode: 'A-C1-04-2-03' }];
+    be.applyStatuses = [503];
+    be.areaQueue.STOCK_MOVE = [assign('PUT-1', 'PUTAWAY')];
+    void w.run();
+    await runFor(w, 200);
+    const c = be.calls;
+    expect(c).toContain('candidates MFC-SEED-01 B-1 4');
+    expect(c.filter((x) => x.startsWith('putaway'))).toEqual(['putaway PUT-1 4→A-C1-04-2-02', 'putaway PUT-1 4→A-C1-04-2-02']);
+    expect(new Set(be.keys).size).toBe(1);
+    expect(be.inbound.get('PUT-1')!.state).toBe('COMPLETED');
+    w.stop();
+  });
+
+  it('적치 후보가 없으면 적치하지 않고 사유를 남긴다', async () => {
+    const { w, be } = setup();
+    be.inbound.set('PUT-1', inboundTask('PUT-1', 'PUTAWAY', 3));
+    be.areaQueue.STOCK_MOVE = [assign('PUT-1', 'PUTAWAY')];
+    void w.run();
+    await runFor(w, 20);
+    expect(be.calls.filter((x) => x.startsWith('putaway'))).toHaveLength(0);
+    expect(w.lastProblem).toMatch(/적치 후보 없음/);
+    w.stop();
+  });
+
+  it('보충(REPLENISH)은 빈 카트 → 출발 칸에서 싣기(pickups) → 도착 칸에 내려놓기(drops), 끝나면 카트를 돌려준다', async () => {
+    const { w, be, ctx } = setup();
+    be.moves.set('MV1', {
+      moveId: 'MV1',
+      kind: 'REPLENISH',
+      mfcId: 'MFC-SEED-01',
+      sku: 'B-1',
+      lotId: 'LOT-B',
+      fromLocation: 'A-C1-04-2-03',
+      toLocation: 'A-C1-04-2-02',
+      cartLocation: null,
+      qty: 4,
+      pickedQty: 0,
+      droppedQty: 0,
+      onCartQty: 0,
+      state: 'ACTIVE',
+      assigneeId: ME,
+      pickedBy: null,
+    });
+    be.areaQueue.STOCK_MOVE = [assign('MV1', 'REPLENISH')];
+    void w.run();
+    await runFor(w, 200);
+    expect(be.calls.filter((x) => x.startsWith('pickup') || x.startsWith('drop'))).toEqual(['pickup MV1 CRT-A-01 4', 'drop MV1 A-C1-04-2-02 4']);
+    expect(be.moves.get('MV1')!.state).toBe('COMPLETED');
+    expect(ctx.carts.inUse).toBe(0);
+    w.stop();
+  });
+
+  it('이동(MOVE)이 이미 실려 있으면(이어 하기) 그 카트로 내려놓기만', async () => {
+    const { w, be } = setup();
+    be.moves.set('MV2', {
+      moveId: 'MV2',
+      kind: 'MOVE',
+      mfcId: 'MFC-SEED-01',
+      sku: 'B-1',
+      lotId: 'LOT-B',
+      fromLocation: 'A-C1-04-2-03',
+      toLocation: 'A-C1-04-2-02',
+      cartLocation: 'CRT-A-09',
+      qty: 3,
+      pickedQty: 3,
+      droppedQty: 0,
+      onCartQty: 3,
+      state: 'ACTIVE',
+      assigneeId: ME,
+      pickedBy: ME,
+    });
+    be.areaQueue.STOCK_MOVE = [assign('MV2', 'MOVE')];
+    void w.run();
+    await runFor(w, 200);
+    expect(be.calls.filter((x) => x.startsWith('pickup') || x.startsWith('drop'))).toEqual(['drop MV2 A-C1-04-2-02 3']);
+    w.stop();
+  });
+
+  it('WORK_AREA_NOT_ALLOWED 받은 업무는 그 작업자에게 다시 묻지 않는다', async () => {
+    const { w, be } = setup();
+    be.areaQueue.STOCK_MOVE = ['DENY'];
+    void w.run();
+    await runFor(w, 20);
+    const pulls = be.calls.filter((x) => x.startsWith('pull'));
+    expect(pulls.filter((x) => x.endsWith('STOCK_MOVE'))).toHaveLength(1);
+    expect(pulls.filter((x) => x.endsWith('PICK_PACK')).length).toBeGreaterThanOrEqual(2);
+    expect(pulls.filter((x) => x.endsWith('INSPECTION')).length).toBeGreaterThanOrEqual(2);
+    expect(w.lastProblem).toBeNull();
+    w.stop();
   });
 });

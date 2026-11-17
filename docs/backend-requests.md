@@ -29,25 +29,25 @@
 |---|---|---|---|
 | mfc-fulfillment 0.4.11 | 작업 목록 `GET /tasks?mfcId&state=`(센터 전체, 페이지 cursor) | 200 (열린 작업 0, 전체 71 — E2E 69·실제 주문 1) | **사용** — 실서버 관찰 3초 조회 |
 | | 작업 상세 `GET /tasks/{id}`(줄·`picks[]` LOT 조각·위치 후보·`allocatedQty`·`visitSeq`) | 200 | **사용** — 지시 칸·줄 SKU |
-| | 시작·실적·내놓기 `POST /tasks/{id}/starts`·`/executions`·`/releases`, 단건 조회 `GET …/starts/{requestId}`·`…/executions/{executionId}` | 쓰기라 미호출 | 가상 작업자 단계 |
-| | 출고 `GET /shipments/{id}`, 밀봉 `POST /shipments/{id}/packages`, **배차 요청** `POST /shipments/{id}/dispatch-requests`(0.4.11 — 자동 요청 없음, 점원 요청 MANUAL 만) | 출고 200 | 가상 작업자 단계(패킹 시작 때 요청) |
+| | 시작·실적·내놓기 `POST /tasks/{id}/starts`·`/executions`·`/releases`, 단건 조회 `GET …/starts/{requestId}`·`…/executions/{executionId}` | 쓰기라 미호출 | **사용** — 가상 작업자 시작·집품·복귀 실적(11-16~17) |
+| | 출고 `GET /shipments/{id}`, 밀봉 `POST /shipments/{id}/packages`, **배차 요청** `POST /shipments/{id}/dispatch-requests`(0.4.11 — 자동 요청 없음, 점원 요청 MANUAL 만) | 출고 200 | **사용** — 관찰(출고·배차 요청), 가상 작업자 밀봉·패킹 시작 때 배차 요청. MOCK 도 점원 요청만(11-17) |
 | | 인계 허가·확정·판정·확인 `POST /packages/{id}/handover-*`, 재포장 | 미호출 | 배송 구현 뒤(SIM-7) |
 | mfc-capacity 0.14.0 | 작업자 목록 `GET /mfcs/{mfcId}/workers`(표시 이름·업무·휴게) | 200 (71명) | **사용** — 담당자 이름 |
 | | 배정 목록 `GET /assignments`, 수동 배정 `POST /assignments`, 추천 `POST /assignment-plans`(OR-Tools) | 목록 200 (102건) | 관찰 보강 후보 |
-| | **다음 작업 받기** `POST /mfcs/{mfcId}/workers/{workerId}/next-tasks`(업무 `workArea`, 품질검사·적치 포함) | 쓰기라 미호출 | 가상 작업자 단계 |
+| | **다음 작업 받기** `POST /mfcs/{mfcId}/workers/{workerId}/next-tasks`(업무 `workArea`, 품질검사·적치 포함) | 쓰기라 미호출 | **사용** — 가상 작업자, 업무 PICK_PACK → STOCK_MOVE → INSPECTION 순(11-17) |
 | | 휴게·근무·업무 변경 `…/workers/{workerId}/breaks`·`shifts`·`duty-changes` 등 | 미호출 | — |
 | mfc-inventory 0.16.0 | **센터 재고** `GET /mfcs/{mfcId}/stock?sku=`(SKU 1개, LOT 요약 + 위치·업무 상태·품질별 단위 행) | 200 (`B-00000463`: `A-C1-04-2-02` STORED 8, `PAK-A-01` PACKED 2) | **사용** — 주문 SKU 실제 재고 |
 | | 자동 보충 기준 `GET/PUT /mfcs/{mfcId}/replenishment-policies` | 200 (0건) | — |
 | | 실사 `/mfcs/{mfcId}/count-sessions…`, 정정 `/stock-corrections`, 출고 불가 LOT `/unshippable-lots`, 취급 `/sku-handlings` | 미호출 | — |
-| mfc-location 0.7.1 | 위치 목록 `GET /locations?mfcId&zone&temperatureZone&state`(cursor), 단건·상태 전이, 적치 후보 `GET /putaway-candidates` | 목록 200 (옛 문법 위치가 `CLOSED` 로 남아 있음 — 예 `A-01` "새 문법 위치로 이전(ADR-0042)"), 적치 후보 200 | 평면 대조 후보(`state=ACTIVE`) |
-| mfc-inbound 0.9.0 | 입고 작업 `GET /inbound-tasks`(품질검사·적치, 상품명·바코드), 실행 `…/inspections`·`…/putaways` | 목록 200 (500건) | 입고 단계 |
-| | 이동·보충 `GET/POST /move-orders`, 집기·내려놓기·취소 | 목록 200 (0건) | 입고 단계 |
-| | 회수 반입 `/return-receipts`, 초기 재고 `/initial-stock-loads` | 미호출 | 회수 표시 단계 |
+| mfc-location 0.7.1 | 위치 목록 `GET /locations?mfcId&zone&temperatureZone&state`(cursor), 단건·상태 전이, 적치 후보 `GET /putaway-candidates` | 목록 200 (옛 문법 위치가 `CLOSED` 로 남아 있음 — 예 `A-01` "새 문법 위치로 이전(ADR-0042)"), 적치 후보 200 | 평면 대조 후보(`state=ACTIVE`). 적치 후보는 **사용** — 가상 작업자 적치 칸(11-17, 시뮬 값) |
+| mfc-inbound 0.9.0 | 입고 작업 `GET /inbound-tasks`(품질검사·적치, 상품명·바코드), 실행 `…/inspections`·`…/putaways` | 목록 200 (500건 — 11-17 READY 0건) | **사용** — 가상 작업자 품질검사(전부 정상)·적치(11-17, 실서버 작업이 없어 실제 확인 전) |
+| | 이동·보충 `GET/POST /move-orders`, 집기·내려놓기·취소 | 목록 200 (0건) | **사용** — 가상 작업자 보충·이동(집기 → 장바구니 → 내려놓기, 11-17, 실제 확인 전) |
+| | 회수 반입 `/return-receipts`, 초기 재고 `/initial-stock-loads` | 미호출 | 회수 반입 자리 표시는 배송 쪽(아래 delivery) 회수 배송으로 |
 | | 입고 예정 `/inbound-promises/*` | **501** (미구현) | R-10 남은 질문 |
 | product 0.1.0 | SKU `GET /skus/{sku}`(무게·`logistics.storageType`·바코드), 바코드 `GET /barcodes/{barcode}` | 200 (`B-00000463`: 500g·AMBIENT, 바코드 빈 배열) | 필요 시 |
 | employee-auth 0.9.0 | 브라우저 로그인 `/employee-auth/logins`→`/tokens`(PKCE), 갱신 `/tokens/refresh`, LAN 시험 교환 `/internal/dev-token-exchange` | 교환 200 | **사용** — Vite 서버 토큰 발급(R-14) |
 | 게이트웨이 LAN | `/actuator/health` 200(`D603-16:8080`, `192.168.0.40:8080`) | 200 | Vite 프록시 대상 |
-| Delivery 배차·라이더 | 배송 서비스 구현 단계 — 실서버 모드는 출하 대기까지(SIM-7) | — | 배송 구현 뒤 |
+| Delivery 배차·라이더 | 직원 배송 찾기 `GET /deliveries?mfcId=`(요약)·배차 상세 `GET /deliveries/{id}/dispatch` — 11-17 대조: delivery-dispatch 0.5.1·execution 0.13.0, 시뮬레이터가 읽는 상태값·필드 그대로(새 필드 `purpose`·`claimId`·`recovery` 만 추가) | 200 | **사용** — 배차·배송 표시(M-01·M-02), 회수 배송(type RETURN)은 요약만 |
 
 ## 열린 요청
 
@@ -109,7 +109,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | 로그인 | Vite 서버 `/sim-auth/tokens`(Keycloak → dev-token-exchange), 토큰 메모리만 | **11-16 완료** · R-14 해소(11-17 401 재발 시 계정 멈춤) |
 | 실서버 관찰 | 열린 작업 3초 조회, 출고별 PICK·PACK·담당 이름, 진행 중 지시 칸·담당자 표시 | **11-16 완료** (화면 확인 전) |
 | 주문 상품 실제 재고 | 주문 SKU 의 선반 STORED·포장 구역 PICKED/PACKED 를 3D 에 | **11-16 완료** (화면 확인 전) · 전체 선반은 R-15 |
-| 계약 0.4.11 | 배차 자동 요청 없음 — `contract.ts` 머리 갱신, MOCK 은 아직 READY 때 라이더를 부름 | 일부 · 가상 작업자 단계에서 "패킹 시작 때 배차 요청"(사용자 11-16) |
+| 계약 0.4.11 | 배차 자동 요청 없음 — 가상 작업자·MOCK 작업자 모두 패킹 시작 때 점원 배차 요청, MOCK 라이더는 요청 뒤 출발해 출하대기면 인계 | **11-17 완료** |
 | 가상 작업자 | `mfcw-pp-01~10` 각자 토큰, 다음 작업 받기 → 시작 → 피킹 → 패킹 시작 때 배차 요청 → 밀봉 | **11-16 완료** (실주문 확인 전) |
 | 실제 작업자 위치 | 마지막 버튼 기준(SIM-2a) — 지금은 다음 지시 칸 | 남음 · R-17 |
 | 방문 순서 | 받은 `visitSeq` 순서로 걷기 | 11-10 코드 완료 — 실서버 확인 전 |
@@ -117,10 +117,12 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | LOT | MOCK 에 LOT 조각(FEFO), 결품 보고 `lotId` | 남음 · R-01 |
 | 칸 구조 v2 | 백엔드 MFC 문서 설계(사용자 "칸구조 A로" 11-16) — `SLOT_DESIGN`, 선반 14,559칸, 칸 치수·용량 식 | **11-17 완료**(`ed304fd`·`6c63c89`). 백엔드 도면 README·`layout.json` 도 같은 설계로 바뀜(`06a4effa`) — `test/location-codes.test.ts` 가 랙마다 단·칸 수까지 대조 |
 | 위치 | 평면을 `GET /locations`(cursor 끝까지)로 대조 | 11-16 한 번 대조(선반 14,559 일치·좌표 0.5cm 안, 임시 스크립트). 화면이 매번 읽지는 않음 · R-08 |
-| 입고·보충 | HttpBackend 에 `/inbound-tasks`·`/move-orders` | 남음 · R-10 |
-| 회수 | `ReturnItemReceived`·`ReturnInspected` 를 회수 반입 자리에 | 남음 · return-location 공지 |
+| 입고·보충 | 가상 작업자가 다음 작업 받기로 품질검사·적치·보충·이동·취소품 복귀까지 | **11-17 코드 완료** — 실서버에 그 작업이 0건이라 실제 확인 전. 입고 예정(트럭)은 R-10 501 |
+| 회수 | 회수 배송(고객 반품·오배송 회수 → MFC, delivery-dispatch 0.5.0 type RETURN)을 실제 주문 탭·회수 반입 자리 `RTN-A-01` 에(오는 중·반납) | **11-17 일부** — 배송 찾기 요약만(회수지 좌표 안 읽음). MFC 의 회수 수령·검수(`/return-receipts`)는 남음 |
 | 실행 끝 정리 | 열린 작업 중지·복귀, 되돌리는 이동, 인계 안 된 포장 | 남음 · SIM-9, R-07 |
-| 다른 기기 보기 | 개발 서버 LAN 공개, 다른 기기는 조회만(개발 서버가 관찰 계정 토큰을 붙임) | **11-16 완료** |
+| 다른 기기 보기 | 개발 서버 LAN 공개, 다른 기기는 조회만(개발 서버가 관찰 계정 토큰을 붙임), 11-17 부터 관찰 화면이 읽는 경로만(`src/backend/http/lanAllow.ts` 허용 목록 — 개인정보 경로 차단) | **11-16 완료 · 11-17 경로 좁힘** |
+| 복귀(RETURN) 표시 | 실제 PDA 작업자의 취소품 복귀 말풍선(① 출발 위치 → ② 상품 싣기 → "실었어요" → ③ 추천 선반 칸), 바코드 탭 | **11-17 완료** — PDA `return_screen.dart` 순서 |
+| 주문 현장 기록 | 고른 주문의 `GET /work-orders?orderId=`(fulfillment 0.10.0) — 작업·담당·시작/끝·결품·포장·인계 | **11-17 완료** — 화면 확인 전 |
 
 ## 클라이언트(PDA 앱)에 알릴 것 — 백엔드 요청 아님, 사용자가 전달
 `../pmart-clients` 도 읽기만 한다. 시뮬레이터 화면과 맞물리는 PDA 앱 동작 중 고칠 만한 것을 적는다.
@@ -158,7 +160,12 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | 적치 순서 | 냉동·냉장 먼저, 피킹 칸을 한도까지 채우고 남는 수량은 보충재고 팔레트 | 문서에 적치 규칙 없음. 실서버는 `GET /putaway-candidates`(mfc-location) |
 | 칸 한도·최소 | 한도 = 백엔드 칸 용량 식 floor(칸 부피 × 0.8 ÷ 상품 부피), 안 들어가면 0(11-17 맞춤, inventory 0.18.0 `UnitSize`). 상품 치수는 MOCK 이 무게로 지어냄. 최소 = 한도의 30%(MOCK 만, Q-07 미결) | R-11 |
 | MOCK 상품 수 | 온도대별 상온 189·냉장 137·냉동 177(백엔드 LAN 시험 상품 503종 규모, 11-17). 이전 "칸의 85%" | — |
-| 입고 작업 우선순위 | 하차·검수 → 긴급 보충 → 적치 → 일반 보충 | 문서에 없음 |
+| 입고 작업 우선순위(MOCK) | 하차·검수 → 긴급 보충 → 적치 → 일반 보충 | 문서에 없음. **실서버는 서버 순서**(다음 작업 받기: 주문 PICK·PACK → 보충·긴급 이동 → 품질검사 → 적치 → 관리자 이동 → 취소품 복귀, capacity 0.14.0) |
+| 가상 작업자 업무 순서 | `PICK_PACK` → `STOCK_MOVE` → `INSPECTION`(모두 작업 없음이면 기다림), 권한 없는 업무(422 `WORK_AREA_NOT_ALLOWED`)는 그 작업자에서 다시 묻지 않음 | 현장 작업자는 PDA 에서 업무를 하나 고른다 — 가상 작업자는 주문 먼저 |
+| 가상 작업자 품질검사 | 전부 정상(NORMAL), 소비기한·제조 LOT 표기 안 보냄 | 실서버에서 품질 실패를 지어내지 않는다. inventory 가 기한 없음을 거절하면 REJECTED 로 보인다(확인 전) |
+| 가상 작업자 적치 칸 | `GET /putaway-candidates`(mfcId·sku·qty) 첫 후보(장바구니·출발 칸 제외), 없으면 하지 않음 | PDA 는 후보 없이 아무 선반이나 찍고 서버가 판정한다 — 시뮬레이터만의 선택 |
+| 끝낼 수 없는 작업 | 추천 칸·후보가 없으면 오류로 두고 30초 뒤 다시 받기(같은 작업이 돌아옴) — 작업자가 내놓는 API 없음 | 센터 관리자가 풀어야 함 |
+| 회수 배송 찾기 | 15초마다(열린 출고가 없어도), 반납 뒤 60분 표시 | 점원 수령 확인 API 가 없어 반납을 MFC 도착으로 본다(execution 0.5.0 설명과 같음) |
 | 실서버 재고 다시 읽기 | 작업 version 이 바뀌면 바로, 아니면 30초마다, 조회 한 번에 최대 10 SKU | SKU 1개씩만 조회 가능(R-15·R-16), SIM-5 "바뀔 때만" |
 | 실서버 작업자 표시 위치 | 그 작업의 첫 남은 지시 칸(실제 위치 아님) | 마지막 실적 칸을 읽을 API 없음(R-17) |
 | 끝난 작업 화면 유지 | 10분 | 표시용 |
