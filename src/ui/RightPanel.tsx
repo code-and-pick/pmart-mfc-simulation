@@ -1,5 +1,5 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useApp, useTick } from '../app/context';
+import { useApp, useTick, useView } from '../app/context';
 import { fmtClock, fmtDur } from '../sim/metrics';
 import { RealOrders, RealStockTable, RealSummary } from './RealPanel';
 import { ScanBoard } from './ScanBoard';
@@ -230,17 +230,19 @@ export function RightPanel() {
   useTick();
   const real = !!sim.real;
   const [tab, setTab] = useState<Tab>(real ? 'orders' : 'api');
-  const [scanShipment, setScanShipment] = useState<string | null>(null);
+  // 고른 출고는 ViewController 에 둔다 — 3D 스캔 말풍선(ScanBubbles)도 같은 값을 본다
+  const view = useView();
+  const scanShipment = view.scanShipment;
   const focus = useMemo(
     () => ({
       shipmentId: scanShipment,
       show: (id: string) => {
-        setScanShipment(id);
+        view.setScanShipment(id);
         setTab('scan');
       },
-      clear: () => setScanShipment(null),
+      clear: () => view.setScanShipment(null),
     }),
-    [scanShipment],
+    [scanShipment, view],
   );
   return (
     <ScanFocusContext.Provider value={focus}>

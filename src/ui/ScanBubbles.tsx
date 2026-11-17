@@ -1,10 +1,11 @@
 // 스캔 말풍선(사용자 2026-11-17 "직원이 카트, 상품이 있는 칸까지 움직였을때 바코드를 찍을수있게"):
 // 실제 PDA 작업자(ObservedWorker)가 3D 에서 카트·지금 갈 칸에 도착하면 그 머리 위에 찍을 바코드를 띄운다.
+// 고른 것만 띄운다(사용자 2026-11-17 "해당 주문/작업자를 선택했을때 뜨는걸로"): 3D 에서 그 작업자를 클릭했거나, 실제 주문 탭에서 그 출고 줄을 눌렀을 때.
 // 순서는 PDA 앱과 같다(domain/pickStop): ① 카트 → ② 칸 위치 → ③ 상품(× 집을 양). 서버에 집품이 확정되면 다음 칸으로 걸어간다.
 // 위치는 매 프레임(requestAnimationFrame) 카메라로 바꿔 DOM 에 바로 쓴다 — React 상태로 올리지 않는다.
 import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { useApp, useTick } from '../app/context';
+import { useApp, useTick, useView } from '../app/context';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
@@ -17,6 +18,7 @@ const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
 export function ScanBubbles() {
   const { sim } = useApp();
   useTick();
+  const view = useView();
   const refs = useRef(new Map<string, HTMLDivElement>());
 
   useEffect(() => {
@@ -50,7 +52,8 @@ export function ScanBubbles() {
     return () => cancelAnimationFrame(raf);
   }, [sim]);
 
-  const ws = sim.observedWorkers.filter((w) => w.cue);
+  const sel = view.selection?.kind === 'worker' ? view.selection.id : null;
+  const ws = sim.observedWorkers.filter((w) => w.cue && (w.id === sel || (!!view.scanShipment && w.pda?.shipmentId === view.scanShipment)));
   return (
     <div className="scan-bubbles">
       {ws.map((w) => (

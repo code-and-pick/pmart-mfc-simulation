@@ -67,6 +67,8 @@ export type LabelMode = 'all' | 'rack' | 'off';
 export class ViewController extends Emitter {
   readonly views: ZoneView[];
   selection: Selection = null;
+  /** 실제 주문 탭에서 고른 출고(바코드 탭·스캔 말풍선이 같이 쓴다). 없으면 null */
+  scanShipment: string | null = null;
   focusedZone = 'ALL';
   /** 사용자가 벽 투명도를 고르지 않았으면(null) 구역 확대 때 벽을 옅게 한다 */
   wallUser: number | null = null;
@@ -163,6 +165,16 @@ export class ViewController extends Emitter {
       const sku = this.sim.skuMap.get(s.sku);
       if (sku && fly) this.focusLocation(sku.location);
     } else if (s && fly) this.focusPerson(s.id);
+    this.emit();
+  }
+
+  /** 실제 주문 줄을 고른다 — 그 출고의 PDA 작업자가 3D 에 있으면 카메라를 그리로(스캔 말풍선이 뜬다) */
+  setScanShipment(id: string | null) {
+    this.scanShipment = id;
+    if (id) {
+      const w = this.sim.observedWorkers.find((x) => x.pda?.shipmentId === id);
+      if (w) this.focusPerson(w.id);
+    }
     this.emit();
   }
 
