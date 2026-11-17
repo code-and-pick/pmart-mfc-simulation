@@ -97,7 +97,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | R-11 | 칸 한도·최소량 | 일부 해소 — `replenishment-policies` 있음, 값은 Q-07 미결(기준 없는 칸은 `CONFIG_REQUIRED`). 칸 용량은 위치 `dimensions` ÷ 상품 `dimensions`(inventory 0.18.0). MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 에서만 | inventory 0.14.0~ |
 | R-20 | 작업 지시 줄 바코드가 비어 PDA 상품 스캔 "다른 상품" | 해소 — fulfillment 0.7.0(`122f03e3`, PC 3 배포): 조회 때 `barcodes[]`·`barcode`(첫 값) 채움, 이미 만든 작업도. 11-16 실측: 진행 중 PICK 7줄 모두 채워짐. 스캔 판은 첫 값 + 나머지 표시 | fulfillment 0.7.0 |
 | R-14 | 시뮬레이터 토큰 발급 경로 | 해소 — `dev-token-exchange` 계속 사용(SIM-11 예외, LAN 전용). 조건: 비밀번호 재설정 금지, 계정 `claude-mfc-wrk`·`mfcw-pp-01~10` 만, 토큰을 다시 받은 뒤에도 401 이면 그 계정 멈춤 → `RealWorker` 반영(11-17) | `…/mfc/2026-11-16-simulator-reply-token-r14.md`(`cb2bf317`) |
-| R-13 | PICK 실적 도착지(상온 대기 칸이 없음) | 해소 — fulfillment 0.8.0·inventory 0.19.0(`d5386b2f`, 11-17 PDA 요청 P1~P4): **피킹 도착지 = 장바구니**(구역 CART), 한 출고 = 한 장바구니(409 `CART_MISMATCH`), 밀봉 때 `packingLocation`(패킹대) 필수 — 장바구니 → 패킹대로 옮기며 PACKED. 포장 위치(PACKING)도 계속 받는다. 실서버 가상 작업자는 장바구니로 바꿈(11-17), MOCK 은 예전 흐름(`PAK-C-01`·`PAK-F-01`) 그대로. 카트는 40대(`149e15e1`) | `docs/handoff/clients/mfc-app/2026-11-17-reply-pick-to-cart.md` |
+| R-13 | PICK 실적 도착지(상온 대기 칸이 없음) | 해소 — fulfillment 0.8.0·inventory 0.19.0(`d5386b2f`, 11-17 PDA 요청 P1~P4): **피킹 도착지 = 장바구니**(구역 CART), 한 출고 = 한 장바구니(409 `CART_MISMATCH`), 밀봉 때 `packingLocation`(패킹대) 필수 — 장바구니 → 패킹대로 옮기며 PACKED. 포장 위치(PACKING)도 계속 받는다. 실서버 가상 작업자는 장바구니로 바꿈(11-17), MOCK 은 예전 흐름(`PAK-C-01`·`PAK-F-01`) 그대로. 카트는 40대(`149e15e1` → 온도 구분 없이 `CRT-A-01~40`, `0cbfecaa`) | `docs/handoff/clients/mfc-app/2026-11-17-reply-pick-to-cart.md` |
 | R-12 | OR-Tools·Chronos-2 | 회신 — OR-Tools 는 mfc-capacity(Java, JVM 실행 ADR-0053), Chronos-2 미적용. 시뮬레이터 할 일 없음 | 회신 11-09 |
 
 ## 시뮬레이터 쪽 후속 작업 (시뮬레이터가 맞출 것 — 백엔드 요청 아님)
@@ -128,7 +128,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | # | 내용 | 근거 | 시뮬레이터 대응 |
 |---|---|---|---|
 | C-1 | PDA 앱이 상품 스캔을 작업 지시 줄의 **첫 바코드(`barcode`) 하나와만** 비교한다. 계약(fulfillment 0.7.0)은 "`barcodes[]` 중 하나면 같은 상품"이라, 바코드가 둘 이상인 상품은 두 번째 값을 찍으면 "다른 상품"이 된다. 입고·검사·재고 조사·이동 화면은 이미 `barcodes.contains` 로 비교한다. | 클라이언트 `c7498f8`(11-17): `apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`(피킹), `features/packing/presentation/packing_controller.dart:171`(포장) | 스캔 판이 첫 값을 "작업 지시 바코드"로 먼저 보이고, 나머지는 "같은 상품 다른 바코드"로 따로 보인다(앱이 바뀌면 나머지도 맞음) |
-| C-2 | **LOT 라벨(QR `LOT:{lotId}`) 전환 시점.** 백엔드는 LOT 라벨을 만들었다(inventory 0.20.0 — 값, 인쇄·해석 `GET /mfcs/{mfcId}/lot-labels/{lotId}`, 재출력 찾기 `…/lot-labels?sku=&locationCode=`). 피킹 첫 스캔을 상품 바코드 → LOT 라벨로 바꾸면 지시 LOT 와 바로 대조된다. PDA 앱 main 은 아직 상품 바코드로 비교한다(11-17 13:00 기준 `LOT:` 처리 없음). LAN 재고에는 라벨이 붙어 있지 않아 처음 쓸 때 재출력으로 뽑아 붙여야 하고, 그 전에 상품 바코드를 막으면 피킹이 멈춘다 — **전환 시점은 사용자가 정함**(백엔드 회신 §4) | 백엔드 `c279d1cb`, `docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md`. 클라이언트 origin/main `1dca4c2` | 스캔 판·말풍선이 상품 바코드 옆에 LOT 라벨 QR 도 같이 보인다(값을 피킹 지시 `picks[].lotId` 로 만들어 서버 조회 없음, 바코드 모드여도 늘 QR). 전환되면 상품 바코드 쪽 설명만 바꾸면 된다 |
+| C-2 | **LOT 라벨 전환 시점.** 백엔드 LOT 라벨 = **GS1-128** `(01)GTIN-14(17)소비기한 YYMMDD(10)LOT 번호`(inventory 0.21.0·fulfillment 0.11.0, `45ad5671` — 그 전 0.20.0 의 QR `LOT:{lotId}` 는 예전 라벨 해석용으로만 남음). PDA 는 찍은 값의 (10) 을 피킹 지시 `picks[].lotNo` 와 바로 대조할 수 있다(서버 조회 없이), 찍은 값으로 LOT 찾기 `GET /mfcs/{mfcId}/lot-resolutions?code=`. PDA 앱 main 은 아직 상품 바코드로 비교한다(11-17 13:00 기준 LOT 라벨 처리 없음). LAN 재고에는 라벨이 붙어 있지 않아 처음 쓸 때 재출력(`…/lot-labels?sku=&locationCode=`)으로 뽑아 붙여야 하고, 그 전에 상품 바코드를 막으면 피킹이 멈춘다 — **전환 시점은 사용자가 정함** | 백엔드 `c279d1cb`(0.20.0)·`45ad5671`(0.21.0), `docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md`. 클라이언트 origin/main `1dca4c2` | 스캔 판·피킹 말풍선이 상품 바코드 옆에 LOT 라벨(GS1-128, 바코드·QR 전환과 상관없이 늘 1차원)을 같이 보인다. 값은 작업 지시 `picks[].lotNo`·`expiresOn`·줄 `barcodes` 로 만든다(서버 조회 없음, LAN `lot-labels` 의 `gs1` 과 같은 값 확인). LOT 번호가 없으면(0.11.0 전 작업) 그리지 않는다 |
 
 ## rider 시뮬레이터 요청 (짝 시뮬레이터 → 이 시뮬레이터)
 
@@ -147,9 +147,9 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | 인계 fence 유효시간 | 180초 | 백엔드 설정 기본 3분(D-2, `mfc-fulfillment-service.yml handover-fence-ttl`)에 맞춤. 계약은 `fenceExpiresAt` 만 정의 |
 | 결품 시 처리 | 고객 사전 선택 "품절 상품만 취소" 로 가정. 보고 때 E·R −q(H 불변), 작업 BLOCKED → **5초 뒤** MOCK 이 결품 사가(CANCEL_ITEM) 대신 해결 | 실서버는 order-orchestration 결품 사가. MOCK 은 같은 SKU 다른 LOT 재확보가 없어 늘 BLOCKED |
 | PICK 도착지(MOCK) | 냉동 `PAK-F-01`, 냉장 `PAK-C-01`, 상온 `PAK-C-01` | MOCK 만 예전 흐름(서버도 PACKING 을 계속 받음). 실서버 가상 작업자는 장바구니 |
-| 장바구니 고르기(실서버 가상 작업자) | 출고마다 첫 줄 칸 온도대의 빈 카트(`CRT-A`·`C`·`F`), 빈 카트가 없으면 다른 온도대 → 그래도 없으면 같이 씀. 밀봉 뒤 빔. 409 `CART_MISMATCH` 면 detail 의 카트로 다시 | 서버는 카트 온도대·같이 쓰기를 보지 않는다(회신 P4). 현장 배정 규칙 문서 없음 |
+| 장바구니 고르기(실서버 가상 작업자) | 출고마다 첫 빈 카트(`CRT-A-01~40`, 온도 구분 없음), 다 쓰면 가장 적게 같이 쓰는 카트. 밀봉 뒤 빔. 409 `CART_MISMATCH` 면 detail 의 카트로 다시 | 서버는 카트 온도대·같이 쓰기를 보지 않는다(회신 P4). 카트 온도 구분 없앰(`0cbfecaa`). 현장 배정 규칙 문서 없음 |
 | 밀봉 패킹대(실서버 가상 작업자) | 자기가 잡은 패킹대 `PAK-A-0n` 을 `packingLocation` 으로 | 장바구니로 집품하면 필수(0.8.0) |
-| 실제 PDA 작업자 말풍선의 카트·패킹대 | 카트: 서버가 아는 그 출고의 장바구니(PACK `packingLocations` 의 CRT-), 첫 집품 전엔 첫 칸 온도대 카트(안내). 패킹대: 서버가 알려 주지 않아 `PAK-A-01` | 포장 조회(Package)에 패킹대 위치가 없다 |
+| 실제 PDA 작업자 말풍선의 카트·패킹대 | 카트: 서버가 아는 그 출고의 장바구니(PACK `packingLocations` 의 CRT-), 첫 집품 전엔 `CRT-A-01`(안내 — PDA 는 아무 카트나 받음). 패킹대: 서버가 알려 주지 않아 `PAK-A-01` | 포장 조회(Package)에 패킹대 위치가 없다 |
 | PICK·PACK 배정(MOCK) | 대기 작업자 FIFO, PACK 은 같은 작업자 | MOCK 화면용 임시 규칙. 실서버는 mfc-capacity |
 | 포장 단위 | 출하 1건당 온도대별 봉투 1개 | MFC 7-6 "온도 보호·분리" 원칙 |
 | 분할 | 총 상품중량 10,000g 초과 시 (확정 정책) — 중량 내림차순 first-fit | 실제 분할은 order-service 이행 계획 |

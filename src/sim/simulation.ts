@@ -25,7 +25,7 @@ import { RealBoard, type RealTask } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
 import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
-import { cartFor, nextPickStop } from '../domain/pickStop';
+import { SUGGESTED_CART, nextPickStop } from '../domain/pickStop';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
@@ -367,7 +367,7 @@ export class Simulation {
           if (!started) {
             target = cart;
             key = `${s.taskId}:cart`;
-            w.cue = { kind: 'CART', taskId: s.taskId, cart: this.serverCart(s.shipmentId) ?? cartFor(stop.location), next: stop };
+            w.cue = { kind: 'CART', taskId: s.taskId, cart: this.serverCart(s.shipmentId) ?? SUGGESTED_CART, next: stop };
           } else if (stopLoc) {
             target = stopLoc.pick;
             key = `${s.taskId}:${stop.location}:${stop.line.orderLineId}`;
@@ -475,11 +475,8 @@ export class Simulation {
     // 패킹대: 예전 흐름(포장 위치로 집품)이면 packingLocations 의 PAK-, 아니면 패킹대 1 [시뮬] — PDA 는 PAK- 면 받는다.
     // 장바구니로 집품하면 packingLocations 는 장바구니라(fulfillment 0.8.0) 어느 패킹대인지 화면에 주는 값이 없다(Package 에 위치 없음)
     const station = (d.packingLocations ?? []).find((x) => x.startsWith('PAK-')) ?? 'PAK-A-01';
-    // 카트: 서버가 아는 이 출고의 장바구니(PICK 실적 도착지) → 없으면 피킹 때 안내한 카트(첫 칸 온도대)
-    const pick = [...real.tasks.values()].find((x) => x.summary.taskType === 'PICK' && x.summary.shipmentId === shipmentId);
-    const pl = pick?.detail?.lines[0];
-    const cart =
-      (d.packingLocations ?? []).find((x) => x.startsWith('CRT-')) ?? this.serverCart(shipmentId) ?? cartFor(pl?.picks?.[0]?.locations?.[0]?.locationCode ?? pl?.locationId ?? null);
+    // 카트: 서버가 아는 이 출고의 장바구니(PICK 실적 도착지) → 없으면 안내용 카트
+    const cart = (d.packingLocations ?? []).find((x) => x.startsWith('CRT-')) ?? this.serverCart(shipmentId) ?? SUGGESTED_CART;
     const packed = new Map<string, number>();
     for (const p of live) for (const x of p.contents as { orderLineId: string; qty: number }[]) packed.set(x.orderLineId, (packed.get(x.orderLineId) ?? 0) + x.qty);
     const bag = d.lines.map((line) => ({ line, left: line.plannedQty - line.cancelledQty - (packed.get(line.orderLineId) ?? 0) })).filter((x) => x.left > 0);

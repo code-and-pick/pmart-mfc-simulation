@@ -1,15 +1,28 @@
 // 바코드 막대 계산(그리기는 화면이 한다). 외부 라이브러리 없이 표준대로.
 // - Code128(코드 집합 B): 위치·카트 라벨 — 값 = 백엔드 위치 코드 그대로(백엔드 deploy/lan/seed/labels 와 같은 값·같은 집합).
 // - EAN-13: 상품 바코드(LAN 시험 바코드 299 대역 — 백엔드 22e57579). 검사 숫자가 맞지 않으면 그리지 않는다.
+// - GS1-128: LOT 라벨 — (01) GTIN-14 + (17) 소비기한 + (10) LOT 번호(백엔드 mfc-inventory 0.21.0 Gs1.java, 45ad5671).
 // 결과는 모듈(가장 가는 막대 폭) 단위의 [검정 시작, 폭] 목록과 전체 모듈 수. 조용한 여백은 넣지 않는다(화면이 둔다).
 
 /**
- * LOT 라벨 값 `LOT:{lotId}` — QR 로만 찍는다. LOT 하나 = 값 하나, 재출력해도 같다.
- * 근거: 백엔드 mfc-inventory 0.20.0(c279d1cb, 2026-11-17) LotLabel.labelValue, 회신 docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md §1.
- * 값에 lotId 가 그대로 있어 서버 조회 없이 피킹 지시 LOT(picks[].lotId)로 만든다.
+ * 상품 바코드(EAN-8·UPC-12·EAN-13·GTIN-14, 선행 0 보존) → GTIN-14(앞에 0). 숫자가 아니거나 길이가 다르면 null.
+ * 백엔드 Gs1.gtin14 그대로(mfc-inventory 0.21.0, 45ad5671).
  */
-export function lotLabelValue(lotId: string): string {
-  return `LOT:${lotId}`;
+export function gtin14(barcode: string): string | null {
+  const b = barcode.trim();
+  return /^(\d{8}|\d{12,14})$/.test(b) ? '0'.repeat(14 - b.length) + b : null;
+}
+
+/**
+ * LOT 라벨 GS1-128 사람이 읽는 꼴 `(01)GTIN-14(17)YYMMDD(10)lotNo` — 소비기한 없으면 (17) 생략, GTIN 이 없으면 null(라벨 불가).
+ * 백엔드 Gs1.humanReadable·LotLabelService.gtin 그대로: GTIN 은 상품 바코드 중 숫자 8·12·13·14자리 첫 값.
+ * 피킹 지시(fulfillment 0.11.0)의 picks[].lotNo·expiresOn 과 작업 지시 줄 barcodes 로 서버 조회 없이 만든다.
+ */
+export function lotGs1(barcodes: readonly string[], lotNo: string, expiresOn: string | null): string | null {
+  const g = barcodes.map(gtin14).find((x): x is string => !!x);
+  if (!g || !lotNo) return null;
+  const exp = expiresOn && /^\d{4}-\d{2}-\d{2}/.test(expiresOn) ? `(17)${expiresOn.slice(2, 4)}${expiresOn.slice(5, 7)}${expiresOn.slice(8, 10)}` : '';
+  return `(01)${g}${exp}(10)${lotNo}`;
 }
 
 export interface Bars {
@@ -34,6 +47,10 @@ const C128 = [
   '114131', '311141', '411131', '211412', '211214', '211232', '2331112',
 ];
 const START_B = 104;
+const START_C = 105;
+const CODE_B = 100; // 집합 C 에서 B 로
+const CODE_C = 99; // 집합 B 에서 C 로
+const FNC1 = 102;
 const STOP = 106;
 
 function fromWidths(patterns: string[]): Bars {
@@ -54,6 +71,59 @@ export function code128(value: string): Bars | null {
   if (!value || [...value].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126)) return null;
   const vals = [START_B, ...[...value].map((c) => c.charCodeAt(0) - 32)];
   const check = vals.reduce((sum, v, i) => sum + v * (i === 0 ? 1 : i), 0) % 103;
+  return fromWidths([...vals, check, STOP].map((v) => C128[v]));
+}
+
+/**
+ * GS1-128: 괄호 꼴 `(01)…(17)…(10)…` → Code128(시작 C + FNC1, 숫자 둘씩은 집합 C, 그 밖은 집합 B).
+ * 가변 길이 (10) 이 끝이라 중간 FNC1(구분자)은 필요 없다(백엔드 Gs1 — 고정 길이 앞, 가변 끝). 틀린 꼴이면 null.
+ */
+export function gs1_128(hri: string): Bars | null {
+  if (!/^(\(\d{2}\)[^()]+)+$/.test(hri)) return null;
+  const s = hri.replace(/[()]/g, '');
+  if ([...s].some((c) => c.charCodeAt(0) < 32 || c.charCodeAt(0) > 126)) return null;
+  const isD = (i: number) => i < s.length && s[i] >= '0' && s[i] <= '9';
+  const digitRun = (i: number) => {
+    let n = 0;
+    while (isD(i + n)) n++;
+    return n;
+  };
+  const vals: number[] = [];
+  let set: 'B' | 'C';
+  if (digitRun(0) >= 2) {
+    vals.push(START_C, FNC1);
+    set = 'C';
+  } else {
+    vals.push(START_B, FNC1);
+    set = 'B';
+  }
+  let i = 0;
+  while (i < s.length) {
+    if (set === 'C') {
+      if (isD(i) && isD(i + 1)) {
+        vals.push(Number(s.slice(i, i + 2)));
+        i += 2;
+      } else {
+        vals.push(CODE_B);
+        set = 'B';
+      }
+    } else {
+      const run = digitRun(i);
+      // 숫자 4개 이상(끝까지면 2개 이상)이 짝수로 이어지면 C 로 — 홀수면 한 자리를 B 로 먼저
+      if (run >= 4 || (run >= 2 && i + run === s.length)) {
+        if (run % 2 === 1) {
+          vals.push(s.charCodeAt(i) - 32);
+          i++;
+        }
+        vals.push(CODE_C);
+        set = 'C';
+      } else {
+        vals.push(s.charCodeAt(i) - 32);
+        i++;
+      }
+    }
+  }
+  const check = vals.reduce((sum, v, k) => sum + v * (k === 0 ? 1 : k), 0) % 103;
   return fromWidths([...vals, check, STOP].map((v) => C128[v]));
 }
 

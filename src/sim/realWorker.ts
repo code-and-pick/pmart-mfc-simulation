@@ -237,9 +237,8 @@ export class RealWorker extends Agent {
     if (!started) {
       await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
     }
-    // 장바구니 — 방문 순서의 출발점. 한 출고 = 한 장바구니(fulfillment 0.8.0): 출고마다 빈 카트 하나(첫 칸 온도대), 집품 실적 도착지가 이 카트
-    const firstLoc = task.lines[0]?.picks?.[0]?.locations?.[0]?.locationCode ?? task.lines[0]?.locationId ?? null;
-    let cart = ctx.carts.take(shipmentId, firstLoc ? tempOfCode(firstLoc) : null);
+    // 장바구니 — 방문 순서의 출발점. 한 출고 = 한 장바구니(fulfillment 0.8.0): 출고마다 빈 카트 하나(온도 구분 없음), 집품 실적 도착지가 이 카트
+    let cart = ctx.carts.take(shipmentId);
     this.state = 'TO_CART';
     this.activity = `장바구니 ${cart} 가지러`;
     this.pda = this.view(task, 'PICK', `장바구니 ${cart} 스캔`);

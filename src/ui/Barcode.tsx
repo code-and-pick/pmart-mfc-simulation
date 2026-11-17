@@ -1,6 +1,7 @@
 // 화면에 띄우는 코드(PDA 카메라로 모니터를 찍는 용도). 값은 같고 모양만 QR 또는 1차원 바코드(위치·카트 Code128, 상품 EAN-13).
 // PDA 앱 카메라(ML Kit)는 형식 제한 없이 읽으므로 QR 로 띄워도 같은 값이 들어간다. 인쇄 라벨은 백엔드 Code128 그대로.
-import { code128, ean13, type Bars } from '../domain/barcode';
+// LOT 라벨(kind gs1)은 늘 GS1-128 1차원 — PDA 가 (01)(17)(10) 을 GS1 규칙으로 읽어야 해서 QR 로 바꾸지 않는다(inventory 0.21.0).
+import { code128, ean13, gs1_128, type Bars } from '../domain/barcode';
 import { qrEncode } from '../domain/qr';
 import { scanView, useScanView, type ScanCodeMode } from './scanView';
 
@@ -10,9 +11,9 @@ const MAX_CSS_WIDTH = 380;
 const dprNow = () => (typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1);
 
 /** 코드 그림만(테두리·글자 없음). size: QR 은 한 변 CSS px, 1차원은 최대 폭 */
-export function CodeImage({ value, kind, mode, size, height = 56 }: { value: string; kind: 'code128' | 'ean13' | 'qr'; mode: ScanCodeMode; size: number; height?: number }) {
+export function CodeImage({ value, kind, mode, size, height = 56 }: { value: string; kind: 'code128' | 'ean13' | 'gs1'; mode: ScanCodeMode; size: number; height?: number }) {
   const dpr = dprNow();
-  if (mode === 'qr' || kind === 'qr') {
+  if (mode === 'qr' && kind !== 'gs1') {
     const q = qrEncode(value);
     if (!q) return <div className="bc bad">QR 로 만들 수 없는 값: {value}</div>;
     const quiet = 4;
@@ -27,7 +28,7 @@ export function CodeImage({ value, kind, mode, size, height = 56 }: { value: str
       </svg>
     );
   }
-  const b: Bars | null = kind === 'ean13' ? ean13(value) : code128(value); // kind 'qr' 은 위에서 끝남
+  const b: Bars | null = kind === 'ean13' ? ean13(value) : kind === 'gs1' ? gs1_128(value) : code128(value);
   if (!b) return <div className="bc bad">그릴 수 없는 값: {value}{kind === 'ean13' ? ' (EAN-13 검사 숫자가 맞지 않음)' : ''}</div>;
   const q = 10;
   const w = b.modules + q * 2;
@@ -51,7 +52,7 @@ export function Barcode({
   onGo,
 }: {
   value: string;
-  kind?: 'code128' | 'ean13' | 'qr';
+  kind?: 'code128' | 'ean13' | 'gs1';
   caption?: string;
   height?: number;
   /** 누르면 3D 에서 그 위치로(위치·카트 코드). 없으면 누르면 크게 */
@@ -63,7 +64,7 @@ export function Barcode({
     <div className={`bc${onGo ? ' go' : ''}`} title={onGo ? `${value} — 누르면 3D 에서 그 위치로` : `${value} — 누르면 크게`}>
       {caption && <div className="bc-cap">{caption}</div>}
       <div className="bc-img" onClick={onGo ?? zoom}>
-        <CodeImage value={value} kind={kind} mode={v.mode} size={v.mode === 'qr' || kind === 'qr' ? 120 : MAX_CSS_WIDTH} height={height} />
+        <CodeImage value={value} kind={kind} mode={v.mode} size={v.mode === 'qr' && kind !== 'gs1' ? 120 : MAX_CSS_WIDTH} height={height} />
       </div>
       <div className="bc-val">
         {value}
@@ -86,7 +87,7 @@ export function ScanZoom() {
     <div className="scan-zoom" onClick={() => scanView.close()} onKeyDown={(e) => e.key === 'Escape' && scanView.close()} tabIndex={-1} ref={(el) => el?.focus()}>
       <div className="scan-zoom-box">
         {z.caption && <div className="bc-cap">{z.caption}</div>}
-        <CodeImage value={z.value} kind={z.kind} mode={v.mode} size={v.mode === 'qr' || z.kind === 'qr' ? Math.min(vw, vh) * 0.6 : vw * 0.85} height={Math.round(vh * 0.28)} />
+        <CodeImage value={z.value} kind={z.kind} mode={v.mode} size={v.mode === 'qr' && z.kind !== 'gs1' ? Math.min(vw, vh) * 0.6 : vw * 0.85} height={Math.round(vh * 0.28)} />
         <div className="bc-val big">{z.value}</div>
         <div className="note">누르거나 Esc 로 닫기 · 위의 QR/바코드 전환은 스캔 판 위쪽 단추</div>
       </div>

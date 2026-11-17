@@ -74,7 +74,7 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect(m.toBackend(SIM_POINT.receivingDock)).toBe('RCV-A-01');
     expect(m.toBackend(SIM_POINT.returnIntake)).toBe('RTN-A-01');
     expect(m.toBackend('SR2-11')).toBe('DSP-A-02');
-    expect(m.toSim('CRT-F-01')).toBe(SIM_POINT.cartDepot);
+    expect(m.toSim('CRT-A-40')).toBe(SIM_POINT.cartDepot);
     expect(m.toSim('MIGRATION')).toBeNull();
   });
 });

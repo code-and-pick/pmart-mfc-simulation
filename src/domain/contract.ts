@@ -1,4 +1,4 @@
-// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.8.0) 의 부분 사본 + _common.yaml 공통 형
+// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.11.0) 의 부분 사본 + _common.yaml 공통 형
 // + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부
 // + delivery-dispatch-service.yaml (0.3.3)·delivery-execution-service.yaml (0.4.0) 의 조회 형 일부(실서버 관찰, rider 시뮬레이터 요청 M-01·M-02).
 // 이 파일의 이름·상태값은 계약을 그대로 따른다. 계약이 바뀌면 여기를 먼저 맞춘다.
@@ -8,6 +8,8 @@
 // 0.7.0(2026-11-16): 작업 상세 TaskLine.barcodes(활성 바코드 전부), barcode 는 그 첫 값(조회 때 채움, R-20 해소).
 // 0.8.0(2026-11-17, d5386b2f): 피킹 도착지 = 장바구니(구역 CART) — 집은 양이 있으면 toLocation 필수(400 TO_LOCATION_REQUIRED),
 //   한 출고 = 한 장바구니(409 CART_MISMATCH), 장바구니로 집품했으면 밀봉 packingLocation(패킹대) 필수. 형 변화 없음(설명만).
+// 0.9.0·0.10.0(2026-11-17): 백오피스 목록·주문별 현장 조회 — 시뮬레이터가 쓰지 않는 경로라 옮긴 형 없음.
+// 0.11.0(2026-11-17, 45ad5671): PICK 상세 picks[].lotNo — LOT 라벨 GS1-128 (10) 과 대조(inventory 0.21.0).
 
 export type TaskState =
   | 'WAITING'
@@ -103,6 +105,8 @@ export type PickStatus = 'OK' | 'PARTIAL' | 'NOT_FOUND' | 'DONE';
 /** PICK 지시(0.2.0) — 한 줄이 여러 LOT 예약 조각으로 나뉠 수 있다. RETURN 은 복귀량·포장 위치. */
 export interface TaskPick {
   lotId: string;
+  /** (fulfillment 0.11.0, PICK 만) LOT 번호 = LOT 라벨 GS1-128 의 (10). 재고 조회가 안 되면 null. MOCK·0.10 이하는 없음 */
+  lotNo?: string | null;
   expiresOn: string | null;
   /** 이 LOT 조각에서 더 집을 양 */
   remainingQty: number;

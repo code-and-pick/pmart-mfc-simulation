@@ -108,19 +108,12 @@ export const BACKEND_FACTS = {
   /** 회수 반입 자리 RTN-A-01, 입고·검수 구역 안 x 38.6 · z 22.0 m [확정] (2026-11-09-simulator-notice-return-location.md, backend-points.json) */
   returnIntake: { code: 'RTN-A-01', x: 38.6, z: 22.0 },
   /**
-   * 이동 카트(장바구니) 40대 — 상온 CRT-A-01~20·냉장 CRT-C-01~12·냉동 CRT-F-01~08, 구역 CART, 모두 카트 보관소 한 자리.
-   * PDA 카트 스캔 값 = 위치 코드 [확정] (백엔드 deploy/lan/seed/mfc_carts.py·라벨 cart-labels-MFC-SEED-01.html 40장, 149e15e1 2026-11-17).
+   * 이동 카트(장바구니) 40대 `CRT-A-01~40` — **온도 구분 없음**(상온·냉장·냉동 상품을 한 카트에, 한 출고 = 한 카트), 구역 CART, 모두 카트 보관소 한 자리.
+   * 코드의 A 는 위치 코드 규칙(ADR-0042)상 남긴 글자일 뿐. 옛 냉장·냉동 카트는 닫힘(CRT-C-01 만 재고가 있어 열림).
+   * PDA 카트 스캔 값 = 위치 코드 [확정] (백엔드 deploy/lan/seed/mfc_carts.py·라벨 cart-labels-MFC-SEED-01.html 40장, 0cbfecaa 2026-11-17 사용자 "일단 상온으로").
    * 피킹 실적 도착지(toLocation) = 찍은 장바구니, 한 출고 = 한 장바구니(fulfillment 0.8.0, d5386b2f).
    */
-  cartLocations: (
-    [
-      ['A', '상온', 20],
-      ['C', '냉장', 12],
-      ['F', '냉동', 8],
-    ] as const
-  ).flatMap(([t, ko, n]) =>
-    Array.from({ length: n }, (_, i) => ({ code: `CRT-${t}-${String(i + 1).padStart(2, '0')}`, label: `카트 ${ko} ${i + 1}`, temp: t })),
-  ),
+  cartLocations: Array.from({ length: 40 }, (_, i) => ({ code: `CRT-A-${String(i + 1).padStart(2, '0')}`, label: `카트 ${i + 1}` })),
   /** 백엔드 인쇄용 위치 라벨 수(목차 합계) — 시뮬레이터 선반 14,559 + 그 밖 49 와 모두 맞음(11-17 대조) [확정] (deploy/lan/seed/labels/README.md·locations/index.html, ece5a2ad 2026-11-17) */
   labelLocationCount: 14608,
 } as const;

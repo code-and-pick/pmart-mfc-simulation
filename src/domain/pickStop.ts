@@ -5,7 +5,7 @@
 // - 칸: 이 주문 몫 배정(allocatedQty > 0) 칸 → 재고 있는 칸 → 첫 칸
 // - 지시가 비었으면(재고 조회 실패) 줄의 지시 칸
 // PDA 의 "접수만 된 양(pendingQty)" 빼기는 서버 값 pendingQty 로 한다(앱은 자기 큐 값).
-import type { TaskLine } from './contract';
+import type { TaskLine, TaskPick } from './contract';
 
 export interface PickStop {
   line: TaskLine;
@@ -14,6 +14,8 @@ export interface PickStop {
   /** 이 칸에서 집을 양 */
   qty: number;
   lotId: string | null;
+  /** 그 LOT 조각(LOT 번호·소비기한 — LOT 라벨). 지시가 비었으면 null */
+  pick: TaskPick | null;
   /** 같은 LOT 이 있는 다른 칸(지시 칸이 비었으면 여기서 집어도 됨) */
   otherLocations: string[];
 }
@@ -40,19 +42,16 @@ export function nextPickStop(lines: TaskLine[]): PickStop | null {
         location: c.locationCode,
         qty: Math.min(here, r),
         lotId: p.lotId,
+        pick: p,
         otherLocations: withStock.filter((o) => o.locationCode !== c.locationCode).map((o) => o.locationCode),
       };
     }
-    if (!picks.length && l.locationId) return { line: l, location: l.locationId, qty: l.remainingQty - l.pendingQty, lotId: l.lotId, otherLocations: [] };
+    if (!picks.length && l.locationId) return { line: l, location: l.locationId, qty: l.remainingQty - l.pendingQty, lotId: l.lotId, pick: null, otherLocations: [] };
   }
   return null;
 }
 
 /**
- * 첫 칸의 온도대에 맞는 카트(PDA 는 CRT- 로 시작하면 어느 카트든 받는다 — 화면 안내용 선택).
- * 백엔드 칸 코드 첫 글자 F·C·A = 냉동·냉장·상온.
+ * 화면 안내용 카트 — 카트는 온도 구분이 없고(백엔드 0cbfecaa) PDA 는 CRT- 로 시작하면 어느 카트든 받는다. 찍은 카트가 그 출고의 장바구니가 된다.
  */
-export function cartFor(location: string | null): string {
-  const t = /^([FCA])-/.exec(location ?? '')?.[1];
-  return t === 'F' ? 'CRT-F-01' : t === 'C' ? 'CRT-C-01' : 'CRT-A-01';
-}
+export const SUGGESTED_CART = 'CRT-A-01';

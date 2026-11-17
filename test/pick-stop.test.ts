@@ -1,7 +1,7 @@
 // PDA 앱 nextPickStop(클라이언트 c7498f8 task_controllers.dart)과 같은 칸을 고르는지
 import { describe, expect, it } from 'vitest';
 import type { TaskLine } from '../src/domain/contract';
-import { cartFor, nextPickStop } from '../src/domain/pickStop';
+import { nextPickStop } from '../src/domain/pickStop';
 
 const line = (o: Partial<TaskLine> & { orderLineId: string }): TaskLine => ({
   taskLineId: o.orderLineId, sku: 'S', barcode: null, locationId: null, lotId: null, expiresOn: null,
@@ -37,12 +37,5 @@ describe('nextPickStop — PDA 와 같은 다음 칸', () => {
   it('지시가 비면 줄의 지시 칸, 다 집으면 null', () => {
     expect(nextPickStop([line({ orderLineId: 'a', locationId: 'F-A1-01-1-01', remainingQty: 2 })])).toMatchObject({ location: 'F-A1-01-1-01', qty: 2 });
     expect(nextPickStop([line({ orderLineId: 'a', remainingQty: 0 })])).toBeNull();
-  });
-
-  it('카트는 첫 칸 온도대', () => {
-    expect(cartFor('F-A1-01-1-01')).toBe('CRT-F-01');
-    expect(cartFor('C-B1-01-1-01')).toBe('CRT-C-01');
-    expect(cartFor('A-C1-01-1-01')).toBe('CRT-A-01');
-    expect(cartFor(null)).toBe('CRT-A-01');
   });
 });

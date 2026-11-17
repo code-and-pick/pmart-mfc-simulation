@@ -1,11 +1,12 @@
 // 스캔 판: PDA 앱으로 찍을 바코드를 화면에 띄운다(사용자 2026-11-16 "바로 클릭하면 보이게", "실제 주문건 눌렀을때 그 바코드 뜨게").
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
-// - 카트 40대(Code128, 값 = 위치 코드 — 상온 20·냉장 12·냉동 8, 백엔드 149e15e1)
+// - 카트 40대(Code128, 값 = 위치 코드 CRT-A-01~40, 온도 구분 없음 — 백엔드 0cbfecaa)
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
-import { lotLabelValue } from '../domain/barcode';
+import { lotGs1 } from '../domain/barcode';
 import { BACKEND_FACTS } from '../config';
+import type { TaskLine, TaskPick } from '../domain/contract';
 import type { RealTask } from '../sim/realBoard';
 import { Barcode } from './Barcode';
 import { TASK_STATE_KO } from './RealPanel';
@@ -31,21 +32,17 @@ function LocBarcode({ code, caption }: { code: string; caption: string }) {
   return <Barcode value={code} caption={caption} height={44} onGo={() => controller.focusBackendCode(code)} />;
 }
 
-/** 장바구니 40대(상온 20·냉장 12·냉동 8) — 온도대별로 접어 둔다. PDA 는 CRT- 면 어느 카트든 받고, 찍은 카트가 그 주문의 장바구니가 된다 */
+/** 장바구니 40대(온도 구분 없음) — 10대씩 접어 둔다. PDA 는 CRT- 면 어느 카트든 받고, 찍은 카트가 그 주문의 장바구니가 된다 */
 export function CartBarcodes() {
-  const groups: [string, string][] = [
-    ['A', '상온'],
-    ['C', '냉장'],
-    ['F', '냉동'],
-  ];
+  const all = BACKEND_FACTS.cartLocations;
+  const groups = Array.from({ length: Math.ceil(all.length / 10) }, (_, i) => all.slice(i * 10, i * 10 + 10));
   return (
     <>
-      {groups.map(([t, ko]) => {
-        const carts = BACKEND_FACTS.cartLocations.filter((c) => c.temp === t);
+      {groups.map((carts, gi) => {
         return (
-          <details key={t} open={t === 'A'}>
+          <details key={gi} open={gi === 0}>
             <summary>
-              {ko} {carts.length}대 ({carts[0]?.code} ~ {carts[carts.length - 1]?.code})
+              카트 {carts[0]?.code} ~ {carts[carts.length - 1]?.code} ({carts.length}대)
             </summary>
             <div className="bc-grid">
               {carts.map((c) => (
@@ -57,6 +54,14 @@ export function CartBarcodes() {
       })}
     </>
   );
+}
+
+/** LOT 라벨(GS1-128) — 피킹 지시의 LOT 번호·소비기한과 줄 상품 바코드로 만든다(서버 조회 없음) */
+export function LotLabel({ l, p, height }: { l: TaskLine; p: TaskPick; height: number }) {
+  if (!p.lotNo) return <div className="note">LOT 번호 없음(fulfillment 0.11.0 전 작업이거나 재고 조회 실패) — LOT 라벨을 그릴 수 없습니다</div>;
+  const v = lotGs1(l.barcodes?.length ? l.barcodes : l.barcode ? [l.barcode] : [], p.lotNo, p.expiresOn);
+  if (!v) return <div className="note">숫자 상품 바코드가 없어 LOT 라벨(GS1)을 만들 수 없습니다 — LOT {p.lotNo}</div>;
+  return <Barcode value={v} kind="gs1" caption={`LOT 라벨 ${p.lotNo}${p.expiresOn ? ` · 기한 ${p.expiresOn}` : ''} (PDA 전환 뒤 — C-2)`} height={height} />;
 }
 
 /** 작업 하나의 찍을 바코드 — PICK: 방문 순서별 지시 칸 + 상품, PACK: 포장 위치 + 출하대기 랙 */
@@ -119,8 +124,8 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
               ) : (
                 bc.map((v) => <Barcode key={v} value={v} kind={kindOf(v)} caption={`상품 ${l.sku} (상품 정보 — 참고)`} height={44} />)
               )}
-              {/* LOT 라벨(QR, 값 LOT:{lotId} — inventory 0.20.0). 지금 PDA 는 상품 바코드로 비교하고, LOT 라벨로 바뀌면 이것을 찍는다(C-2) */}
-              {p.lotId && <Barcode value={lotLabelValue(p.lotId)} kind="qr" caption={`LOT 라벨 ${p.lotId} (PDA 전환 뒤 — C-2)`} height={44} />}
+              {/* LOT 라벨(GS1-128 (01)GTIN(17)기한(10)LOT 번호 — inventory 0.21.0·fulfillment 0.11.0). 지금 PDA 는 상품 바코드로 비교하고, LOT 라벨로 바뀌면 이것을 찍는다(C-2) */}
+              <LotLabel l={l} p={p} height={44} />
             </div>
             {!l.barcode && (
               <div className="note warn">
@@ -184,7 +189,7 @@ export function ScanBoard() {
           </button>
         </div>
       )}
-      <h4>카트 (피킹 때 찍은 카트를 패킹 때 다시 찍음)</h4>
+      <h4>카트 (피킹 때 찍은 카트를 패킹 때 다시 찍음 · 온도 구분 없음)</h4>
       <CartBarcodes />
 
       {!real && <div className="note">실서버 모드에서는 진행 중인 실제 주문의 지시 칸·상품 바코드가 여기에 나옵니다. 선반 칸을 클릭하면 그 칸의 위치 바코드가 카드에 나옵니다.</div>}
