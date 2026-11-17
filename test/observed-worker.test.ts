@@ -26,7 +26,7 @@ async function walk(sim: Simulation, sec: number) {
 }
 
 describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
-  it('시작 = 카트 자리, 집품 등록되면 그 칸 앞으로, 작업이 끝나면 2분 뒤 빠진다', async () => {
+  it('스캔 안내: 카트 → (카트 찍음) → 첫 칸 → 집품 확정되면 다음 칸, 작업이 끝나면 2분 뒤 빠진다', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;
     const sync = () => {
@@ -45,22 +45,57 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.currentTarget?.code).toBe('C01-05-104'); // 다음 지시 칸(바닥 고리)
     const cart = sim.backendPoint('CRT-A-01')!;
     expect(Math.hypot(w.pos.x - cart.x, w.pos.z - cart.z)).toBeLessThan(0.5);
+    // ① 카트 — 상온 칸이 첫 칸이라 상온 카트
+    expect(w.cue).toMatchObject({ kind: 'CART', cart: 'CRT-A-01' });
+    await walk(sim, 2);
+    expect(w.moving).toBe(false); // 도착 → 말풍선이 뜬다
 
-    // 첫 칸 집품 등록 → 그 칸 앞으로 걸어간다
+    // 화면에서 "카트 찍음" → 첫 칸으로 걸어가 ② 위치 ③ 상품
+    sim.passCart('OP-990d2c09');
+    expect(w.cue?.kind).toBe('PICK');
+    await walk(sim, 120);
+    const loc1 = sim.backendLocation('A-C1-05-1-04')!;
+    expect(Math.hypot(w.pos.x - loc1.pick.x, w.pos.z - loc1.pick.z)).toBeLessThan(0.3);
+    expect(w.moving).toBe(false);
+    expect(w.cue).toMatchObject({ kind: 'PICK', index: 1, total: 2, stop: { location: 'A-C1-05-1-04', qty: 1 } });
+
+    // 첫 칸 집품 확정(서버) → 다음 칸으로
     const d2 = pick([0, 1]);
     real.tasks.set(d2.taskId, { summary: d2, detail: d2, firstSeenMs: 0, closed: null });
     sync();
     await walk(sim, 120);
-    const loc = sim.backendLocation('A-C1-05-1-04')!;
-    expect(Math.hypot(w.pos.x - loc.pick.x, w.pos.z - loc.pick.z)).toBeLessThan(0.3);
+    const loc2 = sim.backendLocation('A-C1-04-6-02')!;
+    expect(Math.hypot(w.pos.x - loc2.pick.x, w.pos.z - loc2.pick.z)).toBeLessThan(0.3);
+    expect(w.cue).toMatchObject({ kind: 'PICK', index: 2, stop: { location: 'A-C1-04-6-02' } });
     expect(w.pda?.location).toBe('A-C1-05-1-04');
     expect(w.pda?.nextLocation).toBe('A-C1-04-6-02');
 
-    // 열린 작업이 없어지면 바로 빼지 않고(2분) 쉬는 상태로
+    // 열린 작업이 없어지면 바로 빼지 않고(2분) 쉬는 상태로, 말풍선 없음
     real.tasks.get(d2.taskId)!.closed = { atMs: 0, state: 'COMPLETED' };
     sync();
     expect(sim.observedWorkers).toHaveLength(1);
     expect(w.state).toBe('IDLE');
+    expect(w.cue).toBeNull();
+  });
+
+  it('이미 집품이 있는 작업은 카트를 건너뛰고 지금 칸, 막힘(BLOCKED)은 말풍선 없이 마지막 칸', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const d = pick([0, 1]);
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    real.polls++;
+    (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    const w = sim.observedWorkers[0];
+    expect(w.cue).toMatchObject({ kind: 'PICK', stop: { location: 'A-C1-04-6-02' } });
+
+    const b = { ...pick([0, 1]), state: 'BLOCKED' } as TaskDetail;
+    real.tasks.set(b.taskId, { summary: b, detail: b, firstSeenMs: 0, closed: null });
+    real.polls++;
+    (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    expect(w.cue).toBeNull();
+    await walk(sim, 120);
+    const last = sim.backendLocation('A-C1-05-1-04')!;
+    expect(Math.hypot(w.pos.x - last.pick.x, w.pos.z - last.pick.z)).toBeLessThan(0.3);
   });
 
   it('가상 작업자가 맡은 작업은 실제 작업자로 따로 세우지 않는다', () => {

@@ -24,6 +24,7 @@ import { Metrics } from './metrics';
 import { RealBoard } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
 import { ObservedWorker } from './observedWorker';
+import { cartFor, nextPickStop } from '../domain/pickStop';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
@@ -326,7 +327,8 @@ export class Simulation {
       let target = cart;
       let key = `${s.taskId}:cart`;
       if (s.taskType === 'PICK') {
-        const stops = (t.detail?.lines ?? [])
+        const lines = t.detail?.lines ?? [];
+        const stops = lines
           .flatMap((l) =>
             (l.picks ?? []).map((p) => {
               const locs = p.locations ?? [];
@@ -344,17 +346,36 @@ export class Simulation {
           key = `${s.taskId}:${last.code}`;
         }
         if (!w) {
-          w = new ObservedWorker(`PDA ${name}`, wid, target, this.nav, this.params.walkSpeed);
+          w = new ObservedWorker(`PDA ${name}`, wid, lastLoc ? target : cart, this.nav, this.params.walkSpeed);
           this.observedWorkers.push(w);
+        }
+        // 스캔 안내: PDA 와 같은 순서(nextPickStop)로 카트 → 지금 갈 칸에 세우고, 도착하면 찍을 바코드를 띄운다
+        w.cue = null;
+        const stop = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? nextPickStop(lines) : null;
+        if (stop) {
+          const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.cartPassedTask === s.taskId;
+          const stopLoc = this.backendLocation(stop.location);
+          if (!started) {
+            target = cart;
+            key = `${s.taskId}:cart`;
+            w.cue = { kind: 'CART', taskId: s.taskId, cart: cartFor(stop.location), next: stop };
+          } else if (stopLoc) {
+            target = stopLoc.pick;
+            key = `${s.taskId}:${stop.location}:${stop.line.orderLineId}`;
+            const total = lines.reduce((a, l) => a + l.plannedQty - l.cancelledQty, 0);
+            const left = lines.reduce((a, l) => a + l.remainingQty, 0);
+            w.cue = { kind: 'PICK', taskId: s.taskId, stop, index: total - left + 1, total };
+          }
         }
         w.state = s.state === 'IN_PROGRESS' ? 'PICKING' : s.state === 'BLOCKED' ? 'ERROR' : 'TO_CART';
         w.hasCart = s.state === 'IN_PROGRESS';
-        w.currentTarget = next?.code ? this.backendLocation(next.code) : null;
+        w.currentTarget = stop ? this.backendLocation(stop.location) : next?.code ? this.backendLocation(next.code) : null;
         view.progress = `${done.length} / ${stops.length}`;
         view.location = last?.code ?? null;
-        view.nextLocation = next?.code ?? null;
-        view.productName = next?.l.productName ?? null;
-        view.plannedQty = next?.p.remainingQty ?? null;
+        view.nextLocation = stop?.location ?? next?.code ?? null;
+        view.productName = stop?.line.productName ?? next?.l.productName ?? null;
+        view.barcode = stop?.line.barcode ?? null;
+        view.plannedQty = stop?.qty ?? next?.p.remainingQty ?? null;
         view.step = s.state === 'ASSIGNED' ? '배정됨 — 시작 전' : s.state === 'BLOCKED' ? '막힘(결품 등)' : last ? `집품 등록 ${last.code}` : '시작 — 카트';
         w.activity = `${s.state === 'IN_PROGRESS' ? '피킹' : view.step} ${view.progress}${last?.code ? ` · 마지막 ${last.code}` : ''}`;
       } else {
@@ -365,6 +386,7 @@ export class Simulation {
           this.observedWorkers.push(w);
         }
         w.state = s.state === 'IN_PROGRESS' ? 'PACKING' : 'WAIT_STATION';
+        w.cue = null;
         w.hasCart = false;
         w.currentTarget = null;
         view.step = s.state === 'IN_PROGRESS' ? '포장 중' : '패킹 대기';
@@ -379,9 +401,19 @@ export class Simulation {
       if (byWorker.has(w.workerId)) continue;
       w.state = 'IDLE';
       w.currentTarget = null;
+      w.cue = null;
       w.activity = '열린 작업 없음(서버)';
       if (now - w.lastSeenMs > 120_000) this.observedWorkers.splice(i, 1);
     }
+  }
+
+  /** 스캔 안내: 실제 PDA 로 카트를 찍었다고 화면에서 넘긴다 → 그 작업자를 첫 칸으로(서버는 카트 스캔을 모름) */
+  passCart(workerId: string) {
+    const w = this.observedWorkers.find((x) => x.workerId === workerId);
+    if (!w || w.cue?.kind !== 'CART') return;
+    w.cartPassedTask = w.cue.taskId;
+    this.observedPoll = -1;
+    this.syncObservedWorkers();
   }
 
   private realRiderVer = -1;
