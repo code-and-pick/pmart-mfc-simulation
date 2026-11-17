@@ -107,13 +107,20 @@ export const BACKEND_FACTS = {
   highTurnoverBins: ['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'],
   /** 회수 반입 자리 RTN-A-01, 입고·검수 구역 안 x 38.6 · z 22.0 m [확정] (2026-11-09-simulator-notice-return-location.md, backend-points.json) */
   returnIntake: { code: 'RTN-A-01', x: 38.6, z: 22.0 },
-  /** 이동 카트 위치 4개 — PDA 카트 스캔 값 = 위치 코드 [확정] (백엔드 deploy/lan/seed/mfc_layout.py, 라벨 cart-labels-MFC-SEED-01.html 2026-11-16) */
-  cartLocations: [
-    { code: 'CRT-A-01', label: '카트 상온 1' },
-    { code: 'CRT-A-02', label: '카트 상온 2' },
-    { code: 'CRT-C-01', label: '카트 냉장' },
-    { code: 'CRT-F-01', label: '카트 냉동' },
-  ],
+  /**
+   * 이동 카트(장바구니) 40대 — 상온 CRT-A-01~20·냉장 CRT-C-01~12·냉동 CRT-F-01~08, 구역 CART, 모두 카트 보관소 한 자리.
+   * PDA 카트 스캔 값 = 위치 코드 [확정] (백엔드 deploy/lan/seed/mfc_carts.py·라벨 cart-labels-MFC-SEED-01.html 40장, 149e15e1 2026-11-17).
+   * 피킹 실적 도착지(toLocation) = 찍은 장바구니, 한 출고 = 한 장바구니(fulfillment 0.8.0, d5386b2f).
+   */
+  cartLocations: (
+    [
+      ['A', '상온', 20],
+      ['C', '냉장', 12],
+      ['F', '냉동', 8],
+    ] as const
+  ).flatMap(([t, ko, n]) =>
+    Array.from({ length: n }, (_, i) => ({ code: `CRT-${t}-${String(i + 1).padStart(2, '0')}`, label: `카트 ${ko} ${i + 1}`, temp: t })),
+  ),
   /** 백엔드 인쇄용 위치 라벨 수(목차 합계) — 시뮬레이터 선반 14,559 + 그 밖 49 와 모두 맞음(11-17 대조) [확정] (deploy/lan/seed/labels/README.md·locations/index.html, ece5a2ad 2026-11-17) */
   labelLocationCount: 14608,
 } as const;

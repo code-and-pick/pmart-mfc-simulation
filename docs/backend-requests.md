@@ -70,13 +70,6 @@ SIM-2a 는 "실제 PDA 작업자는 마지막 버튼 기준으로 추적"인데,
 ### R-18 변화 밀어주기(SSE 등) — 낮음, 지금은 요청 아님 (2026-11-16 기록)
 SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 화면이 1~3초 늦는 것이 문제가 되면 그때 요청한다. 기록만 남긴다.
 
-### R-13 PICK 실적의 포장 위치(toLocation) — 상온만 남음 (2026-11-10, 회신 없음 11-16 확인)
-0.4.10 부터 집품 실적에 `toLocation`(구역 PACKING) 이 필요하다. 시뮬레이터 작업자는 피킹을 마치고 패킹 대기 지점으로 가서 빈 패킹대를 기다리므로 집품 시점에는 패킹대를 모른다.
-- 사용자 확인(11-10): 패킹 대기 지점 안에 냉장 칸과 냉동 칸이 따로 있다 → **냉동 = `PAK-F-01`, 냉장 = `PAK-C-01`**, 밀봉은 그 온도대 칸을 `packingLocation` 으로.
-- 백엔드 확인: `mfc-inventory Locations.requirePacking` 은 구역 PACKING 만 보고 온도대는 보지 않는다 → 지금 값은 모두 받힌다.
-- 실측 참고(11-16): 11-10 실제 주문(PDA)은 `PAK-A-01`(패킹대 1)에 포장했다.
-- **남은 질문**: 대기 지점에 상온 칸이 없다. 상온은 임시로 `PAK-C-01` 에 둔다. 상온 대기 칸(예: `PAK-A-00`)을 새로 둘지, 패킹대 `PAK-A-0n` 을 쓸지 정해 달라.
-
 ### R-10 남은 질문 — 정기 입고 수령 뒤 입고 작업 (낮음)
 `/inbound-promises/*` 가 아직 501 이다(11-16 실측). 구현되면 수령(`…/receipts`) 뒤에도 같은 INSPECT·PUTAWAY 입고 작업(`/inbound-tasks`)이 생기는지 알려 달라 — 시뮬레이터 입고 흐름을 실서버로 돌릴 때 쓴다.
 
@@ -104,6 +97,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | R-11 | 칸 한도·최소량 | 일부 해소 — `replenishment-policies` 있음, 값은 Q-07 미결(기준 없는 칸은 `CONFIG_REQUIRED`). 칸 용량은 위치 `dimensions` ÷ 상품 `dimensions`(inventory 0.18.0). MOCK 의 "칸 치수 ÷ 상품 치수, min 30%" 는 MOCK 에서만 | inventory 0.14.0~ |
 | R-20 | 작업 지시 줄 바코드가 비어 PDA 상품 스캔 "다른 상품" | 해소 — fulfillment 0.7.0(`122f03e3`, PC 3 배포): 조회 때 `barcodes[]`·`barcode`(첫 값) 채움, 이미 만든 작업도. 11-16 실측: 진행 중 PICK 7줄 모두 채워짐. 스캔 판은 첫 값 + 나머지 표시 | fulfillment 0.7.0 |
 | R-14 | 시뮬레이터 토큰 발급 경로 | 해소 — `dev-token-exchange` 계속 사용(SIM-11 예외, LAN 전용). 조건: 비밀번호 재설정 금지, 계정 `claude-mfc-wrk`·`mfcw-pp-01~10` 만, 토큰을 다시 받은 뒤에도 401 이면 그 계정 멈춤 → `RealWorker` 반영(11-17) | `…/mfc/2026-11-16-simulator-reply-token-r14.md`(`cb2bf317`) |
+| R-13 | PICK 실적 도착지(상온 대기 칸이 없음) | 해소 — fulfillment 0.8.0·inventory 0.19.0(`d5386b2f`, 11-17 PDA 요청 P1~P4): **피킹 도착지 = 장바구니**(구역 CART), 한 출고 = 한 장바구니(409 `CART_MISMATCH`), 밀봉 때 `packingLocation`(패킹대) 필수 — 장바구니 → 패킹대로 옮기며 PACKED. 포장 위치(PACKING)도 계속 받는다. 실서버 가상 작업자는 장바구니로 바꿈(11-17), MOCK 은 예전 흐름(`PAK-C-01`·`PAK-F-01`) 그대로. 카트는 40대(`149e15e1`) | `docs/handoff/clients/mfc-app/2026-11-17-reply-pick-to-cart.md` |
 | R-12 | OR-Tools·Chronos-2 | 회신 — OR-Tools 는 mfc-capacity(Java, JVM 실행 ADR-0053), Chronos-2 미적용. 시뮬레이터 할 일 없음 | 회신 11-09 |
 
 ## 시뮬레이터 쪽 후속 작업 (시뮬레이터가 맞출 것 — 백엔드 요청 아님)
@@ -151,7 +145,10 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 |---|---|---|
 | 인계 fence 유효시간 | 180초 | 백엔드 설정 기본 3분(D-2, `mfc-fulfillment-service.yml handover-fence-ttl`)에 맞춤. 계약은 `fenceExpiresAt` 만 정의 |
 | 결품 시 처리 | 고객 사전 선택 "품절 상품만 취소" 로 가정. 보고 때 E·R −q(H 불변), 작업 BLOCKED → **5초 뒤** MOCK 이 결품 사가(CANCEL_ITEM) 대신 해결 | 실서버는 order-orchestration 결품 사가. MOCK 은 같은 SKU 다른 LOT 재확보가 없어 늘 BLOCKED |
-| PICK 포장 위치 | 냉동 `PAK-F-01`, 냉장 `PAK-C-01`, 상온 `PAK-C-01`(임시) | 냉장·냉동 칸 분리는 사용자 확인, 상온은 R-13 |
+| PICK 도착지(MOCK) | 냉동 `PAK-F-01`, 냉장 `PAK-C-01`, 상온 `PAK-C-01` | MOCK 만 예전 흐름(서버도 PACKING 을 계속 받음). 실서버 가상 작업자는 장바구니 |
+| 장바구니 고르기(실서버 가상 작업자) | 출고마다 첫 줄 칸 온도대의 빈 카트(`CRT-A`·`C`·`F`), 빈 카트가 없으면 다른 온도대 → 그래도 없으면 같이 씀. 밀봉 뒤 빔. 409 `CART_MISMATCH` 면 detail 의 카트로 다시 | 서버는 카트 온도대·같이 쓰기를 보지 않는다(회신 P4). 현장 배정 규칙 문서 없음 |
+| 밀봉 패킹대(실서버 가상 작업자) | 자기가 잡은 패킹대 `PAK-A-0n` 을 `packingLocation` 으로 | 장바구니로 집품하면 필수(0.8.0) |
+| 실제 PDA 작업자 말풍선의 카트·패킹대 | 카트: 서버가 아는 그 출고의 장바구니(PACK `packingLocations` 의 CRT-), 첫 집품 전엔 첫 칸 온도대 카트(안내). 패킹대: 서버가 알려 주지 않아 `PAK-A-01` | 포장 조회(Package)에 패킹대 위치가 없다 |
 | PICK·PACK 배정(MOCK) | 대기 작업자 FIFO, PACK 은 같은 작업자 | MOCK 화면용 임시 규칙. 실서버는 mfc-capacity |
 | 포장 단위 | 출하 1건당 온도대별 봉투 1개 | MFC 7-6 "온도 보호·분리" 원칙 |
 | 분할 | 총 상품중량 10,000g 초과 시 (확정 정책) — 중량 내림차순 first-fit | 실제 분할은 order-service 이행 계획 |

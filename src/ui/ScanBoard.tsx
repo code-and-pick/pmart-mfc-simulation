@@ -1,6 +1,6 @@
 // 스캔 판: PDA 앱으로 찍을 바코드를 화면에 띄운다(사용자 2026-11-16 "바로 클릭하면 보이게", "실제 주문건 눌렀을때 그 바코드 뜨게").
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
-// - 카트 4장(Code128, 값 = 위치 코드)
+// - 카트 40대(Code128, 값 = 위치 코드 — 상온 20·냉장 12·냉동 8, 백엔드 149e15e1)
 // - 실서버: 진행 중 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes), PACK 의 포장 위치
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
@@ -32,13 +32,31 @@ function LocBarcode({ code, caption }: { code: string; caption: string }) {
   return <Barcode value={code} caption={caption} height={44} onGo={() => controller.focusBackendCode(code)} />;
 }
 
+/** 장바구니 40대(상온 20·냉장 12·냉동 8) — 온도대별로 접어 둔다. PDA 는 CRT- 면 어느 카트든 받고, 찍은 카트가 그 주문의 장바구니가 된다 */
 export function CartBarcodes() {
+  const groups: [string, string][] = [
+    ['A', '상온'],
+    ['C', '냉장'],
+    ['F', '냉동'],
+  ];
   return (
-    <div className="bc-grid">
-      {BACKEND_FACTS.cartLocations.map((c) => (
-        <LocBarcode key={c.code} code={c.code} caption={c.label} />
-      ))}
-    </div>
+    <>
+      {groups.map(([t, ko]) => {
+        const carts = BACKEND_FACTS.cartLocations.filter((c) => c.temp === t);
+        return (
+          <details key={t} open={t === 'A'}>
+            <summary>
+              {ko} {carts.length}대 ({carts[0]?.code} ~ {carts[carts.length - 1]?.code})
+            </summary>
+            <div className="bc-grid">
+              {carts.map((c) => (
+                <LocBarcode key={c.code} code={c.code} caption={c.label} />
+              ))}
+            </div>
+          </details>
+        );
+      })}
+    </>
   );
 }
 
@@ -147,7 +165,7 @@ export function ScanBoard() {
       <div className="note">
         PDA 앱 입력칸의 카메라 버튼으로 화면을 찍거나, PC 브라우저라면 입력칸에 아래 글자를 치고 Enter. 인쇄용 전체 라벨:{' '}
         <a href="/labels/cart-labels-MFC-SEED-01.html" target="_blank" rel="noreferrer">
-          카트 4장
+          카트 {BACKEND_FACTS.cartLocations.length}장
         </a>{' '}
         ·{' '}
         <a href="/labels/locations/index.html" target="_blank" rel="noreferrer">

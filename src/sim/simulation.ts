@@ -23,6 +23,7 @@ import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
+import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { cartFor, nextPickStop } from '../domain/pickStop';
 import { RealWorker, type RealSiteContext } from './realWorker';
@@ -61,6 +62,8 @@ export class Simulation {
   readonly skuMap: Map<string, Sku>;
   readonly metrics = new Metrics();
   readonly stations: StationPool;
+  /** 실서버 가상 작업자의 장바구니(한 출고 = 한 장바구니, fulfillment 0.8.0) */
+  readonly carts = new CartPool(BACKEND_FACTS.cartLocations.map((c) => c.code));
   readonly shipRack: ShippingRack;
   readonly workers: Worker[] = [];
   readonly inboundWorkers: InboundWorker[] = [];
@@ -241,6 +244,8 @@ export class Simulation {
         log: (m) => this.log(m),
         location: (c) => this.backendLocation(c),
         point: (c) => this.backendPoint(c),
+        wire: (c) => this.codes.toBackend(c),
+        carts: this.carts,
       };
     }
   }
@@ -362,7 +367,7 @@ export class Simulation {
           if (!started) {
             target = cart;
             key = `${s.taskId}:cart`;
-            w.cue = { kind: 'CART', taskId: s.taskId, cart: cartFor(stop.location), next: stop };
+            w.cue = { kind: 'CART', taskId: s.taskId, cart: this.serverCart(s.shipmentId) ?? cartFor(stop.location), next: stop };
           } else if (stopLoc) {
             target = stopLoc.pick;
             key = `${s.taskId}:${stop.location}:${stop.line.orderLineId}`;
@@ -445,6 +450,20 @@ export class Simulation {
   }
 
   /** 포장 스캔 안내 — 서버가 아는 것(배차 요청·밀봉한 포장·출고 READY)과 화면에서 넘긴 스캔으로 지금 단계를 정한다 */
+  /**
+   * 서버가 아는 그 출고의 장바구니 — 같은 출고 PACK 상세의 packingLocations(PICK 실적 도착지) 중 CRT-.
+   * 한 출고 = 한 장바구니(fulfillment 0.8.0). 첫 집품 전에는 서버가 모른다.
+   */
+  private serverCart(shipmentId: string | null | undefined): string | null {
+    if (!shipmentId || !this.real) return null;
+    for (const x of this.real.tasks.values()) {
+      if (x.summary.shipmentId !== shipmentId) continue;
+      const c = (x.detail?.packingLocations ?? []).find((v) => v.startsWith('CRT-'));
+      if (c) return c;
+    }
+    return null;
+  }
+
   private packCue(w: ObservedWorker, t: RealTask): ScanCue | null {
     const real = this.real!;
     const s = t.summary;
@@ -452,13 +471,15 @@ export class Simulation {
     const d = t.detail;
     if (!shipmentId || !d) return null;
     const info = real.shipmentInfo.get(shipmentId)?.data ?? null;
-    // 패킹대: 집품분이 놓인 포장 위치(packingLocations)의 패킹대, 없으면 패킹대 1 [시뮬] — PDA 는 PAK- 면 받는다
+    const live = (info?.packages ?? []).filter((p) => p.state !== 'INVALIDATED' && p.state !== 'VOIDED');
+    // 패킹대: 예전 흐름(포장 위치로 집품)이면 packingLocations 의 PAK-, 아니면 패킹대 1 [시뮬] — PDA 는 PAK- 면 받는다.
+    // 장바구니로 집품하면 packingLocations 는 장바구니라(fulfillment 0.8.0) 어느 패킹대인지 화면에 주는 값이 없다(Package 에 위치 없음)
     const station = (d.packingLocations ?? []).find((x) => x.startsWith('PAK-')) ?? 'PAK-A-01';
-    // 카트: 이 출고를 피킹할 때 안내한 카트(첫 칸 온도대) — PDA 는 그 기기가 피킹한 카트와 같은지 본다
+    // 카트: 서버가 아는 이 출고의 장바구니(PICK 실적 도착지) → 없으면 피킹 때 안내한 카트(첫 칸 온도대)
     const pick = [...real.tasks.values()].find((x) => x.summary.taskType === 'PICK' && x.summary.shipmentId === shipmentId);
     const pl = pick?.detail?.lines[0];
-    const cart = cartFor(pl?.picks?.[0]?.locations?.[0]?.locationCode ?? pl?.locationId ?? null);
-    const live = (info?.packages ?? []).filter((p) => p.state !== 'INVALIDATED' && p.state !== 'VOIDED');
+    const cart =
+      (d.packingLocations ?? []).find((x) => x.startsWith('CRT-')) ?? this.serverCart(shipmentId) ?? cartFor(pl?.picks?.[0]?.locations?.[0]?.locationCode ?? pl?.locationId ?? null);
     const packed = new Map<string, number>();
     for (const p of live) for (const x of p.contents as { orderLineId: string; qty: number }[]) packed.set(x.orderLineId, (packed.get(x.orderLineId) ?? 0) + x.qty);
     const bag = d.lines.map((line) => ({ line, left: line.plannedQty - line.cancelledQty - (packed.get(line.orderLineId) ?? 0) })).filter((x) => x.left > 0);

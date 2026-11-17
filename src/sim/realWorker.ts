@@ -1,6 +1,6 @@
 // 실서버 가상 작업자(mfcw-pp-01~10, 사용자 결정 2026-11-16): 실제 PDA 처럼 자기 토큰으로 계약 API 를 부른다.
-// 다음 작업 받기(업무 PICK_PACK) → 시작 → 받은 방문 순서(visitSeq)대로 걸어 집품 실적 → 패킹대 → PACK 시작과 함께 배차 요청(점원 MANUAL)
-// → 밀봉 → 출하대기 랙. 서버가 확정한 결과만 진행으로 본다. 응답이 없으면 같은 Idempotency-Key 로 다시 보낸다.
+// 다음 작업 받기(업무 PICK_PACK) → 시작 → 장바구니 → 받은 방문 순서(visitSeq)대로 걸어 집품 실적(도착지 = 장바구니, fulfillment 0.8.0)
+// → 패킹대 → PACK 시작과 함께 배차 요청(점원 MANUAL) → 밀봉(장바구니 → 패킹대) → 출하대기 랙. 서버가 확정한 결과만 진행으로 본다. 응답이 없으면 같은 Idempotency-Key 로 다시 보낸다.
 // 실서버에서는 결품을 지어내지 않는다(MOCK 의 무작위 결품 없음). 인계는 rider 시뮬레이터 몫(backend-requests "rider 시뮬레이터 요청").
 
 import type { HttpBackend } from '../backend/http/HttpBackend';
@@ -11,6 +11,7 @@ import type { NavGrid, P } from '../domain/navgrid';
 import { REAL_WORKERS } from '../config';
 import type { SimParams } from '../config';
 import { Agent } from './agent';
+import { cartInDetail, type CartPool } from './cartPool';
 import type { StationPool } from './site';
 import type { PdaView, WorkerState } from './worker';
 
@@ -27,6 +28,10 @@ export interface RealSiteContext {
   location: (backendCode: string) => Location | null;
   /** 백엔드 선반 밖 위치 코드(PAK-·DSP-·CRT- 등) → 바닥 좌표 */
   point: (backendCode: string) => P | null;
+  /** 시뮬레이터 코드(패킹대 PS-n 등) → 백엔드 위치 코드 */
+  wire: (simCode: string) => string | null;
+  /** 장바구니 나눠 쓰기(한 출고 = 한 장바구니) */
+  carts: CartPool;
 }
 
 const TEMP_KO: Record<TemperatureZone, string> = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' };
@@ -37,7 +42,7 @@ export function tempOfCode(code: string): TemperatureZone | null {
   return c === 'F' && code[1] === '-' ? 'FROZEN' : c === 'C' && code[1] === '-' ? 'CHILLED' : c === 'A' && code[1] === '-' ? 'AMBIENT' : null;
 }
 
-/** 집은 상품을 내려놓는 포장 위치(R-13): 냉동 PAK-F-01, 냉장·상온 PAK-C-01 */
+/** 예전 흐름의 집품 도착지(포장 위치, R-13): 냉동 PAK-F-01, 냉장·상온 PAK-C-01 — 지금 가상 작업자는 장바구니로 집품(fulfillment 0.8.0) */
 export function packDropFor(temp: TemperatureZone | null): string {
   return temp === 'FROZEN' ? 'PAK-F-01' : 'PAK-C-01';
 }
@@ -232,10 +237,13 @@ export class RealWorker extends Agent {
     if (!started) {
       await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
     }
-    // 장바구니(CRT-A-01) — 방문 순서의 출발점
+    // 장바구니 — 방문 순서의 출발점. 한 출고 = 한 장바구니(fulfillment 0.8.0): 출고마다 빈 카트 하나(첫 칸 온도대), 집품 실적 도착지가 이 카트
+    const firstLoc = task.lines[0]?.picks?.[0]?.locations?.[0]?.locationCode ?? task.lines[0]?.locationId ?? null;
+    let cart = ctx.carts.take(shipmentId, firstLoc ? tempOfCode(firstLoc) : null);
     this.state = 'TO_CART';
-    this.activity = '장바구니 가지러';
-    await this.walkTo(ctx.point('CRT-A-01') ?? ctx.layout.points.cartDepot);
+    this.activity = `장바구니 ${cart} 가지러`;
+    this.pda = this.view(task, 'PICK', `장바구니 ${cart} 스캔`);
+    await this.walkTo(ctx.point(cart) ?? ctx.layout.points.cartDepot);
     await this.wait(8);
     this.hasCart = true;
 
@@ -277,32 +285,42 @@ export class RealWorker extends Agent {
       }
       this.pda.step = '위치·상품 바코드 스캔';
       await this.wait(ctx.params.pickScanSecPerLine + ctx.params.pickSecPerUnit * pick.remainingQty);
-      const to = packDropFor(temp);
-      await this.retry(() =>
-        be.recordExecution(
-          task.taskId,
-          {
-            executionType: 'PICK',
-            workerId: this.workerId!,
-            assignmentVersion: av,
-            fromLocation: from,
-            toLocation: to,
-            lines: [{ orderLineId: line.orderLineId, sku: line.sku, lotId: pick.lotId, pickedQty: pick.remainingQty }],
-          },
-          this.key('pick', task.taskId, `:${line.orderLineId}:${pick.lotId}`),
-        ),
-      );
-      this.dropped.set(line.sku, { loc: to, temp });
+      const send = (to: string) =>
+        this.retry(() =>
+          be.recordExecution(
+            task.taskId,
+            {
+              executionType: 'PICK',
+              workerId: this.workerId!,
+              assignmentVersion: av,
+              fromLocation: from,
+              toLocation: to,
+              lines: [{ orderLineId: line.orderLineId, sku: line.sku, lotId: pick.lotId, pickedQty: pick.remainingQty }],
+            },
+            this.key('pick', task.taskId, `:${line.orderLineId}:${pick.lotId}:${to}`),
+          ),
+        );
+      try {
+        await send(cart);
+      } catch (e) {
+        // 이어 하기 등으로 이 출고가 이미 다른 장바구니를 쓰면 409 CART_MISMATCH(detail 에 그 장바구니) — 그 카트로 다시
+        const used = e instanceof ApiProblem && e.problem.code === 'CART_MISMATCH' ? cartInDetail(e.problem.detail) : null;
+        if (!used || used === cart) throw e;
+        ctx.log(`${this.account} ${shipmentId} 는 장바구니 ${used} 를 씀(409 CART_MISMATCH) — 그 카트로 다시`);
+        cart = used;
+        ctx.carts.bind(shipmentId, cart);
+        await send(cart);
+      }
+      this.dropped.set(line.sku, { loc: cart, temp });
       for (let k = 0; k < pick.remainingQty && this.carrying.length < 12; k++) this.carrying.push(temp ?? 'AMBIENT');
       this.pda.pickedQty = pick.remainingQty;
       this.pda.step = '집품 등록됨';
     }
     this.currentTarget = null;
-    // 패킹 대기 지점(집은 상품 내려놓기) — PACK 은 다음 작업 받기가 이어서 준다(capacity: PICK 담당에게 PACK)
+    // 패킹 대기 지점(장바구니를 끌고 가 둔다) — PACK 은 다음 작업 받기가 이어서 준다(capacity: PICK 담당에게 PACK)
     this.state = 'WAIT_STATION';
-    this.activity = '패킹 대기 지점으로';
-    const firstDrop = [...this.dropped.values()][0]?.loc ?? 'PAK-C-01';
-    await this.walkTo(ctx.point(firstDrop) ?? ctx.layout.points.packQueue);
+    this.activity = `장바구니 ${cart} 패킹 대기 지점으로`;
+    await this.walkTo(ctx.layout.points.packQueue);
     await this.wait(4);
     this.hasCart = false;
     this.carrying = [];
@@ -348,15 +366,17 @@ export class RealWorker extends Agent {
       this.activity = `패킹 ${station.id} (${units}개)`;
       await this.wait(packSec);
 
-      // 밀봉: 집품분이 놓인 포장 위치·온도대별로 봉투 하나씩. 위치는 내가 내려놓은 곳 → PACK 상세 packingLocations 가 하나면 그곳 →
-      // 재고 조회(PICKED) 순으로 찾고, 그래도 모르면 보내지 않는다(계약: 집품 위치가 하나면 서버가 정함)
+      // 밀봉: 집품분이 놓인 위치·온도대별로 봉투 하나씩. 위치는 내가 담은 장바구니 → PACK 상세 packingLocations 가 하나면 그곳 →
+      // 재고 조회(PICKED) 순으로 찾는다. 장바구니면 packingLocation = 이 패킹대(필수 — 장바구니 → 패킹대로 옮기며 PACKED, fulfillment 0.8.0),
+      // 포장 위치(예전 흐름)면 그 위치, 모르면 보내지 않는다(계약: 집품 위치가 하나면 서버가 정함)
+      const stationCode = ctx.wire(station.id);
       const groups = new Map<string, { loc: string | null; temp: TemperatureZone | null; lines: typeof lines }>();
       const onlyLoc = task.packingLocations?.length === 1 ? task.packingLocations[0] : null;
       for (const l of lines) {
         let d = this.dropped.get(l.sku) ?? (onlyLoc ? { loc: onlyLoc, temp: onlyLoc.startsWith('PAK-F') ? ('FROZEN' as const) : null } : null);
         if (!d) {
           const st = await be.getCenterStock(ctx.mfcId, l.sku).catch(() => null);
-          const u = st?.units.find((x) => x.workState === 'PICKED' && x.qty >= l.remainingQty && x.locationCode.startsWith('PAK-'));
+          const u = st?.units.find((x) => x.workState === 'PICKED' && x.qty >= l.remainingQty && /^(PAK|CRT)-/.test(x.locationCode));
           d = u ? { loc: u.locationCode, temp: u.locationCode.startsWith('PAK-F') ? 'FROZEN' : null } : null;
         }
         const k = `${d?.loc ?? '-'}|${d?.temp ?? '-'}`;
@@ -376,7 +396,7 @@ export class RealWorker extends Agent {
               contents: g.lines.map((l) => ({ orderLineId: l.orderLineId, sku: l.sku, qty: l.remainingQty })),
               bagCount: 1,
               ...(g.temp ? { temperatureZone: g.temp } : {}),
-              ...(g.loc ? { packingLocation: g.loc } : {}),
+              ...(g.loc?.startsWith('CRT-') ? (stationCode ? { packingLocation: stationCode } : {}) : g.loc ? { packingLocation: g.loc } : {}),
               packedBy: this.workerId!,
             },
             this.key('seal', shipmentId, `:${g.loc ?? '-'}:${g.temp ?? '-'}`),
@@ -385,6 +405,7 @@ export class RealWorker extends Agent {
         this.carrying.push(g.temp ?? 'AMBIENT');
       }
       for (const l of lines) this.dropped.delete(l.sku);
+      ctx.carts.release(shipmentId); // 집품분이 패킹대로 옮겨져 장바구니가 빔
     } finally {
       ctx.stations.release(station);
     }

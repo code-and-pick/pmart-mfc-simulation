@@ -432,7 +432,7 @@ export class MockBackend implements FulfillmentPort {
             throw problem(400, 'VALIDATION_FAILED', '결품 보고는 집품과 섞지 않고 한 줄(pickedQty 0 + shortage)로 따로 보냅니다.');
           if (!body.fromLocation) throw problem(400, 'VALIDATION_FAILED', '결품 보고는 fromLocation(발견한 선반)이 필요합니다.');
         } else if (!body.fromLocation || !body.toLocation) {
-          throw problem(400, 'VALIDATION_FAILED', '집품은 fromLocation(선반)·toLocation(포장 위치)이 필요합니다.');
+          throw problem(400, 'TO_LOCATION_REQUIRED', '집품은 fromLocation(선반)·toLocation(장바구니 또는 포장 위치)이 필요합니다.');
         }
         const shortages: TaskExecution['shortages'] = [];
         let applied = 0;

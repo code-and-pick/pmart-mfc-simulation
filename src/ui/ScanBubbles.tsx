@@ -94,9 +94,9 @@ function Bubble({ w }: { w: ObservedWorker }) {
           {w.id} · ① 카트 찍기 <span className="sub">다음 칸 {c.next.location}</span>
           <Close />
         </div>
-        <Barcode value={c.cart} caption={`카트 ${c.cart} (PDA 는 어느 카트든 받음)`} height={40} />
+        <Barcode value={c.cart} caption={`카트 ${c.cart} (PDA 는 어느 카트든 받음 — 찍은 카트가 이 주문의 장바구니)`} height={40} />
         <button className="btn" onClick={() => sim.passCart(w.workerId)} title="서버는 카트 스캔을 모릅니다 — 찍었으면 눌러 첫 칸으로. 첫 집품이 서버에 오면 저절로 넘어갑니다">
-          카트 QR 찍음 → 카트 들고 첫 칸으로
+          카트 찍음 → 카트 들고 첫 칸으로
         </button>
       </>
     );
@@ -157,7 +157,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
       return (
         <>
           {head('② 카트 찍기')}
-          <Barcode value={c.cart} caption={`카트 ${c.cart} — 이 주문을 피킹한 카트(PDA 가 같은 카트인지 봄)`} height={36} />
+          <Barcode value={c.cart} caption={`카트 ${c.cart} — 이 주문을 담은 장바구니(PDA 가 같은 카트인지 봄)`} height={36} />
           <button className="btn" onClick={() => sim.passScan(w.workerId)} title="서버는 카트 스캔을 모릅니다 — 찍었으면 눌러 다음으로">
             카트 찍음 → 카트 내려놓고 배차 요청
           </button>

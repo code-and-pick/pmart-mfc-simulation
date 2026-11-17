@@ -2,12 +2,13 @@
 import { describe, expect, it } from 'vitest';
 import type { HttpBackend } from '../src/backend/http/HttpBackend';
 import type { TokenSource } from '../src/backend/http/tokens';
-import { DEFAULT_PARAMS } from '../src/config';
+import { BACKEND_FACTS, DEFAULT_PARAMS } from '../src/config';
 import { ApiProblem, type CapacityAssignment, type TaskDetail, type TaskState } from '../src/domain/contract';
 import { buildLayout } from '../src/domain/layout';
 import { buildLocationCodeMap } from '../src/domain/locationCodes';
 import { NavGrid } from '../src/domain/navgrid';
 import { RealWorker, packDropFor, tempOfCode, type RealSiteContext } from '../src/sim/realWorker';
+import { CartPool } from '../src/sim/cartPool';
 import { StationPool } from '../src/sim/site';
 
 const ME = 'OP-pp01';
@@ -92,8 +93,12 @@ class FakeBe {
     this.tasks.set(id, { ...t, state: 'IN_PROGRESS' });
     return { status: 'ACCEPTED' };
   }
+  /** 이 출고가 이미 쓰는 장바구니(이어 하기) — 다른 toLocation 이면 409 CART_MISMATCH */
+  cartInUse: string | null = null;
   async recordExecution(id: string, body: { fromLocation: string; toLocation: string; lines: { sku: string; lotId: string; pickedQty: number }[] }, key: string) {
     this.calls.push(`pick ${id} ${body.lines[0].sku}×${body.lines[0].pickedQty} ${body.fromLocation}→${body.toLocation} lot=${body.lines[0].lotId}`);
+    if (this.cartInUse && body.toLocation !== this.cartInUse)
+      throw new ApiProblem({ status: 409, code: 'CART_MISMATCH', detail: `이 출고는 장바구니 ${this.cartInUse} 를 씁니다.` });
     this.bodies.push(key);
     return { status: 'ACCEPTED' };
   }
@@ -127,6 +132,8 @@ function setup() {
     log: () => {},
     location: (c) => locBy.get(codes.toSim(c) ?? '') ?? null,
     point: () => null,
+    wire: (c) => codes.toBackend(c),
+    carts: new CartPool(BACKEND_FACTS.cartLocations.map((x) => x.code)),
   };
   const be = new FakeBe();
   const tokens = { get: async () => 'tok', operatorId: ME, lastError: null, invalidated: 0, invalidate() { this.invalidated++; } };
@@ -151,10 +158,10 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(packDropFor('AMBIENT')).toBe('PAK-C-01');
   });
 
-  it('다음 작업 받기(PICK_PACK) → 시작 → visitSeq 순 집품 → PACK 시작 + 배차 요청 → 온도대별 밀봉', async () => {
+  it('다음 작업 받기(PICK_PACK) → 시작 → visitSeq 순 장바구니로 집품 → PACK 시작 + 배차 요청 → 패킹대에서 온도대별 밀봉', async () => {
     const { w, be } = setup();
     be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
-    be.tasks.set('K1', task('K1', 'PACK', 'ASSIGNED', { packingLocations: ['PAK-C-01', 'PAK-F-01'] }));
+    be.tasks.set('K1', task('K1', 'PACK', 'ASSIGNED', { packingLocations: ['CRT-A-01'] }));
     be.queue = [
       { assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' },
       { assignmentId: 'AS2', mfcId: 'MFC-SEED-01', taskId: 'K1', taskType: 'PACK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' },
@@ -164,16 +171,43 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     const c = be.calls;
     expect(c[0]).toBe(`pull ${ME} PICK_PACK`);
     expect(c[1]).toBe(`start P1 ${ME} v1`);
-    // visitSeq 1(냉동) 먼저, 그다음 상온 — 각자 온도대 포장 위치로
-    expect(c[2]).toBe('pick P1 F-1×1 F-A1-01-1-01→PAK-F-01 lot=LOT-F');
-    expect(c[3]).toBe('pick P1 B-1×2 A-C1-04-2-02→PAK-C-01 lot=LOT-B');
+    // visitSeq 1(냉동) 먼저, 그다음 상온 — 한 출고 = 한 장바구니(fulfillment 0.8.0), 첫 줄 온도대(상온)의 빈 카트
+    expect(c[2]).toBe('pick P1 F-1×1 F-A1-01-1-01→CRT-A-01 lot=LOT-F');
+    expect(c[3]).toBe('pick P1 B-1×2 A-C1-04-2-02→CRT-A-01 lot=LOT-B');
     expect(c[4]).toBe(`pull ${ME} PICK_PACK`);
     expect(c[5]).toBe(`start K1 ${ME} v1`);
     expect(c[6]).toMatch(/^dispatch ORD-1-S1 \d+m$/); // 포장 시작 때 배차 요청
-    expect(c.slice(7, 9).sort()).toEqual(['seal ORD-1-S1 B-1 AMBIENT @PAK-C-01', 'seal ORD-1-S1 F-1 FROZEN @PAK-F-01']);
+    // 장바구니로 집품했으면 packingLocation = 이 패킹대(필수 — 장바구니 → 패킹대)
+    expect(c.slice(7, 9).sort()).toEqual(['seal ORD-1-S1 B-1 AMBIENT @PAK-A-01', 'seal ORD-1-S1 F-1 FROZEN @PAK-A-01']);
     expect(c).not.toContain('stock'); // 내가 내려놓은 곳을 알면 재고를 묻지 않는다
     expect(w.ordersDone).toBe(1);
     expect(new Set(be.bodies).size).toBe(2); // 집품마다 다른 Idempotency-Key
+    w.stop();
+  });
+
+  it('이 출고가 이미 다른 장바구니를 쓰면(409 CART_MISMATCH) 그 장바구니로 다시 보낸다', async () => {
+    const { w, be } = setup();
+    be.cartInUse = 'CRT-C-07';
+    be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
+    be.queue = [{ assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
+    void w.run();
+    await runFor(w, 400);
+    const picks = be.calls.filter((x) => x.startsWith('pick'));
+    expect(picks).toEqual([
+      'pick P1 F-1×1 F-A1-01-1-01→CRT-A-01 lot=LOT-F',
+      'pick P1 F-1×1 F-A1-01-1-01→CRT-C-07 lot=LOT-F',
+      'pick P1 B-1×2 A-C1-04-2-02→CRT-C-07 lot=LOT-B',
+    ]);
+    w.stop();
+  });
+
+  it('남이 장바구니로 집은 출고는 packingLocations 가 장바구니 — 밀봉은 이 패킹대로', async () => {
+    const { w, be } = setup();
+    be.tasks.set('K3', task('K3', 'PACK', 'ASSIGNED', { packingLocations: ['CRT-F-02'] }));
+    be.queue = [{ assignmentId: 'AS4', mfcId: 'MFC-SEED-01', taskId: 'K3', taskType: 'PACK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
+    void w.run();
+    await runFor(w, 400);
+    expect(be.calls).toContain('seal ORD-1-S1 B-1+F-1 - @PAK-A-01');
     w.stop();
   });
 

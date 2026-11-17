@@ -1,5 +1,6 @@
 // 바코드 막대 계산 — Code128 은 백엔드 카트 라벨(있으면)과 막대 위치를 대조한다.
 import { describe, expect, it } from 'vitest';
+import { BACKEND_FACTS } from '../src/config';
 import { code128, ean13, ean13CheckDigit } from '../src/domain/barcode';
 
 // node 형 선언 없이 쓴다(이 저장소 typecheck 는 브라우저 형만) — 백엔드 저장소가 형제 폴더에 있을 때만 대조
@@ -20,11 +21,14 @@ describe('바코드', () => {
   it.runIf(fs.existsSync(CART_LABELS))('Code128: 백엔드 카트 라벨(CRT-A-01 등)과 막대가 같다', () => {
     const html = fs.readFileSync(CART_LABELS, 'utf-8');
     const svgs = [...html.matchAll(/<svg[^>]*>(.*?)<\/svg>[\s\S]*?class="code">([^<]+)</g)];
-    expect(svgs.length).toBe(4);
+    // 백엔드 카트 40대(mfc_carts.py, 149e15e1) — 시뮬레이터 카트 목록과 같은 코드
+    expect(svgs.map((m) => m[2]).sort()).toEqual(BACKEND_FACTS.cartLocations.map((c) => c.code).sort());
     for (const [, svg, code] of svgs) {
-      // 백엔드: 1 모듈 = 3px, 여백 30px
-      const rects = [...svg.matchAll(/<rect x="(\d+)" y="0" width="(\d+)"/g)].map((m) => [(Number(m[1]) - 30) / 3, Number(m[2]) / 3]);
-      expect(code128(code)!.bars).toEqual(rects);
+      // 여백·배율은 라벨 판마다 다르다(11-16 판: 여백 30px·1 모듈 3px, 11-17 판: 여백 10·1 모듈 1) — 첫 막대 = 0 모듈, 가장 가는 막대 = 1 모듈
+      const raw = [...svg.matchAll(/<rect x="(\d+)" y="0" width="(\d+)"/g)].map((m) => [Number(m[1]), Number(m[2])]);
+      const x0 = raw[0][0];
+      const unit = Math.min(...raw.map((r) => r[1]));
+      expect(code128(code)!.bars).toEqual(raw.map(([x, w]) => [(x - x0) / unit, w / unit]));
     }
   });
 

@@ -159,7 +159,7 @@ describe('MockBackend — 계약 의미 (mfc-fulfillment 0.4.10)', () => {
     await be.startTask(pick.taskId, { workerId: 'W1', assignmentVersion: v }, 's');
     const line = { orderLineId: 'L1', sku: 'E-00000001', pickedQty: 1 };
     expect(await code(be.recordExecution(pick.taskId, { executionType: 'PICK', workerId: 'W1', fromLocation: 'C01-01-101', lines: [line] }, 'x'))).toBe(
-      'VALIDATION_FAILED',
+      'TO_LOCATION_REQUIRED', // fulfillment 0.8.0
     );
     expect(
       await code(

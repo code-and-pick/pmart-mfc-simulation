@@ -3,6 +3,7 @@
 //       deploy/lan/seed/mfc_layout.py plan() — 백엔드는 이 평면(buildLayout)을 그대로 MFC-SEED-01 에 등록했다(SIM-6 보완).
 // 실서버 모드에서는 백엔드 코드가 정본이다. 화면·MOCK 은 시뮬레이터 코드를 그대로 쓴다.
 
+import { BACKEND_FACTS } from '../config';
 import type { TemperatureZone } from './contract';
 import type { Layout } from './layout';
 
@@ -85,9 +86,9 @@ export function buildLocationCodeMap(L: Layout): LocationCodeMap {
   toS.set('DSP-A-01', 'SHIP-RACK-1');
   toS.set('DSP-A-02', 'SHIP-RACK-2');
 
-  // 장바구니 보관: 백엔드는 거치대 한 자리에 CRT 4개
+  // 장바구니 보관: 백엔드는 카트 보관소 한 자리에 CRT 40대(mfc_carts.py, 2026-11-17)
   pair(SIM_POINT.cartDepot, 'CRT-A-01');
-  for (const c of ['CRT-A-02', 'CRT-C-01', 'CRT-F-01']) toS.set(c, SIM_POINT.cartDepot);
+  for (const c of BACKEND_FACTS.cartLocations) toS.set(c.code, SIM_POINT.cartDepot);
 
   return {
     toBackend: (c) => toB.get(c) ?? null,

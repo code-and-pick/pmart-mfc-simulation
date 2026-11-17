@@ -1,4 +1,4 @@
-// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.7.0) 의 부분 사본 + _common.yaml 공통 형
+// pmart-backend/contracts/openapi/mfc-fulfillment-service.yaml (0.8.0) 의 부분 사본 + _common.yaml 공통 형
 // + mfc-capacity-service.yaml (0.14.0) 의 작업자 목록 형 일부
 // + delivery-dispatch-service.yaml (0.3.3)·delivery-execution-service.yaml (0.4.0) 의 조회 형 일부(실서버 관찰, rider 시뮬레이터 요청 M-01·M-02).
 // 이 파일의 이름·상태값은 계약을 그대로 따른다. 계약이 바뀌면 여기를 먼저 맞춘다.
@@ -6,6 +6,8 @@
 // 0.4.11(2026-11-13): 배차 자동 요청 없음 — 점원 요청(MANUAL)만. 형 변화 없음(AUTO_ON_READY 는 예전 기록 때문에 남음).
 // 0.5.0·0.6.0(2026-11-16): 재발송 작업 지시(ConfirmOrder kind)·예약 시간 변경 — 내부 경로라 옮긴 형 변화 없음.
 // 0.7.0(2026-11-16): 작업 상세 TaskLine.barcodes(활성 바코드 전부), barcode 는 그 첫 값(조회 때 채움, R-20 해소).
+// 0.8.0(2026-11-17, d5386b2f): 피킹 도착지 = 장바구니(구역 CART) — 집은 양이 있으면 toLocation 필수(400 TO_LOCATION_REQUIRED),
+//   한 출고 = 한 장바구니(409 CART_MISMATCH), 장바구니로 집품했으면 밀봉 packingLocation(패킹대) 필수. 형 변화 없음(설명만).
 
 export type TaskState =
   | 'WAITING'
@@ -154,7 +156,7 @@ export interface TaskDetail extends TaskSummary {
   /** 재고 확정 전 실행 결과 */
   pendingExecutions?: { executionId: string; state: 'RECORDED' | 'INVENTORY_PENDING' | 'UNKNOWN_RESULT'; recordedAt: string }[];
   blockReason: string | null;
-  /** PACK — 이 출고의 집품분이 놓인 포장 위치(PICK 실적의 도착지, 0.2.0) */
+  /** PACK — 이 출고의 집품분이 놓인 위치(PICK 실적의 도착지 — 장바구니 CRT- 또는 포장 위치, 0.8.0) */
   packingLocations?: string[];
   /** (0.4.10, PICK 만) 방문 순서를 정한 방법. 피킹 시작 때 정한다 */
   routeMethod?: RouteMethod | null;
@@ -226,9 +228,9 @@ export interface TaskExecutionRequest {
   executionType: 'PICK' | 'PACK' | 'RETURN';
   workerId: string;
   assignmentVersion?: number;
-  /** PICK — 집은 선반(한 실행 = 한 선반). RETURN — 복귀 대상이 놓인 포장 위치 */
+  /** PICK — 집은 선반(한 실행 = 한 선반). RETURN — 복귀 대상이 놓인 위치(장바구니·패킹대) */
   fromLocation?: string;
-  /** PICK — 내려놓은 포장 위치(구역 PACKING). RETURN — 되돌린 선반 */
+  /** PICK — 담은 장바구니(구역 CART, 0.8.0) 또는 포장 위치(PACKING, 예전 흐름). 집은 양이 있으면 필수. RETURN — 되돌린 선반 */
   toLocation?: string;
   /** 결품 보고는 집품과 섞지 않은 한 줄(pickedQty 0 + shortage, lotId·fromLocation 필수) — 서버 규칙(ADR-0044) */
   lines: {
@@ -254,7 +256,7 @@ export interface TaskExecution {
 }
 
 export interface SealPackageRequest {
-  /** 포장 위치. 없으면 이 출고 집품분의 포장 위치가 하나일 때 그 위치(0.2.0) */
+  /** 포장 위치(패킹대). 장바구니로 집품했으면 필수(0.8.0 — 장바구니 → 패킹대로 옮기며 PACKED). 없으면 집품분 위치가 하나일 때 그 위치(0.2.0) */
   packingLocation?: string;
   contents: PackageContentLine[];
   bagCount: number;
