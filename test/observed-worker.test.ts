@@ -49,10 +49,12 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.cue).toMatchObject({ kind: 'CART', cart: 'CRT-A-01' });
     await walk(sim, 2);
     expect(w.moving).toBe(false); // 도착 → 말풍선이 뜬다
+    expect(w.hasCart).toBe(false); // 카트 QR 을 찍기 전엔 빈손
 
     // 화면에서 "카트 찍음" → 첫 칸으로 걸어가 ② 위치 ③ 상품
     sim.passCart('OP-990d2c09');
     expect(w.cue?.kind).toBe('PICK');
+    expect(w.hasCart).toBe(true); // 카트 QR 찍음 → 카트를 든다
     await walk(sim, 120);
     const loc1 = sim.backendLocation('A-C1-05-1-04')!;
     expect(Math.hypot(w.pos.x - loc1.pick.x, w.pos.z - loc1.pick.z)).toBeLessThan(0.3);

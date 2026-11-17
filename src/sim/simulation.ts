@@ -352,8 +352,9 @@ export class Simulation {
         // 스캔 안내: PDA 와 같은 순서(nextPickStop)로 카트 → 지금 갈 칸에 세우고, 도착하면 찍을 바코드를 띄운다
         w.cue = null;
         const stop = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? nextPickStop(lines) : null;
+        // 카트를 찍었다 = 화면에서 "카트 QR 찍음"을 눌렀거나 서버에 집품이 생김(PDA 는 카트를 찍어야 칸·상품으로 넘어간다). 서버는 카트 스캔을 모른다
+        const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.cartPassedTask === s.taskId;
         if (stop) {
-          const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.cartPassedTask === s.taskId;
           const stopLoc = this.backendLocation(stop.location);
           if (!started) {
             target = cart;
@@ -368,7 +369,8 @@ export class Simulation {
           }
         }
         w.state = s.state === 'IN_PROGRESS' ? 'PICKING' : s.state === 'BLOCKED' ? 'ERROR' : 'TO_CART';
-        w.hasCart = s.state === 'IN_PROGRESS';
+        // 카트는 카트 QR 을 찍은 뒤에만 든다(사용자 2026-11-17 "카트 큐알찍어야지 작업자가 카트 들게")
+        w.hasCart = started;
         w.currentTarget = stop ? this.backendLocation(stop.location) : next?.code ? this.backendLocation(next.code) : null;
         view.progress = `${done.length} / ${stops.length}`;
         view.location = last?.code ?? null;

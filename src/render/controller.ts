@@ -178,6 +178,13 @@ export class ViewController extends Emitter {
     this.emit();
   }
 
+  /** 스캔 말풍선 선택 취소 — 고른 출고와 고른 작업자를 함께 푼다(말풍선·바코드 탭 주문 고름이 사라짐) */
+  clearScanSelection() {
+    this.scanShipment = null;
+    if (this.selection?.kind === 'worker') this.selection = null;
+    this.emit();
+  }
+
   setWallOpacity(o: number) {
     this.wallUser = o;
     this.emit();
