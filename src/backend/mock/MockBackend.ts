@@ -1,6 +1,7 @@
-// 계약(mfc-fulfillment-service.yaml)의 의미를 브라우저 안에서 흉내 내는 백엔드.
-// pmart-backend 슬라이스 6(이행)이 아직 501 이라, 실서버와 같은 규칙으로 화면·흐름을 먼저 검증하기 위한 것이다.
-// 여기서 정한 값(fence 유효시간 등)은 계약이 정하지 않은 시뮬 값이며 실서버 동작을 대신하지 않는다.
+// 계약(mfc-fulfillment-service.yaml 0.4.10)의 의미를 브라우저 안에서 흉내 내는 백엔드.
+// 실서버 없이 같은 규칙으로 화면·흐름을 검증하기 위한 것이며 실서버 동작을 대신하지 않는다.
+// 규칙 근거: pmart-backend services/mfc-fulfillment-service/CLAUDE.md(6a·6b·6c), TaskService·PackageService.
+// MOCK 에는 LOT 이 없다 — picks[]·lotId 는 채우지 않는다(LOT 반영은 R-01 답 뒤 후속 작업).
 
 import {
   ApiProblem,
@@ -19,6 +20,7 @@ import {
   type TaskState,
   type TaskSummary,
   type TemperatureZone,
+  type WorkOrderDecision,
 } from '../../domain/contract';
 import type { ApiCallRecord, ApiListener, DomainEventRecord, EventListener, FulfillmentPort } from '../port';
 import { InventoryError, InventoryLedger } from './inventory';
@@ -28,6 +30,8 @@ interface TaskRec {
   predecessorId: string | null;
   orderId: string;
   reservationId: string;
+  /** 결품 보고 뒤 결품 사가(CANCEL_ITEM)를 기다리는 양 */
+  pendingShortages: { orderLineId: string; qty: number }[];
 }
 
 interface WorkOrderRec {
@@ -36,6 +40,7 @@ interface WorkOrderRec {
   reservationId: string;
   shipmentIds: string[];
   preparationStartedAt: string | null;
+  decision: WorkOrderDecision;
 }
 
 interface ShipmentRec {
@@ -43,8 +48,6 @@ interface ShipmentRec {
   pickTaskId: string;
   packTaskId: string;
   riderId: string | null;
-  packedQty: Map<string, number>; // orderLineId → 패킹 완료 수량
-  sealedQty: Map<string, number>;
   temps: Map<string, TemperatureZone>; // sku → 온도대
 }
 
@@ -156,21 +159,36 @@ export class MockBackend implements FulfillmentPort {
   // ── 시뮬레이터가 대신하는 다른 서비스의 역할 ─────────────
   // (실서버에서는 order-orchestration·mfc-capacity·delivery-dispatch 가 한다)
 
-  /** [order-orchestration → fulfillment] ConfirmOrder. 재고 예약은 결제 전에 이미 잡혀 있다고 본다(S1-b). */
-  orchestrationConfirmOrder(req: ConfirmOrderRequest, temps: Map<string, TemperatureZone>, locations: Map<string, { code: string; name: string; barcode: string }>): string {
+  /**
+   * [order-orchestration → fulfillment] ConfirmOrder → WorkOrderDecision.
+   * 출고마다 `<shipmentId>-PICK`(READY) + `-PACK`(WAITING). 같은 orderId·workVersion 재전달은 기존 결정을 돌려준다.
+   * 재고 예약은 결제 전에 이미 잡혀 있다고 본다(S1-b) — 예약 대조(INVENTORY_MISMATCH)는 흉내 내지 않는다.
+   */
+  orchestrationConfirmOrder(
+    req: ConfirmOrderRequest,
+    temps: Map<string, TemperatureZone>,
+    locations: Map<string, { code: string; name: string; barcode: string }>,
+  ): WorkOrderDecision {
     return this.callSync('POST', '/internal/work-orders', 201, () => {
+      const workVersion = req.workVersion ?? 1;
+      const prev = [...this.workOrders.values()].find((w) => w.orderId === req.orderId);
+      if (prev) {
+        if (prev.decision.workVersion === workVersion) return structuredClone(prev.decision);
+        throw problem(409, 'INVALID_STATE', `이미 접수된 주문(작업 버전 ${prev.decision.workVersion})`);
+      }
       const fulfillmentId = this.id('FUL');
+      const created = this.iso();
       const wo: WorkOrderRec = {
         fulfillmentId,
         orderId: req.orderId,
         reservationId: req.reservationId,
         shipmentIds: [],
         preparationStartedAt: null,
+        decision: { fulfillmentId, orderId: req.orderId, workVersion, decision: 'ACCEPTED', shipmentIds: [], taskIds: [], decidedAt: created },
       };
-      const created = this.iso();
       for (const s of req.shipments) {
-        const pickId = this.id('TSK');
-        const packId = this.id('TSK');
+        const pickId = `${s.shipmentId}-PICK`;
+        const packId = `${s.shipmentId}-PACK`;
         const lines = (prefix: string, withLoc: boolean): TaskLine[] =>
           s.lines.map((l, i) => {
             const meta = locations.get(l.sku);
@@ -178,7 +196,7 @@ export class MockBackend implements FulfillmentPort {
               taskLineId: `${prefix}-L${i + 1}`,
               orderLineId: l.orderLineId,
               sku: l.sku,
-              productName: meta?.name,
+              productName: l.productName ?? meta?.name,
               barcode: meta?.barcode ?? null,
               locationId: withLoc ? (meta?.code ?? null) : null,
               lotId: null,
@@ -207,18 +225,21 @@ export class MockBackend implements FulfillmentPort {
           createdAt: created,
           lines: ls,
           blockReason: null,
+          ...(taskType === 'PICK' ? { routeMethod: null } : { packingLocations: [] }),
         });
         this.tasks.set(pickId, {
           detail: base(pickId, 'PICK', 'READY', lines(pickId, true)),
           predecessorId: null,
           orderId: req.orderId,
           reservationId: req.reservationId,
+          pendingShortages: [],
         });
         this.tasks.set(packId, {
           detail: base(packId, 'PACK', 'WAITING', lines(packId, false)),
           predecessorId: pickId,
           orderId: req.orderId,
           reservationId: req.reservationId,
+          pendingShortages: [],
         });
         this.shipments.set(s.shipmentId, {
           shipment: {
@@ -233,23 +254,27 @@ export class MockBackend implements FulfillmentPort {
             bagCount: 0,
             weightG: s.weightG ?? 0,
             readyAt: null,
+            dispatchRequest: null,
           },
           pickTaskId: pickId,
           packTaskId: packId,
           riderId: null,
-          packedQty: new Map(),
-          sealedQty: new Map(),
           temps,
         });
         wo.shipmentIds.push(s.shipmentId);
+        wo.decision.shipmentIds!.push(s.shipmentId);
+        wo.decision.taskIds!.push(pickId, packId);
       }
       this.workOrders.set(fulfillmentId, wo);
       this.emit('WorkAccepted', `${req.orderId} → ${fulfillmentId} (출하 ${req.shipments.length})`);
-      return fulfillmentId;
+      return structuredClone(wo.decision);
     });
   }
 
-  /** [mfc-capacity] 작업 배정. 계약에는 OR-Tools 계획(/assignment-plans)만 있고 수동 배정 API 는 없다(요청 사항). */
+  /**
+   * [mfc-capacity] 작업 배정 — 실서버의 수동 배정 `POST /assignments`(센터 관리자)·배정 계획 확정 자리.
+   * MOCK 은 화면용 FIFO 규칙으로 바로 배정한다(OR-Tools 흉내 아님).
+   */
   capacityAssign(taskId: string, workerId: string): number {
     const t = this.mustTask(taskId);
     const d = t.detail;
@@ -259,6 +284,39 @@ export class MockBackend implements FulfillmentPort {
     d.version += 1;
     this.emit('AssignmentPublished', `${taskId} → ${workerId} v${d.assignment.assignmentVersion}`);
     return d.assignment.assignmentVersion;
+  }
+
+  /**
+   * [order-orchestration 결품 사가 → fulfillment] 결품 해결 CANCEL_ITEM(`POST /internal/work-orders/{id}/shortage-resolutions`, ADR-0045).
+   * 고객 사전 선택 "품절 상품만 취소" 로 보고된 양을 취소한다 — PICK 행 cancelled +q, BLOCKED 는 시작자가 있으면 IN_PROGRESS,
+   * 남은 집품이 0 이면 COMPLETED·포장 준비. 재고(E·R −q)는 결품 보고 때 이미 반영했다.
+   * @returns 해결한 결품 건수
+   */
+  orchestrationResolveShortages(taskId: string): number {
+    const t = this.mustTask(taskId);
+    const d = t.detail;
+    if (d.state !== 'BLOCKED' || t.pendingShortages.length === 0) return 0;
+    return this.callSync('POST', `/internal/work-orders/${d.fulfillmentId}/shortage-resolutions`, 200, () => {
+      const n = t.pendingShortages.length;
+      for (const ps of t.pendingShortages) {
+        const line = d.lines.find((l) => l.orderLineId === ps.orderLineId)!;
+        line.cancelledQty += ps.qty;
+        line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
+        this.emit('TaskProgressed', `${taskId} ${ps.orderLineId} 결품 ${ps.qty}개 취소(품절 상품만 취소)`);
+      }
+      t.pendingShortages = [];
+      d.remainingQty = d.lines.reduce((a, l) => a + l.remainingQty, 0);
+      d.blockReason = null;
+      d.state = d.activeStart ? 'IN_PROGRESS' : d.assignment.workerId ? 'ASSIGNED' : 'READY';
+      d.version += 1;
+      if (d.remainingQty === 0) this.finishTask(t, this.mustShipment(d.shipmentId!));
+      return n;
+    });
+  }
+
+  /** 결품 사가를 기다리는 PICK 작업 */
+  blockedForShortage(): string[] {
+    return [...this.tasks.values()].filter((t) => t.detail.state === 'BLOCKED' && t.pendingShortages.length > 0).map((t) => t.detail.taskId);
   }
 
   /** [delivery-dispatch] 배송 생성·라이더 배정 (DeliveryCreated·DeliveryAssigned). */
@@ -306,7 +364,7 @@ export class MockBackend implements FulfillmentPort {
         .map((t) => t.detail)
         .filter((d) => d.mfcId === mfcId && states.includes(d.state))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-        .map(({ lines: _l, activeStart: _a, blockReason: _b, ...summary }) => summary),
+        .map(({ lines: _l, activeStart: _a, blockReason: _b, routeMethod: _r, packingLocations: _p, pendingExecutions: _e, asOf: _o, ...summary }) => summary),
     );
   }
 
@@ -330,7 +388,7 @@ export class MockBackend implements FulfillmentPort {
         if (expectedVersion !== undefined && expectedVersion !== d.version) throw problem(409, 'VERSION_CONFLICT', 'taskVersion');
         if (t.predecessorId) {
           const p = this.mustTask(t.predecessorId).detail;
-          if (p.state !== 'COMPLETED' && p.state !== 'CLOSED_PARTIAL') throw problem(409, 'PREDECESSOR_NOT_COMPLETED');
+          if (p.state !== 'COMPLETED') throw problem(409, 'PREDECESSOR_NOT_COMPLETED');
         }
         if (d.state !== 'ASSIGNED') throw problem(409, 'INVALID_STATE', d.state);
         d.state = 'IN_PROGRESS';
@@ -344,41 +402,63 @@ export class MockBackend implements FulfillmentPort {
             this.emit('PreparationStarted', `${wo.orderId} 상품준비 (예약 시간 변경 차단)`);
           }
         }
-        return { status: 'APPLIED', resultId: taskId, version: d.version } satisfies CommandResponse;
+        return { status: 'APPLIED', requestId: key, resultId: taskId, version: d.version } satisfies CommandResponse;
       }),
     );
   }
 
+  /**
+   * 실적 등록. 0.2.0 부터 PICK·RETURN 만 — PACK 실적은 포장 밀봉으로(422 UNSUPPORTED_EXECUTION).
+   * 집품은 fromLocation(선반)·toLocation(포장 위치) 필수. 결품 보고는 집품과 섞지 않은 한 줄(pickedQty 0 + shortage)이고,
+   * 받으면 작업 BLOCKED + LineShortageReported — 결품 사가가 해결할 때까지 다음 실적을 받지 않는다(서버 규칙, ADR-0044).
+   * 실서버는 결품 보고에 lotId 도 요구한다 — MOCK 은 LOT 이 없어 검사하지 않는다.
+   */
   recordExecution(taskId: string, body: TaskExecutionRequest, key: string): Promise<CommandResponse> {
     return this.call('POST', `/tasks/${taskId}/executions`, 202, () =>
       this.idempotent(`exec:${taskId}`, key, body, () => {
+        if (body.executionType !== 'PICK' && body.executionType !== 'RETURN')
+          throw problem(422, 'UNSUPPORTED_EXECUTION', 'PACK 실적은 포장 밀봉(POST /shipments/{id}/packages)으로 등록합니다.');
         const t = this.mustTask(taskId);
         const d = t.detail;
+        if (body.executionType !== d.taskType)
+          throw problem(422, 'UNSUPPORTED_EXECUTION', `${body.executionType} 실적은 ${body.executionType} 작업에만 등록합니다.`);
+        if (body.executionType === 'RETURN') throw problem(422, 'UNSUPPORTED_EXECUTION', 'MOCK 은 복귀 작업을 만들지 않는다');
         if (d.state !== 'IN_PROGRESS' && d.state !== 'ASSIGNED') throw problem(409, 'INVALID_STATE', d.state);
         if (d.assignment.workerId !== body.workerId) throw problem(409, 'NOT_ASSIGNEE');
         const sh = this.mustShipment(d.shipmentId!);
+        const shortageLine = body.lines.find((l) => l.shortage);
+        if (shortageLine) {
+          if (body.lines.length !== 1 || shortageLine.pickedQty !== 0)
+            throw problem(400, 'VALIDATION_FAILED', '결품 보고는 집품과 섞지 않고 한 줄(pickedQty 0 + shortage)로 따로 보냅니다.');
+          if (!body.fromLocation) throw problem(400, 'VALIDATION_FAILED', '결품 보고는 fromLocation(발견한 선반)이 필요합니다.');
+        } else if (!body.fromLocation || !body.toLocation) {
+          throw problem(400, 'VALIDATION_FAILED', '집품은 fromLocation(선반)·toLocation(포장 위치)이 필요합니다.');
+        }
         const shortages: TaskExecution['shortages'] = [];
         let applied = 0;
         let commitId = '';
         for (const l of body.lines) {
           const line = d.lines.find((x) => x.orderLineId === l.orderLineId);
-          if (!line) throw problem(400, 'VALIDATION_FAILED', `행 없음 ${l.orderLineId}`);
+          if (!line) throw problem(400, 'VALIDATION_FAILED', `작업에 없는 주문 줄입니다: ${l.orderLineId}`);
           const short = l.shortage?.qty ?? 0;
-          if (l.pickedQty + short > line.remainingQty) throw problem(409, 'INVALID_STATE', '실적이 잔량을 넘는다(WK-03)');
-          if (body.executionType === 'PICK') {
-            if (l.pickedQty > 0) commitId = this.inventory.commitPick([{ sku: l.sku, qty: l.pickedQty }]);
-            if (short > 0) {
-              commitId = this.inventory.commitShortage(t.reservationId, l.sku, short);
-              shortages.push({ orderLineId: l.orderLineId, qty: short, reason: l.shortage!.reason });
-            }
-          } else {
-            if (l.pickedQty > 0) commitId = this.inventory.commitPack([{ sku: l.sku, qty: l.pickedQty }]);
-            sh.packedQty.set(l.orderLineId, (sh.packedQty.get(l.orderLineId) ?? 0) + l.pickedQty);
+          if (l.pickedQty + short > line.remainingQty)
+            throw problem(409, 'QTY_EXCEEDS_REMAINING', `주문 줄 ${l.orderLineId}: 집품 ${l.pickedQty} + 결품 ${short} > 남은 ${line.remainingQty}`);
+          if (l.pickedQty > 0) {
+            commitId = this.inventory.commitPick([{ sku: l.sku, qty: l.pickedQty }]);
+            line.completedQty += l.pickedQty;
+            line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
+            applied += l.pickedQty;
           }
-          line.completedQty += l.pickedQty;
-          line.cancelledQty += short;
-          line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
-          applied += l.pickedQty;
+          if (short > 0) {
+            // 재고: 판매 제외 E −q, 이 주문 예약 R −q, H 그대로(IV-09). MOCK 은 같은 SKU 다른 LOT 재확보가 없다 → 늘 BLOCKED
+            commitId = this.inventory.commitShortage(t.reservationId, l.sku, short);
+            shortages.push({ orderLineId: l.orderLineId, qty: short, reason: l.shortage!.reason });
+            t.pendingShortages.push({ orderLineId: l.orderLineId, qty: short });
+          }
+        }
+        if (body.toLocation && applied > 0) {
+          const pack = this.mustTask(sh.packTaskId).detail;
+          if (!pack.packingLocations!.includes(body.toLocation)) pack.packingLocations!.push(body.toLocation);
         }
         d.completedQty = d.lines.reduce((a, l) => a + l.completedQty, 0);
         d.remainingQty = d.lines.reduce((a, l) => a + l.remainingQty, 0);
@@ -394,42 +474,39 @@ export class MockBackend implements FulfillmentPort {
           recordedAt: this.iso(),
         });
         if (shortages.length > 0) {
-          this.emit('LineShortageReported', `${taskId} 결품 ${shortages.map((s) => `${s.orderLineId}×${s.qty}`).join(', ')} → 품절 상품만 취소`);
-        }
-        if (d.remainingQty === 0) this.finishTask(t, sh);
-        return { status: 'ACCEPTED', resultId: execId, version: d.version, nextAction: 'QUERY_RESULT' } satisfies CommandResponse;
+          d.state = 'BLOCKED';
+          d.blockReason = `SHORTAGE ${shortages.map((s) => `${s.orderLineId}×${s.qty} ${s.reason}`).join(', ')}`;
+          this.emit('LineShortageReported', `${taskId} 결품 ${shortages.map((s) => `${s.orderLineId}×${s.qty}`).join(', ')} → 결품 사가 대기`);
+        } else if (d.remainingQty === 0) this.finishTask(t, sh);
+        return { status: 'ACCEPTED', requestId: key, resultId: execId, version: d.version, nextAction: 'QUERY_RESULT' } satisfies CommandResponse;
       }),
     );
   }
 
+  /** PICK 다 집음 → COMPLETED, 같은 출고 PACK 준비(releasePack: 담당 있으면 ASSIGNED, 없으면 READY). PACK 은 밀봉으로 끝난다. */
   private finishTask(t: TaskRec, sh: ShipmentRec) {
     const d = t.detail;
-    const anyCancelled = d.lines.some((l) => l.cancelledQty > 0);
-    d.state = anyCancelled ? 'CLOSED_PARTIAL' : 'COMPLETED';
+    d.state = 'COMPLETED';
     d.activeStart = undefined;
     this.emit('TaskProgressed', `${d.taskId} ${d.taskType} ${d.state}`);
-    if (d.taskType === 'PICK') {
-      const pack = this.mustTask(sh.packTaskId).detail;
-      for (const pl of pack.lines) {
-        const src = d.lines.find((l) => l.orderLineId === pl.orderLineId)!;
-        pl.plannedQty = src.completedQty;
-        pl.remainingQty = src.completedQty;
-      }
-      pack.lines = pack.lines.filter((l) => l.plannedQty > 0);
-      pack.lineCount = pack.lines.length;
-      pack.plannedQty = pack.remainingQty = pack.lines.reduce((a, l) => a + l.plannedQty, 0);
-      pack.version += 1;
-      if (pack.plannedQty === 0) {
-        pack.state = 'CANCELLED';
-        sh.shipment.state = 'CANCELLED';
-        sh.shipment.holdReason = 'ALL_LINES_SHORT';
-        this.emit('TaskProgressed', `${pack.taskId} PACK CANCELLED (전량 결품)`);
-      } else {
-        // 피킹·패킹 같은 작업자(MFC 1장 운영 원칙) — 배정은 시뮬레이터 디스패처가 이어서 한다
-        pack.state = 'READY';
-      }
+    if (d.taskType !== 'PICK') return;
+    const pack = this.mustTask(sh.packTaskId).detail;
+    for (const pl of pack.lines) {
+      const src = d.lines.find((l) => l.orderLineId === pl.orderLineId)!;
+      pl.cancelledQty = src.cancelledQty;
+      pl.remainingQty = pl.plannedQty - pl.completedQty - pl.cancelledQty;
+    }
+    pack.remainingQty = pack.lines.reduce((a, l) => a + l.remainingQty, 0);
+    pack.version += 1;
+    if (pack.remainingQty === 0) {
+      // 전량 결품 — 포장할 것이 없다
+      pack.state = 'CANCELLED';
+      sh.shipment.state = 'CANCELLED';
+      sh.shipment.holdReason = 'ALL_LINES_SHORT';
+      this.emit('TaskProgressed', `${pack.taskId} PACK CANCELLED (전량 결품)`);
     } else {
-      this.emit('PackingFinished', `${d.shipmentId} 패킹 완료 ${d.completedQty}개`);
+      pack.state = pack.assignment.workerId ? 'ASSIGNED' : 'READY';
+      this.emit('TaskProgressed', `${pack.taskId} PACK ${pack.state} (포장 준비)`);
     }
   }
 
@@ -445,18 +522,42 @@ export class MockBackend implements FulfillmentPort {
     return this.call('GET', `/shipments/${shipmentId}`, 200, () => structuredClone(this.mustShipment(shipmentId).shipment));
   }
 
+  /**
+   * 포장 밀봉 = PACK 실적. 그 PACK 을 시작한 작업자만(IN_PROGRESS). 남은 포장량 = 집품 완료 − 포장 완료.
+   * 재고 PACK(PICKED → PACKED, H/E/R 불변) → SEALED·QR. 다 포장하면 PACK COMPLETED·출고 READY·PackingFinished·ShipmentReady.
+   */
   sealPackage(shipmentId: string, body: SealPackageRequest, key: string): Promise<Package> {
     return this.call('POST', `/shipments/${shipmentId}/packages`, 201, () =>
       this.idempotent(`seal:${shipmentId}`, key, body, () => {
         const sh = this.mustShipment(shipmentId);
         const s = sh.shipment;
         if (s.state === 'CANCELLED' || s.state === 'HANDED_OVER') throw problem(409, 'INVALID_STATE', s.state);
-        for (const c of body.contents) {
-          const packed = sh.packedQty.get(c.orderLineId) ?? 0;
-          const sealed = sh.sealedQty.get(c.orderLineId) ?? 0;
-          if (sealed + c.qty > packed) throw problem(409, 'CONTENT_MISMATCH', `${c.orderLineId} 패킹 완료 수량 초과`);
+        const pack = this.mustTask(sh.packTaskId).detail;
+        if (pack.state !== 'IN_PROGRESS') throw problem(409, 'INVALID_STATE', `포장 작업은 ${pack.state} 상태입니다(시작한 포장 작업만 밀봉).`);
+        if (body.packedBy && pack.activeStart?.workerId !== body.packedBy)
+          throw problem(409, 'NOT_ASSIGNEE', '이 포장 작업을 시작한 작업자가 아닙니다.');
+        const pick = this.mustTask(sh.pickTaskId).detail;
+        const want = new Map<string, number>();
+        for (const c of body.contents) want.set(c.orderLineId, (want.get(c.orderLineId) ?? 0) + c.qty);
+        for (const [ol, q] of want) {
+          const picked = pick.lines.find((l) => l.orderLineId === ol)?.completedQty ?? 0;
+          const packed = pack.lines.find((l) => l.orderLineId === ol)?.completedQty ?? 0;
+          if (q > picked - packed) throw problem(409, 'CONTENT_MISMATCH', `주문 줄 ${ol}: 포장 ${q} > 포장할 수 있는 ${picked - packed}`);
         }
-        for (const c of body.contents) sh.sealedQty.set(c.orderLineId, (sh.sealedQty.get(c.orderLineId) ?? 0) + c.qty);
+        const locs = pack.packingLocations ?? [];
+        if (!body.packingLocation && locs.length !== 1)
+          throw problem(400, 'VALIDATION_FAILED', `packingLocation 이 필요합니다(집품분 포장 위치 ${JSON.stringify(locs)}).`);
+        if (body.packingLocation && !locs.includes(body.packingLocation))
+          throw problem(400, 'VALIDATION_FAILED', `${body.packingLocation} 에 집품분이 없습니다(집품분 포장 위치 ${JSON.stringify(locs)}).`);
+        this.inventory.commitPack(body.contents.map((c) => ({ sku: c.sku, qty: c.qty })));
+        for (const [ol, q] of want) {
+          const line = pack.lines.find((l) => l.orderLineId === ol)!;
+          line.completedQty += q;
+          line.remainingQty = line.plannedQty - line.completedQty - line.cancelledQty;
+        }
+        pack.completedQty = pack.lines.reduce((a, l) => a + l.completedQty, 0);
+        pack.remainingQty = pack.lines.reduce((a, l) => a + l.remainingQty, 0);
+        pack.version += 1;
         const packageId = this.id('PKG');
         const pkg: Package = {
           packageId,
@@ -480,10 +581,11 @@ export class MockBackend implements FulfillmentPort {
         s.packages.push(pkg);
         s.bagCount += body.bagCount;
         s.version += 1;
-        const totalPacked = [...sh.packedQty.values()].reduce((a, b) => a + b, 0);
-        const totalSealed = [...sh.sealedQty.values()].reduce((a, b) => a + b, 0);
-        const packDone = this.mustTask(sh.packTaskId).detail.state === 'COMPLETED';
-        if (packDone && totalSealed === totalPacked) {
+        if (pack.remainingQty === 0) {
+          pack.state = 'COMPLETED';
+          pack.activeStart = undefined;
+          this.emit('TaskProgressed', `${pack.taskId} PACK COMPLETED`);
+          this.emit('PackingFinished', `${shipmentId} 패킹 완료 ${pack.completedQty}개`);
           s.state = 'READY';
           s.readyAt = this.iso();
           this.emit('ShipmentReady', `${shipmentId} 포장 ${s.packages.length}개 · 봉투 ${s.bagCount} · ${s.weightG}g`);
@@ -599,7 +701,7 @@ export class MockBackend implements FulfillmentPort {
         if (p.state !== 'EXPECTED') throw problem(409, 'INVALID_STATE', p.state);
         p.state = 'RECEIVING';
         this.emit('InboundArrivalRecorded', `${trfId} 차량 도착·하차 시작 (${body.recordedBy})`);
-        return { status: 'ACCEPTED', resultId: trfId } satisfies CommandResponse;
+        return { status: 'ACCEPTED', requestId: key, resultId: trfId } satisfies CommandResponse;
       }),
     );
   }
@@ -619,7 +721,7 @@ export class MockBackend implements FulfillmentPort {
         p.state = 'TIN_POSTED';
         const receiptId = this.id('RCP');
         this.emit('MfcReceiptPosted', `${trfId} ${receiptId} TIN 전기 H+${body.lines.reduce((a, l) => a + l.normalQty, 0)} (${commitId}) — 적치 대기`);
-        return { status: 'APPLIED', resultId: receiptId } satisfies CommandResponse;
+        return { status: 'APPLIED', requestId: key, resultId: receiptId } satisfies CommandResponse;
       }),
     );
   }
@@ -645,7 +747,7 @@ export class MockBackend implements FulfillmentPort {
             'InventoryExecutionApplied',
             `${body.executionType} ${body.sku} ×${body.qty} → ${body.toLocation}${body.to === 'reserve' ? ' (보충재고)' : ''}`,
           );
-          return { status: 'APPLIED', resultId: commitId } satisfies CommandResponse;
+          return { status: 'APPLIED', requestId: key, resultId: commitId } satisfies CommandResponse;
         }),
       `${body.executionType} · 계약 공백 R-10`,
     );

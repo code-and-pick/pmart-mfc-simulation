@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { useApp } from '../../app/context';
+import { cameraTap } from '../cameraTap';
 
 /** 매 프레임 시뮬레이션을 진행하고, 약 4Hz 로 패널 갱신 박자를 보낸다. */
 export function SimDriver() {
@@ -166,4 +167,14 @@ export function Lights() {
       />
     </>
   );
+}
+
+/** 매 프레임 카메라·캔버스 크기를 cameraTap 에 적는다(스캔 말풍선 ScanBubbles 가 읽음) */
+export function CameraTap() {
+  useFrame(({ camera, size }) => {
+    cameraTap.camera = camera;
+    cameraTap.width = size.width;
+    cameraTap.height = size.height;
+  });
+  return null;
 }

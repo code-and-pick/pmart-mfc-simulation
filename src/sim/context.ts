@@ -1,7 +1,7 @@
 import type { FulfillmentPort } from '../backend/port';
 import type { Sku } from '../domain/catalog';
 import type { Package } from '../domain/contract';
-import type { Layout } from '../domain/layout';
+import type { Layout, Location } from '../domain/layout';
 import type { NavGrid } from '../domain/navgrid';
 import type { SimParams } from '../config';
 import type { Rng } from '../util/rng';
@@ -23,6 +23,10 @@ export interface SiteContext {
   now(): number;
   log(msg: string): void;
   orderOf(fulfillmentId: string): string | undefined;
+  /** 시뮬레이터 코드 → 서버에 보낼 위치 코드 (MOCK 은 그대로, 실서버는 백엔드 코드) */
+  wireCode(simCode: string): string;
+  /** 서버가 준 위치 코드 → 평면 칸. 평면에 없으면 null */
+  simLocation(wireCode: string): Location | null;
   /** PICK 이 끝난 출하의 PACK 작업을 같은 작업자에게 배정받는다. 전량 결품이면 null. */
   awaitPackAssignment(shipmentId: string, workerId: string): Promise<{ taskId: string; assignmentVersion: number } | null>;
   /** 출하대기 랙에 포장을 올렸다 — 배송(라이더) 쪽으로 넘어간다. */

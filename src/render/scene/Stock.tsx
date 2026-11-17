@@ -67,12 +67,15 @@ export function Goods() {
 
   useLayoutEffect(() => {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
+    // 실서버 모드: 시뮬레이터 가짜 상품은 "수량 모름" — 회색으로 흐리게(실제 재고처럼 보이지 않게)
+    const unknown = sim.mock ? null : new THREE.Color(0x4a4d52);
     for (let k = 0; k < total; k++) {
-      if (layout.colors[k]) mesh.current.setColorAt(k, layout.colors[k]);
+      if (unknown) mesh.current.setColorAt(k, unknown);
+      else if (layout.colors[k]) mesh.current.setColorAt(k, layout.colors[k]);
       mesh.current.setMatrixAt(k, zero);
     }
     shown.current.fill(-1);
-  }, [layout, total]);
+  }, [layout, total, sim]);
 
   useEffect(() => {
     registry.goods = { mesh: mesh.current, skuAt: (i) => catalog[layout.goodsSku[i]].sku };
@@ -82,6 +85,9 @@ export function Goods() {
   }, [registry, catalog, layout]);
 
   const first = useRef(true);
+  const realVer = useRef(-1);
+  /** 실서버 재고를 한 번이라도 받은 칸(시뮬레이터 코드) — 다 집혀 0 이 돼도 가짜 상품으로 되돌리지 않는다 */
+  const realSlots = useRef(new Set<string>());
   useFrame(() => {
     const force = first.current;
     first.current = false;
@@ -110,8 +116,17 @@ export function Goods() {
       changed = true;
     };
     if (!inv) {
-      // 실서버 모드: 수량을 알 수 없어 칸 절반으로 그린다
-      if (force) catalog.forEach((s, ci) => update(ci, Math.ceil(s.shelfCap / 2)));
+      // 실서버 모드: 실제 재고를 읽은 칸은 비우고(RealStock 이 실제 수량을 그림), 나머지는 수량 모름(회색 절반)
+      const real = sim.real;
+      const ver = real?.stockVersion ?? 0;
+      if (force || ver !== realVer.current) {
+        realVer.current = ver;
+        for (const u of real?.stockUnits() ?? []) {
+          const c = sim.codes.toSim(u.locationCode);
+          if (c) realSlots.current.add(c);
+        }
+        catalog.forEach((s, ci) => update(ci, realSlots.current.has(s.location.code) ? 0 : Math.ceil(s.shelfCap / 2)));
+      }
     } else if (force) {
       catalog.forEach((s, ci) => update(ci, inv.get(s.sku)?.shelf ?? 0));
       inv.dirty.clear();

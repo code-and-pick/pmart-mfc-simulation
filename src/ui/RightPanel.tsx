@@ -1,13 +1,23 @@
 import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useApp, useTick } from '../app/context';
+import { useApp, useTick, useView } from '../app/context';
 import { fmtClock, fmtDur } from '../sim/metrics';
+import { RealOrders, RealStockTable, RealSummary } from './RealPanel';
+import { ScanBoard } from './ScanBoard';
+import { ScanFocusContext } from './scanFocus';
 
-type Tab = 'api' | 'events' | 'logs' | 'inventory';
+type Tab = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
+const REAL_TABS: { t: Tab; text: string }[] = [
+  { t: 'orders', text: '실제 주문' },
+  { t: 'inventory', text: '주문 상품 재고' },
+  { t: 'scan', text: '바코드' },
+  { t: 'api', text: 'API 호출' },
+];
 const TABS: { t: Tab; text: string }[] = [
   { t: 'api', text: 'API 호출' },
   { t: 'events', text: '계약 이벤트' },
   { t: 'logs', text: '현장' },
   { t: 'inventory', text: '재고' },
+  { t: 'scan', text: '바코드' },
 ];
 
 function Kpis() {
@@ -88,6 +98,8 @@ function Board() {
 function LogBody({ tab }: { tab: Tab }): ReactNode {
   const { sim: s, controller } = useApp();
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
+  if (tab === 'orders') return s.real ? <RealOrders /> : null;
+  if (tab === 'scan') return <ScanBoard />;
   if (tab === 'api') {
     return s.apiLog.slice(-150).map((r, i) => {
       const ok = typeof r.status === 'number' && r.status < 400;
@@ -126,9 +138,7 @@ function LogBody({ tab }: { tab: Tab }): ReactNode {
       <div className="note">결품·보충 대기·차단·오류 같은 현장 사건이 여기에 쌓입니다.</div>
     );
   }
-  if (!s.mock) {
-    return <div className="note">실서버 모드에서는 재고 스냅샷 API(/internal/snapshots)가 서비스 전용이라 볼 수 없습니다 (backend-requests.md R-05).</div>;
-  }
+  if (!s.mock) return s.real ? <RealStockTable /> : null;
   const inv = s.mock.inventory;
   const active = inv
     .all()
@@ -190,7 +200,7 @@ function Log({ tab }: { tab: Tab }) {
   const box = useRef<HTMLDivElement>(null);
   // 바닥에 붙어 있었으면 새 행이 와도 바닥을 따라간다
   const stick = useRef(true);
-  const key = `${tab}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? Math.floor(s.time / 5) : ''}`;
+  const key = `${tab}:${tab === 'orders' || tab === 'scan' ? (s.real?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? (s.real?.skuVersion ?? 0) : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
   // 내용이 바뀔 때만 다시 만든다 (4Hz 갱신마다 150행을 새로 그리지 않게)
   const body = useMemo(() => <LogBody tab={tab} />, [key]);
   const lastTab = useRef(tab);
@@ -199,7 +209,7 @@ function Log({ tab }: { tab: Tab }) {
     if (!el) return;
     const tabChanged = lastTab.current !== tab;
     lastTab.current = tab;
-    if (tab !== 'inventory' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
+    if (tab !== 'inventory' && tab !== 'orders' && tab !== 'scan' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
   }, [key, tab]);
   return (
     <div
@@ -216,14 +226,31 @@ function Log({ tab }: { tab: Tab }) {
 }
 
 export function RightPanel() {
+  const { sim } = useApp();
   useTick();
-  const [tab, setTab] = useState<Tab>('api');
+  const real = !!sim.real;
+  const [tab, setTab] = useState<Tab>(real ? 'orders' : 'api');
+  // 고른 출고는 ViewController 에 둔다 — 3D 스캔 말풍선(ScanBubbles)도 같은 값을 본다
+  const view = useView();
+  const scanShipment = view.scanShipment;
+  const focus = useMemo(
+    () => ({
+      shipmentId: scanShipment,
+      show: (id: string) => {
+        view.setScanShipment(id);
+        setTab('scan');
+      },
+      clear: () => view.setScanShipment(null),
+    }),
+    [scanShipment, view],
+  );
   return (
+    <ScanFocusContext.Provider value={focus}>
     <div className="panel right">
-      <Kpis />
-      <Board />
+      {real ? <RealSummary /> : <Kpis />}
+      {!real && <Board />}
       <div className="tabs">
-        {TABS.map((x) => (
+        {(real ? REAL_TABS : TABS).map((x) => (
           <button key={x.t} className={tab === x.t ? 'on' : undefined} onClick={() => setTab(x.t)}>
             {x.text}
           </button>
@@ -231,5 +258,6 @@ export function RightPanel() {
       </div>
       <Log tab={tab} />
     </div>
+    </ScanFocusContext.Provider>
   );
 }

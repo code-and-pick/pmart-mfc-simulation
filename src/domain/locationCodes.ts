@@ -1,0 +1,97 @@
+// 시뮬레이터 평면 코드 ↔ 백엔드 위치 코드(ADR-0042) 대응.
+// 근거: pmart-backend docs/handoff/simulator/mfc/2026-11-09-simulator-notice-layout-bins.md, …/mfc/2026-11-16-simulator-notice-layout-v2-slots.md,
+//       deploy/lan/seed/mfc_layout.py plan() — 백엔드는 이 평면(buildLayout)을 그대로 MFC-SEED-01 에 등록했다(SIM-6 보완).
+// 실서버 모드에서는 백엔드 코드가 정본이다. 화면·MOCK 은 시뮬레이터 코드를 그대로 쓴다.
+
+import type { TemperatureZone } from './contract';
+import type { Layout } from './layout';
+
+/** 평면에 코드가 따로 없는 자리 — 시뮬레이터 쪽 이름. */
+export const SIM_POINT = {
+  packQueue: 'PACK-QUEUE',
+  /** 패킹 대기 지점의 냉동 칸 — 화면에서는 packQueue 와 같은 자리 */
+  packQueueFrozen: 'PACK-QUEUE-F',
+  cartDepot: 'CART-DEPOT',
+  receiving: 'RCV',
+  receivingDock: 'RCV-DOCK',
+  returnIntake: 'RTN',
+} as const;
+
+const TEMP_LETTER: Record<TemperatureZone, 'A' | 'C' | 'F'> = { AMBIENT: 'A', CHILLED: 'C', FROZEN: 'F' };
+const QUARANTINE: Record<string, string> = { AQ: 'QRT-F-01', BQ: 'QRT-C-01', CQ: 'QRT-A-01' };
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+
+/**
+ * 집은 상품을 내려놓는 포장 위치(PICK toLocation) — 시뮬레이터 코드.
+ * 패킹 대기 지점 안에 냉장 칸(PAK-C-01)·냉동 칸(PAK-F-01)이 따로 있다(사용자 2026-11-10, 백엔드 mfc_layout.py).
+ * 상온은 대기 지점에 상온 칸이 없어 냉장 칸(PAK-C-01)에 둔다 — 임시, R-13. 백엔드는 온도대를 검사하지 않는다(Locations.requirePacking).
+ */
+export function packDropPoint(temp: TemperatureZone): string {
+  return temp === 'FROZEN' ? SIM_POINT.packQueueFrozen : SIM_POINT.packQueue;
+}
+
+export interface LocationCodeMap {
+  /** 시뮬레이터 코드 → 백엔드 코드. 대응이 없으면 null. */
+  toBackend(simCode: string): string | null;
+  /** 백엔드 코드 → 시뮬레이터 코드. 평면에 없는 위치(MIGRATION 등)는 null. */
+  toSim(backendCode: string): string | null;
+  /** 선반 칸 수(대응표 점검용) */
+  readonly shelfCount: number;
+}
+
+/** 선반 칸: `A01-01-101` → `F-A1-01-1-01` ({온도대}-{그룹 글자 + 줄 번호}-{랙 2자리}-{단}-{칸 2자리}). */
+export function shelfBackendCode(temp: TemperatureZone, group: string, rackNo: number, level: number, slot: number): string {
+  const area = group[0] + String(Number(group.slice(1)));
+  return `${TEMP_LETTER[temp]}-${area}-${pad2(rackNo)}-${level}-${pad2(slot)}`;
+}
+
+export function buildLocationCodeMap(L: Layout): LocationCodeMap {
+  const toB = new Map<string, string>();
+  const toS = new Map<string, string>();
+  const pair = (sim: string, backend: string, reverse = true) => {
+    toB.set(sim, backend);
+    if (reverse) toS.set(backend, sim);
+  };
+
+  const racks = new Map(L.racks.map((r) => [r.id, r]));
+  for (const loc of L.locations) {
+    const r = racks.get(loc.rackId)!;
+    pair(loc.code, shelfBackendCode(loc.temp, r.group, r.rackNo, loc.level, loc.slot));
+  }
+  const shelfCount = toB.size;
+
+  // 보충재고 팔레트: 온도대별 평면 순서대로 R1-01, R1-02 …
+  const nByTemp: Partial<Record<TemperatureZone, number>> = {};
+  for (const rs of L.reserves) {
+    const n = (nByTemp[rs.temp] ?? 0) + 1;
+    nByTemp[rs.temp] = n;
+    pair(rs.id, `${TEMP_LETTER[rs.temp]}-R1-${pad2(n)}-1-01`);
+  }
+
+  for (const st of L.stations) pair(st.id, `PAK-A-${pad2(Number(st.id.split('-')[1]))}`);
+  // 패킹 대기 지점: 백엔드는 같은 좌표에 PAK-C-01(냉장)·PAK-F-01(냉동) 두 칸을 둔다
+  pair(SIM_POINT.packQueue, 'PAK-C-01');
+  pair(SIM_POINT.packQueueFrozen, 'PAK-F-01');
+
+  for (const [zoneId, code] of Object.entries(QUARANTINE)) pair(zoneId, code);
+  pair(SIM_POINT.receiving, 'RCV-A-01');
+  pair(SIM_POINT.receivingDock, 'RCV-A-01', false);
+  for (const d of L.dockSlots) pair(d.id, 'RCV-A-01', false);
+  pair(SIM_POINT.returnIntake, 'RTN-A-01');
+
+  // 외부 출하대기 랙 2개 → DSP-A-01·02 (칸 SR1-xx 는 랙 1)
+  for (const s of L.shippingSlots) pair(s.id, `DSP-A-${pad2(s.rackIndex + 1)}`, false);
+  toS.set('DSP-A-01', 'SHIP-RACK-1');
+  toS.set('DSP-A-02', 'SHIP-RACK-2');
+
+  // 장바구니 보관: 백엔드는 거치대 한 자리에 CRT 4개
+  pair(SIM_POINT.cartDepot, 'CRT-A-01');
+  for (const c of ['CRT-A-02', 'CRT-C-01', 'CRT-F-01']) toS.set(c, SIM_POINT.cartDepot);
+
+  return {
+    toBackend: (c) => toB.get(c) ?? null,
+    toSim: (c) => toS.get(c) ?? null,
+    shelfCount,
+  };
+}

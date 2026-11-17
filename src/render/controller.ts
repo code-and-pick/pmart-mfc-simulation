@@ -67,6 +67,8 @@ export type LabelMode = 'all' | 'rack' | 'off';
 export class ViewController extends Emitter {
   readonly views: ZoneView[];
   selection: Selection = null;
+  /** 실제 주문 탭에서 고른 출고(바코드 탭·스캔 말풍선이 같이 쓴다). 없으면 null */
+  scanShipment: string | null = null;
   focusedZone = 'ALL';
   /** 사용자가 벽 투명도를 고르지 않았으면(null) 구역 확대 때 벽을 옅게 한다 */
   wallUser: number | null = null;
@@ -127,9 +129,31 @@ export class ViewController extends Emitter {
     this.nearCut = 1.75;
   }
 
+  /** 바코드에서 고른 자리 — 3D 에 잠깐 표시(노란 기둥·고리). until = performance.now() 기준 ms */
+  marker: { x: number; y: number; z: number; until: number } | null = null;
+
+  /** 백엔드 위치 코드로: 선반 칸이면 정면, 카트·포장대·출하대기 같은 바닥 자리면 위에서. 모르는 코드면 false */
+  focusBackendCode(code: string): boolean {
+    const loc = this.sim.backendLocation(code);
+    if (loc) {
+      this.focusLocation(loc);
+      this.marker = { x: loc.pick.x, y: loc.shelf.y, z: loc.pick.z, until: performance.now() + 8000 };
+      this.emit();
+      return true;
+    }
+    const p = this.sim.backendPoint(code);
+    if (!p) return false;
+    this.nearCut = 0;
+    const t = new THREE.Vector3(p.x, 0.5, p.z);
+    this.cameraRequest = { pos: t.clone().add(new THREE.Vector3(0, 8, 8)), target: t, animate: true };
+    this.marker = { x: p.x, y: 0, z: p.z, until: performance.now() + 8000 };
+    this.emit();
+    return true;
+  }
+
   focusPerson(id: string) {
     this.nearCut = 0;
-    const p = [...this.sim.workers, ...this.sim.inboundWorkers].find((x) => x.id === id);
+    const p = [...this.sim.siteWorkers(), ...this.sim.inboundWorkers].find((x) => x.id === id);
     if (!p) return;
     const tTo = new THREE.Vector3(p.pos.x, 0.5, p.pos.z);
     this.cameraRequest = { pos: tTo.clone().add(new THREE.Vector3(0, 7, 7)), target: tTo, animate: true };
@@ -141,6 +165,23 @@ export class ViewController extends Emitter {
       const sku = this.sim.skuMap.get(s.sku);
       if (sku && fly) this.focusLocation(sku.location);
     } else if (s && fly) this.focusPerson(s.id);
+    this.emit();
+  }
+
+  /** 실제 주문 줄을 고른다 — 그 출고의 PDA 작업자가 3D 에 있으면 카메라를 그리로(스캔 말풍선이 뜬다) */
+  setScanShipment(id: string | null) {
+    this.scanShipment = id;
+    if (id) {
+      const w = this.sim.observedWorkers.find((x) => x.pda?.shipmentId === id);
+      if (w) this.focusPerson(w.id);
+    }
+    this.emit();
+  }
+
+  /** 스캔 말풍선 선택 취소 — 고른 출고와 고른 작업자를 함께 푼다(말풍선·바코드 탭 주문 고름이 사라짐) */
+  clearScanSelection() {
+    this.scanShipment = null;
+    if (this.selection?.kind === 'worker') this.selection = null;
     this.emit();
   }
 

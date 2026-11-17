@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import type { P as Point } from '../../domain/navgrid';
 import type { InboundWorker } from '../../sim/inbound';
-import type { Worker } from '../../sim/worker';
+import type { SiteWorker } from '../../sim/worker';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
 import { makeLabel } from '../sprites';
 import { Box } from './Facility';
@@ -46,12 +46,12 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   }, [id, registry]);
 
   useFrame(() => {
-    const a: Worker | InboundWorker | undefined =
-      kind === 'worker' ? sim.workers.find((x) => x.id === id) : sim.inboundWorkers.find((x) => x.id === id);
+    const a: SiteWorker | InboundWorker | undefined =
+      kind === 'worker' ? sim.siteWorkers().find((x) => x.id === id) : sim.inboundWorkers.find((x) => x.id === id);
     if (!a) return;
     group.current.position.set(a.pos.x, 0, a.pos.z);
     group.current.rotation.y = a.heading;
-    bodyMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as Worker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
+    bodyMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as SiteWorker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
     const s = controller.selection;
     const sel = s && s.kind !== 'location' && s.id === id;
     bodyMat.current.emissive.setHex(sel ? 0x444444 : 0x000000);
@@ -109,7 +109,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
 export function People() {
   const { sim } = useApp();
   const people = useIdList(
-    () => [...sim.workers.map((a) => ({ id: a.id, kind: 'worker' as Kind })), ...sim.inboundWorkers.map((a) => ({ id: a.id, kind: 'inbound' as Kind }))],
+    () => [...sim.siteWorkers().map((a) => ({ id: a.id, kind: 'worker' as Kind })), ...sim.inboundWorkers.map((a) => ({ id: a.id, kind: 'inbound' as Kind }))],
     (p) => `${p.kind}:${p.id}`,
   );
   return (

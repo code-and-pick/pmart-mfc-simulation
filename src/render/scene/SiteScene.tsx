@@ -2,9 +2,11 @@
 import { Canvas } from '@react-three/fiber';
 import { AppContext, type AppCtx } from '../../app/context';
 import { People, Riders, Trucks } from './Agents';
-import { CameraRig, Lights, Picker, SimDriver } from './Core';
+import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
 import { Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
+import { RealMarkers, RealShipLabels, RealStock } from './Real';
+import { ScanMarker } from './Marker';
 import { Goods, Reserves } from './Stock';
 
 export function SiteScene({ app }: { app: AppCtx }) {
@@ -22,12 +24,17 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <Dock />
         <Staged />
         <TargetMarkers />
+        {app.sim.real && <RealMarkers />}
+        {app.sim.real && <RealStock />}
+        {app.sim.real && <RealShipLabels />}
+        <ScanMarker />
         <People />
         <Riders />
         <Trucks />
         <PathLine />
         <Highlight />
         <CameraRig />
+        <CameraTap />
         <LocationLabelsLayer />
         <Picker />
       </AppContext.Provider>

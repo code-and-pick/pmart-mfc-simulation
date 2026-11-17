@@ -3,6 +3,7 @@
 
 import { ApiProblem, ResultUnknown, type Package, type TaskDetail, type TemperatureZone } from '../domain/contract';
 import type { Location } from '../domain/layout';
+import { packDropPoint } from '../domain/locationCodes';
 import type { P } from '../domain/navgrid';
 import { Agent } from './agent';
 import type { SiteContext } from './context';
@@ -23,6 +24,24 @@ export interface PdaView {
   barcode: string | null;
   plannedQty: number | null;
   pickedQty: number | null;
+}
+
+/** 화면(3D·카드·요약)이 보는 작업자 모양 — MOCK 작업자(Worker)와 실서버 가상 작업자(RealWorker) 공통 */
+export interface SiteWorker {
+  readonly id: string;
+  pos: P;
+  heading: number;
+  path: P[];
+  distance: number;
+  activity: string;
+  state: WorkerState;
+  pda: PdaView | null;
+  hasCart: boolean;
+  carrying: TemperatureZone[];
+  busySeconds: number;
+  ordersDone: number;
+  currentTarget: Location | null;
+  readonly idle: boolean;
 }
 
 export interface Job {
@@ -136,15 +155,26 @@ export class Worker extends Agent {
     this.hasCart = true;
 
     // ── 3. 로케이션 순회 ──
+    // 실서버(0.4.10)는 피킹 시작 뒤 상세의 picks[].visitSeq 가 방문 순서다(냉장 → 냉동 → 상온 C~H, 그룹 안 최단 — ADR-0050).
+    // 받은 순서가 없으면(MOCK, 또는 순서를 못 받은 경우) 시뮬레이터 규칙(구역 순 + 가장 가까운 칸)으로 걷는다.
     this.state = 'PICKING';
+    task = await port.getTask(job.taskId);
     const rank = ctx.params.pickSequence === 'DOC_B_A_C' ? ZONE_RANK_DOC : ZONE_RANK_AMBIENT;
     const lines = task.lines
       .filter((l) => l.remainingQty > 0)
-      .map((l) => ({ l, loc: ctx.skuMap.get(l.sku)?.location ?? null }))
-      .filter((x): x is { l: (typeof task.lines)[number]; loc: Location } => x.loc !== null);
-    const ordered = routeOrder(lines, this.pos, (x) => rank[x.loc.code[0]] ?? 9);
+      .map((l) => {
+        const first = l.picks?.find((p) => p.remainingQty > 0);
+        const code = first?.locations[0]?.locationCode ?? l.locationId;
+        const loc = (code ? ctx.simLocation(code) : null) ?? ctx.skuMap.get(l.sku)?.location ?? null;
+        return { l, loc, seq: first?.visitSeq ?? null, lotId: first?.lotId };
+      })
+      .filter((x): x is { l: (typeof task.lines)[number]; loc: Location; seq: number | null; lotId: string | undefined } => x.loc !== null);
+    const ordered = lines.every((x) => x.seq !== null)
+      ? [...lines].sort((a, b) => a.seq! - b.seq!)
+      : routeOrder(lines, this.pos, (x) => rank[x.loc.code[0]] ?? 9);
+    // 집은 상품을 내려놓는 포장 위치 = 패킹 대기 지점의 온도대 칸(냉동 PAK-F-01, 냉장·상온 PAK-C-01) — 피킹이 끝나면 그리로 간다
     for (let i = 0; i < ordered.length; i++) {
-      const { l, loc } = ordered[i];
+      const { l, loc, lotId } = ordered[i];
       const sku = ctx.skuMap.get(l.sku)!;
       this.currentTarget = loc;
       this.pda = {
@@ -188,33 +218,59 @@ export class Worker extends Agent {
         stockOut === 0 && ctx.rng.next() < ctx.params.shortageRate ? Math.min(l.remainingQty, 1 + Math.floor(ctx.rng.next() * l.remainingQty)) : 0;
       const short = stockOut || randomShort;
       const picked = l.remainingQty - short;
-      await this.retry(() =>
-        port.recordExecution(
-          task.taskId,
-          {
-            executionType: 'PICK',
-            workerId: this.id,
-            assignmentVersion: job.assignmentVersion,
-            fromLocation: loc.code,
-            lines: [
-              {
-                orderLineId: l.orderLineId,
-                sku: l.sku,
-                pickedQty: picked,
-                ...(short > 0 ? { shortage: { qty: short, reason: 'SHORT' as const, note: '선반 실물 부족' } } : {}),
-              },
-            ],
-          },
-          this.key('pick', task.taskId, `:${l.orderLineId}`),
-        ),
-      );
-      if (short > 0) {
-        ctx.metrics.shortageUnits += short;
-        ctx.log(`${this.id} 결품 보고 ${loc.code} ${sku.name} ×${short}`);
+      const from = ctx.wireCode(loc.code);
+      if (picked > 0) {
+        await this.retry(() =>
+          port.recordExecution(
+            task.taskId,
+            {
+              executionType: 'PICK',
+              workerId: this.id,
+              assignmentVersion: job.assignmentVersion,
+              fromLocation: from,
+              toLocation: ctx.wireCode(packDropPoint(sku.temp)),
+              lines: [{ orderLineId: l.orderLineId, sku: l.sku, ...(lotId ? { lotId } : {}), pickedQty: picked }],
+            },
+            this.key('pick', task.taskId, `:${l.orderLineId}`),
+          ),
+        );
       }
       this.pda.pickedQty = picked;
-      this.pda.step = short > 0 ? `결품 ${short} 보고` : '피킹 완료';
       for (let k = 0; k < picked; k++) this.carrying.push(sku.temp);
+      if (short > 0) {
+        // 결품 보고는 집품과 섞지 않은 한 줄(pickedQty 0 + shortage) — 받으면 작업이 BLOCKED, 결품 사가가 풀 때까지 기다린다
+        await this.retry(() =>
+          port.recordExecution(
+            task.taskId,
+            {
+              executionType: 'PICK',
+              workerId: this.id,
+              assignmentVersion: job.assignmentVersion,
+              fromLocation: from,
+              lines: [
+                {
+                  orderLineId: l.orderLineId,
+                  sku: l.sku,
+                  ...(lotId ? { lotId } : {}),
+                  pickedQty: 0,
+                  shortage: { qty: short, reason: 'SHORT' as const, note: '선반 실물 부족' },
+                },
+              ],
+            },
+            this.key('short', task.taskId, `:${l.orderLineId}`),
+          ),
+        );
+        ctx.metrics.shortageUnits += short;
+        ctx.log(`${this.id} 결품 보고 ${loc.code} ${sku.name} ×${short}`);
+        this.pda.step = `결품 ${short} 보고 — 처리 대기`;
+        this.activity = `결품 처리 대기 ${loc.code}`;
+        for (let w = 0; w < 120; w++) {
+          const now = await port.getTask(task.taskId);
+          if (now.state !== 'BLOCKED') break;
+          await this.wait(3);
+        }
+        this.pda.step = `결품 ${short} 취소됨`;
+      } else this.pda.step = '피킹 완료';
     }
     this.currentTarget = null;
     if (trace) trace.pickDoneAt = ctx.now();
@@ -242,31 +298,19 @@ export class Worker extends Agent {
     if (trace) trace.packStartAt = ctx.now();
     this.state = 'PACKING';
     const packTask = await port.getTask(pack.taskId);
-    const units = packTask.lines.reduce((a, l) => a + l.plannedQty, 0);
+    // 포장할 양 = PACK 행 잔량(결품 취소분은 cancelledQty 로 빠져 있다)
+    const toPack = packTask.lines.filter((l) => l.remainingQty > 0);
+    const units = toPack.reduce((a, l) => a + l.remainingQty, 0);
     const packSec = ctx.params.packBaseSec + ctx.params.packPerUnitSec * units;
     this.pda!.step = '상품·기한 확인 → 포장';
     this.pda!.progress = `${units}개`;
     this.activity = `패킹 ${station.id} (${units}개)`;
     await this.wait(packSec);
 
-    await this.retry(() =>
-      port.recordExecution(
-        pack.taskId,
-        {
-          executionType: 'PACK',
-          workerId: this.id,
-          assignmentVersion: pack.assignmentVersion,
-          toLocation: station.id,
-          lines: packTask.lines.map((l) => ({ orderLineId: l.orderLineId, sku: l.sku, pickedQty: l.plannedQty })),
-          durationSec: Math.round(packSec),
-        },
-        this.key('pack', pack.taskId),
-      ),
-    );
-
-    // 온도대별 봉투 1개씩 밀봉 → 포장 QR (문서 7-6: 상온·냉장·냉동은 주문별 통합 포장하되 온도 보호·분리)
-    const byTemp = new Map<TemperatureZone, typeof packTask.lines>();
-    for (const l of packTask.lines) {
+    // 온도대별 봉투 1개씩 밀봉 → 포장 QR (문서 7-6: 상온·냉장·냉동은 주문별 통합 포장하되 온도 보호·분리).
+    // 밀봉이 PACK 실적이다(0.2.0 — PACK 실행 등록 없음). 마지막 밀봉에서 PACK COMPLETED·출고 READY.
+    const byTemp = new Map<TemperatureZone, typeof toPack>();
+    for (const l of toPack) {
       const t = ctx.skuMap.get(l.sku)?.temp ?? 'AMBIENT';
       byTemp.set(t, [...(byTemp.get(t) ?? []), l]);
     }
@@ -274,17 +318,19 @@ export class Worker extends Agent {
     for (const [temp, ls] of byTemp) {
       this.pda!.step = `${TEMP_KO[temp]} 봉투 밀봉·라벨 출력`;
       await this.wait(12);
-      const weightG = ls.reduce((a, l) => a + (ctx.skuMap.get(l.sku)?.weightG ?? 0) * l.plannedQty, 0);
+      const weightG = ls.reduce((a, l) => a + (ctx.skuMap.get(l.sku)?.weightG ?? 0) * l.remainingQty, 0);
       const pkg = await this.retry(() =>
         port.sealPackage(
           shipmentId,
           {
-            contents: ls.map((l) => ({ orderLineId: l.orderLineId, sku: l.sku, qty: l.plannedQty })),
+            contents: ls.map((l) => ({ orderLineId: l.orderLineId, sku: l.sku, qty: l.remainingQty })),
             bagCount: 1,
             temperatureZone: temp,
             weightG,
             containsAlcohol: ls.some((l) => ctx.skuMap.get(l.sku)?.containsAlcohol),
             packedBy: this.id,
+            // 그 온도대 상품을 내려놓은 칸에서 꺼내 밀봉한다(재고 PACK 의 출발 위치)
+            packingLocation: ctx.wireCode(packDropPoint(temp)),
           },
           this.key('seal', shipmentId, `:${temp}`),
         ),

@@ -24,8 +24,8 @@ export function TopBar() {
       <div className="brand">PMart MFC 가상 현장</div>
       <span className={`badge ${sim.mode}`}>{mock ? 'MOCK 백엔드' : '실서버'}</span>
       <div className="clock">{fmtClock(sim.time)}</div>
-      <div className="seg">
-        {SPEEDS.map((s) => (
+      <div className="seg" title={mock ? undefined : '실서버 모드는 실제 시각(1×)만 — SIM-1'}>
+        {(mock ? SPEEDS : ([0, 1] as const)).map((s) => (
           <button
             key={s}
             className={sim.speed === s ? 'on' : undefined}
@@ -34,7 +34,7 @@ export function TopBar() {
               ticker.bump();
             }}
           >
-            {s === 0 ? '❚❚' : `${s}×`}
+            {s === 0 ? '❚❚' : mock ? `${s}×` : '실제 시각'}
           </button>
         ))}
       </div>
