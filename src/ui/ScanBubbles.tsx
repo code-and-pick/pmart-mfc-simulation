@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
+import { lotLabelValue } from '../domain/barcode';
 import { Barcode } from './Barcode';
 
 const HEAD_Y = 2.0;
@@ -118,6 +119,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
         <div className="note warn">작업 지시 줄에 상품 바코드가 없습니다 — 오른쪽 스캔 판의 상품 정보 바코드(참고)를 보세요.</div>
       )}
       {more.length > 0 && <div className="note">같은 상품 다른 바코드 {more.join(', ')} — PDA 는 첫 값만 비교(C-1)</div>}
+      {stop.lotId && <Barcode value={lotLabelValue(stop.lotId)} kind="qr" caption={`LOT 라벨 — PDA 가 LOT 라벨로 바뀌면 상품 대신 (C-2)`} height={36} />}
       {stop.otherLocations.length > 0 && <div className="note">지시 칸이 비었으면 같은 LOT 칸: {stop.otherLocations.join(', ')}</div>}
     </>
   );

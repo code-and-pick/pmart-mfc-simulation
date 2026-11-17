@@ -4,7 +4,8 @@ import { useSyncExternalStore } from 'react';
 export type ScanCodeMode = 'qr' | 'bar';
 export interface ZoomCode {
   value: string;
-  kind: 'code128' | 'ean13';
+  /** qr = 늘 QR(LOT 라벨 — 실물 라벨이 QR). 그 밖은 QR/바코드 전환을 따른다 */
+  kind: 'code128' | 'ean13' | 'qr';
   caption?: string;
 }
 

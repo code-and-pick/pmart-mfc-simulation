@@ -1,7 +1,8 @@
 // 바코드 막대 계산 — Code128 은 백엔드 카트 라벨(있으면)과 막대 위치를 대조한다.
 import { describe, expect, it } from 'vitest';
 import { BACKEND_FACTS } from '../src/config';
-import { code128, ean13, ean13CheckDigit } from '../src/domain/barcode';
+import { code128, ean13, ean13CheckDigit, lotLabelValue } from '../src/domain/barcode';
+import { qrEncode } from '../src/domain/qr';
 
 // node 형 선언 없이 쓴다(이 저장소 typecheck 는 브라우저 형만) — 백엔드 저장소가 형제 폴더에 있을 때만 대조
 const NODE_FS = 'node:fs';
@@ -30,6 +31,11 @@ describe('바코드', () => {
       const unit = Math.min(...raw.map((r) => r[1]));
       expect(code128(code)!.bars).toEqual(raw.map(([x, w]) => [(x - x0) / unit, w / unit]));
     }
+  });
+
+  it('LOT 라벨 값 = LOT:{lotId}(inventory 0.20.0), lotId 최대 40자도 QR 로 만든다', () => {
+    expect(lotLabelValue('LOT-3f2c')).toBe('LOT:LOT-3f2c');
+    expect(qrEncode(lotLabelValue('L'.repeat(40)))).not.toBeNull();
   });
 
   it('EAN-13: 검사 숫자, 95 모듈, 틀린 검사 숫자는 그리지 않는다', () => {

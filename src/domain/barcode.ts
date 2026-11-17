@@ -3,6 +3,15 @@
 // - EAN-13: 상품 바코드(LAN 시험 바코드 299 대역 — 백엔드 22e57579). 검사 숫자가 맞지 않으면 그리지 않는다.
 // 결과는 모듈(가장 가는 막대 폭) 단위의 [검정 시작, 폭] 목록과 전체 모듈 수. 조용한 여백은 넣지 않는다(화면이 둔다).
 
+/**
+ * LOT 라벨 값 `LOT:{lotId}` — QR 로만 찍는다. LOT 하나 = 값 하나, 재출력해도 같다.
+ * 근거: 백엔드 mfc-inventory 0.20.0(c279d1cb, 2026-11-17) LotLabel.labelValue, 회신 docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md §1.
+ * 값에 lotId 가 그대로 있어 서버 조회 없이 피킹 지시 LOT(picks[].lotId)로 만든다.
+ */
+export function lotLabelValue(lotId: string): string {
+  return `LOT:${lotId}`;
+}
+
 export interface Bars {
   /** [시작 모듈, 폭 모듈] — 검정 막대만 */
   bars: [number, number][];

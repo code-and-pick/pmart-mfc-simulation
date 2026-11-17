@@ -128,6 +128,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | # | 내용 | 근거 | 시뮬레이터 대응 |
 |---|---|---|---|
 | C-1 | PDA 앱이 상품 스캔을 작업 지시 줄의 **첫 바코드(`barcode`) 하나와만** 비교한다. 계약(fulfillment 0.7.0)은 "`barcodes[]` 중 하나면 같은 상품"이라, 바코드가 둘 이상인 상품은 두 번째 값을 찍으면 "다른 상품"이 된다. 입고·검사·재고 조사·이동 화면은 이미 `barcodes.contains` 로 비교한다. | 클라이언트 `c7498f8`(11-17): `apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`(피킹), `features/packing/presentation/packing_controller.dart:171`(포장) | 스캔 판이 첫 값을 "작업 지시 바코드"로 먼저 보이고, 나머지는 "같은 상품 다른 바코드"로 따로 보인다(앱이 바뀌면 나머지도 맞음) |
+| C-2 | **LOT 라벨(QR `LOT:{lotId}`) 전환 시점.** 백엔드는 LOT 라벨을 만들었다(inventory 0.20.0 — 값, 인쇄·해석 `GET /mfcs/{mfcId}/lot-labels/{lotId}`, 재출력 찾기 `…/lot-labels?sku=&locationCode=`). 피킹 첫 스캔을 상품 바코드 → LOT 라벨로 바꾸면 지시 LOT 와 바로 대조된다. PDA 앱 main 은 아직 상품 바코드로 비교한다(11-17 13:00 기준 `LOT:` 처리 없음). LAN 재고에는 라벨이 붙어 있지 않아 처음 쓸 때 재출력으로 뽑아 붙여야 하고, 그 전에 상품 바코드를 막으면 피킹이 멈춘다 — **전환 시점은 사용자가 정함**(백엔드 회신 §4) | 백엔드 `c279d1cb`, `docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md`. 클라이언트 origin/main `1dca4c2` | 스캔 판·말풍선이 상품 바코드 옆에 LOT 라벨 QR 도 같이 보인다(값을 피킹 지시 `picks[].lotId` 로 만들어 서버 조회 없음, 바코드 모드여도 늘 QR). 전환되면 상품 바코드 쪽 설명만 바꾸면 된다 |
 
 ## rider 시뮬레이터 요청 (짝 시뮬레이터 → 이 시뮬레이터)
 
