@@ -21,9 +21,9 @@ import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backe
 import { Rng } from '../util/rng';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
-import { RealBoard } from './realBoard';
+import { RealBoard, type RealTask } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
-import { ObservedWorker } from './observedWorker';
+import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { cartFor, nextPickStop } from '../domain/pickStop';
 import { RealWorker, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
@@ -43,6 +43,9 @@ export interface HttpSettings {
 }
 
 /** 실서버 모드의 시계: 그 PC 의 오늘 자정부터 지난 초 (SIM-1 — 실제 시각 1×) */
+/** 포장 단계 표시 이름(PDA 포장 화면 단계) */
+const PACK_STEP_KO: Record<PackStep, string> = { STATION: '포장 ① 패킹대', CART: '포장 ② 카트', DISPATCH: '포장 ③ 배차 요청', BAG: '포장 ④ 담기·밀봉', RACK: '포장 ⑤ 출하대기 랙' };
+
 function wallClockSec(): number {
   const d = new Date();
   return d.getHours() * 3600 + d.getMinutes() * 60 + d.getSeconds() + d.getMilliseconds() / 1000;
@@ -353,7 +356,7 @@ export class Simulation {
         w.cue = null;
         const stop = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? nextPickStop(lines) : null;
         // 카트를 찍었다 = 화면에서 "카트 QR 찍음"을 눌렀거나 서버에 집품이 생김(PDA 는 카트를 찍어야 칸·상품으로 넘어간다). 서버는 카트 스캔을 모른다
-        const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.cartPassedTask === s.taskId;
+        const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.passed.has(`${s.taskId}:CART`);
         if (stop) {
           const stopLoc = this.backendLocation(stop.location);
           if (!started) {
@@ -392,6 +395,18 @@ export class Simulation {
         w.hasCart = false;
         w.currentTarget = null;
         view.step = s.state === 'IN_PROGRESS' ? '포장 중' : '패킹 대기';
+        // 스캔 안내(포장): PDA 포장 화면 단계 그대로(clients packing_screen.dart — 패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙)
+        const pc = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? this.packCue(w, t) : null;
+        if (pc?.kind === 'PACK') {
+          w.cue = pc;
+          const at = this.backendPoint(pc.step === 'RACK' ? pc.rack : pc.station);
+          if (at) {
+            target = at;
+            key = `${s.taskId}:${pc.step === 'RACK' ? pc.rack : pc.station}`;
+          }
+          w.hasCart = pc.step === 'STATION' || pc.step === 'CART'; // 피킹한 카트를 끌고 와 포장대에서 내린다
+          view.step = PACK_STEP_KO[pc.step];
+        }
         w.activity = view.step;
       }
       w.pda = view;
@@ -411,11 +426,54 @@ export class Simulation {
 
   /** 스캔 안내: 실제 PDA 로 카트를 찍었다고 화면에서 넘긴다 → 그 작업자를 첫 칸으로(서버는 카트 스캔을 모름) */
   passCart(workerId: string) {
+    this.passScan(workerId);
+  }
+
+  /**
+   * 스캔 안내: 서버가 모르는 스캔(피킹 카트, 포장의 패킹대·카트)을 실제 PDA 로 찍었다고 화면에서 넘긴다.
+   * 서버를 부르지 않는다 — 다음 단계를 그리기 위한 표시일 뿐이다.
+   */
+  passScan(workerId: string) {
     const w = this.observedWorkers.find((x) => x.workerId === workerId);
-    if (!w || w.cue?.kind !== 'CART') return;
-    w.cartPassedTask = w.cue.taskId;
+    const c = w?.cue;
+    if (!w || !c) return;
+    if (c.kind === 'CART') w.passed.add(`${c.taskId}:CART`);
+    else if (c.kind === 'PACK' && (c.step === 'STATION' || c.step === 'CART')) w.passed.add(`${c.taskId}:PACK-${c.step}`);
+    else return;
     this.observedPoll = -1;
     this.syncObservedWorkers();
+  }
+
+  /** 포장 스캔 안내 — 서버가 아는 것(배차 요청·밀봉한 포장·출고 READY)과 화면에서 넘긴 스캔으로 지금 단계를 정한다 */
+  private packCue(w: ObservedWorker, t: RealTask): ScanCue | null {
+    const real = this.real!;
+    const s = t.summary;
+    const shipmentId = s.shipmentId;
+    const d = t.detail;
+    if (!shipmentId || !d) return null;
+    const info = real.shipmentInfo.get(shipmentId)?.data ?? null;
+    // 패킹대: 집품분이 놓인 포장 위치(packingLocations)의 패킹대, 없으면 패킹대 1 [시뮬] — PDA 는 PAK- 면 받는다
+    const station = (d.packingLocations ?? []).find((x) => x.startsWith('PAK-')) ?? 'PAK-A-01';
+    // 카트: 이 출고를 피킹할 때 안내한 카트(첫 칸 온도대) — PDA 는 그 기기가 피킹한 카트와 같은지 본다
+    const pick = [...real.tasks.values()].find((x) => x.summary.taskType === 'PICK' && x.summary.shipmentId === shipmentId);
+    const pl = pick?.detail?.lines[0];
+    const cart = cartFor(pl?.picks?.[0]?.locations?.[0]?.locationCode ?? pl?.locationId ?? null);
+    const live = (info?.packages ?? []).filter((p) => p.state !== 'INVALIDATED' && p.state !== 'VOIDED');
+    const packed = new Map<string, number>();
+    for (const p of live) for (const x of p.contents as { orderLineId: string; qty: number }[]) packed.set(x.orderLineId, (packed.get(x.orderLineId) ?? 0) + x.qty);
+    const bag = d.lines.map((line) => ({ line, left: line.plannedQty - line.cancelledQty - (packed.get(line.orderLineId) ?? 0) })).filter((x) => x.left > 0);
+    const serverPast = !!info?.dispatchRequest || live.length > 0;
+    const step: PackStep =
+      !serverPast && !w.passed.has(`${s.taskId}:PACK-STATION`)
+        ? 'STATION'
+        : !serverPast && !w.passed.has(`${s.taskId}:PACK-CART`)
+          ? 'CART'
+          : !info?.dispatchRequest
+            ? 'DISPATCH'
+            : info.state !== 'READY'
+              ? 'BAG'
+              : 'RACK';
+    return { kind: 'PACK', taskId: s.taskId, shipmentId, step, station, cart, rack: 'DSP-A-01', bag };
   }
 
   private realRiderVer = -1;

@@ -100,6 +100,54 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(Math.hypot(w.pos.x - last.pick.x, w.pos.z - last.pick.z)).toBeLessThan(0.3);
   });
 
+  it('포장 안내: 패킹대 → 카트 → (서버) 배차 요청 → 담기(밀봉한 만큼 줄어듦) → 출고 READY 면 출하대기 랙', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const p = pick([0, 0]);
+    const pack = {
+      ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'IN_PROGRESS', packingLocations: ['PAK-A-02'],
+      lines: p.lines.map((l) => ({ ...l, plannedQty: 2, completedQty: 0, remainingQty: 2, picks: [] })),
+    } as unknown as TaskDetail;
+    const pk = { ...p, state: 'COMPLETED' } as TaskDetail;
+    real.tasks.set(pk.taskId, { summary: pk, detail: pk, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
+    const ship = (o: object) => real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'PREPARING', packages: [], dispatchRequest: null, ...o } as never, readMs: 0, sig: '' });
+    ship({});
+    sync();
+    const w = sim.observedWorkers[0];
+    const cue = () => w.cue as { kind: string; step: string; station: string; cart: string; bag: { left: number }[] };
+    expect(cue()).toMatchObject({ kind: 'PACK', step: 'STATION', station: 'PAK-A-02', cart: 'CRT-A-01' });
+    expect(w.hasCart).toBe(true); // 피킹한 카트를 끌고 옴
+    await walk(sim, 120);
+    const st = sim.backendPoint('PAK-A-02')!;
+    expect(Math.hypot(w.pos.x - st.x, w.pos.z - st.z)).toBeLessThan(0.5);
+
+    sim.passScan('OP-990d2c09');
+    expect(cue().step).toBe('CART');
+    sim.passScan('OP-990d2c09');
+    expect(cue().step).toBe('DISPATCH');
+    expect(w.hasCart).toBe(false);
+
+    ship({ dispatchRequest: { estimatedReadyAt: '2026-11-17T02:00:00Z' } });
+    sync();
+    expect(cue().step).toBe('BAG');
+    expect(cue().bag.map((b) => b.left)).toEqual([2, 2]);
+    ship({ dispatchRequest: {}, packages: [{ state: 'SEALED', contents: [{ orderLineId: 'E-1', sku: 'E-1', qty: 2 }, { orderLineId: 'E-2', sku: 'E-2', qty: 1 }] }] });
+    sync();
+    expect(cue().bag.map((b) => b.left)).toEqual([1]);
+
+    ship({ state: 'READY', dispatchRequest: {}, packages: [] });
+    sync();
+    expect(cue().step).toBe('RACK');
+    await walk(sim, 120);
+    const rack = sim.backendPoint('DSP-A-01')!;
+    expect(Math.hypot(w.pos.x - rack.x, w.pos.z - rack.z)).toBeLessThan(0.5);
+  });
+
   it('가상 작업자가 맡은 작업은 실제 작업자로 따로 세우지 않는다', () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     (sim as unknown as { virtualWorkerIds(): Set<string> }).virtualWorkerIds = () => new Set(['OP-990d2c09']);

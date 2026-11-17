@@ -8,7 +8,7 @@ import { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
 import { cameraTap } from '../render/cameraTap';
-import type { ObservedWorker } from '../sim/observedWorker';
+import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
 
 const HEAD_Y = 2.0;
@@ -101,6 +101,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
       </>
     );
   }
+  if (c.kind === 'PACK') return <PackBubble w={w} c={c} />;
   const { stop, index, total } = c;
   const l = stop.line;
   const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
@@ -130,4 +131,68 @@ function Close() {
       ✕
     </button>
   );
+}
+
+/** 포장 말풍선 — PDA 포장 화면 단계: ① 패킹대 → ② 카트 → ③ 배차 요청 → ④ 담기·밀봉 → ⑤ 출하대기 랙 */
+function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: 'PACK' }> }) {
+  const { sim, controller } = useApp();
+  const head = (t: string) => (
+    <div className="sb-head">
+      {w.id} · 포장 {t}
+      <Close />
+    </div>
+  );
+  switch (c.step) {
+    case 'STATION':
+      return (
+        <>
+          {head('① 패킹대 찍기')}
+          <Barcode value={c.station} caption={`패킹대 ${c.station} (PDA 는 PAK- 면 받음 — 집품분이 놓인 곳)`} height={36} onGo={() => controller.focusBackendCode(c.station)} />
+          <button className="btn" onClick={() => sim.passScan(w.workerId)} title="서버는 패킹대 스캔을 모릅니다 — 찍었으면 눌러 다음으로. 배차 요청이 서버에 오면 저절로 넘어갑니다">
+            패킹대 찍음 → 카트
+          </button>
+        </>
+      );
+    case 'CART':
+      return (
+        <>
+          {head('② 카트 찍기')}
+          <Barcode value={c.cart} caption={`카트 ${c.cart} — 이 주문을 피킹한 카트(PDA 가 같은 카트인지 봄)`} height={36} />
+          <button className="btn" onClick={() => sim.passScan(w.workerId)} title="서버는 카트 스캔을 모릅니다 — 찍었으면 눌러 다음으로">
+            카트 찍음 → 카트 내려놓고 배차 요청
+          </button>
+        </>
+      );
+    case 'DISPATCH':
+      return (
+        <>
+          {head('③ 배차 요청')}
+          <div className="note">찍을 바코드 없음 — PDA 에서 예상 포장 시간을 골라 배차를 요청하세요. 서버에 요청이 오면 다음 단계로 넘어갑니다.</div>
+        </>
+      );
+    case 'BAG':
+      return (
+        <>
+          {head('④ 담기 — 상품 찍고 밀봉')}
+          {c.bag.map(({ line: l, left }) =>
+            l.barcode ? (
+              <Barcode key={l.orderLineId} value={l.barcode} kind={kindOf(l.barcode)} caption={`${l.productName ?? l.sku} — ${left}번 찍기`} height={32} />
+            ) : (
+              <div key={l.orderLineId} className="note warn">
+                {l.productName ?? l.sku} × {left} — 작업 지시 줄에 상품 바코드 없음
+              </div>
+            ),
+          )}
+          <div className="note">다 담았으면 PDA 에서 밀봉. 밀봉이 서버에 오면 남은 수가 줄고, 다 끝나면 출하대기 랙으로 갑니다.</div>
+        </>
+      );
+    case 'RACK':
+      return (
+        <>
+          {head('⑤ 출하대기 랙 찍기')}
+          <Barcode value={c.rack} caption={`출하대기 랙 ${c.rack} (PDA 는 DSP- 면 받음)`} height={36} onGo={() => controller.focusBackendCode(c.rack)} />
+          <div className="note">찍은 뒤 PDA 에서 "포장 끝내기" — 서버에 작업이 끝나면 말풍선이 닫힙니다.</div>
+        </>
+      );
+  }
 }

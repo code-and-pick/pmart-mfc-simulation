@@ -6,7 +6,7 @@
 // 스캔 안내(사용자 2026-11-17 "카트, 상품이 있는 칸까지 움직였을때 바코드를 찍을수있게"): 진행 중 PICK 이면 PDA 와 같은 순서로
 // 카트 → 지금 갈 칸으로 걸어가 서고, 도착하면 그 자리에 찍을 바코드(cue)를 띄운다. 이때 서 있는 자리는 "찍을 곳"이지 실제 위치가 아니다(R-17).
 
-import type { TemperatureZone } from '../domain/contract';
+import type { TaskLine, TemperatureZone } from '../domain/contract';
 import type { Location } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
 import type { PickStop } from '../domain/pickStop';
@@ -14,7 +14,12 @@ import { Agent } from './agent';
 import type { PdaView, SiteWorker, WorkerState } from './worker';
 
 /** 3D 에서 이 작업자 위에 띄울 "지금 찍을 것" */
-export type ScanCue = { kind: 'CART'; taskId: string; cart: string; next: PickStop } | { kind: 'PICK'; taskId: string; stop: PickStop; index: number; total: number };
+export type PackStep = 'STATION' | 'CART' | 'DISPATCH' | 'BAG' | 'RACK';
+export type ScanCue =
+  | { kind: 'CART'; taskId: string; cart: string; next: PickStop }
+  | { kind: 'PICK'; taskId: string; stop: PickStop; index: number; total: number }
+  /** 포장 — PDA 포장 화면 단계(패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙) */
+  | { kind: 'PACK'; taskId: string; shipmentId: string; step: PackStep; station: string; cart: string; rack: string; bag: { line: TaskLine; left: number }[] };
 
 export class ObservedWorker extends Agent implements SiteWorker {
   state: WorkerState = 'IDLE';
@@ -29,8 +34,11 @@ export class ObservedWorker extends Agent implements SiteWorker {
   lastSeenMs = 0;
   /** 지금 찍을 것 — 도착(멈춤)했을 때만 화면에 띄운다 */
   cue: ScanCue | null = null;
-  /** 카트를 찍었다고 화면에서 넘긴 작업(서버는 카트 스캔을 모른다 — 첫 집품이 서버에 오면 자동으로 넘어감) */
-  cartPassedTask: string | null = null;
+  /**
+   * 서버가 모르는 스캔(피킹 카트, 포장의 패킹대·카트)을 화면에서 "찍음"으로 넘긴 것 — `${taskId}:${단계}`.
+   * 서버에 다음 단계 흔적(집품·배차 요청·밀봉)이 오면 누르지 않아도 넘어간다.
+   */
+  readonly passed = new Set<string>();
   private aimKey = '';
 
   constructor(

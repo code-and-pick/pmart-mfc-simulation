@@ -337,7 +337,9 @@ export class RealBoard {
       if (!(r.pick ?? r.pack ?? r.ret)?.summary.shipmentId) continue; // 출고 ID 없는 작업
       const sig = [r.pick, r.pack, r.ret].map((t) => (t ? `${t.summary.version}:${t.closed?.state ?? ''}` : '-')).join('|');
       const hit = this.shipmentInfo.get(r.shipmentId);
-      const due = !hit || hit.sig !== sig || (this.pendingHandover(r.shipmentId) && now - hit.readMs > this.opt.shipmentRefreshSec * 1000);
+      // 포장 중이면 배차 요청·밀봉을 놓치지 않게 주기적으로(배차 요청은 작업 version 을 안 바꿀 수 있다 — 스캔 말풍선 포장 단계)
+      const packing = !!r.pack && !r.pack.closed;
+      const due = !hit || hit.sig !== sig || ((this.pendingHandover(r.shipmentId) || packing) && now - hit.readMs > this.opt.shipmentRefreshSec * 1000);
       if (!due) continue;
       budget--;
       try {
