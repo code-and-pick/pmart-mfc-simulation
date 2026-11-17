@@ -17,6 +17,7 @@ import {
   type InboundTask,
   type InboundTaskExecution,
   type InspectionResult,
+  type LotLabel,
   type MoveOrder,
   type Package,
   type PutawayCandidate,
@@ -212,6 +213,11 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   // ── 재고 이동·품질검사 업무(가상 작업자 STOCK_MOVE·INSPECTION) — mfc-inbound 0.9.0, mfc-location ──
+
+  /** mfc-inventory getLotLabel(0.20.0) — LOT 인쇄 정보(소비기한·제조일·제조 LOT 표기). 가상 작업자 품질검사가 상품 표기 대신 읽는다 */
+  getLotLabel(mfcId: string, lotId: string): Promise<LotLabel> {
+    return this.request('GET', `/mfcs/${enc(mfcId)}/lot-labels/${enc(lotId)}`);
+  }
 
   /** mfc-inbound getInboundTask — 품질검사·적치 작업 한 건(배정 taskId) */
   getInboundTask(taskId: string): Promise<InboundTask> {

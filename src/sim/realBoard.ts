@@ -3,6 +3,7 @@
 // 근거: SIM-5(주기 조회, 3초), SIM-2a(PDA 작업자는 서버 기록으로 추적). 서버가 준 상태만 그린다 — 목록에서 빠진 작업은
 // 상세를 다시 읽어 확정된 최종 상태를 받기 전까지 "확인 중"으로 둔다.
 
+import { ApiProblem } from '../domain/contract';
 import type {
   OrderFulfillmentView,
   CapacityWorker,
@@ -307,17 +308,22 @@ export class RealBoard {
   readonly skuBarcodes = new Map<string, string[] | 'ERR' | 'LOADING'>();
   skuVersion = 0;
   /** 주문 번호 → 현장 기록(GET /work-orders?orderId=) — 화면이 그 주문을 고르면 읽고, 고른 동안 orderViewRefreshSec 마다 다시 */
-  readonly orderViews = new Map<string, { data: OrderFulfillmentView | null; error: string | null; readMs: number; loading: boolean }>();
+  /** notYet = 404 WORK_ORDER_NOT_FOUND — 작업 지시가 아직 MFC 에 안 옴(오류 아님, 백엔드 PC 1 회신 11-18) */
+  readonly orderViews = new Map<string, { data: OrderFulfillmentView | null; error: string | null; readMs: number; loading: boolean; notYet?: boolean }>();
   orderViewVersion = 0;
 
   requestOrderView(orderId: string, refreshSec = 15) {
     const hit = this.orderViews.get(orderId);
     if (!this.reader.getOrderFulfillment || hit?.loading || (hit && this.nowMs() - hit.readMs < refreshSec * 1000)) return;
-    this.orderViews.set(orderId, { data: hit?.data ?? null, error: hit?.error ?? null, readMs: hit?.readMs ?? 0, loading: true });
+    this.orderViews.set(orderId, { data: hit?.data ?? null, error: hit?.error ?? null, readMs: hit?.readMs ?? 0, loading: true, notYet: hit?.notYet });
     this.reader
       .getOrderFulfillment(orderId)
       .then((d) => this.orderViews.set(orderId, { data: d, error: null, readMs: this.nowMs(), loading: false }))
-      .catch((e: unknown) => this.orderViews.set(orderId, { data: hit?.data ?? null, error: (e as Error).message, readMs: this.nowMs(), loading: false }))
+      .catch((e: unknown) =>
+        e instanceof ApiProblem && e.problem.code === 'WORK_ORDER_NOT_FOUND'
+          ? this.orderViews.set(orderId, { data: null, error: null, readMs: this.nowMs(), loading: false, notYet: true })
+          : this.orderViews.set(orderId, { data: hit?.data ?? null, error: (e as Error).message, readMs: this.nowMs(), loading: false }),
+      )
       .finally(() => this.orderViewVersion++);
   }
 

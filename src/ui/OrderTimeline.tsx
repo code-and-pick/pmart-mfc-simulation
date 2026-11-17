@@ -15,6 +15,7 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   });
   if (!orderId) return <div className="note">현장 기록: 출고 조회 전이라 주문 번호를 아직 모릅니다.</div>;
   const v = real.orderViews.get(orderId);
+  if (v?.notYet) return <div className="note">현장 기록: 이 주문의 작업 지시가 아직 MFC 에 오지 않았습니다(404 WORK_ORDER_NOT_FOUND).</div>;
   if (!v || (!v.data && v.loading)) return <div className="note">현장 기록 읽는 중… (GET /work-orders?orderId=)</div>;
   if (!v.data) return <div className="note warn">현장 기록을 읽지 못했습니다: {v.error}</div>;
   const w = (id: string | null | undefined) => (id ? real.workerName(id) : '—');

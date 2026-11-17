@@ -94,6 +94,18 @@ class FakeBe {
   candidates: { locationCode: string }[] = [];
   moves = new Map<string, MoveOrder>();
   keys: string[] = [];
+  lotLabels = new Map<string, { lotId: string; lotNo: string; sku: string; tracking: 'TRACKED'; onHand: number; expiryDate?: string | null; manufactureDate?: string | null; sourceLotRef?: string | null }>();
+  async getLotLabel(_mfcId: string, lotId: string) {
+    this.calls.push(`label ${lotId}`);
+    const l = this.lotLabels.get(lotId);
+    if (!l) throw new ApiProblem({ status: 404, code: 'LOT_NOT_FOUND' });
+    return l;
+  }
+  rejectPick: { code: string; reason: string } | null = null;
+  async getExecution(taskId: string, executionId: string) {
+    this.calls.push(`execution ${taskId} ${executionId}`);
+    return { executionId, taskId, state: 'REJECTED', rejectCode: this.rejectPick?.code ?? null, rejectReason: this.rejectPick?.reason ?? null };
+  }
   async getInboundTask(id: string) {
     return this.inbound.get(id)!;
   }
@@ -177,6 +189,7 @@ class FakeBe {
     if (this.cartInUse && body.toLocation !== this.cartInUse)
       throw new ApiProblem({ status: 409, code: 'CART_MISMATCH', detail: `이 출고는 장바구니 ${this.cartInUse} 를 씁니다.` });
     this.bodies.push(key);
+    if (this.rejectPick) return { status: 'REJECTED', resultId: `EX-${id}`, nextAction: 'QUERY_RESULT' };
     return { status: 'ACCEPTED' };
   }
   async requestDispatch(s: string, minutes: number) {
@@ -198,6 +211,7 @@ function setup() {
   const layout = buildLayout();
   const codes = buildLocationCodeMap(layout);
   const locBy = new Map(layout.locations.map((l) => [l.code, l]));
+  const logs: string[] = [];
   const ctx: RealSiteContext = {
     runId: 'run1',
     mfcId: 'MFC-SEED-01',
@@ -206,7 +220,7 @@ function setup() {
     stations: new StationPool(layout.stations, 4),
     params: { ...DEFAULT_PARAMS },
     now: () => 0,
-    log: () => {},
+    log: (m: string) => logs.push(m),
     location: (c) => locBy.get(codes.toSim(c) ?? '') ?? null,
     point: () => null,
     wire: (c) => codes.toBackend(c),
@@ -215,7 +229,7 @@ function setup() {
   const be = new FakeBe();
   const tokens = { get: async () => 'tok', operatorId: ME, lastError: null, invalidated: 0, invalidate() { this.invalidated++; } };
   const w = new RealWorker('mfcw-pp-01', layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens as unknown as TokenSource);
-  return { w, be, tokens, ctx };
+  return { w, be, tokens, ctx, logs };
 }
 
 function assign(taskId: string, taskType: string): CapacityAssignment {
@@ -400,18 +414,54 @@ describe('RealWorker — 재고 이동·품질검사 업무', () => {
     w.stop();
   });
 
-  it('품질검사(INSPECTION)는 남은 양 전부 NORMAL — 기한·LOT 표기는 지어내지 않는다. CAPTURED 면 같은 키로 다시', async () => {
+  it('품질검사(INSPECTION)는 LOT 정보의 기한·표기로 PDA 와 같은 기준 판정(정상) — CAPTURED 면 같은 키로 다시', async () => {
     const { w, be } = setup();
-    be.inbound.set('IN1', inboundTask('IN1', 'INSPECT', 10));
+    be.inbound.set('IN1', { ...inboundTask('IN1', 'INSPECT', 10), minRemainingDays: 3 });
+    be.lotLabels.set('LOT-R', { lotId: 'LOT-R', lotNo: 'L1', sku: 'B-1', tracking: 'TRACKED', onHand: 0, expiryDate: '2099-01-01', sourceLotRef: 'MFG-7' });
     be.applyStatuses = ['CAPTURED'];
     be.areaQueue.INSPECTION = [assign('IN1', 'INSPECT')];
     void w.run();
     await runFor(w, 200);
     const c = be.calls;
     expect(c.slice(0, 3)).toEqual([`pull ${ME} PICK_PACK`, `pull ${ME} STOCK_MOVE`, `pull ${ME} INSPECTION`]);
-    expect(c.filter((x) => x.startsWith('inspect'))).toEqual(['inspect IN1 NORMAL×10', 'inspect IN1 NORMAL×10']);
+    expect(c.filter((x) => x.startsWith('inspect'))).toEqual(['inspect IN1 NORMAL×10 exp=2099-01-01 ref=MFG-7', 'inspect IN1 NORMAL×10 exp=2099-01-01 ref=MFG-7']);
     expect(new Set(be.keys).size).toBe(1); // 같은 Idempotency-Key
     expect(be.inbound.get('IN1')!.state).toBe('COMPLETED');
+    w.stop();
+  });
+
+  it('품질검사: 판정 기준이 없거나 기한을 모르면 보내지 않고 사유를 남긴다(PDA 도 막음), 잔여일이 모자라면 격리', async () => {
+    const { w, be, logs } = setup();
+    be.inbound.set('IN1', inboundTask('IN1', 'INSPECT', 4)); // minRemainingDays 없음
+    be.lotLabels.set('LOT-R', { lotId: 'LOT-R', lotNo: 'L1', sku: 'B-1', tracking: 'TRACKED', onHand: 0, expiryDate: '2099-01-01' });
+    be.areaQueue.INSPECTION = [assign('IN1', 'INSPECT')];
+    void w.run();
+    await runFor(w, 120);
+    expect(be.calls.filter((x) => x.startsWith('inspect'))).toEqual([]);
+    expect(logs.some((m) => /INSPECT IN1 B-1 — 판정 기준 미설정/.test(m))).toBe(true);
+    w.stop();
+
+    const b = setup();
+    b.be.inbound.set('IN2', { ...inboundTask('IN2', 'INSPECT', 4), minRemainingDays: 30 });
+    b.be.lotLabels.set('LOT-R', { lotId: 'LOT-R', lotNo: 'L1', sku: 'B-1', tracking: 'TRACKED', onHand: 0, expiryDate: '2000-01-02' });
+    b.be.areaQueue.INSPECTION = [assign('IN2', 'INSPECT')];
+    void b.w.run();
+    await runFor(b.w, 120);
+    expect(b.be.calls.filter((x) => x.startsWith('inspect'))).toEqual(['inspect IN2 QUARANTINED×4 exp=2000-01-02']);
+    b.w.stop();
+  });
+
+  it('집품 실적이 REJECTED 면 실행을 한 번 읽어 거절 사유(rejectCode·rejectReason, fulfillment 0.16.0)를 남기고 넘어가지 않는다', async () => {
+    const { w, be, logs } = setup();
+    be.rejectPick = { code: 'LOT_MISMATCH', reason: '예약에 없는 LOT' };
+    be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
+    be.queue = [{ assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
+    void w.run();
+    await runFor(w, 200);
+    expect(be.calls).toContain('execution P1 EX-P1');
+    expect(be.calls.filter((x) => x.startsWith('pick'))[0]).toBe('pick P1 F-1×1 F-A1-01-1-01→CRT-A-01 lot=LOT-F');
+    expect(be.calls).not.toContain('pick P1 B-1×2 A-C1-04-2-02→CRT-A-01 lot=LOT-B');
+    expect(logs.some((m) => m.includes('PICK P1 중단 — 집품 거절 LOT_MISMATCH — 예약에 없는 LOT'))).toBe(true);
     w.stop();
   });
 

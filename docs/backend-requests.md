@@ -40,7 +40,7 @@
 | | 자동 보충 기준 `GET/PUT /mfcs/{mfcId}/replenishment-policies` | 200 (0건) | — |
 | | 실사 `/mfcs/{mfcId}/count-sessions…`, 정정 `/stock-corrections`, 출고 불가 LOT `/unshippable-lots`, 취급 `/sku-handlings` | 미호출 | — |
 | mfc-location 0.7.1 | 위치 목록 `GET /locations?mfcId&zone&temperatureZone&state`(cursor), 단건·상태 전이, 적치 후보 `GET /putaway-candidates` | 목록 200 (옛 문법 위치가 `CLOSED` 로 남아 있음 — 예 `A-01` "새 문법 위치로 이전(ADR-0042)"), 적치 후보 200 | 평면 대조 후보(`state=ACTIVE`). 적치 후보는 **사용** — 가상 작업자 적치 칸(11-17, 시뮬 값) |
-| mfc-inbound 0.9.0 | 입고 작업 `GET /inbound-tasks`(품질검사·적치, 상품명·바코드), 실행 `…/inspections`·`…/putaways` | 목록 200 (500건 — 11-17 READY 0건) | **사용** — 가상 작업자 품질검사(전부 정상)·적치(11-17, 실서버 작업이 없어 실제 확인 전) |
+| mfc-inbound 0.9.0 | 입고 작업 `GET /inbound-tasks`(품질검사·적치, 상품명·바코드), 실행 `…/inspections`·`…/putaways` | 목록 200 (500건 — 11-17 READY 0건) | **사용** — 가상 작업자 품질검사(11-18 부터 PDA 판정 기준 — 0.11.0 `minRemainingDays`·`maxDaysSinceManufacture`)·적치(11-17, 실서버 작업이 없어 실제 확인 전) |
 | | 이동·보충 `GET/POST /move-orders`, 집기·내려놓기·취소 | 목록 200 (0건) | **사용** — 가상 작업자 보충·이동(집기 → 장바구니 → 내려놓기, 11-17, 실제 확인 전) |
 | | 회수 반입 `/return-receipts`, 초기 재고 `/initial-stock-loads` | 미호출 | 회수 반입 자리 표시는 배송 쪽(아래 delivery) 회수 배송으로 |
 | | 입고 예정 `/inbound-promises/*` | **501** (미구현) | R-10 남은 질문 |
@@ -162,7 +162,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 | MOCK 상품 수 | 온도대별 상온 189·냉장 137·냉동 177(백엔드 LAN 시험 상품 503종 규모, 11-17). 이전 "칸의 85%" | — |
 | 입고 작업 우선순위(MOCK) | 하차·검수 → 긴급 보충 → 적치 → 일반 보충 | 문서에 없음. **실서버는 서버 순서**(다음 작업 받기: 주문 PICK·PACK → 보충·긴급 이동 → 품질검사 → 적치 → 관리자 이동 → 취소품 복귀, capacity 0.14.0) |
 | 가상 작업자 업무 순서 | `PICK_PACK` → `STOCK_MOVE` → `INSPECTION`(모두 작업 없음이면 기다림), 권한 없는 업무(422 `WORK_AREA_NOT_ALLOWED`)는 그 작업자에서 다시 묻지 않음 | 현장 작업자는 PDA 에서 업무를 하나 고른다 — 가상 작업자는 주문 먼저 |
-| 가상 작업자 품질검사 | 전부 정상(NORMAL), 소비기한·제조 LOT 표기 안 보냄 | 실서버에서 품질 실패를 지어내지 않는다. inventory 가 기한 없음을 거절하면 REJECTED 로 보인다(확인 전) |
+| 가상 작업자 품질검사 | 소비기한·제조일·제조 LOT 표기는 상품 대신 서버 LOT 정보(`GET /mfcs/{mfcId}/lot-labels/{lotId}`, inventory 0.20.0)에서 읽고, PDA 와 같은 기준(inbound 0.11.0)으로 판정 — 기준 미설정·기한 모름·제조일 필요한데 없음이면 보내지 않음(오류로 두고 다시 받기), 잔여일 부족·제조 후 경과일 초과면 격리(QUARANTINED), 그 밖은 정상 | 값을 지어내지 않는다. 온도 확인·불량 사진·사유는 PDA 화면 몫이라 보내지 않음(계약 요청 본문에 없음). 11-18 |
 | 가상 작업자 적치 칸 | `GET /putaway-candidates`(mfcId·sku·qty) 첫 후보(장바구니·출발 칸 제외), 없으면 하지 않음 | PDA 는 후보 없이 아무 선반이나 찍고 서버가 판정한다 — 시뮬레이터만의 선택 |
 | 끝낼 수 없는 작업 | 추천 칸·후보가 없으면 오류로 두고 30초 뒤 다시 받기(같은 작업이 돌아옴) — 작업자가 내놓는 API 없음 | 센터 관리자가 풀어야 함 |
 | 회수 배송 찾기 | 15초마다(열린 출고가 없어도), 반납 뒤 60분 표시 | 점원 수령 확인 API 가 없어 반납을 MFC 도착으로 본다(execution 0.5.0 설명과 같음) |

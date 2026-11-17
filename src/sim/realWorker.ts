@@ -3,7 +3,7 @@
 // → 패킹대 → PACK 시작과 함께 배차 요청(점원 MANUAL) → 밀봉(장바구니 → 패킹대) → 출하대기 랙. 서버가 확정한 결과만 진행으로 본다. 응답이 없으면 같은 Idempotency-Key 로 다시 보낸다.
 // 실서버에서는 결품을 지어내지 않는다(MOCK 의 무작위 결품 없음). 인계는 rider 시뮬레이터 몫(backend-requests "rider 시뮬레이터 요청").
 // 피패킹이 없으면 재고 이동(STOCK_MOVE — 적치·보충·이동·취소품 복귀), 품질검사(INSPECTION) 순으로 묻는다(capacity 0.14.0).
-// 품질검사는 모두 정상(NORMAL)으로 낸다 — 실서버에서 품질 불량을 지어내지 않는다.
+// 품질검사는 PDA 와 같은 기준(inbound 0.11.0)으로 판정한다 — 기한·제조일은 서버 LOT 정보에서 읽고 지어내지 않는다(domain/inspectVerdict.ts).
 
 import type { HttpBackend } from '../backend/http/HttpBackend';
 import type { TokenSource } from '../backend/http/tokens';
@@ -11,6 +11,7 @@ import {
   ApiProblem,
   ResultUnknown,
   type CapacityAssignment,
+  type CommandResponse,
   type InboundTask,
   type InboundTaskExecution,
   type TaskDetail,
@@ -24,6 +25,7 @@ import { REAL_WORKERS } from '../config';
 import type { SimParams } from '../config';
 import { Agent } from './agent';
 import { cartInDetail, type CartPool } from './cartPool';
+import { inspectVerdict, seoulToday } from '../domain/inspectVerdict';
 import type { StationPool } from './site';
 import type { PdaView, WorkerState } from './worker';
 
@@ -345,8 +347,9 @@ export class RealWorker extends Agent {
             this.key('pick', task.taskId, `:${line.orderLineId}:${pick.lotId}:${to}`),
           ),
         );
+      let res: CommandResponse;
       try {
-        await send(cart);
+        res = await send(cart);
       } catch (e) {
         // 이어 하기 등으로 이 출고가 이미 다른 장바구니를 쓰면 409 CART_MISMATCH(detail 에 그 장바구니) — 그 카트로 다시
         const used = e instanceof ApiProblem && e.problem.code === 'CART_MISMATCH' ? cartInDetail(e.problem.detail) : null;
@@ -354,8 +357,9 @@ export class RealWorker extends Agent {
         ctx.log(`${this.account} ${shipmentId} 는 장바구니 ${used} 를 씀(409 CART_MISMATCH) — 그 카트로 다시`);
         cart = used;
         ctx.carts.bind(shipmentId, cart);
-        await send(cart);
+        res = await send(cart);
       }
+      if (res.status === 'REJECTED') throw new Error(`집품 거절 ${await this.rejectOf(task.taskId, res)}`);
       this.dropped.set(line.sku, { loc: cart, temp });
       for (let k = 0; k < pick.remainingQty && this.carrying.length < 12; k++) this.carrying.push(temp ?? 'AMBIENT');
       this.pda.pickedQty = pick.remainingQty;
@@ -552,7 +556,7 @@ export class RealWorker extends Agent {
           ),
         ),
       );
-      if (r.status === 'REJECTED') throw new Error(`복귀 거절 ${r.nextAction ?? ''}`.trim());
+      if (r.status === 'REJECTED') throw new Error(`복귀 거절 ${await this.rejectOf(task.taskId, r)}`);
       sent.add(k!);
       this.pda.pickedQty = p.qty;
       this.pda.step = '복귀 등록됨';
@@ -576,6 +580,21 @@ export class RealWorker extends Agent {
     return t;
   }
 
+  /**
+   * 거절된 실적의 사유 — 응답에는 없어서(nextAction 은 QUERY_RESULT) resultId = executionId 로 실행을 한 번 읽는다(fulfillment 0.16.0 E1).
+   * PDA task_repository.dart _rejectOf 와 같다: 읽기 실패·REJECTED 아님이면 사유만 모른다(거절은 그대로).
+   */
+  private async rejectOf(taskId: string, r: CommandResponse): Promise<string> {
+    if (!r.resultId) return '(사유 모름)';
+    try {
+      const e = await this.be.getExecution(taskId, r.resultId);
+      if (e.state !== 'REJECTED') return '(사유 모름)';
+      return [e.rejectCode ?? 'REJECTED', e.rejectReason].filter(Boolean).join(' — ');
+    } catch {
+      return '(사유 조회 실패)';
+    }
+  }
+
   /** 입고 작업 실행 — APPLIED 만 확정. CAPTURED·UNKNOWN_RESULT(503 포함)는 같은 키로 다시, REJECTED 는 오류 */
   private async applied(op: string, key: string, call: (k: string) => Promise<InboundTaskExecution>): Promise<InboundTaskExecution> {
     for (let i = 0; ; i++) {
@@ -597,14 +616,26 @@ export class RealWorker extends Agent {
     this.activity = `품질검사 → ${t.locationCode}`;
     this.pda = this.inboundView(t, 'INSPECT', `${t.locationCode} 로 이동`, qty);
     await this.walkTo(ctx.point(t.locationCode) ?? ctx.layout.points.inboundIdle[0]);
-    this.pda.step = '라벨·기한 확인 → 정상';
+    this.pda.step = '라벨·기한 확인';
     this.activity = `품질검사 ${t.sku} ${qty}개`;
+    // 소비기한·제조일·제조 LOT 표기 = 사람이 상품에서 읽는 값 → 서버 LOT 정보. 판정은 PDA 와 같은 기준(inspectVerdict)
+    const label = await this.retry(() => be.getLotLabel(ctx.mfcId, t.lotId)).catch((e: unknown) => {
+      if (e instanceof ApiProblem && e.problem.status === 404) return null;
+      throw e;
+    });
     await this.wait(REAL_WORKERS.inspectBaseSec + REAL_WORKERS.inspectSecPerUnit * qty);
-    // 전량 정상. 제조 LOT 표기·소비기한은 시뮬레이터가 모른다 — 지어내지 않고 보내지 않는다(계약상 선택)
-    const r = await this.applied('품질검사', this.key('inspect', t.taskId, `:${qty}`), (k) => be.inspectInboundTask(t.taskId, [{ qty, resultQuality: 'NORMAL' }], k));
+    const v = inspectVerdict(t, label, qty, seoulToday(Date.now()));
+    if (!v.ok) {
+      this.lastProblem = `${t.sku} 품질검사 못 함 — ${v.why}`;
+      ctx.log(`${this.account} INSPECT ${t.taskId} ${t.sku} — ${v.why}, 손대지 않음`);
+      throw new Error(`품질검사 못 함 — ${v.why}`);
+    }
+    const word = v.reason === 'NORMAL' ? '정상' : v.reason === 'EXPIRY' ? `격리(잔여일 < ${t.minRemainingDays}일)` : `격리(제조 후 ${t.maxDaysSinceManufacture}일 초과)`;
+    this.pda.step = `판정 ${word}`;
+    const r = await this.applied('품질검사', this.key('inspect', t.taskId, `:${qty}`), (k) => be.inspectInboundTask(t.taskId, [v.result], k));
     this.pda.pickedQty = qty;
     this.pda.step = '품질검사 반영됨';
-    ctx.log(`${this.account} 품질검사 ${t.taskId} ${t.sku} 정상 ${qty}${r.createdTaskIds?.length ? ` → 적치 ${r.createdTaskIds.join(', ')}` : ''}`);
+    ctx.log(`${this.account} 품질검사 ${t.taskId} ${t.sku} ${word} ${qty} (기한 ${v.result.expiryDate})${r.createdTaskIds?.length ? ` → 적치 ${r.createdTaskIds.join(', ')}` : ''}`);
   }
 
   private async doPutaway(a: CapacityAssignment) {

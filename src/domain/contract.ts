@@ -257,6 +257,10 @@ export interface TaskExecution {
   appliedQty: number;
   shortages: { orderLineId: string; qty: number; reason: ShortageReason }[];
   recordedAt: string;
+  /** (0.16.0) REJECTED 일 때 재고 거절 코드 그대로(LOT_MISMATCH·PICK_QTY_EXCEEDED·INSUFFICIENT_STOCK 등, 모르는 코드도 그대로), 아니면 null */
+  rejectCode?: string | null;
+  /** (0.16.0) REJECTED 일 때 짧은 설명 — 화면에 그대로 */
+  rejectReason?: string | null;
 }
 
 export interface SealPackageRequest {
@@ -545,6 +549,12 @@ export interface InboundTask {
   sku: string;
   productName?: string | null;
   barcodes?: string[];
+  /** (0.11.0, BR-52 R18) 보관 온도대 — 모르면 null */
+  storageType?: TemperatureZone | null;
+  /** (0.11.0) 정상 판정 최소 잔여일 — 상품 보장, 없으면 보관 유형 기본값. 둘 다 없으면 null(0·무제한 아님 — PDA 는 기준 미설정으로 막음) */
+  minRemainingDays?: number | null;
+  /** (0.11.0) 제조 후 최대 경과일 — 있으면 제조일 필수 */
+  maxDaysSinceManufacture?: number | null;
   /** 품질검사 = 수령 LOT, 적치 = 나뉜 LOT */
   lotId: string;
   /** 출발 위치 */
@@ -570,6 +580,19 @@ export interface InboundTaskExecution {
 }
 
 /** POST /inbound-tasks/{taskId}/inspections 결과 줄(qty·resultQuality 필수, 나머지 선택). 합계 ≤ 작업 잔량 */
+/** mfc-inventory LotLabel (0.20.0·0.21.0) — 가상 작업자 품질검사가 쓰는 칸만 */
+export interface LotLabel {
+  lotId: string;
+  lotNo: string;
+  sku: string;
+  gs1?: string | null;
+  tracking: 'TRACKED' | 'UNTRACKED';
+  sourceLotRef?: string | null;
+  expiryDate?: string | null;
+  manufactureDate?: string | null;
+  onHand: number;
+}
+
 export interface InspectionResult {
   qty: number;
   resultQuality: 'NORMAL' | 'QUARANTINED';
