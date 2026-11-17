@@ -11,8 +11,6 @@ import { TASK_STATE_KO } from './RealPanel';
 import { useScanFocus } from './scanFocus';
 import { scanView, useScanView } from './scanView';
 
-const SCAN_STATES = new Set(['READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED']);
-
 /** 화면에 나온 PICK 의 상품 바코드를 서버에서 (SKU 마다 한 번) 읽게 한다 */
 const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
 
@@ -142,13 +140,14 @@ export function ScanBoard() {
   const focus = useScanFocus();
   const view = useScanView();
   const real = sim.real;
-  // 실제 주문 줄에서 고른 출고면 그 출고의 PICK·PACK(끝난 것도), 아니면 진행 중 작업 전부
-  const tasks = real
-    ? [...real.tasks.values()]
-        .filter((t) => (t.summary.taskType === 'PICK' || t.summary.taskType === 'PACK') && t.detail)
-        .filter((t) => (focus.shipmentId ? t.summary.shipmentId === focus.shipmentId : !t.closed && SCAN_STATES.has(t.summary.state)))
-        .sort((a, b) => a.summary.createdAt.localeCompare(b.summary.createdAt) || (a.summary.taskType === b.summary.taskType ? 0 : a.summary.taskType === 'PICK' ? -1 : 1))
-    : [];
+  // 실제 주문 줄에서 고른 출고의 PICK·PACK(끝난 것도)만 — 고르기 전에는 주문 바코드를 보이지 않는다(3D 말풍선과 같은 기준, 사용자 2026-11-17)
+  const tasks =
+    real && focus.shipmentId
+      ? [...real.tasks.values()]
+          .filter((t) => (t.summary.taskType === 'PICK' || t.summary.taskType === 'PACK') && t.detail)
+          .filter((t) => t.summary.shipmentId === focus.shipmentId)
+          .sort((a, b) => a.summary.createdAt.localeCompare(b.summary.createdAt) || (a.summary.taskType === b.summary.taskType ? 0 : a.summary.taskType === 'PICK' ? -1 : 1))
+      : [];
   useSkuBarcodes(tasks);
 
   return (
@@ -178,7 +177,7 @@ export function ScanBoard() {
         <div className="scan-focus">
           <b>주문 {focus.shipmentId}</b>
           <button className="btn ghost" onClick={focus.clear}>
-            진행 중 전체 보기
+            선택 취소
           </button>
         </div>
       )}
@@ -186,9 +185,8 @@ export function ScanBoard() {
       <CartBarcodes />
 
       {!real && <div className="note">실서버 모드에서는 진행 중인 실제 주문의 지시 칸·상품 바코드가 여기에 나옵니다. 선반 칸을 클릭하면 그 칸의 위치 바코드가 카드에 나옵니다.</div>}
-      {real && !tasks.length && (
-        <div className="note">{focus.shipmentId ? '이 주문의 작업이 화면에서 빠졌습니다.' : `${sim.params.mfcId} 에 바코드를 찍을 PICK·PACK 작업이 없습니다. 실제 주문 탭에서 주문 줄을 누르면 그 주문의 바코드가 여기에 나옵니다.`}</div>
-      )}
+      {real && !focus.shipmentId && <div className="note">실제 주문 탭에서 주문 줄을 누르면 그 주문의 바코드(지시 칸·상품·포장 위치)가 여기에 나옵니다.</div>}
+      {real && focus.shipmentId && !tasks.length && <div className="note">이 주문의 작업이 화면에서 빠졌습니다.</div>}
       {tasks.map((t) => (
         <div className="scan-task" key={t.summary.taskId}>
           <h4>
