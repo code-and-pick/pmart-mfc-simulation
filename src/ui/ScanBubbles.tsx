@@ -115,7 +115,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
       </div>
       <Barcode value={stop.location} caption="② 칸 위치" height={36} onGo={() => controller.focusBackendCode(stop.location)} />
       {l.barcode ? (
-        <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`③ 상품 ${l.sku} — ${stop.qty}번 찍기`} height={36} />
+        <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={stop.qty > 1 ? `③ 상품 ${l.sku} — 한 번 찍고 나머지 ${stop.qty - 1}개는 스캔·+·수기` : `③ 상품 ${l.sku} — 한 번 찍기`} height={36} />
       ) : (
         <div className="note warn">작업 지시 줄에 상품 바코드가 없습니다 — 오른쪽 스캔 판의 상품 정보 바코드(참고)를 보세요.</div>
       )}
@@ -142,7 +142,7 @@ function ReturnBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind:
         <>
           <Barcode value={p.from} caption={`① 출발 위치 ${p.from} (취소된 집품분이 놓인 곳)`} height={36} onGo={() => controller.focusBackendCode(p.from)} />
           {l.barcode ? (
-            <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={`② 상품 ${l.sku} — ${p.left}번 찍어 싣기`} height={36} />
+            <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={p.left > 1 ? `② 상품 ${l.sku} — 한 번 찍고 나머지 ${p.left - 1}개는 스캔·+·수기로 싣기` : `② 상품 ${l.sku} — 한 번 찍어 싣기`} height={36} />
           ) : (
             <div className="note warn">작업 지시 줄에 상품 바코드가 없습니다 — PDA 에서 수량을 직접 넣습니다.</div>
           )}

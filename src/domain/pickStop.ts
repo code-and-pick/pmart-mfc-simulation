@@ -1,9 +1,9 @@
 // 실제 PDA 앱이 "지금 갈 칸"을 고르는 방법을 그대로 따른다(사용자 2026-11-17 "직원이 카트, 상품이 있는 칸까지 움직였을때 바코드를 찍을수있게").
-// 근거: pmart-clients apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart nextPickStop (클라이언트 c7498f8)
-// - 줄은 서버가 준 순서대로, 남은 양(remaining − pending)이 있는 첫 줄
-// - 그 줄의 LOT 조각 중 DONE 이 아니고 남은 양이 있는 첫 조각
+// 근거: pmart-clients apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart nextPickStop (클라이언트 3f2048f, 11-17 #77)
+// - 남은 조각 중 서버 방문 순서(visitSeq — 냉장 → 냉동 → 상온, 걷는 거리 최단)가 가장 앞인 것. 줄 사이에 끼어 있어도 서버 순서
+// - 방문 순서가 없으면 서버가 준 줄·조각 순서(줄 안에서는 첫 남은 조각만)
 // - 칸: 이 주문 몫 배정(allocatedQty > 0) 칸 → 재고 있는 칸 → 첫 칸
-// - 지시가 비었으면(재고 조회 실패) 줄의 지시 칸
+// - 앞 줄까지 고른 칸이 없고 이 줄 지시가 비었으면(재고 조회 실패) 줄의 지시 칸
 // PDA 의 "접수만 된 양(pendingQty)" 빼기는 서버 값 pendingQty 로 한다(앱은 자기 큐 값).
 import type { TaskLine, TaskPick } from './contract';
 
@@ -21,6 +21,8 @@ export interface PickStop {
 }
 
 export function nextPickStop(lines: TaskLine[]): PickStop | null {
+  let best: PickStop | null = null;
+  let bestSeq: number | null = null;
   for (const l of lines) {
     if (l.remainingQty - l.pendingQty <= 0) continue;
     let sent = l.pendingQty;
@@ -36,8 +38,8 @@ export function nextPickStop(lines: TaskLine[]): PickStop | null {
       const allocated = p.locations.find((c) => (c.allocatedQty ?? 0) > 0);
       const c = allocated ?? withStock[0] ?? p.locations[0];
       if (!c) continue;
-      const here = (c.allocatedQty ?? 0) > 0 ? c.allocatedQty! : (c.qty ?? 0) > 0 ? c.qty : r;
-      return {
+      const here = (c.allocatedQty ?? 0) > 0 ? c.allocatedQty! : (c.qty ?? 0) > 0 ? c.qty! : r;
+      const stop: PickStop = {
         line: l,
         location: c.locationCode,
         qty: Math.min(here, r),
@@ -45,10 +47,16 @@ export function nextPickStop(lines: TaskLine[]): PickStop | null {
         pick: p,
         otherLocations: withStock.filter((o) => o.locationCode !== c.locationCode).map((o) => o.locationCode),
       };
+      const seq = p.visitSeq ?? null;
+      if (!best || (seq != null && (bestSeq == null || seq < bestSeq))) {
+        best = stop;
+        bestSeq = seq;
+      }
+      if (seq == null) break;
     }
-    if (!picks.length && l.locationId) return { line: l, location: l.locationId, qty: l.remainingQty - l.pendingQty, lotId: l.lotId, pick: null, otherLocations: [] };
+    if (!best && !picks.length && l.locationId) return { line: l, location: l.locationId, qty: l.remainingQty - l.pendingQty, lotId: l.lotId, pick: null, otherLocations: [] };
   }
-  return null;
+  return best;
 }
 
 /**
