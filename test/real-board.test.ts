@@ -258,6 +258,27 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(b.orderNumberOf('ORD-9-S1')).toBeNull();
   });
 
+  it('MFC 반납 인증번호: 회수 배송 간격마다 읽고, 못 읽으면 이유만 남긴다', async () => {
+    const r = new FakeReader();
+    let n = 0;
+    (r as unknown as { listReturnHandovers: () => Promise<unknown[]> }).listReturnHandovers = async () => {
+      n++;
+      if (n === 2) throw new Error('503');
+      return [{ deliveryId: 'DLV-1', deliveryNumber: '74939255-2', purpose: 'CLAIM_RETURN', state: 'RETURN_PICKED_UP', code: '4821', failedAttempts: 0, locked: false, issuedAt: 'x' }];
+    };
+    const now = { ms: 0 };
+    const b = new RealBoard(r, 'MFC-SEED-01', { pollSec: 3, workerRefreshSec: 60, recentKeepSec: 600, openStates: OPEN, stockRefreshSec: 30, maxStockPerPoll: 10, shipmentRefreshSec: 3, maxShipmentPerPoll: 5, handoverKeepSec: 3600, returnPickupRefreshSec: 15 }, () => now.ms);
+    await b.tick();
+    expect(b.returnHandovers.map((h) => h.code)).toEqual(['4821']);
+    now.ms = 4000;
+    await b.tick(); // 15초 전 — 안 읽음
+    expect(n).toBe(1);
+    now.ms = 16000;
+    await b.tick();
+    expect(b.returnHandoverError).toMatch(/503/);
+    expect(b.returnHandovers).toHaveLength(1); // 들고 있던 것은 그대로
+  });
+
   it('작업자 속도 배율(speedFactor): 서버 값, 없으면 1, 0.5~2.0 으로 자름', async () => {
     const r = new FakeReader();
     r.listWorkers = async () => [

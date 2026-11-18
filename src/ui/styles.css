@@ -600,3 +600,4 @@ table.inv.real tr.clickable:hover, table.inv.real tr.clickable.on { background: 
 .sys-ids code { font-size: 11px; }
 .cart-again { margin: 4px 0; }
 .btn-row { display: flex; gap: 6px; }
+.code4 { font-size: 16px; letter-spacing: 2px; }

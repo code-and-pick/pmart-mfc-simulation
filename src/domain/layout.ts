@@ -68,6 +68,10 @@ export interface Location {
    * 11-16 실서버 표본(F 188·냉장 161·C 125·D 112·E 141·H 225 폭, 높이 420/350)과 같음. 칸 용량 계산용(그림의 levelH 와 다름)
    */
   dimMm: { w: number; d: number; h: number };
+  /** 넓은 칸(layout-v3-wide, 2026-11-18) — 합친 칸 수(가로)·단 수(세로). 없으면 한 칸 */
+  span?: { slots: number; levels: number };
+  /** 합쳐져 닫힌 칸(백엔드 CLOSED) — 재고·안내·라벨에서 뺀다 */
+  closed?: boolean;
 }
 
 /** 보충재고 팔레트 자리 (입고창고 = 상온, 저온실 안 = 냉장·냉동). MFC 4-3, 5-1 */
@@ -120,6 +124,8 @@ export interface Layout {
   racks: Rack[];
   locations: Location[];
   locationsByTemp: Record<TemperatureZone, Location[]>;
+  /** 넓은 칸 자리(applyWideCells 뒤) — 칸막이·선반을 그 안에서 뺀다 */
+  wideSpans?: import('./wideCells').WideSpan[];
   obstacles: Obstacle[];
   stations: PackingStation[];
   shippingSlots: ShippingSlot[];

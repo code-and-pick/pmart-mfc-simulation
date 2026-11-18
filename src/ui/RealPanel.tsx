@@ -116,12 +116,56 @@ const RETURN_STATE_KO: Partial<Record<string, string>> = {
 };
 
 /** 이 센터로 오는 회수 배송(고객 반품·오배송 회수, type RETURN) — 배송 찾기 요약만(회수지 좌표는 읽지 않음) */
+const PURPOSE_KO: Record<string, string> = { CLAIM_RETURN: '반품 회수', MISDELIVERY_RECOVERY: '오배송 회수', FAILED_DELIVERY_RETURN: '전달 실패 반납' };
+
+/**
+ * MFC 반납 인증번호(delivery-execution 0.28.0 — 센터 직원 화면 4자리, 라이더가 넣어야 반납). 서버 값 그대로.
+ * 번호가 없으면 서버가 조회 때 만든다. 이 PC 화면만(다른 기기 조회 경로에는 넣지 않음 — 반납 확인용 번호).
+ */
+function ReturnHandovers() {
+  const { sim } = useApp();
+  const real = sim.real!;
+  const hs = real.returnHandovers;
+  // 다른 기기(조회만)는 이 경로를 허용 목록에 넣지 않았다(403) — 오류로 보이지 않는다
+  if (!hs.length) return real.returnHandoverError && !sim.realTokens?.serverInjected ? <div className="note warn">반납 인증번호를 읽지 못했습니다: {real.returnHandoverError}</div> : null;
+  return (
+    <>
+      <h4>MFC 반납 대기 · 반납 인증번호 (라이더가 입력)</h4>
+      <table className="inv real">
+        <thead>
+          <tr>
+            <th>배송</th>
+            <th>인증번호</th>
+          </tr>
+        </thead>
+        <tbody>
+          {hs.map((h) => (
+            <tr key={h.deliveryId} title={h.deliveryId}>
+              <td>
+                <div>{h.deliveryNumber ?? <span className="muted">{h.deliveryId.slice(-8)} · 번호 없음</span>}</div>
+                <div className="sub">
+                  {PURPOSE_KO[h.purpose ?? ''] ?? h.purpose ?? '—'} · {RETURN_STATE_KO[h.state] ?? h.state}
+                </div>
+              </td>
+              <td>
+                <b className="code4">{h.code}</b>
+                {h.locked ? <div className="sub warn">잠김(5번 틀림) — 센터에서 새로 내기</div> : h.failedAttempts ? <div className="sub warn">틀림 {h.failedAttempts}번</div> : null}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
 function ReturnPickups() {
   const { sim } = useApp();
   const rp = sim.real!.returnPickups;
-  if (!rp.length) return null;
+  if (!rp.length) return <ReturnHandovers />;
   return (
     <>
+      <ReturnHandovers />
       <h4>회수 배송 → {sim.params.mfcId} (회수 반입 {BACKEND_FACTS.returnIntake.code})</h4>
       <table className="inv real">
         <thead>

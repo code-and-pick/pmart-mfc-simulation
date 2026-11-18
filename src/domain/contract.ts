@@ -506,6 +506,22 @@ export interface StaffDeliverySummary {
   createdAt: string;
 }
 
+/** delivery-execution ReturnHandover(0.28.0) — MFC 반납 기다리는 회수·반납 배송과 반납 인증번호(센터 직원 화면) */
+export interface ReturnHandover {
+  deliveryId: string;
+  deliveryNumber?: string | null;
+  /** CLAIM_RETURN · MISDELIVERY_RECOVERY · FAILED_DELIVERY_RETURN */
+  purpose?: string | null;
+  state: string;
+  riderId?: string | null;
+  /** 반납 인증번호 4자리 — 라이더에게 불러 주거나 보여 준다 */
+  code: string;
+  failedAttempts: number;
+  /** 5번 틀려 잠김 — 새로 내기로 풀린다 */
+  locked: boolean;
+  issuedAt: string;
+}
+
 /** delivery-dispatch DispatchAttempt 일부 */
 export interface DispatchAttempt {
   attemptId: string;

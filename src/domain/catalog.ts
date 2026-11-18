@@ -97,7 +97,7 @@ export function buildCatalog(layout: Layout, count: Record<TemperatureZone, numb
   const skus: Sku[] = [];
   let serial = 1;
   for (const t of temps) {
-    const pool = [...layout.locationsByTemp[t]];
+    const pool = layout.locationsByTemp[t].filter((l) => !l.closed);
     const n = Math.min(pool.length, count[t]);
     for (let i = pool.length - 1; i > 0; i--) {
       const j = Math.floor(rng.next() * (i + 1));

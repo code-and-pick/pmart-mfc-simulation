@@ -127,6 +127,7 @@ export class LocationLabels {
     const cam = camera.position;
     const cand: { loc: Location; d: number }[] = [];
     for (const loc of this.layout.locations) {
+      if (loc.closed) continue; // 닫힌 칸(넓은 칸으로 합쳐짐) — 라벨 없음
       const dx = loc.shelf.x - target.x;
       const dz = loc.shelf.z - target.z;
       if (dx * dx + dz * dz > radius * radius) continue;

@@ -1,4 +1,5 @@
 // 고정 시설: 바닥·구역·벽·랙·장애물·패킹대·거치대.
+import { dividerInside, shelfInside } from '../../domain/wideCells';
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
@@ -160,11 +161,19 @@ function Racks({ L }: { L: Layout }) {
       const levelH = (RACK_HEIGHT - 0.25) / r.levels;
       const slotW = (RACK_LEN * 0.9) / r.slotsPerLevel;
       const dh = Math.min(0.12, levelH * 0.4); // 칸막이 높이 — 상품을 가리지 않게 낮게
+      const spans = L.wideSpans ?? [];
       for (let lv = 0; lv < r.levels; lv++) {
         const y = 0.1 + (lv * (RACK_HEIGHT - 0.25)) / r.levels;
-        mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, new THREE.Vector3(lx, 0.03, lz));
+        // 세로로 합친 칸(넓은 칸) 안의 선반 판은 뺀다 — 숨김(크기 0)
+        mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, shelfInside(spans, r.id, lv + 1, r.slotsPerLevel) ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(lx, 0.03, lz));
         shelves.current.setMatrixAt(si++, mtx);
         for (let s = 1; s < r.slotsPerLevel; s++) {
+          if (dividerInside(spans, r.id, lv + 1, s)) {
+            // 합친 칸 안의 칸막이는 뺀다(크기 0)
+            mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, new THREE.Vector3(0, 0, 0));
+            dividers.current.setMatrixAt(di++, mtx);
+            continue;
+          }
           const a = (s - r.slotsPerLevel / 2) * slotW; // 칸 경계(랙 중심 기준)
           const p = new THREE.Vector3(r.along === 'x' ? r.cx + a : r.cx, y + 0.015 + dh / 2, r.along === 'x' ? r.cz : r.cz + a);
           mtx.compose(p, q, r.along === 'x' ? new THREE.Vector3(0.008, dh, RACK_DEPTH * 0.96) : new THREE.Vector3(RACK_DEPTH * 0.96, dh, 0.008));

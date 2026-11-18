@@ -6,6 +6,7 @@
 import { ApiProblem } from '../domain/contract';
 import type {
   OrderFulfillmentView,
+  ReturnHandover,
   TaskLine,
   TaskPick,
   CapacityWorker,
@@ -32,6 +33,8 @@ export interface RealReader {
   searchDeliveries(mfcId: string, size?: number): Promise<StaffDeliverySummary[]>;
   getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch>;
   getSku(sku: string): Promise<SkuBarcodes>;
+  /** (delivery-execution 0.28.0) MFC 반납 인증번호 — 없으면 화면이 보이지 않는다 */
+  listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
 }
@@ -245,6 +248,10 @@ export class RealBoard {
    * 배송 찾기 요약만 쓴다 — 배차 상세에는 회수지(고객 집) 좌표가 같이 와서 읽지 않는다(개인정보).
    */
   returnPickups: StaffDeliverySummary[] = [];
+  /** MFC 반납 기다리는 배송과 반납 인증번호(GET /return-handovers?mfcId=, 회수 배송 간격마다). 못 읽으면 이유 */
+  returnHandovers: ReturnHandover[] = [];
+  returnHandoverError: string | null = null;
+  private lastHandoverMs = -Infinity;
   private lastReturnMs = -Infinity;
   private lastPollMs = -Infinity;
   private lastWorkersMs = -Infinity;
@@ -326,6 +333,7 @@ export class RealBoard {
       const live = new Set([...this.tasks.values()].map((t) => t.summary.shipmentId));
       for (const sid of this.seenPicks.keys()) if (!live.has(sid)) this.seenPicks.delete(sid);
       await this.refreshShipments(now);
+      await this.refreshReturnHandovers(now);
       await this.refreshStock(now);
       this.lastOkMs = now;
       this.lastError = null;
@@ -534,6 +542,21 @@ export class RealBoard {
   }
 
   /** 회수 배송만 골라 둔다 — 진행 중(취소·실패 아님) + 반납 뒤 returnShownMin 분 */
+  private async refreshReturnHandovers(now: number) {
+    const sec = this.opt.returnPickupRefreshSec;
+    if (!this.reader.listReturnHandovers || sec == null || now - this.lastHandoverMs < sec * 1000) return;
+    this.lastHandoverMs = now;
+    try {
+      const next = await this.reader.listReturnHandovers(this.mfcId);
+      const sig = (x: ReturnHandover[]) => x.map((h) => `${h.deliveryId}:${h.state}:${h.code}:${h.locked}`).join(',');
+      if (sig(next) !== sig(this.returnHandovers)) this.deliveryVersion++;
+      this.returnHandovers = next;
+      this.returnHandoverError = null;
+    } catch (e) {
+      this.returnHandoverError = describe(e);
+    }
+  }
+
   private setReturnPickups(list: StaffDeliverySummary[], now: number) {
     this.lastReturnMs = now;
     const keepMs = (this.opt.returnShownMin ?? 60) * 60_000;
@@ -608,7 +631,8 @@ export class RealBoard {
 
   workerName(workerId: string | null | undefined): string {
     if (!workerId) return '미배정';
-    return this.workers.get(workerId)?.displayName ?? `${workerId.slice(0, 11)}…`;
+    // ADR-0070: 직원은 이름 · 사번만 — 운영자 ID(OP-…)는 화면에 내지 않는다. 모르면 ID 끝 8자리 + 번호 없음
+    return this.workers.get(workerId)?.displayName ?? `…${workerId.slice(-8)}(번호 없음)`;
   }
 
   /** 화면용 주문번호(fulfillment 0.13.0 — 작업·출고 응답의 orderNumber, ADR-0070). 없으면 null */

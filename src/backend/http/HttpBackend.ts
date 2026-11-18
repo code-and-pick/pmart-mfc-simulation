@@ -18,6 +18,7 @@ import {
   type InboundTaskExecution,
   type InspectionResult,
   type LotLabel,
+  type ReturnHandover,
   type MoveOrder,
   type Package,
   type PutawayCandidate,
@@ -152,6 +153,12 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   /** delivery-execution 직원용 배송 찾기 — 그 센터 배송 최신순(배송 생긴 시각). 센터 직원은 mfcId 필수 */
+  /** delivery-execution listReturnHandovers(0.28.0) — MFC 반납 기다리는 배송과 반납 인증번호(센터 직원). 번호가 없으면 서버가 이때 만든다 */
+  async listReturnHandovers(mfcId: string): Promise<ReturnHandover[]> {
+    const r: { items?: ReturnHandover[] } = await this.request('GET', `/return-handovers?${new URLSearchParams({ mfcId })}`);
+    return r.items ?? [];
+  }
+
   async searchDeliveries(mfcId: string, size = 50): Promise<StaffDeliverySummary[]> {
     const r: { items?: StaffDeliverySummary[] } = await this.request('GET', `/deliveries?${new URLSearchParams({ mfcId, size: String(size), sort: 'NEWEST' })}`);
     return r.items ?? [];

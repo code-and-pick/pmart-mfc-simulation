@@ -27,6 +27,7 @@ import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { nextPickStop } from '../domain/pickStop';
 import { suggestCarts } from '../domain/cartSuggest';
+import { applyWideCells } from '../domain/wideCells';
 import { nextReturnPiece } from '../domain/returnPiece';
 import { RealWorker, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
@@ -131,6 +132,7 @@ export class Simulation {
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     this.layout = buildLayout();
     this.codes = buildLocationCodeMap(this.layout);
+    applyWideCells(this.layout, this.codes); // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18)
     this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
     this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed);
