@@ -57,6 +57,11 @@ export interface RealBoardOptions {
   returnPickupRefreshSec?: number;
   /** 반납된 회수 배송을 두는 시간(분). 없으면 60 */
   returnShownMin?: number;
+  /**
+   * 화면을 연 뒤 첫 조회 때, 이만큼(초) 안에 만든 끝난 작업(COMPLETED) 중 출고가 아직 인계 전(출하 대기 등)인 것을 한 번 불러 둔다.
+   * 열린 작업만 주기 조회하므로, 새로고침 전에 포장까지 끝난 주문이 배차·라이더 단계에서 화면에서 빠지지 않게. 없으면 안 함
+   */
+  backfillSec?: number;
 }
 
 /** 실서버 재고 단위 행(주문에 나온 SKU 만) */
@@ -266,6 +271,7 @@ export class RealBoard {
       await this.refreshWorkers();
       const list = await this.reader.listTasks(this.mfcId, [...this.opt.openStates]);
       const now = this.nowMs();
+      if (!this.backfilled && this.opt.backfillSec) await this.backfillPending(now);
       const seen = new Set<string>();
       let detailBudget = this.opt.maxDetailPerPoll ?? 10;
       for (const s of list) {
@@ -329,6 +335,23 @@ export class RealBoard {
     } finally {
       this.busy = false;
     }
+  }
+
+  private backfilled = false;
+  /** 첫 조회 한 번: 최근 끝난 작업 중 출고가 인계 전인 것을 끝난 작업으로 들여 둔다(backfillSec). 실패하면 다음 조회에서 다시 */
+  private async backfillPending(now: number) {
+    const done = await this.reader.listTasks(this.mfcId, ['COMPLETED']);
+    const since = now - this.opt.backfillSec! * 1000;
+    const recent = done.filter((s) => s.shipmentId && Date.parse(s.createdAt) >= since && !this.tasks.has(s.taskId));
+    for (const sid of new Set(recent.map((s) => s.shipmentId!))) {
+      const sh = await this.reader.getShipment(sid).catch(() => null);
+      if (!sh || !SHIPMENT_PENDING.has(sh.state)) continue;
+      for (const s of recent.filter((x) => x.shipmentId === sid)) {
+        const d = await this.reader.getTask(s.taskId).catch(() => null);
+        this.tasks.set(s.taskId, { summary: d ?? s, detail: d, detailSig: progressSig(s), firstSeenMs: now, closed: { atMs: now, state: 'COMPLETED' } });
+      }
+    }
+    this.backfilled = true;
   }
 
   /** 상품 바코드(스캔 판) — SKU → 서버 barcodes, 못 읽었으면 'ERR'. 화면이 볼 때만 한 번 읽는다(주기 조회 없음) */

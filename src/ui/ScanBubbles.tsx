@@ -230,7 +230,9 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
       return (
         <>
           {head('⑤ 출하대기 랙 찍기')}
-          <Barcode value={c.rack} caption={`출하대기 랙 ${c.rack} (PDA 는 DSP- 면 받음)`} height={36} onGo={() => controller.focusBackendCode(c.rack)} />
+          {/* 출하대기 랙 2곳(DSP-A-01·02) — PDA 는 DSP- 면 어느 랙이든 받고 서버에 보내지 않는다(둘 중 하나) */}
+          <Barcode value="DSP-A-01" caption="출하대기 랙 1 DSP-A-01" height={36} onGo={() => controller.focusBackendCode('DSP-A-01')} />
+          <Barcode value="DSP-A-02" caption="출하대기 랙 2 DSP-A-02 (둘 중 하나)" height={36} onGo={() => controller.focusBackendCode('DSP-A-02')} />
           <div className="note">찍은 뒤 PDA 에서 "포장 끝내기" — 서버에 작업이 끝나면 말풍선이 닫힙니다.</div>
         </>
       );

@@ -177,6 +177,8 @@ export const REAL_LINK = {
   returnShownMin: 60,
   /** 작업이 끝난 뒤에도 인계 전(출하 대기·픽업 전) 출고를 화면에 두는 최대 시간(초) — 배차 시도 10분 × 재시도 2회 넉넉히 [시뮬] */
   handoverKeepSec: 3 * 3600,
-  /** 열린 작업 상태 — 이 상태들만 주기 조회한다(완료 이력은 읽지 않음) [시뮬] */
+  /** 화면을 연(새로고침한) 첫 조회 때 이만큼(초) 안에 만든 끝난 작업 중 출고가 인계 전인 것을 한 번 불러 둔다 — 새로고침해도 출하 대기 주문이 안 빠지게 [시뮬] */
+  backfillSec: 24 * 3600,
+  /** 열린 작업 상태 — 이 상태들만 주기 조회한다(완료 이력은 첫 조회 한 번만 — backfillSec) [시뮬] */
   openStates: ['WAITING', 'READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'] as const,
 };

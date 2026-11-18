@@ -134,7 +134,7 @@ function dl(p: Partial<StaffDeliverySummary>): StaffDeliverySummary {
 
 const OPEN: TaskState[] = ['WAITING', 'READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'];
 
-function board(r: FakeReader, now: { ms: number }) {
+function board(r: FakeReader, now: { ms: number }, extra: { backfillSec?: number } = {}) {
   return new RealBoard(
     r,
     'MFC-SEED-01',
@@ -148,6 +148,7 @@ function board(r: FakeReader, now: { ms: number }) {
       shipmentRefreshSec: 3,
       maxShipmentPerPoll: 5,
       handoverKeepSec: 3 * 3600,
+      ...extra,
     },
     () => now.ms,
   );
@@ -220,6 +221,30 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     now.ms = 7000;
     await b.tick(); // 진행이 그대로면 다시 읽지 않는다
     expect(r.calls.get).toBe(2);
+  });
+
+  it('새로고침(첫 조회): 끝난 작업이라도 출고가 출하 대기면 불러 둔다 — 인계 끝난 출고·오래된 작업은 안 부름', async () => {
+    const r = new FakeReader();
+    const at = Date.parse('2026-11-18T01:00:00Z');
+    const pk = summary({ taskId: 'A-PACK', taskType: 'PACK', state: 'COMPLETED', shipmentId: 'A-S1', createdAt: '2026-11-18T00:30:00Z' });
+    const pc = summary({ taskId: 'A-PICK', state: 'COMPLETED', shipmentId: 'A-S1', createdAt: '2026-11-18T00:30:00Z' });
+    const gone = summary({ taskId: 'B-PACK', taskType: 'PACK', state: 'COMPLETED', shipmentId: 'B-S1', createdAt: '2026-11-18T00:40:00Z' });
+    const old = summary({ taskId: 'C-PACK', taskType: 'PACK', state: 'COMPLETED', shipmentId: 'C-S1', createdAt: '2026-11-16T00:00:00Z' });
+    r.list = [pk, pc, gone, old];
+    for (const s of r.list) r.details.set(s.taskId, detail(s, [{ code: 'X' }], 0));
+    r.ships.set('A-S1', ship({ shipmentId: 'A-S1', state: 'READY' }));
+    r.ships.set('B-S1', ship({ shipmentId: 'B-S1', state: 'HANDED_OVER' }));
+    r.ships.set('C-S1', ship({ shipmentId: 'C-S1', state: 'READY' }));
+    const now = { ms: at };
+    const b = board(r, now, { backfillSec: 24 * 3600 });
+    await b.tick();
+    expect([...b.tasks.keys()].sort()).toEqual(['A-PACK', 'A-PICK']);
+    expect(b.tasks.get('A-PACK')!.closed?.state).toBe('COMPLETED');
+    const lists = r.calls.list;
+    now.ms = at + 3500;
+    await b.tick(); // 한 번만
+    expect(r.calls.list).toBe(lists + 1);
+    expect(b.tasks.has('A-PACK')).toBe(true); // 출하 대기라 남는다
   });
 
   it('서버가 다 집은 조각을 상세에서 빼도 본 조각은 출고별로 남긴다(바코드 판 — 패킹까지)', async () => {

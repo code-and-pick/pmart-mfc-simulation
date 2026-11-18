@@ -185,6 +185,7 @@ export class Simulation {
         handoverKeepSec: REAL_LINK.handoverKeepSec,
         returnPickupRefreshSec: REAL_LINK.returnPickupRefreshSec,
         returnShownMin: REAL_LINK.returnShownMin,
+        backfillSec: REAL_LINK.backfillSec,
       });
       this.time = wallClockSec();
       this.speed = 1;
