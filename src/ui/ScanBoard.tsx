@@ -108,7 +108,9 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
             </div>
           ))}
         <div className="bc-grid">
+          {/* 출하대기 랙 2곳(백엔드 deploy/lan/seed/mfc_layout.py DISPATCH_STAGING) — PDA 는 DSP- 면 어느 랙이든 받고 서버에 보내지 않는다 */}
           <LocBarcode code="DSP-A-01" caption="⑤ 출하대기 랙 1 (밀봉 뒤)" />
+          <LocBarcode code="DSP-A-02" caption="⑤ 출하대기 랙 2 (밀봉 뒤, 둘 중 하나)" />
         </div>
       </>
     );
