@@ -100,8 +100,27 @@ describe('앞마당 라이더(실서버 관찰, M-02)', () => {
 
 import { NavGrid } from '../src/domain/navgrid';
 import { buildLayout } from '../src/domain/layout';
-import { vehicleOf, offLot } from '../src/sim/realRider';
+import { getOff, vehicleOf, offLot } from '../src/sim/realRider';
 describe('라이더 수단(배차 배정 vehicleType)', () => {
+  it('내리면 수단이 선 방향의 운전석 문 쪽(모델 +x)으로 비켜 선다', async () => {
+    const L = buildLayout();
+    const P = L.points;
+    for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+      const r = new RealRider('RD-2', 'DLV-2', P.riderParking[3], P.riderEntry, P.riderPickup, new NavGrid(L), 'CAR');
+      r.pos = { x: 28, z: 38.4 };
+      r.heading = heading;
+      const done = getOff(r);
+      for (let i = 0; i < 40; i++) {
+        r.tick(0.25);
+        for (let k = 0; k < 5; k++) await Promise.resolve();
+      }
+      await done;
+      expect(r.parkedHeading).toBe(heading);
+      expect(r.pos.x).toBeCloseTo(28 + 0.9 * Math.cos(heading), 1);
+      expect(r.pos.z).toBeCloseTo(38.4 - 0.9 * Math.sin(heading), 1);
+    }
+  });
+
   it('수단 이름 → 그릴 수단, 모르면 오토바이', () => {
     expect(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK'].map(vehicleOf)).toEqual(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK']);
     expect(vehicleOf(null)).toBe('MOTORCYCLE');

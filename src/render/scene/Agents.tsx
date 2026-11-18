@@ -282,8 +282,9 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
       ride.current.position.set(r.pos.x, 0, r.pos.z);
       ride.current.rotation.y = r.heading;
     } else if (r.parkedAt) {
-      // 내린 뒤: 멈춘 자리·멈춘 방향 그대로(라이더는 옆으로 비켜 섬 — 운전석 문이 +x 쪽)
+      // 내린 뒤: 멈춘 자리·멈춘 방향 그대로(라이더는 운전석 문 쪽 — 모델 +x — 으로 비켜 섬)
       ride.current.position.set(r.parkedAt.x, 0, r.parkedAt.z);
+      ride.current.rotation.y = r.parkedHeading;
     } else {
       ride.current.position.set(parking.x, 0, parking.z);
     }

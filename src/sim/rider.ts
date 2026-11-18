@@ -20,6 +20,7 @@ export class Rider extends Agent {
   trunk = false;
   stowed = false;
   parkedAt: P | null = null;
+  parkedHeading = 0;
   readonly parking: P;
 
   constructor(

@@ -34,9 +34,16 @@ export async function walkOn(a: Agent & { riding: boolean }, p: P) {
 }
 
 /** 문·트렁크(배달통 뚜껑)를 다루는 라이더 — 그림은 door·trunk 를 보고 천천히 연다(사용자 2026-11-19 "승용차는 차문 열리는 애니메이션", 트렁크·배달통 포함) */
-type Hatched = Agent & { riding: boolean; vehicle: VehicleType; door: boolean; trunk: boolean; stowed: boolean; parkedAt: P | null };
-/** 내린 라이더가 비켜 서는 거리(m) — 수단 옆(+x) */
+type Hatched = Agent & { riding: boolean; vehicle: VehicleType; door: boolean; trunk: boolean; stowed: boolean; parkedAt: P | null; parkedHeading: number };
+/** 내린 라이더가 비켜 서는 거리(m) — 수단 옆(운전석 문 쪽) */
 const SIDE = 0.9;
+/**
+ * 수단 옆 자리 — 수단이 선 방향(heading)의 왼쪽(모델 +x = 운전석 문 쪽, 사용자 2026-11-19 "차 방향에 맞춰서 서줘").
+ * 그림은 rotation.y = heading 이라 모델 +x 는 세상 (cos h, −sin h).
+ */
+function sideOf(at: P, heading: number): P {
+  return { x: at.x + SIDE * Math.cos(heading), z: at.z - SIDE * Math.sin(heading) };
+}
 const hasDoor = (v: VehicleType) => v === 'CAR';
 const hasBox = (v: VehicleType) => v === 'CAR' || v === 'MOTORCYCLE' || v === 'BICYCLE' || v === 'E_BIKE';
 
@@ -48,7 +55,8 @@ export async function getOff(a: Hatched) {
   }
   // 수단은 멈춘 자리에 둔다(그림도 그 자리) — 라이더만 옆으로 비켜 선다
   a.parkedAt = { ...a.pos };
-  const side = { x: a.pos.x + SIDE, z: a.pos.z };
+  a.parkedHeading = a.heading;
+  const side = sideOf(a.pos, a.heading);
   if (hasDoor(a.vehicle)) {
     a.door = true;
     await a.wait(RIDER_VEHICLE.hatchSec);
@@ -65,7 +73,7 @@ export async function getOff(a: Hatched) {
 /** 포장 싣고 타기 — 들고 온 포장이 있으면 트렁크(배달통)를 열고 넣고 닫은 뒤, 승용차는 문 열고 타고 닫는다 */
 export async function loadAndGetOn(a: Hatched & { carrying: number }) {
   const at = a.parkedAt;
-  if (at && a.vehicle !== 'WALK') await walkOn(a, { x: at.x + SIDE, z: at.z }); // 수단 옆으로
+  if (at && a.vehicle !== 'WALK') await walkOn(a, sideOf(at, a.parkedHeading)); // 수단 옆(운전석 문 쪽)으로
   if (a.carrying > 0 && hasBox(a.vehicle)) {
     a.trunk = true;
     await a.wait(RIDER_VEHICLE.hatchSec);
@@ -108,6 +116,8 @@ export interface SiteRider {
   stowed: boolean;
   /** 수단을 세운 자리(내린 뒤) — 그림은 수단을 여기 둔다 */
   parkedAt: P | null;
+  /** 수단을 세운 방향(heading) — 그림도 이 방향 */
+  parkedHeading: number;
   tick(dt: number): void;
 }
 
@@ -119,6 +129,7 @@ export class RealRider extends Agent implements SiteRider {
   trunk = false;
   stowed = false;
   parkedAt: P | null = null;
+  parkedHeading = 0;
   readonly vehicle: VehicleType;
   leaving = false;
   private leave: ((n: number) => void) | null = null;
