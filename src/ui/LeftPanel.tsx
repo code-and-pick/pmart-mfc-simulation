@@ -160,7 +160,29 @@ function BackendSettings() {
 function VirtualWorkers() {
   const { sim } = useApp();
   useTick();
-  if (sim.realTokens?.serverInjected) return <p className="note">다른 기기에서는 가상 작업자를 켤 수 없습니다(조회만).</p>;
+  // 속도 배수는 이 화면에서만 — 다른 기기(LAN, 조회만)도 아바타 걷기 속도는 바꿀 수 있다(사용자 2026-11-18 "왜 나한테만 뜨지")
+  const speed = (
+    <Slider
+      name="속도 배수"
+      initial={sim.speedBoost}
+      min={1}
+      max={REAL_WORKERS.speedBoostMax}
+      step={1}
+      hint={
+        sim.realTokens?.serverInjected
+          ? '이 화면의 작업자 아바타 걷기 속도만 — 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자는 켠 PC 의 배수를 따릅니다.'
+          : '작업자마다 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자의 걷기·집기·포장 시간과 실제 PDA 작업자 아바타의 걷기에만 — 서버 응답 기다림·조회 간격(3초)은 실제 시각 그대로라, 배수를 크게 해도 서버 반영보다 빨라지지는 않습니다. 이 화면에서만 적용됩니다.'
+      }
+      apply={(v) => sim.setSpeedBoost(v)}
+    />
+  );
+  if (sim.realTokens?.serverInjected)
+    return (
+      <>
+        <p className="note">다른 기기에서는 가상 작업자를 켤 수 없습니다(조회만).</p>
+        {speed}
+      </>
+    );
   const ws = sim.virtualWorkers.filter((w) => !w.left);
   return (
     <>
@@ -174,15 +196,7 @@ function VirtualWorkers() {
         hint="mfcw-pp-01부터 켭니다. 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
         apply={(v) => sim.setVirtualWorkers(v)}
       />
-      <Slider
-        name="속도 배수"
-        initial={sim.speedBoost}
-        min={1}
-        max={REAL_WORKERS.speedBoostMax}
-        step={1}
-        hint="작업자마다 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자의 걷기·집기·포장 시간과 실제 PDA 작업자 아바타의 걷기에만 — 서버 응답 기다림·조회 간격(3초)은 실제 시각 그대로라, 배수를 크게 해도 서버 반영보다 빨라지지는 않습니다."
-        apply={(v) => sim.setSpeedBoost(v)}
-      />
+      {speed}
       {ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length && (
         <p className="note warn">
           카트가 {BACKEND_FACTS.cartLocations.length}대뿐입니다(백엔드 라벨 README) — 현장에서는 {BACKEND_FACTS.cartLocations.length}명 넘게 동시에 피킹할 수 없습니다. 서버는 카트 수를 막지 않으므로 화면에서는 그대로 돕니다.
