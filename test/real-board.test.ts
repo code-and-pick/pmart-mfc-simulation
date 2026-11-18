@@ -200,6 +200,28 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(r.calls.stock).toEqual(['B-1', 'B-1']); // version 이 바뀌면 그 SKU 재고를 다시 읽는다
   });
 
+  it('칸 하나 집품(부분 실적)은 서버가 version 을 안 올린다 — 완료 수량·마지막 실적 시각이 바뀌면 상세를 다시 읽는다', async () => {
+    const r = new FakeReader();
+    const pick = summary({ taskId: 'T1', state: 'IN_PROGRESS', version: 3, plannedQty: 2, completedQty: 0, remainingQty: 2, lastActivityAt: '2026-11-18T01:00:00Z' });
+    r.list = [pick];
+    r.details.set('T1', detail(pick, [{ code: 'X' }]));
+    const now = { ms: 0 };
+    const b = board(r, now);
+    await b.tick();
+    expect(r.calls.get).toBe(1);
+    // 첫 칸 집품 반영 — version 그대로 3
+    const after = { ...pick, completedQty: 1, remainingQty: 1, lastActivityAt: '2026-11-18T01:01:00Z' };
+    r.list = [after];
+    r.details.set('T1', detail(after, [{ code: 'Y' }], 1));
+    now.ms = 3500;
+    await b.tick();
+    expect(r.calls.get).toBe(2);
+    expect(b.pickTargets()[0].locationCode).toBe('Y');
+    now.ms = 7000;
+    await b.tick(); // 진행이 그대로면 다시 읽지 않는다
+    expect(r.calls.get).toBe(2);
+  });
+
   it('주문 SKU 재고: 집품이 반영되면 선반 STORED 가 줄고 포장 구역 PICKED 가 생긴다 — 서버 응답 그대로', async () => {
     const r = new FakeReader();
     const pick = summary({ taskId: 'T1', state: 'IN_PROGRESS', version: 1 });

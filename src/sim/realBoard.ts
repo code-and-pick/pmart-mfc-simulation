@@ -66,10 +66,17 @@ export interface RealStockUnit {
   qty: number;
 }
 
+/** 목록 요약의 진행 서명 — version(상태 전이) + 완료·남은 수량 + 마지막 실적 시각(부분 집품마다 바뀜) */
+export function progressSig(s: TaskSummary): string {
+  return `${s.version}:${s.completedQty}:${s.remainingQty}:${s.lastActivityAt ?? ''}`;
+}
+
 export interface RealTask {
   summary: TaskSummary;
-  /** 열린 작업의 상세(줄의 SKU, PICK·RETURN 지시 칸). 목록 version 이 바뀌면 다시 읽는다 */
+  /** 열린 작업의 상세(줄의 SKU, PICK·RETURN 지시 칸). 목록의 진행 서명(progressSig)이 바뀌면 다시 읽는다 */
   detail: TaskDetail | null;
+  /** 상세를 읽을 때의 목록 진행 서명 */
+  detailSig?: string;
   firstSeenMs: number;
   /** 열린 목록에서 빠진 뒤: 상세로 확인한 최종 상태. 확인 전이면 checking */
   closed: null | { atMs: number; state: TaskState | 'CHECKING' };
@@ -259,12 +266,16 @@ export class RealBoard {
           t.summary = s;
           t.closed = null; // 다시 열린 작업(내놓기 등)
         }
-        // 상세는 모든 열린 작업 — 줄의 SKU 를 알아야 그 재고를 읽는다. version 이 바뀌면 그 SKU 재고도 다시 읽는다
-        if ((!t.detail || t.detail.version !== s.version) && detailBudget > 0) {
+        // 상세는 모든 열린 작업 — 줄의 SKU 를 알아야 그 재고를 읽는다. 진행이 바뀌면 그 SKU 재고도 다시 읽는다.
+        // 서버는 칸 하나 집품(부분 실적)에는 작업 version 을 올리지 않는다(상태가 바뀔 때만 — fulfillment TaskService) →
+        // version 만 보면 첫 칸 뒤 상세가 멈춘다. 완료·남은 수량·마지막 실적 시각까지 본다.
+        const sig = progressSig(s);
+        if ((!t.detail || t.detailSig !== sig) && detailBudget > 0) {
           detailBudget--;
           const d = await this.reader.getTask(s.taskId).catch(() => null);
           if (d) {
             t.detail = d;
+            t.detailSig = sig;
             for (const l of d.lines) this.staleSkus.add(l.sku);
           }
         }
