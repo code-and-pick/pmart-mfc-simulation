@@ -154,6 +154,34 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(Math.hypot(w.pos.x - rack.x, w.pos.z - rack.z)).toBeLessThan(0.5);
   });
 
+  it('끌고 온 장바구니의 집품분(서버 PICKED)은 작업자 카트 위에 — 카트를 내려놓으면 카트 보관 자리로', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const p = pick([0, 0]);
+    const pack = {
+      ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'IN_PROGRESS', packingLocations: ['CRT-A-07'],
+      lines: p.lines.map((l) => ({ ...l, plannedQty: 2, completedQty: 0, remainingQty: 2, picks: [] })),
+    } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
+    real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'PREPARING', packages: [], dispatchRequest: null } as never, readMs: 0, sig: '' });
+    real.stock.set('E-1', { data: { mfcId: 'MFC-SEED-01', sku: 'E-1', lots: [], units: [{ locationCode: 'CRT-A-07', workState: 'PICKED', qualityState: 'NORMAL', qty: 2 }] } as never, readMs: 0 });
+    real.stock.set('E-2', { data: { mfcId: 'MFC-SEED-01', sku: 'E-2', lots: [], units: [{ locationCode: 'CRT-A-09', workState: 'PICKED', qualityState: 'NORMAL', qty: 5 }] } as never, readMs: 0 });
+    sync();
+    const w = sim.observedWorkers[0];
+    expect(w.hasCart).toBe(true);
+    expect(w.carrying).toHaveLength(2); // 이 출고의 카트 CRT-A-07 몫만
+    expect([...sim.heldCarts()]).toEqual(['CRT-A-07']);
+    sim.passScan(w.workerId);
+    sim.passScan(w.workerId); // 카트 찍음 → 내려놓음
+    expect(w.hasCart).toBe(false);
+    expect(w.carrying).toEqual([]);
+    expect(sim.heldCarts().size).toBe(0);
+  });
+
   it('복귀(RETURN): 출발 위치(장바구니)에서 상품 싣기 → (실었어요) → 추천 선반 칸, 실적이 서버에 오면 다음 조각', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;

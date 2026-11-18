@@ -183,7 +183,7 @@ function ProductBarcodes({ l }: { l: TaskLine }) {
   const bc = sim.real!.skuBarcodes.get(l.sku);
   // 작업 지시 바코드 중 첫 값 말고 나머지(0.7.0 barcodes) — 계약은 "barcodes 중 하나면 같은 상품"
   const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
-  // PDA 앱은 찍은 값을 작업 지시 줄의 barcode 와 비교한다(mfc_app task_controllers.dart, backend-requests C-1) — 그 값을 먼저 보인다
+  // PDA 앱은 찍은 값이 작업 지시 줄의 barcode 또는 barcodes 중 하나면 받는다(mfc_app task_list.dart matchesBarcode, 클라이언트 c6f4930 — C-1 해소)
   if (l.barcode)
     return (
       <>
@@ -208,7 +208,6 @@ function ProductBarcodes({ l }: { l: TaskLine }) {
 function ProductBarcodeNotes({ l }: { l: TaskLine }) {
   const { sim } = useApp();
   const bc = sim.real!.skuBarcodes.get(l.sku);
-  const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
   return (
     <>
       {!l.barcode && (
@@ -216,7 +215,6 @@ function ProductBarcodeNotes({ l }: { l: TaskLine }) {
           이 작업 지시 줄에 상품 바코드가 비어 있습니다 — PDA 는 찍은 값을 작업 지시 바코드와 비교하므로 "다른 상품"이 됩니다. 서버(0.7.0)는 조회 때 채우므로 비어 있으면 재고 서비스 조회 실패이거나 그 상품의 바코드가 없는 것입니다. 위 바코드는 상품 정보의 값(참고)입니다.
         </div>
       )}
-      {more.length > 0 && <div className="note">PDA 앱은 지금 첫 바코드({l.barcode})로만 비교합니다 — 다른 바코드는 앱이 barcodes 전체로 비교하게 바뀌면 맞습니다.</div>}
       {l.barcode && Array.isArray(bc) && bc.length > 0 && !bc.includes(l.barcode) && (
         <div className="note warn">작업 지시 바코드({l.barcode})가 지금 상품 정보 바코드({bc.join(', ')})와 다릅니다 — PDA 는 작업 지시 바코드로 비교합니다.</div>
       )}

@@ -27,7 +27,7 @@ import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { SUGGESTED_CART, nextPickStop } from '../domain/pickStop';
 import { nextReturnPiece } from '../domain/returnPiece';
-import { RealWorker, type RealSiteContext } from './realWorker';
+import { RealWorker, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
@@ -384,6 +384,7 @@ export class Simulation {
         w.state = s.state === 'IN_PROGRESS' ? 'PICKING' : s.state === 'BLOCKED' ? 'ERROR' : 'TO_CART';
         // 카트는 카트 QR 을 찍은 뒤에만 든다(사용자 2026-11-17 "카트 큐알찍어야지 작업자가 카트 들게")
         w.hasCart = started;
+        w.carrying = started ? this.cartLoad(s.shipmentId) : [];
         w.currentTarget = stop ? this.backendLocation(stop.location) : next?.code ? this.backendLocation(next.code) : null;
         view.progress = `${done.length} / ${stops.length}`;
         view.location = last?.code ?? null;
@@ -403,6 +404,7 @@ export class Simulation {
         }
         w.cue = null;
         w.hasCart = false;
+        w.carrying = [];
         w.currentTarget = null;
         target = cart;
         key = `${s.taskId}:ret`;
@@ -443,6 +445,7 @@ export class Simulation {
         w.state = s.state === 'IN_PROGRESS' ? 'PACKING' : 'WAIT_STATION';
         w.cue = null;
         w.hasCart = false;
+        w.carrying = [];
         w.currentTarget = null;
         view.step = s.state === 'IN_PROGRESS' ? '포장 중' : '패킹 대기';
         // 스캔 안내(포장): PDA 포장 화면 단계 그대로(clients packing_screen.dart — 패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙)
@@ -455,6 +458,7 @@ export class Simulation {
             key = `${s.taskId}:${pc.step === 'RACK' ? pc.rack : pc.station}`;
           }
           w.hasCart = pc.step === 'STATION' || pc.step === 'CART'; // 피킹한 카트를 끌고 와 포장대에서 내린다
+          w.carrying = w.hasCart ? this.cartLoad(s.shipmentId) : [];
           view.step = PACK_STEP_KO[pc.step];
         }
         w.activity = view.step;
@@ -469,9 +473,45 @@ export class Simulation {
       w.state = 'IDLE';
       w.currentTarget = null;
       w.cue = null;
+      w.hasCart = false;
+      w.carrying = [];
       w.activity = '열린 작업 없음(서버)';
       if (now - w.lastSeenMs > 120_000) this.observedWorkers.splice(i, 1);
     }
+  }
+
+  /**
+   * 지금 작업자가 끌고 있는 장바구니 코드 — 그 카트의 집품 재고(서버 PICKED)는 카트 보관 자리 대신 작업자 카트에 그린다.
+   * 카트 ↔ 출고는 서버(PICK 실적 도착지·PACK packingLocations), 출고 ↔ 작업자는 서버 배정. 가상 작업자는 자기 카트 배정.
+   */
+  heldCarts(): Set<string> {
+    const out = new Set<string>();
+    for (const w of this.observedWorkers) {
+      const sid = w.pda?.shipmentId;
+      if (!w.hasCart || !sid) continue;
+      const c = this.serverCart(sid);
+      if (c) out.add(c);
+    }
+    for (const w of this.virtualWorkers) {
+      const sid = w.pda?.shipmentId;
+      if (!w.hasCart || !sid) continue;
+      const c = this.carts.cartOf(sid) ?? this.serverCart(sid);
+      if (c) out.add(c);
+    }
+    return out;
+  }
+
+  /** 관찰 작업자 카트 위 상자 = 서버가 아는 그 카트의 집품 수량(온도대는 집은 칸 코드 첫 글자) */
+  private cartLoad(shipmentId: string | null | undefined): TemperatureZone[] {
+    const real = this.real;
+    const cart = this.serverCart(shipmentId);
+    if (!real || !cart || !shipmentId) return [];
+    const temp = new Map<string, TemperatureZone>();
+    for (const x of real.picksOf(shipmentId)) if (x.loc) temp.set(x.line.sku, tempOfCode(x.loc) ?? 'AMBIENT');
+    const out: TemperatureZone[] = [];
+    for (const u of real.stockUnits())
+      if (u.locationCode === cart && u.workState === 'PICKED') for (let i = 0; i < u.qty && out.length < 12; i++) out.push(temp.get(u.sku) ?? 'AMBIENT');
+    return out;
   }
 
   /** 스캔 안내: 실제 PDA 로 카트를 찍었다고 화면에서 넘긴다 → 그 작업자를 첫 칸으로(서버는 카트 스캔을 모름) */

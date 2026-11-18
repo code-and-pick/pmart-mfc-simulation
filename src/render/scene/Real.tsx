@@ -152,19 +152,39 @@ const WORK_KO: Record<StockWorkState, string> = {
   UNSTOWED: '미적치',
 };
 
+/** 출하대기 랙(그리기 자리) — 서버는 포장이 어느 랙에 있는지 모른다(BR-52 R20) */
+const RACK_AT = 'DSP-A-01';
+
 /**
  * 실서버 재고(주문에 나온 SKU 만, GET /mfcs/{id}/stock): 선반 칸의 STORED 수량은 그 칸에, 집품·포장 등은 그 위치(패킹대·대기 지점)에
- * 상자로 쌓아 보인다. PDA 가 집으면 다음 조회에서 선반에서 빠지고 포장 구역에 생긴다. 서버 응답 그대로 — 추정하지 않는다.
+ * 상자로 쌓아 보인다. PDA 가 집으면 다음 조회에서 선반에서 빠지고 포장 구역에 생긴다. 수량은 서버 응답 그대로. 그리는 자리만 두 가지 예외:
+ * - 작업자가 끌고 있는 장바구니의 집품분(PICKED)은 카트 보관 자리에 그리지 않는다 — 작업자 카트 위에 그린다(Simulation.heldCarts·cartLoad)
+ * - 출고가 출하 대기(READY)면 밀봉한 포장 내용만큼의 포장분(PACKED, 서버 위치 PAK-…)을 출하대기 랙 1에 그린다 — PDA 랙 스캔은 서버에
+ *   가지 않아(BR-52 R20 OPEN) 서버 위치는 패킹대 그대로. 이름표에 "추정"으로 적는다
  */
 export function RealStock() {
   const { sim } = useApp();
   const mesh = useRef<THREE.InstancedMesh>(null!);
   const labels = useMemo(() => new THREE.Group(), []);
-  const ver = useRef(-1);
+  const ver = useRef('');
   useFrame(() => {
     const real = sim.real;
-    if (!real || real.stockVersion === ver.current) return;
-    ver.current = real.stockVersion;
+    if (!real) return;
+    const held = sim.heldCarts();
+    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}`;
+    if (sig === ver.current) return;
+    ver.current = sig;
+    // 출하 대기 출고의 밀봉 포장 내용(SKU → 수량) — 그만큼의 PACKED 를 랙에
+    const toRack = new Map<string, number>();
+    for (const r of real.shipments()) {
+      if (r.info?.state !== 'READY') continue;
+      for (const p of r.info.packages ?? []) {
+        if (p.state !== 'SEALED') continue;
+        for (const c of p.contents as { sku: string; qty: number }[]) toRack.set(c.sku, (toRack.get(c.sku) ?? 0) + c.qty);
+      }
+    }
+    const rackPoint = sim.backendPoint(RACK_AT);
+    let rackGuess = 0;
     const m = mesh.current;
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color();
@@ -172,7 +192,21 @@ export function RealStock() {
 
     const shelf = new Map<string, { loc: Location; normal: number; held: number }>();
     const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number> }>();
-    for (const u of real.stockUnits()) {
+    for (const u0 of real.stockUnits()) {
+      let u = u0;
+      if (u.workState === 'PICKED' && held.has(u.locationCode)) continue; // 작업자 카트 위에 그림
+      if (u.workState === 'PACKED' && u.locationCode.startsWith('PAK-') && rackPoint) {
+        const take = Math.min(toRack.get(u.sku) ?? 0, u.qty);
+        if (take > 0) {
+          toRack.set(u.sku, (toRack.get(u.sku) ?? 0) - take);
+          rackGuess += take;
+          const g = points.get(RACK_AT) ?? { x: rackPoint.x, z: rackPoint.z, table: true, by: new Map() };
+          g.by.set('PACKED', (g.by.get('PACKED') ?? 0) + take);
+          points.set(RACK_AT, g);
+          if (take === u.qty) continue;
+          u = { ...u, qty: u.qty - take };
+        }
+      }
       const loc = u.workState === 'STORED' ? sim.backendLocation(u.locationCode) : null;
       if (loc) {
         const g = shelf.get(loc.code) ?? { loc, normal: 0, held: 0 };
@@ -243,7 +277,10 @@ export function RealStock() {
       labels.remove(s);
     }
     for (const [code, g] of points) {
-      const text = `${code} ${[...g.by].map(([ws, q]) => `${WORK_KO[ws]} ${q}`).join(' · ')}`;
+      const text =
+        code === RACK_AT && rackGuess > 0
+          ? `${code} 포장 ${rackGuess} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
+          : `${code} ${[...g.by].map(([ws, q]) => `${WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       s.position.set(g.x, (g.table ? 0.9 : 0.02) + 0.9, g.z);
       labels.add(s);

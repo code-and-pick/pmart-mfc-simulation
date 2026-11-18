@@ -25,6 +25,11 @@ export class CartPool {
     this.byShipment.set(shipmentId, cart);
   }
 
+  /** 그 출고에 정해 둔 장바구니(없으면 null) */
+  cartOf(shipmentId: string): string | null {
+    return this.byShipment.get(shipmentId) ?? null;
+  }
+
   release(shipmentId: string) {
     this.byShipment.delete(shipmentId);
   }

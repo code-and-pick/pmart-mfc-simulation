@@ -78,6 +78,14 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 - 묻는 것: 계약 `Shipment.deliveryId` 는 언제 채워지나(배송 생성 `DeliveryCreated` 를 fulfillment 가 받아 적는지), 아니면 비워 두는 필드인가.
 - 시뮬레이터는 그동안 **배송 찾기의 `orderId` 로 후보를 고르고 배차 상세(`GET /deliveries/{id}/dispatch`)의 `shipmentId` 로 출고에 잇는다**(11-17 — 같은 주문의 재발송 출고 fulfillment 0.5.0 과 섞이지 않게. 실측: 배차 상세에 shipmentId 있음). 채워지면 `deliveryId` 를 먼저 쓴다.
 
+### R-20 출하대기 랙 스캔을 받아 포장 재고 위치를 패킹대 → 랙으로 — 중간 (2026-11-18 추가, PDA BR-52 R20 과 같은 것)
+PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01`·`DSP-A-02`, mfc-location 구역 `DISPATCH_STAGING`)을 찍지만 **서버로 보내지 않는다** — 받을 API 가 계약에 없다(클라이언트 `packing_controller.dart` "보낼 곳이 계약에 없다(BR-52 R20) — 화면 확인만", "패킹 끝" PACK 실행 본문에 랙 없음). 그래서 밀봉 뒤 인계 전까지 서버 재고는 패킹대에 있다.
+- 실측(11-18, GET, `claude-mfc-wrk`): 주문 `ORD-b50b6b64-…-S1` 출고 READY(밀봉 01:30Z) — 그 SKU 3종 재고가 `PAK-A-01` PACKED(E-00000056 ×1, E-00000266 ×2, B-00000050 ×1). 실물은 랙에 있음.
+- 원하는 것: 랙 스캔(포장 ID 또는 출고 + 랙 코드)을 받는 명령 — 예 `POST /packages/{packageId}/staging { stagingLocation: "DSP-A-01" }` 또는 PACK 실행 본문에 `stagingLocation`. 받으면 mfc-inventory 가 그 포장분 PACKED 의 **위치만** `PAK-…` → `DSP-…` 로(H·E·R·업무 상태 불변 — IV-07/08/09 그대로). 포장(`Package`)에 `stagingLocation`·`stagedAt` 이 보이면 더 좋다.
+- 쓰임: 라이더·점원이 봉투가 어느 랙에 있는지, 패킹대가 비었는지 서버로 안다. 시뮬레이터는 서버 위치 그대로 랙에 그린다.
+- 같은 요청이 이미 있음: 클라이언트 `docs/backend-requests.md` **BR-52 R20**(11-10, "피킹한 사람에게 같은 주문 패킹 배정·출하대기 랙 위치", OPEN — 백엔드 회신 11-14 "다음 차례 후보"). 시뮬레이터도 같은 것이 필요하다는 기록 — 따로 만들 필요 없이 R20 에 같이 넣어 주면 된다.
+- 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
+
 ### R-07 가상 라이더 배차 — 바뀜: 라이더는 rider 시뮬레이터 몫 (2026-11-16)
 배송 서비스(delivery-dispatch 0.3.3·delivery-execution 0.4.0)가 생겼고(백엔드 `rider_e2e.py` 11-16 첫 끝까지 실행), 실서버의 라이더 API 는 짝 시뮬레이터 `../pmart-rider-simulation` 이 부른다(그쪽 `docs/design.md` §2-1). 이 시뮬레이터는 **배차·배송 상태를 읽어 그리기만** 하고 실서버에서 인계 API 를 부르지 않는다 → 아래 "rider 시뮬레이터 요청". MOCK 의 가상 라이더는 그대로.
 - 실측 참고(11-16): 인계가 없으면 포장이 `PAK-A-01` 에 PACKED 로 남는다(11-10 실제 주문 7개). 실행 끝 정리(SIM-9)를 할 때 이 포장의 처리 방법(중지·복귀)을 같이 확인한다.
@@ -129,7 +137,7 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 
 | # | 내용 | 근거 | 시뮬레이터 대응 |
 |---|---|---|---|
-| C-1 | PDA 앱이 상품 스캔을 작업 지시 줄의 **첫 바코드(`barcode`) 하나와만** 비교한다. 계약(fulfillment 0.7.0)은 "`barcodes[]` 중 하나면 같은 상품"이라, 바코드가 둘 이상인 상품은 두 번째 값을 찍으면 "다른 상품"이 된다. 입고·검사·재고 조사·이동 화면은 이미 `barcodes.contains` 로 비교한다. | 클라이언트 `c7498f8`(11-17): `apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`(피킹), `features/packing/presentation/packing_controller.dart:171`(포장) | 스캔 판이 첫 값을 "작업 지시 바코드"로 먼저 보이고, 나머지는 "같은 상품 다른 바코드"로 따로 보인다(앱이 바뀌면 나머지도 맞음) |
+| C-1 | **해소(클라이언트 `c6f4930` #57, 11-17 확인 11-18)** — 이제 `TaskLineView.matchesBarcode` = `barcode` 또는 `barcodes.contains`(피킹·포장 모두). 원래 내용: PDA 앱이 상품 스캔을 작업 지시 줄의 **첫 바코드(`barcode`) 하나와만** 비교한다. 계약(fulfillment 0.7.0)은 "`barcodes[]` 중 하나면 같은 상품"이라, 바코드가 둘 이상인 상품은 두 번째 값을 찍으면 "다른 상품"이 된다. 입고·검사·재고 조사·이동 화면은 이미 `barcodes.contains` 로 비교한다. | 클라이언트 `c7498f8`(11-17): `apps/mfc_app/lib/features/tasks/presentation/task_controllers.dart:368`(피킹), `features/packing/presentation/packing_controller.dart:171`(포장) | 스캔 판이 첫 값을 "작업 지시 바코드"로 먼저 보이고, 나머지는 "같은 상품 다른 바코드"로 따로 보인다(앱이 바뀌면 나머지도 맞음) |
 | C-2 | **LOT 라벨 전환 시점.** 백엔드 LOT 라벨 = **GS1-128** `(01)GTIN-14(17)소비기한 YYMMDD(10)LOT 번호`(inventory 0.21.0·fulfillment 0.11.0, `45ad5671` — 그 전 0.20.0 의 QR `LOT:{lotId}` 는 예전 라벨 해석용으로만 남음). PDA 는 찍은 값의 (10) 을 피킹 지시 `picks[].lotNo` 와 바로 대조할 수 있다(서버 조회 없이), 찍은 값으로 LOT 찾기 `GET /mfcs/{mfcId}/lot-resolutions?code=`. PDA 앱 main 은 아직 상품 바코드로 비교한다(11-17 13:00 기준 LOT 라벨 처리 없음). LAN 재고에는 라벨이 붙어 있지 않아 처음 쓸 때 재출력(`…/lot-labels?sku=&locationCode=`)으로 뽑아 붙여야 하고, 그 전에 상품 바코드를 막으면 피킹이 멈춘다 — **전환 시점은 사용자가 정함** | 백엔드 `c279d1cb`(0.20.0)·`45ad5671`(0.21.0), `docs/handoff/clients/mfc-app/2026-11-17-reply-lot-label.md`. 클라이언트 origin/main `1dca4c2` | 스캔 판·피킹 말풍선이 상품 바코드 옆에 LOT 라벨(GS1-128, 바코드·QR 전환과 상관없이 늘 1차원)을 같이 보인다. 값은 작업 지시 `picks[].lotNo`·`expiresOn`·줄 `barcodes` 로 만든다(서버 조회 없음, LAN `lot-labels` 의 `gs1` 과 같은 값 확인). LOT 번호가 없으면(0.11.0 전 작업) 그리지 않는다 |
 
 ## rider 시뮬레이터 요청 (짝 시뮬레이터 → 이 시뮬레이터)
@@ -146,6 +154,8 @@ SIM-5 결정대로 주기 조회(3초)로 충분하다. 실서버 관찰에서 �
 
 | 값 | 시뮬 값 | 이유 |
 |---|---|---|
+| 출하대기 랙 포장(추정) | 출고가 READY 면 밀봉 포장(SEALED) 내용의 SKU·수량만큼 패킹대(`PAK-…`) PACKED 를 출하대기 랙 1(`DSP-A-01`)에 그린다. 이름표 "추정" | 서버 위치는 패킹대 그대로(R-20). 수량은 서버 값, 자리만 화면 결정. 11-18 |
+| 끌고 있는 장바구니 | 작업자가 끄는 카트(서버 PICK 실적 도착지 `CRT-…`)의 집품분(PICKED)은 카트 보관 자리 대신 작업자 카트 위에(최대 12개) | 백엔드 위치 데이터는 카트 40대 좌표가 모두 카트 보관 자리. 11-18 |
 | 인계 fence 유효시간 | 180초 | 백엔드 설정 기본 3분(D-2, `mfc-fulfillment-service.yml handover-fence-ttl`)에 맞춤. 계약은 `fenceExpiresAt` 만 정의 |
 | 결품 시 처리 | 고객 사전 선택 "품절 상품만 취소" 로 가정. 보고 때 E·R −q(H 불변), 작업 BLOCKED → **5초 뒤** MOCK 이 결품 사가(CANCEL_ITEM) 대신 해결 | 실서버는 order-orchestration 결품 사가. MOCK 은 같은 SKU 다른 LOT 재확보가 없어 늘 BLOCKED |
 | PICK 도착지(MOCK) | 냉동 `PAK-F-01`, 냉장 `PAK-C-01`, 상온 `PAK-C-01` | MOCK 만 예전 흐름(서버도 PACKING 을 계속 받음). 실서버 가상 작업자는 장바구니 |
