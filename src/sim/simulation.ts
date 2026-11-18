@@ -525,7 +525,9 @@ export class Simulation {
     const packed = new Map<string, number>();
     for (const p of live) for (const x of p.contents as { orderLineId: string; qty: number }[]) packed.set(x.orderLineId, (packed.get(x.orderLineId) ?? 0) + x.qty);
     const bag = d.lines.map((line) => ({ line, left: line.plannedQty - line.cancelledQty - (packed.get(line.orderLineId) ?? 0) })).filter((x) => x.left > 0);
-    const serverPast = !!info?.dispatchRequest || live.length > 0;
+    // PDA(packing_screen.dart, 클라이언트 cc4507c)는 패킹대·카트를 화면 안 상태로만 들어 배차 요청이 이미 있어도 ① 패킹대 → ② 카트부터 묻는다.
+    // 서버로 넘었다고 볼 수 있는 건 밀봉한 포장뿐(밀봉 = 패킹대·카트를 찍은 뒤의 ④). 배차 요청은 피킹 전에도 올 수 있다(fulfillment 0.14.0)
+    const serverPast = live.length > 0;
     const step: PackStep =
       !serverPast && !w.passed.has(`${s.taskId}:PACK-STATION`)
         ? 'STATION'

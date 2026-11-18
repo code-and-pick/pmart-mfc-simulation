@@ -126,6 +126,12 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     const st = sim.backendPoint('PAK-A-02')!;
     expect(Math.hypot(w.pos.x - st.x, w.pos.z - st.z)).toBeLessThan(0.5);
 
+    // 배차 요청이 이미 있어도(피킹 전 요청 — fulfillment 0.14.0) PDA 는 ① 패킹대 → ② 카트부터 묻는다
+    ship({ dispatchRequest: { estimatedReadyAt: '2026-11-17T02:00:00Z' } });
+    sync();
+    expect(cue().step).toBe('STATION');
+    ship({});
+    sync();
     sim.passScan('OP-990d2c09');
     expect(cue().step).toBe('CART');
     sim.passScan('OP-990d2c09');

@@ -73,22 +73,28 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
   const d = t.detail;
   if (!d) return <div className="note">작업 상세를 읽는 중…</div>;
   if (s.taskType === 'PACK') {
-    // 포장: 위치(장바구니·패킹대) + 담을 상품 바코드(PDA 포장 화면은 상품을 찍어 담는다) + 피킹 때 본 LOT 라벨 + 출하대기 랙
+    // 포장: PDA 포장 화면 순서(packing_screen.dart) ① 패킹대 → ② 카트 → ③ 배차 요청(바코드 없음) → ④ 담기(상품) → ⑤ 출하대기 랙
     const seen = s.shipmentId ? real.picksOf(s.shipmentId) : [];
+    const locs = d.packingLocations ?? [];
+    const station = locs.find((c) => c.startsWith('PAK-')) ?? 'PAK-A-01';
+    const carts = locs.filter((c) => c.startsWith('CRT-'));
     return (
       <>
         <div className="bc-grid">
-          {(d.packingLocations ?? []).map((c) => (
-            <LocBarcode key={c} code={c} caption="포장 위치(집품분)" />
-          ))}
-          <LocBarcode code="DSP-A-01" caption="출하대기 랙 1" />
+          <LocBarcode code={station} caption="① 패킹대 (PDA 는 PAK- 면 받음)" />
+          {carts.length ? (
+            carts.map((c) => <LocBarcode key={c} code={c} caption="② 카트 (이 주문을 담은 장바구니)" />)
+          ) : (
+            <div className="note">② 카트 — 서버가 아직 모름(집품 전)</div>
+          )}
+          <div className="note">③ 배차 요청 — 찍을 바코드 없음(PDA 에서 예상 포장 시간)</div>
         </div>
         {d.lines
           .filter((l) => l.plannedQty - l.cancelledQty > 0)
           .map((l) => (
             <div className="scan-stop" key={l.orderLineId}>
               <div className="sub">
-                담기 · {l.productName ?? l.sku} × {l.plannedQty - l.cancelledQty}
+                ④ 담기 · {l.productName ?? l.sku} × {l.plannedQty - l.cancelledQty}
               </div>
               <div className="bc-grid">
                 <ProductBarcodes l={l} />
@@ -101,6 +107,9 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
               <ProductBarcodeNotes l={l} />
             </div>
           ))}
+        <div className="bc-grid">
+          <LocBarcode code="DSP-A-01" caption="⑤ 출하대기 랙 1 (밀봉 뒤)" />
+        </div>
       </>
     );
   }
