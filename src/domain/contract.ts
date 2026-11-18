@@ -74,6 +74,8 @@ export interface TaskSummary {
   lastActivityAt?: string | null;
   /** (0.4.9) 목록 표시용 "상품명 외 N건" */
   headline?: { productName: string | null; otherLineCount: number };
+  /** (fulfillment 0.13.0, F-5) 화면용 주문번호(숫자 8자리). 번호 전 주문은 null */
+  orderNumber?: string | null;
   /** (0.18.0) PACK 만 — 같은 출고 PICK 을 끝낸 담당. 다음 작업 받기가 이 사람에게만 이 PACK 을 준다(capacity 0.19.0) */
   pickedBy?: string | null;
 }
@@ -100,6 +102,8 @@ export interface CapacityWorker {
   /** capacity TaskType(RECEIVE·INSPECT·PUTAWAY·REPLENISH·MOVE 포함) — fulfillment TaskType 보다 넓다 */
   effectiveTaskTypes?: string[];
   onBreak?: boolean;
+  /** (capacity 0.11.0) 속도 배율 — 배정 추천의 작업 시간 = 추정 분 ÷ 배율(1.0 보통, 센터 관리자가 정함, 0.5~2.0) */
+  speedFactor?: number;
 }
 
 export type PickStatus = 'OK' | 'PARTIAL' | 'NOT_FOUND' | 'DONE';
@@ -489,6 +493,10 @@ export interface StaffDeliverySummary {
   version: number;
   type: 'FORWARD' | 'RETURN' | 'RESHIPMENT';
   orderId: string | null;
+  /** (execution, 2026-11-18) 화면용 주문번호 8자리 — 배정 사건이 실어 준 값(배정 전 null) */
+  orderNumber?: string | null;
+  /** (execution 0.26.0, ADR-0070) 화면 배송 번호 = 주문번호-순번(예 74939255-1). 모르면 null */
+  deliveryNumber?: string | null;
   mfcId: string | null;
   riderId: string | null;
   state: ExecutionState;

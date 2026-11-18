@@ -247,6 +247,29 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(b.tasks.has('A-PACK')).toBe(true); // 출하 대기라 남는다
   });
 
+  it('화면 주문번호(ADR-0070): 출고 조회의 orderNumber, 없으면 작업 요약의 orderNumber, 둘 다 없으면 null', async () => {
+    const r = new FakeReader();
+    const pick = summary({ taskId: 'T1', state: 'READY', orderNumber: '74939255' });
+    r.list = [pick];
+    r.details.set('T1', detail(pick, [{ code: 'X' }]));
+    const b = board(r, { ms: 0 });
+    await b.tick();
+    expect(b.orderNumberOf('ORD-1-S1')).toBe('74939255');
+    expect(b.orderNumberOf('ORD-9-S1')).toBeNull();
+  });
+
+  it('작업자 속도 배율(speedFactor): 서버 값, 없으면 1, 0.5~2.0 으로 자름', async () => {
+    const r = new FakeReader();
+    r.listWorkers = async () => [
+      { mfcId: 'MFC-SEED-01', workerId: 'OP-a', displayName: 'A', state: 'ACTIVE', speedFactor: 1.24 },
+      { mfcId: 'MFC-SEED-01', workerId: 'OP-b', displayName: 'B', state: 'ACTIVE' },
+      { mfcId: 'MFC-SEED-01', workerId: 'OP-c', displayName: 'C', state: 'ACTIVE', speedFactor: 9 },
+    ];
+    const b = board(r, { ms: 0 });
+    await b.tick();
+    expect([b.speedFactor('OP-a'), b.speedFactor('OP-b'), b.speedFactor('OP-c'), b.speedFactor('OP-x'), b.speedFactor(null)]).toEqual([1.24, 1, 2, 1, 1]);
+  });
+
   it('서버가 다 집은 조각을 상세에서 빼도 본 조각은 출고별로 남긴다(바코드 판 — 패킹까지)', async () => {
     const r = new FakeReader();
     const pick = summary({ taskId: 'T1', state: 'IN_PROGRESS', version: 3, lastActivityAt: 'a' });

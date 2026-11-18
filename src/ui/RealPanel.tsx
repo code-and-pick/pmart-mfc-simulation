@@ -1,5 +1,6 @@
 // 실서버 관찰 화면: 실제 주문(출고)별 PICK·PACK 상태와 담당 작업자. 서버가 준 값만 보인다.
 // 주문 줄을 누르면 "바코드" 탭으로 넘어가 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)를 보인다.
+import { OrderNo } from './OrderNo';
 import { Fragment } from 'react';
 import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
@@ -133,12 +134,13 @@ function ReturnPickups() {
           {rp.map((d) => (
             <tr key={d.deliveryId} title={`${d.deliveryId}\n${d.orderId ?? ''}`}>
               <td>
-                <div>{shortId(d.deliveryId)}</div>
-                <div className="sub">{d.orderId ? shortId(d.orderId) : '—'}</div>
+                {/* 화면 번호(ADR-0070): 배송 = 주문번호-순번, 없으면 ID 끝 8자리 회색. 시스템 ID 는 줄 title */}
+                <div>{d.deliveryNumber ?? <span className="muted">{d.deliveryId.slice(-8)} · 번호 없음</span>}</div>
+                <div className="sub">{d.orderNumber ? `주문 ${d.orderNumber}` : '—'}</div>
               </td>
               <td>
                 {RETURN_STATE_KO[d.state] ?? d.state}
-                <div className="sub">{d.riderId ? `라이더 ${d.riderId}` : '라이더 없음'}</div>
+                <div className="sub">{d.riderId ? '라이더 배정됨' : '라이더 없음'}</div>
               </td>
             </tr>
           ))}
@@ -189,7 +191,9 @@ export function RealOrders() {
               onClick={() => (focus.shipmentId === r.shipmentId ? focus.clear() : focus.show(r.shipmentId))}
             >
               <td>
-                <div>{shortId(r.shipmentId)}</div>
+                <div>
+                  <OrderNo shipmentId={r.shipmentId} />
+                </div>
                 <div className="sub">
                   {head?.productName ?? '—'}
                   {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''} · {created.toLocaleTimeString()}
@@ -257,10 +261,4 @@ export function RealStockTable() {
       </table>
     </>
   );
-}
-
-/** ORD-0e67de38-7acf-…-S1 → ORD-0e67de38…S1 */
-function shortId(id: string): string {
-  const m = /^([A-Z0-9]+-[0-9a-f]{8})[0-9a-f-]*(-S\d+)?$/i.exec(id);
-  return m ? `${m[1]}…${m[2] ?? ''}` : id;
 }

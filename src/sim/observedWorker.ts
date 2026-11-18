@@ -75,6 +75,11 @@ export class ObservedWorker extends Agent implements SiteWorker {
     this.aimKey = '';
   }
 
+  /** 걷는 속도(m/s) — 서버 속도 배율을 곱한 값 */
+  setSpeed(v: number) {
+    if (v > 0) this.speed = v;
+  }
+
   override tick(dt: number) {
     super.tick(dt);
     if (this.state !== 'IDLE') this.busySeconds += dt;

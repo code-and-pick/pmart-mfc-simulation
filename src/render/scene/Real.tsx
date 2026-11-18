@@ -1,5 +1,6 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
+import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -108,7 +109,7 @@ export function RealShipLabels() {
       .shipments()
       .filter((r) => r.info && ['READY', 'PARTIALLY_HANDED_OVER', 'PREPARING'].includes(r.info.state) && SHIP_LABEL_STAGES.has(dispatchView(r).stage))
       .filter((r) => r.info!.state !== 'PREPARING' || !!r.info!.dispatchRequest);
-    const texts = rows.slice(0, MAX_SHIP_LABELS).map((r) => `${r.info!.orderId.slice(0, 12)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
+    const texts = rows.slice(0, MAX_SHIP_LABELS).map((r) => `${orderText(real.orderNumberOf(r.shipmentId), r.shipmentId)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
     if (rows.length > MAX_SHIP_LABELS) texts.push(`외 ${rows.length - MAX_SHIP_LABELS}건`);
     const key = texts.join('|');
     if (key === ver.current) return;

@@ -252,6 +252,7 @@ export class Simulation {
         point: (c) => this.backendPoint(c),
         wire: (c) => this.codes.toBackend(c),
         carts: this.carts,
+        speedFactor: (id) => this.real?.speedFactor(id) ?? 1,
       };
     }
   }
@@ -490,6 +491,8 @@ export class Simulation {
       }
       w.pda = view;
       w.lastSeenMs = now;
+      // 걷는 속도 = 기본 × 서버 속도 배율(capacity speedFactor) — 실제 PDA 작업자 아바타도 그 사람 속도로
+      w.setSpeed(this.params.walkSpeed * real.speedFactor(wid));
       w.aim(target, key);
     }
     for (let i = this.observedWorkers.length - 1; i >= 0; i--) {

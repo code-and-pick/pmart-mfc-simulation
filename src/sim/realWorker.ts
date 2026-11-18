@@ -46,6 +46,8 @@ export interface RealSiteContext {
   wire: (simCode: string) => string | null;
   /** 장바구니 나눠 쓰기(한 출고 = 한 장바구니) */
   carts: CartPool;
+  /** 서버 작업자 속도 배율(capacity 0.11.0 `speedFactor`, 0.5~2.0). 모르면 1 */
+  speedFactor?: (workerId: string) => number;
 }
 
 const TEMP_KO: Record<TemperatureZone, string> = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' };
@@ -291,7 +293,7 @@ export class RealWorker extends Agent {
     this.activity = `장바구니 ${cart} 가지러`;
     this.pda = this.view(task, 'PICK', `장바구니 ${cart} 스캔`);
     await this.walkTo(ctx.point(cart) ?? ctx.layout.points.cartDepot);
-    await this.wait(8);
+    await this.work(8);
     this.hasCart = true;
 
     // 시작 뒤 상세의 visitSeq 가 방문 순서(fulfillment 0.4.10, ADR-0050). 없으면 줄 순서
@@ -331,7 +333,7 @@ export class RealWorker extends Agent {
         this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
       }
       this.pda.step = '위치·상품 바코드 스캔';
-      await this.wait(ctx.params.pickScanSecPerLine + ctx.params.pickSecPerUnit * pick.remainingQty);
+      await this.work(ctx.params.pickScanSecPerLine + ctx.params.pickSecPerUnit * pick.remainingQty);
       const send = (to: string) =>
         this.retry(() =>
           be.recordExecution(
@@ -370,7 +372,7 @@ export class RealWorker extends Agent {
     this.state = 'WAIT_STATION';
     this.activity = `장바구니 ${cart} 패킹 대기 지점으로`;
     await this.walkTo(ctx.layout.points.packQueue);
-    await this.wait(4);
+    await this.work(4);
     this.hasCart = false;
     this.carrying = [];
     ctx.log(`${this.account} 피킹 완료 ${shipmentId}`);
@@ -413,7 +415,7 @@ export class RealWorker extends Agent {
       }
       this.pda.step = '상품·기한 확인 → 포장';
       this.activity = `패킹 ${station.id} (${units}개)`;
-      await this.wait(packSec);
+      await this.work(packSec);
 
       // 밀봉: 집품분이 놓인 위치·온도대별로 봉투 하나씩. 위치는 내가 담은 장바구니 → PACK 상세 packingLocations 가 하나면 그곳 →
       // 재고 조회(PICKED) 순으로 찾는다. 장바구니면 packingLocation = 이 패킹대(필수 — 장바구니 → 패킹대로 옮기며 PACKED, fulfillment 0.8.0),
@@ -437,7 +439,7 @@ export class RealWorker extends Agent {
       for (const g of groups.values()) {
         n++;
         this.pda.step = `${g.temp ? TEMP_KO[g.temp] : ''} 봉투 밀봉·라벨 출력 (${n}/${groups.size})`;
-        await this.wait(12);
+        await this.work(12);
         await this.retry(() =>
           be.sealPackage(
             shipmentId,
@@ -463,7 +465,7 @@ export class RealWorker extends Agent {
     this.activity = '출하대기 랙으로';
     this.pda!.step = '출하대기 랙 적재';
     await this.walkTo(ctx.point('DSP-A-01') ?? ctx.layout.points.shipDrop);
-    await this.wait(4 * Math.max(1, this.carrying.length));
+    await this.work(4 * Math.max(1, this.carrying.length));
     this.carrying = [];
     this.ordersDone += 1;
     ctx.log(`${this.account} 포장 완료 ${shipmentId}`);
@@ -525,7 +527,7 @@ export class RealWorker extends Agent {
       };
       await this.walkTo(ctx.point(p.from) ?? ctx.layout.points.packQueue);
       this.pda.step = '상품 스캔 → 실었어요';
-      await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
+      await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
       this.hasCart = p.from.startsWith('CRT-');
       for (let i = 0; i < p.qty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
       // ② 돌려놓을 선반
@@ -539,7 +541,7 @@ export class RealWorker extends Agent {
         await this.walkTo(loc.pick);
         this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
       }
-      await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
+      await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
       const r = await this.retry(() =>
         unknownAsResend(() =>
           be.recordExecution(
@@ -578,6 +580,24 @@ export class RealWorker extends Agent {
     }
     if (t.assigneeId && t.assigneeId !== this.workerId) throw new Error(`${t.taskId} 담당 ${t.assigneeId} — 내 작업 아님`);
     return t;
+  }
+
+  /**
+   * 손으로 하는 일(스캔·집기·포장·검사·적치)에 드는 시간 — 서버 속도 배율로 나눈다(capacity: 작업 시간 = 추정 ÷ speedFactor).
+   * 걷기도 같은 배율(speed). 재시도·대기·반영 확인 같은 기다림은 나누지 않는다(wait 그대로).
+   */
+  private work(sec: number) {
+    return this.wait(sec / this.factor());
+  }
+
+  override walkTo(target: P): Promise<void> {
+    this.speed = this.ctx.params.walkSpeed * this.factor();
+    return super.walkTo(target);
+  }
+
+  private factor(): number {
+    const f = this.workerId ? (this.ctx.speedFactor?.(this.workerId) ?? 1) : 1;
+    return Number.isFinite(f) && f > 0 ? f : 1;
   }
 
   /**
@@ -623,7 +643,7 @@ export class RealWorker extends Agent {
       if (e instanceof ApiProblem && e.problem.status === 404) return null;
       throw e;
     });
-    await this.wait(REAL_WORKERS.inspectBaseSec + REAL_WORKERS.inspectSecPerUnit * qty);
+    await this.work(REAL_WORKERS.inspectBaseSec + REAL_WORKERS.inspectSecPerUnit * qty);
     const v = inspectVerdict(t, label, qty, seoulToday(Date.now()));
     if (!v.ok) {
       this.lastProblem = `${t.sku} 품질검사 못 함 — ${v.why}`;
@@ -660,7 +680,7 @@ export class RealWorker extends Agent {
     this.pda.temp = temp ? TEMP_KO[temp] : null;
     this.pda.step = `${t.locationCode} 스캔 → 상품 싣기`;
     await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
-    await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+    await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
     for (let i = 0; i < qty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
     const loc = ctx.location(to);
     this.currentTarget = loc;
@@ -672,7 +692,7 @@ export class RealWorker extends Agent {
       await this.walkTo(loc.pick);
       this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
     }
-    await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+    await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
     await this.applied('적치', this.key('putaway', t.taskId, `:${to}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: to, qty }, k));
     this.carrying = [];
     this.currentTarget = null;
@@ -712,7 +732,7 @@ export class RealWorker extends Agent {
       this.state = 'TO_CART';
       this.activity = `${label} 카트 ${cart} 가지러`;
       await this.walkTo(ctx.point(cart) ?? ctx.layout.points.cartDepot);
-      await this.wait(REAL_WORKERS.shelveBaseSec);
+      await this.work(REAL_WORKERS.shelveBaseSec);
       this.hasCart = true;
       const toPick = m.state === 'ACTIVE' ? m.qty - m.pickedQty : 0;
       if (toPick > 0) {
@@ -725,7 +745,7 @@ export class RealWorker extends Agent {
           await this.walkTo(from.pick);
           this.heading = Math.atan2(from.shelf.x - this.pos.x, from.shelf.z - this.pos.z);
         }
-        await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * toPick);
+        await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * toPick);
         m = await this.retry(() => unknownAsResend(() => be.pickUpMoveOrder(m.moveId, { cartLocation: cart, qty: toPick }, this.key('pickup', m.moveId, `:${cart}:${toPick}`))));
         this.pda.pickedQty = m.pickedQty;
       }
@@ -745,7 +765,7 @@ export class RealWorker extends Agent {
           await this.walkTo(loc.pick);
           this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
         }
-        await this.wait(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
+        await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
         m = await this.retry(() => unknownAsResend(() => be.dropMoveOrder(m.moveId, { toLocation: to, qty }, this.key('drop', m.moveId, `:${to}:${qty}`))));
         this.pda.step = `${label} 반영됨`;
       }

@@ -611,6 +611,20 @@ export class RealBoard {
     return this.workers.get(workerId)?.displayName ?? `${workerId.slice(0, 11)}…`;
   }
 
+  /** 화면용 주문번호(fulfillment 0.13.0 — 작업·출고 응답의 orderNumber, ADR-0070). 없으면 null */
+  orderNumberOf(shipmentId: string): string | null {
+    const s = this.shipmentInfo.get(shipmentId)?.data.orderNumber;
+    if (s) return s;
+    for (const t of this.tasks.values()) if (t.summary.shipmentId === shipmentId && t.summary.orderNumber) return t.summary.orderNumber;
+    return null;
+  }
+
+  /** 작업자 속도 배율(capacity 0.11.0 `speedFactor` — 배정 추천의 작업 시간 = 추정 ÷ 배율). 모르면 1, 0.5~2.0 으로 자름 */
+  speedFactor(workerId: string | null | undefined): number {
+    const f = workerId ? this.workers.get(workerId)?.speedFactor : undefined;
+    return typeof f === 'number' && Number.isFinite(f) ? Math.min(2, Math.max(0.5, f)) : 1;
+  }
+
   /** 열린 작업 수 (유형:상태 → 건수) */
   counts(): Record<string, number> {
     const out: Record<string, number> = {};

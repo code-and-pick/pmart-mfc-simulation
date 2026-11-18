@@ -1,4 +1,5 @@
 // 확대한 구역 요약 카드, 선택한 작업자 PDA / 로케이션 카드.
+import { orderText } from './OrderNo';
 import type { ReactNode } from 'react';
 import { useApp, useTick, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
@@ -299,7 +300,7 @@ function DetailBody() {
       {d ? (
         <dl>
           <Row k="작업" v={`${TASK_KO[d.taskType] ?? d.taskType} ${d.taskId}`} />
-          <Row k="주문" v={d.orderId} />
+          <Row k="주문" v={d.shipmentId && sim.real ? orderText(sim.real.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId} />
           <Row k="진행" v={d.progress} />
           <Row
             k="현재 로케이션"

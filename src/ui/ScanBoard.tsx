@@ -2,6 +2,7 @@
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
 // - 카트 40대(Code128, 값 = 위치 코드 CRT-A-01~40, 온도 구분 없음 — 백엔드 0cbfecaa)
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
+import { OrderNo, SystemIds } from './OrderNo';
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
 import { lotGs1 } from '../domain/barcode';
@@ -268,7 +269,10 @@ export function ScanBoard() {
 
       {focus.shipmentId && (
         <div className="scan-focus">
-          <b>주문 {focus.shipmentId}</b>
+          <b>
+            주문 <OrderNo shipmentId={focus.shipmentId} />
+          </b>
+          <SystemIds ids={[['출고', focus.shipmentId], ['주문', real?.shipmentInfo.get(focus.shipmentId)?.data.orderId]]} />
           <button className="btn ghost" onClick={focus.clear}>
             선택 취소
           </button>
@@ -284,7 +288,7 @@ export function ScanBoard() {
       {tasks.map((t) => (
         <div className="scan-task" key={t.summary.taskId}>
           <h4>
-            {t.summary.taskType} · {t.summary.shipmentId ?? t.summary.fulfillmentId} · {TASK_STATE_KO[t.closed ? t.closed.state : t.summary.state]} · {real!.workerName(t.summary.assignment?.workerId)}
+            {t.summary.taskType} · {t.summary.shipmentId ? <OrderNo shipmentId={t.summary.shipmentId} /> : t.summary.fulfillmentId.slice(-8)} · {TASK_STATE_KO[t.closed ? t.closed.state : t.summary.state]} · {real!.workerName(t.summary.assignment?.workerId)}
           </h4>
           <TaskBarcodes t={t} />
         </div>

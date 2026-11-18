@@ -2,6 +2,7 @@
 // 작업 지시(원래·재발송) → 출고별 작업(담당·시작·끝)·결품 보고·포장·인계, 배차 요청·출하 대기 시각. 서버 값 그대로 보인다.
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
+import { OrderNo } from './OrderNo';
 import { TASK_STATE_KO } from './RealPanel';
 
 const t = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleTimeString() : '—');
@@ -22,7 +23,7 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   return (
     <details className="order-timeline" open>
       <summary>
-        현장 기록 · 주문 {orderId} <span className="sub">(fulfillment 0.10.0, {t(new Date(v.readMs).toISOString())} 읽음)</span>
+        현장 기록 · 주문 <OrderNo shipmentId={shipmentId} /> <span className="sub">(fulfillment 0.10.0, {t(new Date(v.readMs).toISOString())} 읽음)</span>
       </summary>
       {v.data.workOrders.map((wo) => (
         <div key={wo.fulfillmentId}>
@@ -34,7 +35,7 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
               <thead>
                 <tr>
                   <th>
-                    {s.shipmentId === shipmentId ? <b>{s.shipmentId}</b> : s.shipmentId} · {s.state}
+                    <span title={s.shipmentId}>{s.shipmentId === shipmentId ? <b>이 출고</b> : `다른 출고 …${s.shipmentId.slice(-8)}`}</span> · {s.state}
                   </th>
                   <th>
                     배차 요청 {t(s.dispatchRequestedAt)} · 출하 대기 {t(s.readyAt)}

@@ -596,3 +596,5 @@ table.inv.real tr.clickable:hover, table.inv.real tr.clickable.on { background: 
 .scan-bubble .sb-x:hover { color: #fff; }
 .scan-bubble .bc { margin: 2px 0; }
 .scan-bubble .btn { margin-top: 4px; }
+.sys-ids { display: inline-block; margin-left: 8px; font-size: 11px; color: var(--muted); }
+.sys-ids code { font-size: 11px; }
