@@ -135,7 +135,10 @@ function Wheel({ z, r = 0.25, t = 0.08 }: { z: number; r?: number; t?: number })
   );
 }
 
-function VehicleModel({ v }: { v: VehicleType }) {
+/** 문(승용차 운전석)·뚜껑(트렁크·배달통) 회전축 — RiderMesh 가 각도를 천천히 바꾼다 */
+type Hinge = React.RefObject<THREE.Group | null>;
+
+function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hinge }) {
   switch (v) {
     case 'MOTORCYCLE':
       return (
@@ -144,10 +147,17 @@ function VehicleModel({ v }: { v: VehicleType }) {
             <boxGeometry args={[0.35, 0.5, 1.6]} />
             <meshStandardMaterial color={0xd32f2f} metalness={0.3} />
           </mesh>
-          <mesh position={[0, 0.95, -0.55]} castShadow>
-            <boxGeometry args={[0.5, 0.45, 0.5]} />
+          <mesh position={[0, 0.93, -0.55]} castShadow>
+            <boxGeometry args={[0.5, 0.41, 0.5]} />
             <meshStandardMaterial color={0xeeeeee} />
           </mesh>
+          {/* 배달통 뚜껑 — 앞쪽 윗모서리가 축 */}
+          <group ref={lid} position={[0, 1.15, -0.3]}>
+            <mesh position={[0, 0, -0.25]} castShadow>
+              <boxGeometry args={[0.52, 0.04, 0.5]} />
+              <meshStandardMaterial color={0xdddddd} />
+            </mesh>
+          </group>
           <Wheel z={-0.6} />
           <Wheel z={0.6} />
         </>
@@ -170,10 +180,16 @@ function VehicleModel({ v }: { v: VehicleType }) {
               <meshStandardMaterial color={0x222222} />
             </mesh>
           )}
-          <mesh position={[0, 0.8, -0.45]} castShadow>
-            <boxGeometry args={[0.42, 0.32, 0.36]} />
+          <mesh position={[0, 0.78, -0.45]} castShadow>
+            <boxGeometry args={[0.42, 0.28, 0.36]} />
             <meshStandardMaterial color={0xeeeeee} />
           </mesh>
+          <group ref={lid} position={[0, 0.94, -0.27]}>
+            <mesh position={[0, 0, -0.18]} castShadow>
+              <boxGeometry args={[0.44, 0.04, 0.36]} />
+              <meshStandardMaterial color={0xdddddd} />
+            </mesh>
+          </group>
           <Wheel z={-0.48} r={0.3} t={0.03} />
           <Wheel z={0.48} r={0.3} t={0.03} />
         </>
@@ -208,6 +224,20 @@ function VehicleModel({ v }: { v: VehicleType }) {
             <boxGeometry args={[1.0, 0.45, 1.4]} />
             <meshStandardMaterial color={0x90a4ae} metalness={0.2} transparent opacity={0.75} />
           </mesh>
+          {/* 운전석 문(+x 쪽) — 앞쪽 모서리가 축, 바깥으로(-각) 열린다 */}
+          <group ref={door} position={[0.57, 0.62, 0.65]}>
+            <mesh position={[0, 0, -0.5]} castShadow>
+              <boxGeometry args={[0.05, 0.62, 1.0]} />
+              <meshStandardMaterial color={0x607d8b} metalness={0.4} />
+            </mesh>
+          </group>
+          {/* 트렁크 뚜껑(뒤 -z) — 앞쪽 윗모서리가 축, 위로 열린다 */}
+          <group ref={lid} position={[0, 0.79, -0.6]}>
+            <mesh position={[0, 0, -0.35]} castShadow>
+              <boxGeometry args={[1.08, 0.05, 0.7]} />
+              <meshStandardMaterial color={0x607d8b} metalness={0.4} />
+            </mesh>
+          </group>
           {[-0.85, 0.85].map((z) => [-0.55, 0.55].map((x) => (
             <mesh key={`${x}${z}`} rotation-z={Math.PI / 2} position={[x, 0.24, z]} castShadow>
               <cylinderGeometry args={[0.22, 0.22, 0.14, 12]} />
@@ -227,14 +257,23 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
   const body = useRef<THREE.Group>(null!);
   const box = useRef<THREE.Mesh>(null!);
   const ride = useRef<THREE.Group>(null!);
+  const door = useRef<THREE.Group>(null);
+  const lid = useRef<THREE.Group>(null);
+  const ang = useRef({ door: 0, lid: 0 });
   const tag = useMemo(() => makeLabel(id, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [id]);
   const vehicle = sim.riders.find((x) => x.id === id)?.vehicle ?? 'MOTORCYCLE';
-  useFrame(() => {
+  useFrame((_, dt) => {
     const r = sim.riders.find((x) => x.id === id);
     if (!r) return;
     group.current.position.set(r.pos.x, 0, r.pos.z);
     group.current.rotation.y = r.heading;
-    box.current.visible = r.carrying > 0;
+    // 문·뚜껑은 목표 각도로 천천히(약 RIDER_VEHICLE.hatchSec) — 문 70°, 트렁크·배달통 63°
+    const k = Math.min(1, dt * 6);
+    ang.current.door += ((r.door ? -1.2 : 0) - ang.current.door) * k;
+    ang.current.lid += ((r.trunk ? 1.1 : 0) - ang.current.lid) * k;
+    if (door.current) door.current.rotation.y = ang.current.door;
+    if (lid.current) lid.current.rotation.x = ang.current.lid;
+    box.current.visible = r.carrying > 0 && !r.stowed;
     // 타는 중이면 수단이 라이더와 같이 움직이고(라이더는 올라탄 높이, 승용차면 안에 앉아 보이지 않게), 아니면 주차 자리에 서 있다
     const riding = r.riding && r.vehicle !== 'WALK';
     body.current.position.y = riding ? (r.vehicle === 'CAR' ? -0.4 : r.vehicle === 'KICKBOARD' ? 0.12 : 0.45) : 0;
@@ -242,9 +281,11 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
     if (riding) {
       ride.current.position.set(r.pos.x, 0, r.pos.z);
       ride.current.rotation.y = r.heading;
+    } else if (r.parkedAt) {
+      // 내린 뒤: 멈춘 자리·멈춘 방향 그대로(라이더는 옆으로 비켜 섬 — 운전석 문이 +x 쪽)
+      ride.current.position.set(r.parkedAt.x, 0, r.parkedAt.z);
     } else {
-      ride.current.position.set(parking.x, 0, parking.z + 0.9);
-      ride.current.rotation.y = 0;
+      ride.current.position.set(parking.x, 0, parking.z);
     }
   });
   return (
@@ -268,7 +309,7 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
       </group>
       {/* 수단(rider VehicleType): 타면 라이더와 같이, 내리면 주차 자리. 도보는 없음 */}
       <group ref={ride}>
-        <VehicleModel v={vehicle} />
+        <VehicleModel v={vehicle} door={door} lid={lid} />
       </group>
     </>
   );

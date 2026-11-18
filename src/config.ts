@@ -166,6 +166,8 @@ export const RIDER_VEHICLE = {
   walkSpeed: 1.4,
   /** 입구에서 앞길을 따라 오른쪽으로 가 사라지는 거리(m) — 평면 폭 48 m 안(입구 x 30 → 47) [시뮬] */
   offLot: 17,
+  /** 문·트렁크(배달통 뚜껑) 열고 닫는 데 쓰는 시간(초) — 그림 애니메이션과 같은 길이 [시뮬] */
+  hatchSec: 0.7,
   /** 수단을 모를 때(옛 배정·MOCK) [시뮬] */
   fallback: 'MOTORCYCLE' as const,
 };

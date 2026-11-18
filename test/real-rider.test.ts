@@ -113,10 +113,13 @@ describe('라이더 수단(배차 배정 vehicleType)', () => {
     const P = L.points;
     const r = new RealRider('RD-1', 'DLV-1', P.riderParking[0], P.riderEntry, P.riderPickup, new NavGrid(L), 'CAR');
     expect(r.vehicle).toBe('CAR');
+    const seen = new Set<string>();
     const step = async (sec: number) => {
       for (let t = 0; t < sec; t += 0.25) {
         r.tick(0.25);
         for (let i = 0; i < 5; i++) await Promise.resolve();
+        if (r.door) seen.add(r.carrying ? 'door-out' : 'door-in');
+        if (r.trunk) seen.add('trunk');
       }
     };
     void r.run();
@@ -125,9 +128,16 @@ describe('라이더 수단(배차 배정 vehicleType)', () => {
     await step(60);
     expect(r.riding).toBe(false); // 내려서 걸어 랙 앞
     expect(Math.hypot(r.pos.x - P.riderPickup.x, r.pos.z - P.riderPickup.z)).toBeLessThan(0.5);
+    expect(seen.has('door-in')).toBe(true); // 내릴 때 문 열림
+    expect(r.door).toBe(false);
+    const parked = { ...r.parkedAt! };
     r.depart(1);
     await step(8);
+    expect(r.stowed).toBe(true); // 트렁크에 넣음
     await step(60);
+    expect(seen.has('trunk')).toBe(true);
+    expect(seen.has('door-out')).toBe(true); // 탈 때 문 열림
+    expect(parked).toBeTruthy();
     expect(r.done).toBe(true);
     const end = offLot(P.riderEntry);
     expect(Math.hypot(r.pos.x - end.x, r.pos.z - end.z)).toBeLessThan(0.5);

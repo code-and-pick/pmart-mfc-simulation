@@ -7,7 +7,7 @@ import type { P } from '../domain/navgrid';
 import { Agent } from './agent';
 import { RIDER_VEHICLE } from '../config';
 import type { VehicleType } from '../domain/contract';
-import { offLot, rideTo, walkOn } from './realRider';
+import { getOff, loadAndGetOn, offLot, rideTo, walkOn } from './realRider';
 import type { SiteContext } from './context';
 
 export class Rider extends Agent {
@@ -16,6 +16,10 @@ export class Rider extends Agent {
   /** MOCK 라이더는 오토바이 [시뮬] */
   readonly vehicle: VehicleType = RIDER_VEHICLE.fallback;
   riding = true;
+  door = false;
+  trunk = false;
+  stowed = false;
+  parkedAt: P | null = null;
   readonly parking: P;
 
   constructor(
@@ -49,7 +53,7 @@ export class Rider extends Agent {
       this.activity = 'MFC 도착';
       await rideTo(this, ctx.layout.points.riderEntry);
       await rideTo(this, this.parking);
-      this.riding = false;
+      await getOff(this);
       await this.wait(8);
       this.activity = '출하대기 랙으로';
       await walkOn(this, ctx.layout.points.riderPickup);
@@ -78,7 +82,8 @@ export class Rider extends Agent {
       this.onHandedOver(this.orderId);
       this.activity = '출발';
       await walkOn(this, this.parking);
-      await this.wait(5);
+      await this.wait(3);
+      await loadAndGetOn(this);
       await rideTo(this, ctx.layout.points.riderEntry);
       await rideTo(this, offLot(ctx.layout.points.riderEntry));
     } catch (e) {

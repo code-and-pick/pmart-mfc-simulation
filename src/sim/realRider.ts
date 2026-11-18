@@ -33,6 +33,60 @@ export async function walkOn(a: Agent & { riding: boolean }, p: P) {
   await a.walkTo(p);
 }
 
+/** 문·트렁크(배달통 뚜껑)를 다루는 라이더 — 그림은 door·trunk 를 보고 천천히 연다(사용자 2026-11-19 "승용차는 차문 열리는 애니메이션", 트렁크·배달통 포함) */
+type Hatched = Agent & { riding: boolean; vehicle: VehicleType; door: boolean; trunk: boolean; stowed: boolean; parkedAt: P | null };
+/** 내린 라이더가 비켜 서는 거리(m) — 수단 옆(+x) */
+const SIDE = 0.9;
+const hasDoor = (v: VehicleType) => v === 'CAR';
+const hasBox = (v: VehicleType) => v === 'CAR' || v === 'MOTORCYCLE' || v === 'BICYCLE' || v === 'E_BIKE';
+
+/** 주차 자리에서 내리기 — 승용차는 문 열고 내리고 닫는다 */
+export async function getOff(a: Hatched) {
+  if (a.vehicle === 'WALK') {
+    a.riding = false;
+    return;
+  }
+  // 수단은 멈춘 자리에 둔다(그림도 그 자리) — 라이더만 옆으로 비켜 선다
+  a.parkedAt = { ...a.pos };
+  const side = { x: a.pos.x + SIDE, z: a.pos.z };
+  if (hasDoor(a.vehicle)) {
+    a.door = true;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+    a.riding = false;
+    await walkOn(a, side);
+    a.door = false;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+    return;
+  }
+  a.riding = false;
+  await walkOn(a, side);
+}
+
+/** 포장 싣고 타기 — 들고 온 포장이 있으면 트렁크(배달통)를 열고 넣고 닫은 뒤, 승용차는 문 열고 타고 닫는다 */
+export async function loadAndGetOn(a: Hatched & { carrying: number }) {
+  const at = a.parkedAt;
+  if (at && a.vehicle !== 'WALK') await walkOn(a, { x: at.x + SIDE, z: at.z }); // 수단 옆으로
+  if (a.carrying > 0 && hasBox(a.vehicle)) {
+    a.trunk = true;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+    a.stowed = true; // 들고 있던 상자는 트렁크·배달통 안
+    await a.wait(0.4);
+    a.trunk = false;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+  } else if (a.carrying > 0) a.stowed = true;
+  if (hasDoor(a.vehicle)) {
+    a.door = true;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+  }
+  if (at && a.vehicle !== 'WALK') await walkOn(a, at); // 타는 자리 = 수단이 선 자리
+  if (a.vehicle !== 'WALK') a.riding = true;
+  if (hasDoor(a.vehicle)) {
+    await a.wait(0.3);
+    a.door = false;
+    await a.wait(RIDER_VEHICLE.hatchSec);
+  }
+}
+
 /** 화면(3D·요약)이 보는 라이더 모양 — MOCK 라이더(Rider)와 실서버 관찰 라이더(RealRider) 공통 */
 export interface SiteRider {
   readonly id: string;
@@ -46,6 +100,14 @@ export interface SiteRider {
   readonly vehicle: VehicleType;
   /** 지금 수단을 타고 움직이는 중 — 아니면 수단은 주차 자리에 서 있다(도보는 수단 없음) */
   riding: boolean;
+  /** 승용차 운전석 문을 여는 중 */
+  door: boolean;
+  /** 트렁크(승용차)·배달통 뚜껑(오토바이·자전거)을 여는 중 */
+  trunk: boolean;
+  /** 들고 온 포장을 트렁크·배달통에 넣었다(손에 든 상자를 안 그림) */
+  stowed: boolean;
+  /** 수단을 세운 자리(내린 뒤) — 그림은 수단을 여기 둔다 */
+  parkedAt: P | null;
   tick(dt: number): void;
 }
 
@@ -53,6 +115,10 @@ export class RealRider extends Agent implements SiteRider {
   done = false;
   carrying = 0;
   riding = true;
+  door = false;
+  trunk = false;
+  stowed = false;
+  parkedAt: P | null = null;
   readonly vehicle: VehicleType;
   leaving = false;
   private leave: ((n: number) => void) | null = null;
@@ -83,7 +149,7 @@ export class RealRider extends Agent implements SiteRider {
     this.activity = 'MFC 도착';
     await rideTo(this, this.entry);
     await rideTo(this, this.parking);
-    this.riding = false;
+    await getOff(this);
     if (!this.leaving) {
       await this.wait(3);
       this.activity = '출하대기 랙 앞 — 인계 대기';
@@ -93,7 +159,8 @@ export class RealRider extends Agent implements SiteRider {
     this.carrying = n;
     this.activity = n > 0 ? `픽업 ${n}개 — 출발` : '빈손으로 떠남';
     await walkOn(this, this.parking);
-    await this.wait(2);
+    await this.wait(1);
+    await loadAndGetOn(this);
     await rideTo(this, this.entry);
     await rideTo(this, offLot(this.entry));
     this.done = true;
