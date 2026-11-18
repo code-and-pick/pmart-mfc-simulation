@@ -4,7 +4,7 @@
 // 선택 취소("선택취소하는 기능도"): 말풍선의 ✕, Esc, 고른 주문 줄 다시 누르기, 바코드 탭 "선택 취소".
 // 순서는 PDA 앱과 같다(domain/pickStop): ① 카트 → ② 칸 위치 → ③ 상품(× 집을 양). 서버에 집품이 확정되면 다음 칸으로 걸어간다.
 // 위치는 매 프레임(requestAnimationFrame) 카메라로 바꿔 DOM 에 바로 쓴다 — React 상태로 올리지 않는다.
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
 import { cameraTap } from '../render/cameraTap';
@@ -65,6 +65,33 @@ export function ScanBubbles() {
     return () => window.removeEventListener('keydown', onKey);
   }, [controller]);
 
+  // 출하대기 랙 말풍선 위치(랙 1 위) — 작업자 말풍선과 같은 방식
+  const rackRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    let raf = 0;
+    const v = new THREE.Vector3();
+    const loop = () => {
+      const cam = cameraTap.camera;
+      const el = rackRef.current;
+      const p = sim.backendPoint(RACK_AT);
+      if (el && cam && p) {
+        v.set(p.x, RACK_Y, p.z).project(cam);
+        const show = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+        const x = ((v.x + 1) / 2) * cameraTap.width;
+        const y = ((1 - v.y) / 2) * cameraTap.height;
+        const bw = el.offsetWidth || 300;
+        const bh = el.offsetHeight || 200;
+        const top = Math.min(y - bh - 10 < EDGE_TOP ? y + 24 : y - bh - 10, cameraTap.height - bh - 8);
+        const left = Math.max(8, Math.min(x - bw / 2, cameraTap.width - bw - 8));
+        el.style.transform = `translate(${left}px, ${Math.max(EDGE_TOP, top)}px)`;
+        el.style.display = show ? 'block' : 'none';
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [sim]);
+
   const sel = view.selection?.kind === 'worker' ? view.selection.id : null;
   const ws = sim.observedWorkers.filter((w) => w.cue && (w.id === sel || (!!view.scanShipment && w.pda?.shipmentId === view.scanShipment)));
   return (
@@ -81,6 +108,50 @@ export function ScanBubbles() {
           <Bubble w={w} />
         </div>
       ))}
+      <RackBubble innerRef={rackRef} shipmentId={view.scanShipment ?? null} />
+    </div>
+  );
+}
+
+const RACK_AT = 'DSP-A-01';
+const RACK_Y = 1.8;
+/** 한 번에 보이는 포장 수 — 넘으면 "외 N개" */
+const RACK_MAX = 6;
+
+/**
+ * 출하대기 랙 말풍선(사용자 2026-11-18 "배차 대기 랙에 있는 패킹 완료 상품들의 qr 코드도 말풍선 넣어줘"):
+ * 출고가 출하 대기(READY·부분 인계)인 밀봉 포장(SEALED)의 라벨 QR(`Package.qrCode` — 라이더 인계 때 찍음)·주문번호·숫자 인계 코드(F-8).
+ * 서버는 포장이 어느 랙에 있는지 모른다(BR-52 R20) — 랙 1 위에 모아 보인다. 주문을 고르면 그 주문 것만.
+ */
+function RackBubble({ innerRef, shipmentId }: { innerRef: React.MutableRefObject<HTMLDivElement | null>; shipmentId: string | null }) {
+  const { sim } = useApp();
+  const [open, setOpen] = useState(true);
+  const real = sim.real;
+  const list = (real?.shipments() ?? [])
+    .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER'))
+    .filter((r) => !shipmentId || r.shipmentId === shipmentId)
+    .flatMap((r) => (r.info!.packages ?? []).filter((p) => p.state === 'SEALED').map((p) => ({ r, p })));
+  if (!list.length) return null;
+  return (
+    <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
+      <div className="sb-head">
+        출하대기 랙 · 포장 {list.length}개 <span className="sub">라벨 QR — 라이더 인계 때 찍음</span>
+        <button className="sb-x" onClick={() => setOpen(!open)} title={open ? '접기' : '펼치기'}>
+          {open ? '▾' : '▸'}
+        </button>
+      </div>
+      {open &&
+        list.slice(0, RACK_MAX).map(({ r, p }) => (
+          <div key={p.packageId}>
+            <div className="sub">
+              주문 {p.orderNumber ?? r.info!.orderNumber ?? r.info!.orderId} · {p.temperatureZone ?? '-'} · 봉투 {p.bagCount}
+              {p.handoverCode ? ` · 숫자 인계 ${p.handoverCode}` : ''}
+            </div>
+            <Barcode value={p.qrCode} caption={`포장 ${p.packageId} v${p.packageVersion}`} height={32} />
+          </div>
+        ))}
+      {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 실제 주문 탭에서 주문을 고르면 그 주문 것만</div>}
+      <div className="note">서버는 포장이 어느 랙에 있는지 모릅니다(R20) — 랙 1 위에 모아 보입니다.</div>
     </div>
   );
 }

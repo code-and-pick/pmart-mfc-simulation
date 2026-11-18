@@ -293,6 +293,10 @@ export interface Package {
   version: number;
   state: PackageState;
   qrCode: string;
+  /** (0.13.0, F-5) 화면용 주문번호(숫자 8자리) — 라벨에 크게. 번호 전 주문은 null */
+  orderNumber?: string | null;
+  /** (0.13.0, F-8) 라벨 숫자 6자리 — QR 이 안 찍힐 때 라이더가 입력 */
+  handoverCode?: string | null;
   contents: PackageContentLine[];
   bagCount: number;
   containsAlcohol: boolean;
@@ -319,6 +323,8 @@ export interface Shipment {
   shipmentId: string;
   fulfillmentId: string;
   orderId: string;
+  /** (0.13.0, F-5) 화면용 주문번호(숫자 8자리). 번호 전 주문은 null */
+  orderNumber?: string | null;
   deliveryId: string | null;
   version: number;
   state: ShipmentState;
