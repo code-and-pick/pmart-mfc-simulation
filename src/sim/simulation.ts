@@ -365,6 +365,17 @@ export class Simulation {
         // 스캔 안내: PDA 와 같은 순서(nextPickStop)로 카트 → 지금 갈 칸에 세우고, 도착하면 찍을 바코드를 띄운다
         w.cue = null;
         const stop = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? nextPickStop(lines) : null;
+        // PDA 따라가기: 서버에 집품이 새로 오면(완료+접수 수량이 늘면) PDA 는 방금 그 칸을 지났다 → 아직 못 갔으면 그 칸으로 순간이동.
+        // 서버는 다 집은 조각을 상세에서 빼므로 방금 집은 칸 = 본 조각(picksOf) 중 다 집은 것의 방문 순서 마지막
+        const doneQty = lines.reduce((a, l) => a + l.completedQty + l.pendingQty, 0);
+        const mark = `${s.taskId}:${doneQty}`;
+        if (w.progressMark && w.progressMark !== mark && w.progressMark.startsWith(`${s.taskId}:`) && s.shipmentId) {
+          const justDone = real.picksOf(s.shipmentId).filter((x) => x.gone && x.loc);
+          const code = justDone.length ? justDone[justDone.length - 1].loc : (last?.code ?? null);
+          const at = code ? this.backendLocation(code) : null;
+          if (at) w.snapTo(at.pick);
+        }
+        w.progressMark = mark;
         // 카트를 찍었다 = 화면에서 "카트 QR 찍음"을 눌렀거나 서버에 집품이 생김(PDA 는 카트를 찍어야 칸·상품으로 넘어간다). 서버는 카트 스캔을 모른다
         const started = lines.some((l) => l.completedQty > 0 || l.pendingQty > 0) || w.passed.has(`${s.taskId}:CART`);
         if (stop) {
@@ -458,6 +469,12 @@ export class Simulation {
             key = `${s.taskId}:${pc.step === 'RACK' ? pc.rack : pc.station}`;
           }
           w.hasCart = pc.step === 'STATION' || pc.step === 'CART'; // 피킹한 카트를 끌고 와 포장대에서 내린다
+          // PDA 따라가기: 담기(서버에 배차 요청이 옴)·랙(밀봉 끝, READY) 단계면 PDA 는 이미 패킹대를 거쳤다 → 아직 걷는 중이면 패킹대로 순간이동.
+          // 단계가 바뀔 때 한 번만(랙으로 걷는 중에 되돌리지 않게)
+          const st = this.backendPoint(pc.station);
+          const mark = `${s.taskId}:${pc.step}`;
+          if (st && (pc.step === 'BAG' || pc.step === 'RACK') && w.progressMark !== mark) w.snapTo(st);
+          w.progressMark = mark;
           w.carrying = w.hasCart ? this.cartLoad(s.shipmentId) : [];
           view.step = PACK_STEP_KO[pc.step];
         }

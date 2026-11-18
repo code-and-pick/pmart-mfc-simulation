@@ -80,6 +80,31 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.cue).toBeNull();
   });
 
+  it('PDA 따라가기: 아바타가 아직 걷는 중인데 서버에 집품이 오면 방금 집은 칸으로 순간이동 → 다음 칸으로 걷는다', async () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const d = pick([1, 1]);
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    sync();
+    const w = sim.observedWorkers[0];
+    sim.passCart('OP-990d2c09');
+    await walk(sim, 1); // 첫 칸으로 걷는 중
+    const loc1 = sim.backendLocation('A-C1-05-1-04')!;
+    expect(Math.hypot(w.pos.x - loc1.pick.x, w.pos.z - loc1.pick.z)).toBeGreaterThan(0.3);
+    const d2 = pick([0, 1]);
+    real.tasks.set(d2.taskId, { summary: d2, detail: d2, firstSeenMs: 0, closed: null });
+    sync();
+    expect(Math.hypot(w.pos.x - loc1.pick.x, w.pos.z - loc1.pick.z)).toBeLessThan(0.3); // PDA 는 이미 첫 칸을 지남
+    expect(w.moving).toBe(true); // 다음 칸으로
+    await walk(sim, 120);
+    const loc2 = sim.backendLocation('A-C1-04-6-02')!;
+    expect(Math.hypot(w.pos.x - loc2.pick.x, w.pos.z - loc2.pick.z)).toBeLessThan(0.3);
+  });
+
   it('이미 집품이 있는 작업은 카트를 건너뛰고 지금 칸, 막힘(BLOCKED)은 말풍선 없이 마지막 칸', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;

@@ -44,6 +44,8 @@ export class ObservedWorker extends Agent implements SiteWorker {
    */
   readonly passed = new Set<string>();
   private aimKey = '';
+  /** 서버 진행 표시(작업 ID + 집품·밀봉 수) — 바뀌면 PDA 가 이미 지나간 자리로 순간이동(snapTo) */
+  progressMark = '';
 
   constructor(
     id: string,
@@ -60,6 +62,17 @@ export class ObservedWorker extends Agent implements SiteWorker {
     if (key === this.aimKey) return;
     this.aimKey = key;
     void this.walkTo(p);
+  }
+
+  /**
+   * PDA 가 이미 그 자리를 지났다(서버에 실적이 왔다) — 아직 걷는 중이면 거기로 바로 옮긴다(사용자 2026-11-18 "아바타가 pda쪽 화면 따라가게, 순간이동").
+   * 그다음 aim 이 새 목표로 걷게 한다. 이미 가까우면 그대로.
+   */
+  snapTo(p: P) {
+    if (Math.hypot(this.pos.x - p.x, this.pos.z - p.z) < 0.3) return;
+    this.path = [];
+    this.pos = { x: p.x, z: p.z };
+    this.aimKey = '';
   }
 
   override tick(dt: number) {
