@@ -1,4 +1,5 @@
 // 움직이는 것들: 피킹·패킹 작업자, 입고 작업자, 라이더, 입고 차량.
+import type { VehicleType } from '../../domain/contract';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -121,51 +122,153 @@ export function People() {
   );
 }
 
+/**
+ * 라이더 수단 모델(사용자 2026-11-18 "수단에 따라 모델링") — rider VehicleType. 간단한 상자·바퀴로만.
+ * 수단 앞쪽 = +z(Agent heading = atan2(dx, dz) — 움직이는 쪽이 +z). 배달통은 뒤(-z).
+ */
+function Wheel({ z, r = 0.25, t = 0.08 }: { z: number; r?: number; t?: number }) {
+  return (
+    <mesh rotation-y={Math.PI / 2} position={[0, r + 0.02, z]} castShadow>
+      <torusGeometry args={[r, t, 8, 16]} />
+      <meshStandardMaterial color={0x111111} />
+    </mesh>
+  );
+}
+
+function VehicleModel({ v }: { v: VehicleType }) {
+  switch (v) {
+    case 'MOTORCYCLE':
+      return (
+        <>
+          <mesh position-y={0.55} castShadow>
+            <boxGeometry args={[0.35, 0.5, 1.6]} />
+            <meshStandardMaterial color={0xd32f2f} metalness={0.3} />
+          </mesh>
+          <mesh position={[0, 0.95, -0.55]} castShadow>
+            <boxGeometry args={[0.5, 0.45, 0.5]} />
+            <meshStandardMaterial color={0xeeeeee} />
+          </mesh>
+          <Wheel z={-0.6} />
+          <Wheel z={0.6} />
+        </>
+      );
+    case 'BICYCLE':
+    case 'E_BIKE':
+      return (
+        <>
+          <mesh position-y={0.62} rotation-x={Math.PI / 2} castShadow>
+            <cylinderGeometry args={[0.03, 0.03, 1.0, 6]} />
+            <meshStandardMaterial color={v === 'E_BIKE' ? 0x43a047 : 0x1e88e5} metalness={0.4} />
+          </mesh>
+          <mesh position={[0, 0.85, 0.42]} castShadow>
+            <boxGeometry args={[0.5, 0.04, 0.04]} />
+            <meshStandardMaterial color={0x333333} />
+          </mesh>
+          {v === 'E_BIKE' && (
+            <mesh position={[0, 0.5, 0.05]} castShadow>
+              <boxGeometry args={[0.12, 0.18, 0.35]} />
+              <meshStandardMaterial color={0x222222} />
+            </mesh>
+          )}
+          <mesh position={[0, 0.8, -0.45]} castShadow>
+            <boxGeometry args={[0.42, 0.32, 0.36]} />
+            <meshStandardMaterial color={0xeeeeee} />
+          </mesh>
+          <Wheel z={-0.48} r={0.3} t={0.03} />
+          <Wheel z={0.48} r={0.3} t={0.03} />
+        </>
+      );
+    case 'KICKBOARD':
+      return (
+        <>
+          <mesh position-y={0.12} castShadow>
+            <boxGeometry args={[0.18, 0.05, 0.85]} />
+            <meshStandardMaterial color={0x8e24aa} />
+          </mesh>
+          <mesh position={[0, 0.6, 0.4]} castShadow>
+            <cylinderGeometry args={[0.025, 0.025, 1.0, 6]} />
+            <meshStandardMaterial color={0x555555} metalness={0.5} />
+          </mesh>
+          <mesh position={[0, 1.08, 0.4]} castShadow>
+            <boxGeometry args={[0.45, 0.04, 0.04]} />
+            <meshStandardMaterial color={0x333333} />
+          </mesh>
+          <Wheel z={-0.4} r={0.09} t={0.03} />
+          <Wheel z={0.4} r={0.09} t={0.03} />
+        </>
+      );
+    case 'CAR':
+      return (
+        <>
+          <mesh position-y={0.5} castShadow>
+            <boxGeometry args={[1.1, 0.55, 2.6]} />
+            <meshStandardMaterial color={0x546e7a} metalness={0.4} />
+          </mesh>
+          <mesh position={[0, 0.98, 0.15]} castShadow>
+            <boxGeometry args={[1.0, 0.45, 1.4]} />
+            <meshStandardMaterial color={0x90a4ae} metalness={0.2} transparent opacity={0.75} />
+          </mesh>
+          {[-0.85, 0.85].map((z) => [-0.55, 0.55].map((x) => (
+            <mesh key={`${x}${z}`} rotation-z={Math.PI / 2} position={[x, 0.24, z]} castShadow>
+              <cylinderGeometry args={[0.22, 0.22, 0.14, 12]} />
+              <meshStandardMaterial color={0x111111} />
+            </mesh>
+          )))}
+        </>
+      );
+    case 'WALK':
+      return null;
+  }
+}
+
 function RiderMesh({ id, parking }: { id: string; parking: Point }) {
   const { sim } = useApp();
   const group = useRef<THREE.Group>(null!);
+  const body = useRef<THREE.Group>(null!);
   const box = useRef<THREE.Mesh>(null!);
+  const ride = useRef<THREE.Group>(null!);
   const tag = useMemo(() => makeLabel(id, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [id]);
+  const vehicle = sim.riders.find((x) => x.id === id)?.vehicle ?? 'MOTORCYCLE';
   useFrame(() => {
     const r = sim.riders.find((x) => x.id === id);
     if (!r) return;
     group.current.position.set(r.pos.x, 0, r.pos.z);
     group.current.rotation.y = r.heading;
     box.current.visible = r.carrying > 0;
+    // 타는 중이면 수단이 라이더와 같이 움직이고(라이더는 올라탄 높이, 승용차면 안에 앉아 보이지 않게), 아니면 주차 자리에 서 있다
+    const riding = r.riding && r.vehicle !== 'WALK';
+    body.current.position.y = riding ? (r.vehicle === 'CAR' ? -0.4 : r.vehicle === 'KICKBOARD' ? 0.12 : 0.45) : 0;
+    body.current.visible = !(riding && r.vehicle === 'CAR');
+    if (riding) {
+      ride.current.position.set(r.pos.x, 0, r.pos.z);
+      ride.current.rotation.y = r.heading;
+    } else {
+      ride.current.position.set(parking.x, 0, parking.z + 0.9);
+      ride.current.rotation.y = 0;
+    }
   });
   return (
     <>
       <group ref={group}>
-        <mesh position-y={0.66} castShadow>
-          <capsuleGeometry args={[0.22, 0.85, 4, 12]} />
-          <meshStandardMaterial color={0x26c6da} />
-        </mesh>
-        <mesh position-y={1.44}>
-          <sphereGeometry args={[0.2, 16, 12]} />
-          <meshStandardMaterial color={0xffffff} />
-        </mesh>
-        <mesh ref={box} position={[0, 1.0, -0.3]} visible={false}>
-          <boxGeometry args={[0.42, 0.36, 0.3]} />
-          <meshStandardMaterial color={0x00897b} />
-        </mesh>
+        <group ref={body}>
+          <mesh position-y={0.66} castShadow>
+            <capsuleGeometry args={[0.22, 0.85, 4, 12]} />
+            <meshStandardMaterial color={0x26c6da} />
+          </mesh>
+          <mesh position-y={1.44}>
+            <sphereGeometry args={[0.2, 16, 12]} />
+            <meshStandardMaterial color={0xffffff} />
+          </mesh>
+          <mesh ref={box} position={[0, 1.0, -0.3]} visible={false}>
+            <boxGeometry args={[0.42, 0.36, 0.3]} />
+            <meshStandardMaterial color={0x00897b} />
+          </mesh>
+        </group>
         <primitive object={tag} position-y={1.95} />
       </group>
-      {/* 오토바이는 주차 자리에 서 있다 */}
-      <group position={[parking.x, 0, parking.z + 0.9]}>
-        <mesh position-y={0.55} castShadow>
-          <boxGeometry args={[0.35, 0.5, 1.6]} />
-          <meshStandardMaterial color={0xd32f2f} metalness={0.3} />
-        </mesh>
-        <mesh position={[0, 0.95, -0.55]} castShadow>
-          <boxGeometry args={[0.5, 0.45, 0.5]} />
-          <meshStandardMaterial color={0xeeeeee} />
-        </mesh>
-        {[-0.6, 0.6].map((z) => (
-          <mesh key={z} rotation-y={Math.PI / 2} position={[0, 0.27, z]} castShadow>
-            <torusGeometry args={[0.25, 0.08, 8, 16]} />
-            <meshStandardMaterial color={0x111111} />
-          </mesh>
-        ))}
+      {/* 수단(rider VehicleType): 타면 라이더와 같이, 내리면 주차 자리. 도보는 없음 */}
+      <group ref={ride}>
+        <VehicleModel v={vehicle} />
       </group>
     </>
   );

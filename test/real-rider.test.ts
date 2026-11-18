@@ -97,3 +97,39 @@ describe('앞마당 라이더(실서버 관찰, M-02)', () => {
     expect(sim.riders).toHaveLength(0);
   });
 });
+
+import { NavGrid } from '../src/domain/navgrid';
+import { buildLayout } from '../src/domain/layout';
+import { vehicleOf, offLot } from '../src/sim/realRider';
+describe('라이더 수단(배차 배정 vehicleType)', () => {
+  it('수단 이름 → 그릴 수단, 모르면 오토바이', () => {
+    expect(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK'].map(vehicleOf)).toEqual(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK']);
+    expect(vehicleOf(null)).toBe('MOTORCYCLE');
+    expect(vehicleOf('TRUCK')).toBe('MOTORCYCLE');
+  });
+
+  it('앞길 끝에서 타고 와 주차 자리에서 내리고, 걸어서 랙 → 다시 타고 앞길 끝으로', async () => {
+    const L = buildLayout();
+    const P = L.points;
+    const r = new RealRider('RD-1', 'DLV-1', P.riderParking[0], P.riderEntry, P.riderPickup, new NavGrid(L), 'CAR');
+    expect(r.vehicle).toBe('CAR');
+    const step = async (sec: number) => {
+      for (let t = 0; t < sec; t += 0.25) {
+        r.tick(0.25);
+        for (let i = 0; i < 5; i++) await Promise.resolve();
+      }
+    };
+    void r.run();
+    await step(0.5);
+    expect(r.riding).toBe(true); // 타고 들어옴
+    await step(60);
+    expect(r.riding).toBe(false); // 내려서 걸어 랙 앞
+    expect(Math.hypot(r.pos.x - P.riderPickup.x, r.pos.z - P.riderPickup.z)).toBeLessThan(0.5);
+    r.depart(1);
+    await step(8);
+    await step(60);
+    expect(r.done).toBe(true);
+    const end = offLot(P.riderEntry);
+    expect(Math.hypot(r.pos.x - end.x, r.pos.z - end.z)).toBeLessThan(0.5);
+  });
+});

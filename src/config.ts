@@ -155,6 +155,21 @@ export const REAL_WORKERS = {
   /** 한 번에 켤 수 있는 최대 인원 = REAL_LINK.virtualAccounts 수(10) [확정 사용자 2026-11-16] */
 };
 
+/**
+ * 앞마당 라이더 수단(그리기만 — 사용자 2026-11-18 "QR 찍고 나갈 때 운송수단으로", "수단에 따라 모델링"). 수단은 배차 배정의 vehicleType.
+ * 입구 밖 먼 자리에서 수단을 타고 와 주차 자리에서 내리고, 걸어서 출하대기 랙 → 주차 자리에서 다시 타고 떠난다. 도보는 내내 걷는다 [시뮬]
+ */
+export const RIDER_VEHICLE = {
+  /** 타고 움직이는 속도(m/s) — 앞마당 안이라 느리게 [시뮬] */
+  rideSpeed: { MOTORCYCLE: 3, CAR: 2.5, E_BIKE: 2.6, BICYCLE: 2.2, KICKBOARD: 2.0, WALK: 1.4 } as Record<string, number>,
+  /** 걷는 속도(m/s) [시뮬] */
+  walkSpeed: 1.4,
+  /** 입구에서 앞길을 따라 오른쪽으로 가 사라지는 거리(m) — 평면 폭 48 m 안(입구 x 30 → 47) [시뮬] */
+  offLot: 17,
+  /** 수단을 모를 때(옛 배정·MOCK) [시뮬] */
+  fallback: 'MOTORCYCLE' as const,
+};
+
 export const REAL_LINK = {
   /** 실서버 읽기(작업 목록·상세·작업자 목록)에 쓰는 계정. 백엔드 문서의 "시뮬레이터 작업자" [확정] */
   observerAccount: 'claude-mfc-wrk',

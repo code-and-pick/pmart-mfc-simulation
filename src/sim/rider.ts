@@ -5,11 +5,17 @@
 import { ApiProblem, ResultUnknown } from '../domain/contract';
 import type { P } from '../domain/navgrid';
 import { Agent } from './agent';
+import { RIDER_VEHICLE } from '../config';
+import type { VehicleType } from '../domain/contract';
+import { offLot, rideTo, walkOn } from './realRider';
 import type { SiteContext } from './context';
 
 export class Rider extends Agent {
   done = false;
   carrying = 0;
+  /** MOCK 라이더는 오토바이 [시뮬] */
+  readonly vehicle: VehicleType = RIDER_VEHICLE.fallback;
+  riding = true;
   readonly parking: P;
 
   constructor(
@@ -21,7 +27,7 @@ export class Rider extends Agent {
     private readonly ctx: SiteContext,
     private readonly onHandedOver: (orderId: string) => void,
   ) {
-    super(id, ctx.layout.points.riderEntry, ctx.nav, 1.4);
+    super(id, offLot(ctx.layout.points.riderEntry), ctx.nav, 1.4);
     this.parking = parking;
   }
 
@@ -41,10 +47,12 @@ export class Rider extends Agent {
     const { ctx } = this;
     try {
       this.activity = 'MFC 도착';
-      await this.walkTo(this.parking);
+      await rideTo(this, ctx.layout.points.riderEntry);
+      await rideTo(this, this.parking);
+      this.riding = false;
       await this.wait(8);
       this.activity = '출하대기 랙으로';
-      await this.walkTo(ctx.layout.points.riderPickup);
+      await walkOn(this, ctx.layout.points.riderPickup);
       const staged = ctx.shipRack.ofShipment(this.shipmentId);
       for (const s of staged) {
         this.activity = `QR 스캔 ${s.pkg.packageId}`;
@@ -69,9 +77,10 @@ export class Rider extends Agent {
       }
       this.onHandedOver(this.orderId);
       this.activity = '출발';
-      await this.walkTo(this.parking);
+      await walkOn(this, this.parking);
       await this.wait(5);
-      await this.walkTo(ctx.layout.points.riderEntry);
+      await rideTo(this, ctx.layout.points.riderEntry);
+      await rideTo(this, offLot(ctx.layout.points.riderEntry));
     } catch (e) {
       this.activity = `인계 실패: ${e instanceof ApiProblem ? e.problem.code : (e as Error).message}`;
       ctx.log(`${this.id} ${this.activity}`);

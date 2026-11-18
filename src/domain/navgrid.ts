@@ -89,6 +89,9 @@ export class NavGrid {
   findPath(from: P, to: P): P[] | null {
     const [sc, sr] = this.snap(from);
     const [gc, gr] = this.snap(to);
+    // 격자 밖이면 길 찾기를 하지 않는다(null → 곧장 걷기) — 격자 밖 칸 번호로 A* 가 끝나지 않던 것(11-18 라이더 앞길 끝)
+    const out = (c: number, r: number) => c < 0 || r < 0 || c >= this.cols || r >= this.rows;
+    if (out(sc, sr) || out(gc, gr)) return null;
     const n = this.cols * this.rows;
     const start = sr * this.cols + sc;
     const goal = gr * this.cols + gc;

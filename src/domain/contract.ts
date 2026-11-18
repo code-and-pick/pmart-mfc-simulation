@@ -34,6 +34,10 @@ export type ShipmentState =
 export type PackageState = 'OPEN' | 'SEALED' | 'HANDED_OVER' | 'INVALIDATED' | 'VOIDED';
 export type FenceState = 'NONE' | 'HANDOVER_IN_PROGRESS' | 'COMMITTED' | 'EXPIRED';
 export type TemperatureZone = 'AMBIENT' | 'CHILLED' | 'FROZEN';
+
+/** rider-service VehicleType — 라이더 배달 수단 */
+export type VehicleType = 'MOTORCYCLE' | 'BICYCLE' | 'E_BIKE' | 'KICKBOARD' | 'CAR' | 'WALK';
+export const VEHICLE_TYPES: readonly VehicleType[] = ['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK'];
 export type ShortageReason = 'SHORT' | 'DAMAGED' | 'BLOCKED';
 export type CommandStatus = 'ACCEPTED' | 'APPLIED' | 'REJECTED' | 'UNKNOWN_RESULT';
 
@@ -542,7 +546,8 @@ export interface DeliveryDispatch {
   shipmentId?: string;
   mfcId?: string;
   state: DispatchState;
-  assignment?: { riderId: string; state: 'ASSIGNED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED'; assignedAt?: string; pickedUpAt?: string } | null;
+  /** vehicleType = 배정 때 라이더 수단(dispatch Assignment, rider VehicleType) */
+  assignment?: { riderId: string; vehicleType?: string | null; state: 'ASSIGNED' | 'PICKED_UP' | 'CANCELLED' | 'COMPLETED'; assignedAt?: string; pickedUpAt?: string } | null;
   attempts?: DispatchAttempt[];
   updatedAt?: string;
 }

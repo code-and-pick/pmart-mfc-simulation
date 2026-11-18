@@ -40,3 +40,11 @@ describe('applyWideCells', () => {
     expect(loc('C-B1-01-4-01').slotW).toBe(w);
   });
 });
+
+import { NavGrid } from '../src/domain/navgrid';
+describe('NavGrid', () => {
+  it('격자 밖 목적지는 길 찾기를 하지 않고 null(멈추지 않음)', () => {
+    const nav = new NavGrid(buildLayout());
+    expect(nav.findPath({ x: 30, z: 39 }, { x: 30, z: 60 })).toBeNull();
+  });
+});

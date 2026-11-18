@@ -685,7 +685,7 @@ export class Simulation {
     const real = this.real;
     if (!real || real.deliveryVersion === this.realRiderVer) return;
     this.realRiderVer = real.deliveryVersion;
-    const live = new Map<string, { arrived: boolean; gone: boolean; riderId: string | null; handed: number }>();
+    const live = new Map<string, { arrived: boolean; gone: boolean; riderId: string | null; handed: number; vehicle: string | null }>();
     for (const r of real.shipments()) {
       const d = r.delivery;
       if (!d) continue;
@@ -697,6 +697,7 @@ export class Simulation {
         gone: shipmentDone || !['ASSIGNED', 'ARRIVED_AT_STORE'].includes(d.state),
         riderId: d.riderId,
         handed,
+        vehicle: r.dispatch?.assignment?.vehicleType ?? null,
       });
     }
     const mine = this.riders.filter((x): x is RealRider => x instanceof RealRider);
@@ -711,7 +712,7 @@ export class Simulation {
       const parking = this.layout.points.riderParking.find((p) => !used.has(`${p.x},${p.z}`)) ?? this.layout.points.riderParking[0];
       let id = s.riderId ?? deliveryId.slice(0, 12);
       if (this.riders.some((x) => x.id === id)) id = `${id} (${deliveryId.slice(4, 8)})`;
-      const rr = new RealRider(id, deliveryId, parking, this.layout.points.riderEntry, this.layout.points.riderPickup, this.nav);
+      const rr = new RealRider(id, deliveryId, parking, this.layout.points.riderEntry, this.layout.points.riderPickup, this.nav, s.vehicle);
       this.riders.push(rr);
       mine.push(rr);
       void rr.run();
