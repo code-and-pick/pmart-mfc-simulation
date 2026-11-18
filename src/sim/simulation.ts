@@ -25,7 +25,8 @@ import { RealBoard, type RealTask } from './realBoard';
 import { RealRider, type SiteRider } from './realRider';
 import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
-import { SUGGESTED_CART, nextPickStop } from '../domain/pickStop';
+import { nextPickStop } from '../domain/pickStop';
+import { suggestCarts } from '../domain/cartSuggest';
 import { nextReturnPiece } from '../domain/returnPiece';
 import { RealWorker, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
@@ -383,7 +384,7 @@ export class Simulation {
           if (!started) {
             target = cart;
             key = `${s.taskId}:cart`;
-            w.cue = { kind: 'CART', taskId: s.taskId, cart: this.serverCart(s.shipmentId) ?? SUGGESTED_CART, next: stop };
+            w.cue = { kind: 'CART', taskId: s.taskId, cart: this.cartFor(s.shipmentId), next: stop };
           } else if (stopLoc) {
             target = stopLoc.pick;
             key = `${s.taskId}:${stop.location}:${stop.line.orderLineId}`;
@@ -557,7 +558,7 @@ export class Simulation {
    * 서버가 아는 그 출고의 장바구니 — 같은 출고 PACK 상세의 packingLocations(PICK 실적 도착지) 중 CRT-.
    * 한 출고 = 한 장바구니(fulfillment 0.8.0). 첫 집품 전에는 서버가 모른다.
    */
-  private serverCart(shipmentId: string | null | undefined): string | null {
+  serverCart(shipmentId: string | null | undefined): string | null {
     if (!shipmentId || !this.real) return null;
     for (const x of this.real.tasks.values()) {
       if (x.summary.shipmentId !== shipmentId) continue;
@@ -565,6 +566,29 @@ export class Simulation {
       if (c) return c;
     }
     return null;
+  }
+
+  private cartHint = { polls: -1, map: new Map<string, string>() };
+  /**
+   * 그 출고의 장바구니 — 서버가 알면(첫 집품 뒤) 그 카트, 아니면 안내 카트(suggestCarts: 쓰는 카트를 뺀 빈 카트를 출고마다 하나씩).
+   * 쓰는 카트 = 아직 안 끝난 PACK 의 packingLocations 중 CRT-(서버 PICK 실적 도착지). 조회마다 한 번 계산.
+   */
+  cartFor(shipmentId: string | null | undefined): string {
+    const real = this.real;
+    const known = this.serverCart(shipmentId);
+    if (known || !real || !shipmentId) return known ?? BACKEND_FACTS.cartLocations[0].code;
+    if (this.cartHint.polls !== real.polls) {
+      const used = new Set<string>();
+      const needing: { shipmentId: string; createdAt: string }[] = [];
+      for (const t of real.tasks.values()) {
+        const s = t.summary;
+        if (s.taskType === 'PACK' && !t.closed && s.state !== 'COMPLETED' && s.state !== 'CANCELLED')
+          for (const c of t.detail?.packingLocations ?? []) if (c.startsWith('CRT-')) used.add(c);
+        if (s.taskType === 'PICK' && !t.closed && s.shipmentId && !this.serverCart(s.shipmentId)) needing.push({ shipmentId: s.shipmentId, createdAt: s.createdAt });
+      }
+      this.cartHint = { polls: real.polls, map: suggestCarts(BACKEND_FACTS.cartLocations.map((c) => c.code), used, needing) };
+    }
+    return this.cartHint.map.get(shipmentId) ?? BACKEND_FACTS.cartLocations[0].code;
   }
 
   private packCue(w: ObservedWorker, t: RealTask): ScanCue | null {
@@ -579,7 +603,7 @@ export class Simulation {
     // 장바구니로 집품하면 packingLocations 는 장바구니라(fulfillment 0.8.0) 어느 패킹대인지 화면에 주는 값이 없다(Package 에 위치 없음)
     const station = (d.packingLocations ?? []).find((x) => x.startsWith('PAK-')) ?? 'PAK-A-01';
     // 카트: 서버가 아는 이 출고의 장바구니(PICK 실적 도착지) → 없으면 안내용 카트
-    const cart = (d.packingLocations ?? []).find((x) => x.startsWith('CRT-')) ?? this.serverCart(shipmentId) ?? SUGGESTED_CART;
+    const cart = (d.packingLocations ?? []).find((x) => x.startsWith('CRT-')) ?? this.cartFor(shipmentId);
     const packed = new Map<string, number>();
     for (const p of live) for (const x of p.contents as { orderLineId: string; qty: number }[]) packed.set(x.orderLineId, (packed.get(x.orderLineId) ?? 0) + x.qty);
     const bag = d.lines.map((line) => ({ line, left: line.plannedQty - line.cancelledQty - (packed.get(line.orderLineId) ?? 0) })).filter((x) => x.left > 0);

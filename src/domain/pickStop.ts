@@ -58,8 +58,3 @@ export function nextPickStop(lines: TaskLine[]): PickStop | null {
   }
   return best;
 }
-
-/**
- * 화면 안내용 카트 — 카트는 온도 구분이 없고(백엔드 0cbfecaa) PDA 는 CRT- 로 시작하면 어느 카트든 받는다. 찍은 카트가 그 출고의 장바구니가 된다.
- */
-export const SUGGESTED_CART = 'CRT-A-01';

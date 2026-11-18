@@ -156,8 +156,14 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
         )
         .sort((a, b) => (a.p.visitSeq ?? 9999) - (b.p.visitSeq ?? 9999));
   if (!stops.length) return <div className="note">지시 칸이 아직 없습니다(피킹 시작 뒤 방문 순서가 정해집니다).</div>;
+  // ① 카트 — 서버가 아는 카트(첫 집품 뒤), 아니면 이 주문 안내 카트(다른 주문과 겹치지 않는 빈 카트)
+  const known = sim.serverCart(s.shipmentId);
+  const cart = known ?? sim.cartFor(s.shipmentId);
   return (
     <>
+      <div className="bc-grid">
+        <LocBarcode code={cart} caption={known ? '① 카트 (서버: 이 주문을 담은 장바구니)' : '① 카트 (이 주문 안내 — 다른 주문과 겹치지 않게)'} />
+      </div>
       {stops.map(({ l, p, loc, gone }) => (
         <div className={`scan-stop${gone ? ' done' : ''}`} key={`${l.orderLineId}:${p.lotId}`}>
           <div className="sub">

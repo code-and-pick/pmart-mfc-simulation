@@ -69,6 +69,8 @@ function TaskCell({ t }: { t?: RealTask }) {
       <span className={`st ${STATE_CLASS[state] ?? ''}`}>{TASK_STATE_KO[state]}</span> {s.completedQty}/{s.plannedQty}
       <div className="sub">
         {sim.real!.workerName(s.assignment?.workerId)}
+        {/* fulfillment 0.18.0 pickedBy — 담당 없는 PACK 은 피킹한 사람이 다음 작업으로 받는다(capacity 0.19.0) */}
+        {s.taskType === 'PACK' && !s.assignment?.workerId && s.pickedBy ? <> · 피킹한 {sim.real!.workerName(s.pickedBy)} 다음 작업</> : null}
         {flags && <span className="warn"> · {flags}</span>}
       </div>
     </td>

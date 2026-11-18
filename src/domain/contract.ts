@@ -74,6 +74,8 @@ export interface TaskSummary {
   lastActivityAt?: string | null;
   /** (0.4.9) 목록 표시용 "상품명 외 N건" */
   headline?: { productName: string | null; otherLineCount: number };
+  /** (0.18.0) PACK 만 — 같은 출고 PICK 을 끝낸 담당. 다음 작업 받기가 이 사람에게만 이 PACK 을 준다(capacity 0.19.0) */
+  pickedBy?: string | null;
 }
 
 /** mfc-inventory WorkState (0.16.0) — 단위 행의 업무 상태 */

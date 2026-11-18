@@ -80,6 +80,21 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.cue).toBeNull();
   });
 
+  it('카트 안내: 카트가 아직 없는 두 주문은 서로 다른 빈 카트, 다른 주문이 쓰는 카트(서버)는 빼고', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const a = pick([1, 1]);
+    const b = { ...pick([1, 1]), taskId: 'ORD-2-S1-PICK', shipmentId: 'ORD-2-S1', createdAt: '2026-11-16T07:15:00Z', assignment: { workerId: 'OP-other', assignmentVersion: 1 } } as unknown as TaskDetail;
+    // 다른 주문 ORD-9 가 CRT-A-01 을 쓰는 중(서버 PACK packingLocations)
+    const busy = { ...pick([0, 0]), taskId: 'ORD-9-S1-PACK', taskType: 'PACK', state: 'READY', shipmentId: 'ORD-9-S1', packingLocations: ['CRT-A-01'], assignment: { workerId: null, assignmentVersion: 0 } } as unknown as TaskDetail;
+    for (const d of [a, b, busy]) real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    real.polls++;
+    (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    const cue = (id: string) => (sim.observedWorkers.find((w) => w.workerId === id)!.cue as { cart: string }).cart;
+    expect(cue('OP-990d2c09')).toBe('CRT-A-02');
+    expect(cue('OP-other')).toBe('CRT-A-03');
+  });
+
   it('PDA 따라가기: 아바타가 아직 걷는 중인데 서버에 집품이 오면 방금 집은 칸으로 순간이동 → 다음 칸으로 걷는다', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;
