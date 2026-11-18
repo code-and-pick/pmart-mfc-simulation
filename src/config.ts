@@ -204,3 +204,38 @@ export const REAL_LINK = {
   /** 열린 작업 상태 — 이 상태들만 주기 조회한다(완료 이력은 첫 조회 한 번만 — backfillSec) [시뮬] */
   openStates: ['WAITING', 'READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'] as const,
 };
+
+/** 실제 주문 넣기(R-21 — auth 0.3.0 개발용 고객 토큰·payment 0.2.0 시험 결제, 백엔드 알림 2026-11-19). 이 PC(루프백)에서만 */
+export const REAL_ORDER = {
+  /** 고를 수 있는 고객 — 백엔드 허용 목록에 있는 기존 계정만(목록 밖 403). 백엔드 알림 2026-11-19·6bf69d04 [확정] */
+  customers: [
+    {
+      key: 'pc1',
+      label: 'PC 1 지정 고객(사용자 Google 계정)',
+      accountId: 'CU-eae131fa-886a-4733-9eee-86a158be281a',
+      warn: '실제 계정 — 고객 앱 주문 내역에 보이고 배송 알림이 휴대폰으로 갑니다(결제만 시험).',
+    },
+    {
+      key: 'test',
+      label: '시험 고객',
+      accountId: 'CU-fdccbd6b-9817-4e95-b55a-2c4e71539116',
+      warn: '백엔드 허용 목록에 아직 없음(R-22 요청) — 넣기 전까지 403.',
+    },
+  ],
+  /** 한 번에 넣는 최대 건수 [시뮬] */
+  maxCount: 5,
+  /** 장바구니에 담을 최대 품목 수 [시뮬] */
+  maxItems: 10,
+  /** 고를 상품 단가 범위(원) — 한 개로 최소 주문을 다 채우지 않게 [시뮬] */
+  priceMin: 1000,
+  priceMax: 12000,
+  /** 예약 시간대: 마감까지 이만큼(분) 넘게 남은 것만 [시뮬] — 요청서 R-21 */
+  slotCutoffMarginMin: 5,
+  /** 랜덤에서 예약이 뽑히면 가장 빠른 이 수 중 하나 [시뮬] — 요청서 R-21 */
+  randomSlotPool: 3,
+  /** 결제 진입 뒤 결제창 정보(PAY)를 기다리는 최대 시간(초)·간격 [시뮬] */
+  checkoutWaitSec: 30,
+  /** 승인 뒤 주문번호를 기다리는 최대 시간(초) [시뮬] */
+  orderNumberWaitSec: 15,
+  pollMs: 1000,
+};

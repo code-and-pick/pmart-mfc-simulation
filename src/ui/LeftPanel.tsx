@@ -2,7 +2,8 @@ import { useRef, useState } from 'react';
 import { useApp, useTick } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { BACKEND_FACTS, REAL_LINK, REAL_WORKERS } from '../config';
+import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS } from '../config';
+import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import type { InboundState } from '../sim/inbound';
 import { fmtClock } from '../sim/metrics';
@@ -149,9 +150,112 @@ function BackendSettings() {
         </button>
       )}
       {!mock && <VirtualWorkers />}
+      {!mock && !sim.realTokens?.serverInjected && <RealOrderControls />}
       <p className="note">
         실서버 모드는 고객 앱 주문으로 생긴 작업과 PDA 작업자의 진행을 {REAL_LINK.pollSec}초마다 읽어 그립니다. 가짜 주문은 없습니다. 가상 작업자를 켜지 않으면 실서버 재고·작업을 바꾸지 않습니다. 시계는 실제 시각(1×)입니다.
       </p>
+    </>
+  );
+}
+
+/** 실제 주문 넣기(R-21) — 개발 서버가 고객 토큰을 받아 고객 경로 그대로 주문하고 시험 결제로 승인한다. 이 PC 에서만 */
+function RealOrderControls() {
+  const { sim } = useApp();
+  const [customer, setCustomer] = useState(REAL_ORDER.customers[0].key);
+  const [mode, setMode] = useState<OrderModeChoice>('RANDOM');
+  const [count, setCount] = useState(1);
+  const [arm, setArm] = useState(false);
+  const [busy, setBusy] = useState('');
+  const [log, setLog] = useState<{ at: string; text: string; warn?: boolean; ask?: boolean }[]>([]);
+  const cust = REAL_ORDER.customers.find((c) => c.key === customer)!;
+  const push = (text: string, warn = false, ask = false) =>
+    setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn, ask }, ...l].slice(0, 12));
+
+  const run = async (m: OrderModeChoice, n: number) => {
+    setArm(false);
+    for (let i = 0; i < n; i++) {
+      setBusy(`${i + 1}/${n}건 넣는 중…`);
+      let r: RealOrderResult;
+      try {
+        const res = await fetch('/sim-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer, mode: m, mfcId: sim.params.mfcId }),
+        });
+        r = (await res.json()) as RealOrderResult;
+      } catch {
+        r = { ok: false, step: 'NETWORK', code: 'NO_RESPONSE', detail: '개발 서버 응답 없음 — 결과 불명, 실제 주문 탭에서 확인하세요' };
+      }
+      if (r.ok) {
+        const w = r.window ? ` ${r.window.date.slice(5)} ${r.window.start}–${r.window.end}` : '';
+        push(`주문 ${r.orderNumber ?? `(번호 아직 없음 ${r.orderId.slice(-8)})`} · ${MODE_KO[r.mode]}${w} · ${r.amount.toLocaleString()}원 · ${r.items.length}품목`);
+      } else {
+        push(`${r.step} ${r.code} — ${r.detail}`, true, !!r.askScheduled);
+        break;
+      }
+    }
+    setBusy('');
+  };
+
+  return (
+    <>
+      <h3>실제 주문 넣기</h3>
+      <div className="field">
+        <label>고객</label>
+        <select value={customer} onChange={(e) => (setCustomer(e.target.value), setArm(false))}>
+          {REAL_ORDER.customers.map((c) => (
+            <option key={c.key} value={c.key}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <small className="warn">{cust.warn}</small>
+      </div>
+      <div className="field">
+        <label>배송 방식</label>
+        <div className="btn-row">
+          {(['SINGLE', 'BUNDLED', 'SCHEDULED', 'RANDOM'] as const).map((m) => (
+            <button key={m} className={`btn ${mode === m ? '' : 'ghost'}`} onClick={() => (setMode(m), setArm(false))}>
+              {MODE_KO[m]}
+            </button>
+          ))}
+        </div>
+        <small>예약은 고를 수 있는 가장 빠른 시간대, 랜덤은 지금 되는 방식 중 하나(예약이면 빠른 {REAL_ORDER.randomSlotPool}개 중 하나).</small>
+      </div>
+      <Slider name="건수" initial={count} min={1} max={REAL_ORDER.maxCount} step={1} hint="한 건씩 차례로 넣고, 실패하면 멈춥니다." apply={(v) => (setCount(v), setArm(false))} />
+      {busy ? (
+        <div className="probe">{busy}</div>
+      ) : arm ? (
+        <div className="btn-row">
+          <button className="btn" onClick={() => run(mode, count)}>
+            정말 {count}건 넣기
+          </button>
+          <button className="btn ghost" onClick={() => setArm(false)}>
+            취소
+          </button>
+        </div>
+      ) : (
+        <button className="btn" onClick={() => setArm(true)}>
+          주문 넣기
+        </button>
+      )}
+      <small>
+        출하 가능한 상품으로 최소 주문 금액을 넘게 담아 주문하고 시험 결제(TEST_AUTO)로 승인합니다. 실제 주문이라 MFC 작업 지시·배송까지 그대로 흘러갑니다. 고객 토큰은 개발 서버 안에서만 씁니다.
+      </small>
+      {log.length > 0 && (
+        <div className="probe">
+          {log.map((l, i) => (
+            <div key={i} className={l.warn ? 'warn' : ''}>
+              {l.at} · {l.text}
+              {l.ask && !busy && (
+                <button className="btn ghost" onClick={() => run('SCHEDULED', 1)}>
+                  예약으로 1건 넣기
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </>
   );
 }
