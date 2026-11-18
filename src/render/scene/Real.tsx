@@ -171,13 +171,14 @@ export function RealStock() {
     const real = sim.real;
     if (!real) return;
     const held = sim.heldCarts();
-    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}`;
+    const racked = real.shipments().filter((r) => r.info?.state === 'READY' && sim.onRack(r.shipmentId)).map((r) => r.shipmentId);
+    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}|${racked.join(',')}`;
     if (sig === ver.current) return;
     ver.current = sig;
     // 출하 대기 출고의 밀봉 포장 내용(SKU → 수량) — 그만큼의 PACKED 를 랙에
     const toRack = new Map<string, number>();
     for (const r of real.shipments()) {
-      if (r.info?.state !== 'READY') continue;
+      if (r.info?.state !== 'READY' || !racked.includes(r.shipmentId)) continue;
       for (const p of r.info.packages ?? []) {
         if (p.state !== 'SEALED') continue;
         for (const c of p.contents as { sku: string; qty: number }[]) toRack.set(c.sku, (toRack.get(c.sku) ?? 0) + c.qty);

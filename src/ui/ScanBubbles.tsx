@@ -128,7 +128,7 @@ function RackBubble({ innerRef, shipmentId }: { innerRef: React.MutableRefObject
   const [open, setOpen] = useState(true);
   const real = sim.real;
   const list = (real?.shipments() ?? [])
-    .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER'))
+    .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId))
     .filter((r) => !shipmentId || r.shipmentId === shipmentId)
     .flatMap((r) => (r.info!.packages ?? []).filter((p) => p.state === 'SEALED').map((p) => ({ r, p })));
   if (!list.length) return null;
@@ -304,7 +304,10 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
           {/* 출하대기 랙 2곳(DSP-A-01·02) — PDA 는 DSP- 면 어느 랙이든 받고 서버에 보내지 않는다(둘 중 하나) */}
           <Barcode value="DSP-A-01" caption="출하대기 랙 1 DSP-A-01" height={36} onGo={() => controller.focusBackendCode('DSP-A-01')} />
           <Barcode value="DSP-A-02" caption="출하대기 랙 2 DSP-A-02 (둘 중 하나)" height={36} onGo={() => controller.focusBackendCode('DSP-A-02')} />
-          <div className="note">찍은 뒤 PDA 에서 "포장 끝내기" — 서버에 작업이 끝나면 말풍선이 닫힙니다.</div>
+          <button className="btn" onClick={() => sim.passScan(w.workerId)} title="서버는 랙 스캔을 모릅니다(마지막 밀봉에서 이미 패킹 완료) — 찍었으면 눌러 랙에 올림. 이 작업자가 다음 작업을 받아도 넘어갑니다">
+            랙 찍음 → 랙에 올림
+          </button>
+          <div className="note">찍은 뒤 PDA 에서 "패킹 끝". 포장은 그때부터 출하대기 랙에 그립니다(그 전엔 패킹대).</div>
         </>
       );
   }

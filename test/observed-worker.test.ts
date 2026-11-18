@@ -194,6 +194,37 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(Math.hypot(w.pos.x - rack.x, w.pos.z - rack.z)).toBeLessThan(0.5);
   });
 
+  it('마지막 밀봉에서 PACK 이 끝나도(서버) ⑤ 랙 단계로 둔다 — "랙 찍음" 또는 그 작업자가 다음 작업을 받아야 랙에 올림', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const p = pick([0, 0]);
+    const pack = { ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'COMPLETED', packingLocations: ['CRT-A-07'] } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'READY', dispatchRequest: {}, packages: [{ state: 'SEALED', contents: [] }] } as never, readMs: 0, sig: '' });
+    sync();
+    const w = sim.observedWorkers[0];
+    expect(w.cue).toMatchObject({ kind: 'PACK', step: 'RACK' });
+    expect(sim.onRack('ORD-1-S1')).toBe(false); // 아직 패킹대
+    sim.passScan(w.workerId); // 랙 찍음
+    expect(sim.onRack('ORD-1-S1')).toBe(true);
+    expect(w.cue).toBeNull();
+    expect(w.state).toBe('IDLE');
+
+    // 다른 PC 화면(찍음 안 누름): 그 작업자가 다음 작업을 받으면 랙에 올린 것으로
+    const sim2 = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const r2 = sim2.real!;
+    r2.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    r2.shipmentInfo.set('ORD-1-S1', real.shipmentInfo.get('ORD-1-S1')!);
+    expect(sim2.onRack('ORD-1-S1')).toBe(false);
+    const next = { ...pick([1, 1]), taskId: 'ORD-2-S1-PICK', shipmentId: 'ORD-2-S1', state: 'ASSIGNED' } as unknown as TaskDetail;
+    r2.tasks.set(next.taskId, { summary: next, detail: next, firstSeenMs: 0, closed: null });
+    expect(sim2.onRack('ORD-1-S1')).toBe(true);
+  });
+
   it('끌고 온 장바구니의 집품분(서버 PICKED)은 작업자 카트 위에 — 카트를 내려놓으면 카트 보관 자리로', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;

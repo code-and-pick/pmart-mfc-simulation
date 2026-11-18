@@ -318,6 +318,13 @@ export class Simulation {
       const cur = byWorker.get(wid);
       if (!cur || rank[s.state] < rank[cur.summary.state]) byWorker.set(wid, t);
     }
+    // 밀봉 끝 뒤 ⑤ 출하대기 랙: 서버는 마지막 밀봉에서 PACK 을 COMPLETED·출고 READY 로 바꾸고 랙 스캔은 모른다(BR-52 R20).
+    // 그 작업자가 다른 작업을 받기 전이고 화면에서 "랙 찍음"을 안 눌렀으면 랙 단계로 둔다(사용자 2026-11-18 "랙 스캔이 안되는데 자동으로 랙에 옮겨졌어")
+    for (const t of real.tasks.values()) {
+      const wid = t.summary.assignment?.workerId;
+      if (!wid || virtualIds.has(wid) || byWorker.has(wid) || !this.rackPending(t)) continue;
+      byWorker.set(wid, t);
+    }
     const cart = this.backendPoint('CRT-A-01') ?? this.layout.points.cartDepot;
     for (const [wid, t] of byWorker) {
       const s = t.summary;
@@ -461,7 +468,7 @@ export class Simulation {
         w.currentTarget = null;
         view.step = s.state === 'IN_PROGRESS' ? '포장 중' : '패킹 대기';
         // 스캔 안내(포장): PDA 포장 화면 단계 그대로(clients packing_screen.dart — 패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙)
-        const pc = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' ? this.packCue(w, t) : null;
+        const pc = s.state === 'ASSIGNED' || s.state === 'IN_PROGRESS' || this.rackPending(t) ? this.packCue(w, t) : null;
         if (pc?.kind === 'PACK') {
           w.cue = pc;
           const at = this.backendPoint(pc.step === 'RACK' ? pc.rack : pc.station);
@@ -546,11 +553,35 @@ export class Simulation {
     const c = w?.cue;
     if (!w || !c) return;
     if (c.kind === 'CART') w.passed.add(`${c.taskId}:CART`);
-    else if (c.kind === 'PACK' && (c.step === 'STATION' || c.step === 'CART')) w.passed.add(`${c.taskId}:PACK-${c.step}`);
+    else if (c.kind === 'PACK' && (c.step === 'STATION' || c.step === 'CART' || c.step === 'RACK')) w.passed.add(`${c.taskId}:PACK-${c.step}`);
     else if (c.kind === 'RETURN' && c.step === 'FROM') w.passed.add(`${c.taskId}:${c.piece.line.orderLineId}:${c.piece.lotId}:LOADED`);
     else return;
     this.observedPoll = -1;
     this.syncObservedWorkers();
+  }
+
+  /** 끝난 PACK 인데 ⑤ 랙을 아직 안 찍었다고 볼 것 — 출고 출하 대기(READY·부분 인계), 화면에서 "랙 찍음" 안 누름 */
+  private rackPending(t: RealTask): boolean {
+    const s = t.summary;
+    if (s.taskType !== 'PACK' || t.closed?.state !== 'COMPLETED' || !s.shipmentId) return false;
+    const st = this.real?.shipmentInfo.get(s.shipmentId)?.data.state;
+    if (st !== 'READY' && st !== 'PARTIALLY_HANDED_OVER') return false;
+    return !this.observedWorkers.some((w) => w.passed.has(`${s.taskId}:PACK-RACK`));
+  }
+
+  /**
+   * 이 출고 포장이 출하대기 랙에 올라갔다고 볼까(그리기만 — 서버는 랙을 모름, R-20). PACK 이 끝났고 다음 중 하나:
+   * 화면에서 "랙 찍음"을 눌렀다 · 포장한 작업자가 다른 작업을 받았다(PDA 는 랙을 찍어야 "패킹 끝" → 다음 작업) · 가상 작업자가 포장했다
+   */
+  onRack(shipmentId: string): boolean {
+    const real = this.real;
+    if (!real) return false;
+    const pack = [...real.tasks.values()].find((t) => t.summary.taskType === 'PACK' && t.summary.shipmentId === shipmentId);
+    if (!pack || pack.closed?.state !== 'COMPLETED') return false;
+    const wid = pack.summary.assignment?.workerId;
+    if (!wid || this.virtualWorkerIds().has(wid)) return true;
+    if (this.observedWorkers.some((w) => w.passed.has(`${pack.summary.taskId}:PACK-RACK`))) return true;
+    return [...real.tasks.values()].some((t) => !t.closed && t.summary.assignment?.workerId === wid && t.summary.shipmentId !== shipmentId);
   }
 
   /** 포장 스캔 안내 — 서버가 아는 것(배차 요청·밀봉한 포장·출고 READY)과 화면에서 넘긴 스캔으로 지금 단계를 정한다 */
