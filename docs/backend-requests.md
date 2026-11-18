@@ -112,6 +112,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 
 | 항목 | 내용 | 상태 · 계기 |
 |---|---|---|
+| 화면 번호(ADR-0070) | 목록·말풍선·3D 이름표에 시스템 ID(`ORD-…`·`DLV-…`·`RD-…`) 대신 화면 번호 — 주문 `orderNumber`(8자리, fulfillment 0.13.0 — 지금 있음), 배송 `deliveryNumber` "주문번호-순번" + 종류(execution 0.26.0·dispatch 0.10.0), 라이더 "가린 이름 · riderNumber 6자리"(rider 0.12.0, `GET /riders?riderIds=` 50개까지, 이메일 안 냄), 상세엔 접힌 "시스템 번호" + 복사, 번호 없으면 ID 끝 8자리 회색 + "번호 없음" | **남음** · 백엔드 PR #184(`docs/handoff/simulator/2026-11-18-notice-display-numbers.md`) 11-18 18시 기준 OPEN — 병합·배포 뒤. 주문번호 부분은 먼저 할 수 있음. LAN 조회 허용 목록(`lanAllow.ts`)에 `/riders` 를 넣을지는 개인정보(가린 이름만) 확인 뒤 |
 | 계약 동기화 | `contract.ts`·MOCK 을 fulfillment 0.4.10 에 맞춤 | 11-10 완료 |
 | 칸 코드 | 시뮬레이터 ↔ 백엔드 코드 대응, 고회전 5칸·회수 반입 자리 표시 | 11-10 완료 (SIM-6, L-1) |
 | 로그인 | Vite 서버 `/sim-auth/tokens`(Keycloak → dev-token-exchange), 토큰 메모리만 | **11-16 완료** · R-14 해소(11-17 401 재발 시 계정 멈춤) |
