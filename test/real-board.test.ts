@@ -279,6 +279,28 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(b.returnHandovers).toHaveLength(1); // 들고 있던 것은 그대로
   });
 
+  it('작업자 표시(ADR-0070): hr 이름·사번, 못 읽으면 capacity 사번, 둘 다 없으면 ID 끝 8자리 — OP-… 를 내지 않음', async () => {
+    const r = new FakeReader();
+    const asked: string[][] = [];
+    (r as unknown as { getEmployeeLabels: (ids: string[]) => Promise<unknown[]> }).getEmployeeLabels = async (ids) => {
+      asked.push(ids);
+      return [{ operatorId: 'OP-a', name: '김현장', employeeNo: 'P2026-00011' }];
+    };
+    const b = board(r, { ms: 0 });
+    await b.tick();
+    expect(asked).toEqual([['OP-a']]);
+    expect(b.workerName('OP-a')).toBe('김현장 · P2026-00011');
+    expect(b.workerName('OP-12345678-zzzz')).toBe('…678-zzzz(번호 없음)');
+
+    const r2 = new FakeReader();
+    (r2 as unknown as { getEmployeeLabels: () => Promise<unknown[]> }).getEmployeeLabels = async () => {
+      throw new Error('403');
+    };
+    const b2 = board(r2, { ms: 0 });
+    await b2.tick();
+    expect(b2.workerName('OP-a')).toBe('MFC시험 피킹포장 11'); // capacity displayName
+  });
+
   it('작업자 속도 배율(speedFactor): 서버 값, 없으면 1, 0.5~2.0 으로 자름', async () => {
     const r = new FakeReader();
     r.listWorkers = async () => [

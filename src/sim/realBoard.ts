@@ -6,6 +6,7 @@
 import { ApiProblem } from '../domain/contract';
 import type {
   OrderFulfillmentView,
+  EmployeeLabel,
   ReturnHandover,
   TaskLine,
   TaskPick,
@@ -33,6 +34,8 @@ export interface RealReader {
   searchDeliveries(mfcId: string, size?: number): Promise<StaffDeliverySummary[]>;
   getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch>;
   getSku(sku: string): Promise<SkuBarcodes>;
+  /** (hr 0.8.0) 운영자 ID → 이름·사번(ADR-0070 "이름 · 사번") — 없으면 capacity displayName 만 */
+  getEmployeeLabels?(operatorIds: string[]): Promise<EmployeeLabel[]>;
   /** (delivery-execution 0.28.0) MFC 반납 인증번호 — 없으면 화면이 보이지 않는다 */
   listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
@@ -627,11 +630,25 @@ export class RealBoard {
     } catch {
       /* 이름 표시만 못 한다 — 작업 조회는 계속 */
     }
+    // 이름·사번(hr 0.8.0) — 50개씩. 못 읽으면(다른 기기 조회 경로 밖 403 등) 사번(displayName)만
+    if (this.reader.getEmployeeLabels && this.workers.size) {
+      const ids = [...this.workers.keys()];
+      try {
+        for (let i = 0; i < ids.length; i += 50) for (const l of await this.reader.getEmployeeLabels(ids.slice(i, i + 50))) this.labels.set(l.operatorId, l);
+      } catch {
+        /* 이름 없이 사번만 */
+      }
+    }
   }
+
+  /** 운영자 ID → 이름·사번(hr employee-labels) */
+  readonly labels = new Map<string, EmployeeLabel>();
 
   workerName(workerId: string | null | undefined): string {
     if (!workerId) return '미배정';
     // ADR-0070: 직원은 이름 · 사번만 — 운영자 ID(OP-…)는 화면에 내지 않는다. 모르면 ID 끝 8자리 + 번호 없음
+    const l = this.labels.get(workerId);
+    if (l) return `${l.name} · ${l.employeeNo}`;
     return this.workers.get(workerId)?.displayName ?? `…${workerId.slice(-8)}(번호 없음)`;
   }
 

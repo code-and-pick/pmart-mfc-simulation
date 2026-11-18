@@ -35,6 +35,14 @@ export type PackageState = 'OPEN' | 'SEALED' | 'HANDED_OVER' | 'INVALIDATED' | '
 export type FenceState = 'NONE' | 'HANDOVER_IN_PROGRESS' | 'COMMITTED' | 'EXPIRED';
 export type TemperatureZone = 'AMBIENT' | 'CHILLED' | 'FROZEN';
 
+/** hr-service EmployeeLabel(0.8.0) — 운영자 ID → 이름·사번(화면 표시용, 모든 직원) */
+export interface EmployeeLabel {
+  operatorId: string;
+  name: string;
+  /** 사번(P2026-00012) */
+  employeeNo: string;
+}
+
 /** rider-service VehicleType — 라이더 배달 수단 */
 export type VehicleType = 'MOTORCYCLE' | 'BICYCLE' | 'E_BIKE' | 'KICKBOARD' | 'CAR' | 'WALK';
 export const VEHICLE_TYPES: readonly VehicleType[] = ['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK'];
