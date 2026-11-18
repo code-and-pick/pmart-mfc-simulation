@@ -561,6 +561,7 @@ table.inv.real .muted {
 .scan h4 { margin: 10px 0 4px; font-size: 12px; }
 .scan-task { border-top: 1px solid rgba(127, 127, 127, 0.3); margin-top: 8px; padding-top: 4px; }
 .scan-stop { margin: 6px 0; }
+.scan-stop.done > .sub { opacity: 0.6; }
 .bc-grid { display: flex; flex-wrap: wrap; gap: 8px; }
 .bc { background: #fff; color: #000; border-radius: 4px; padding: 6px 8px 4px; display: inline-block; margin: 4px 0; }
 .bc svg { display: block; }

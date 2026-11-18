@@ -222,6 +222,25 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(r.calls.get).toBe(2);
   });
 
+  it('서버가 다 집은 조각을 상세에서 빼도 본 조각은 출고별로 남긴다(바코드 판 — 패킹까지)', async () => {
+    const r = new FakeReader();
+    const pick = summary({ taskId: 'T1', state: 'IN_PROGRESS', version: 3, lastActivityAt: 'a' });
+    r.list = [pick];
+    r.details.set('T1', detail(pick, [{ code: 'X' }]));
+    const now = { ms: 0 };
+    const b = board(r, now);
+    await b.tick();
+    expect(b.picksOf('ORD-1-S1').map((x) => [x.loc, x.gone])).toEqual([['X', false]]);
+    const after = { ...pick, completedQty: 2, remainingQty: 0, lastActivityAt: 'b' };
+    r.list = [after];
+    const d = detail(after, [{ code: 'X' }], 0);
+    d.lines[0].picks = []; // 서버: remaining <= 0 조각은 빼고 준다
+    r.details.set('T1', d);
+    now.ms = 3500;
+    await b.tick();
+    expect(b.picksOf('ORD-1-S1').map((x) => [x.loc, x.gone, x.pick.lotId])).toEqual([['X', true, 'LOT-1']]);
+  });
+
   it('주문 SKU 재고: 집품이 반영되면 선반 STORED 가 줄고 포장 구역 PICKED 가 생긴다 — 서버 응답 그대로', async () => {
     const r = new FakeReader();
     const pick = summary({ taskId: 'T1', state: 'IN_PROGRESS', version: 1 });

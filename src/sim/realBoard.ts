@@ -6,6 +6,8 @@
 import { ApiProblem } from '../domain/contract';
 import type {
   OrderFulfillmentView,
+  TaskLine,
+  TaskPick,
   CapacityWorker,
   CenterStock,
   DeliveryDispatch,
@@ -64,6 +66,16 @@ export interface RealStockUnit {
   workState: StockWorkState;
   qualityState: StockQualityState;
   qty: number;
+}
+
+/** 한 번 본 피킹 조각 — 서버는 다 집은 조각을 상세 picks 에서 뺀다(TaskService.detail remaining <= 0 건너뜀). 패킹까지 바코드를 보이려고 든다 */
+export interface SeenPick {
+  line: TaskLine;
+  pick: TaskPick;
+  /** 지시 칸(배정 칸 → 첫 칸 → 줄 지시 칸) */
+  loc: string | null;
+  /** 지금 상세에 없음 = 다 집음(또는 취소) */
+  gone: boolean;
 }
 
 /** 목록 요약의 진행 서명 — version(상태 전이) + 완료·남은 수량 + 마지막 실적 시각(부분 집품마다 바뀜) */
@@ -276,6 +288,7 @@ export class RealBoard {
           if (d) {
             t.detail = d;
             t.detailSig = sig;
+            this.rememberPicks(d);
             for (const l of d.lines) this.staleSkus.add(l.sku);
           }
         }
@@ -290,6 +303,7 @@ export class RealBoard {
             t.summary = d;
             t.detail = d;
             t.closed = { atMs: now, state: d.state };
+            this.rememberPicks(d);
             for (const l of d.lines) this.staleSkus.add(l.sku); // 끝난 작업의 마지막 실적까지 재고에 반영
           } catch {
             /* 다음 조회에서 다시 확인 */
@@ -303,6 +317,8 @@ export class RealBoard {
         const keep = this.pendingHandover(t.summary.shipmentId) ? this.opt.handoverKeepSec : this.opt.recentKeepSec;
         if (age > keep * 1000) this.tasks.delete(id);
       }
+      const live = new Set([...this.tasks.values()].map((t) => t.summary.shipmentId));
+      for (const sid of this.seenPicks.keys()) if (!live.has(sid)) this.seenPicks.delete(sid);
       await this.refreshShipments(now);
       await this.refreshStock(now);
       this.lastOkMs = now;
@@ -336,6 +352,33 @@ export class RealBoard {
           : this.orderViews.set(orderId, { data: hit?.data ?? null, error: (e as Error).message, readMs: this.nowMs(), loading: false }),
       )
       .finally(() => this.orderViewVersion++);
+  }
+
+  /** 출고(shipmentId) → 본 피킹 조각(orderLineId:lotId). 화면에서 빠진 출고와 같이 버린다 */
+  readonly seenPicks = new Map<string, Map<string, SeenPick>>();
+
+  private rememberPicks(d: TaskDetail) {
+    if (d.taskType !== 'PICK' || !d.shipmentId) return;
+    let m = this.seenPicks.get(d.shipmentId);
+    if (!m) this.seenPicks.set(d.shipmentId, (m = new Map()));
+    const now = new Set<string>();
+    for (const l of d.lines)
+      for (const p of l.picks ?? []) {
+        const k = `${l.orderLineId}:${p.lotId}`;
+        now.add(k);
+        const locs = p.locations ?? [];
+        m.set(k, { line: l, pick: p, loc: (locs.find((x) => (x.allocatedQty ?? 0) > 0) ?? locs[0])?.locationCode ?? l.locationId ?? null, gone: false });
+      }
+    for (const [k, v] of m) {
+      if (now.has(k)) continue;
+      const line = d.lines.find((l) => l.orderLineId === v.line.orderLineId) ?? v.line;
+      m.set(k, { ...v, line, gone: true });
+    }
+  }
+
+  /** 그 출고의 피킹 조각 — 지금 남은 것 + 이미 집어 서버 상세에서 빠진 것, 방문 순서대로 */
+  picksOf(shipmentId: string): SeenPick[] {
+    return [...(this.seenPicks.get(shipmentId)?.values() ?? [])].sort((a, b) => (a.pick.visitSeq ?? 9999) - (b.pick.visitSeq ?? 9999));
   }
 
   requestSkuBarcodes(skus: Iterable<string>) {
