@@ -2,7 +2,7 @@ import { useRef, useState } from 'react';
 import { useApp, useTick } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { BACKEND_FACTS, REAL_LINK } from '../config';
+import { BACKEND_FACTS, REAL_LINK, REAL_WORKERS } from '../config';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import type { InboundState } from '../sim/inbound';
 import { fmtClock } from '../sim/metrics';
@@ -173,6 +173,15 @@ function VirtualWorkers() {
         step={1}
         hint="mfcw-pp-01부터 켭니다. 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
         apply={(v) => sim.setVirtualWorkers(v)}
+      />
+      <Slider
+        name="속도 배수"
+        initial={sim.speedBoost}
+        min={1}
+        max={REAL_WORKERS.speedBoostMax}
+        step={1}
+        hint="작업자마다 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자의 걷기·집기·포장 시간과 실제 PDA 작업자 아바타의 걷기에만 — 서버 응답 기다림·조회 간격(3초)은 실제 시각 그대로라, 배수를 크게 해도 서버 반영보다 빨라지지는 않습니다."
+        apply={(v) => sim.setSpeedBoost(v)}
       />
       {ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length && (
         <p className="note warn">

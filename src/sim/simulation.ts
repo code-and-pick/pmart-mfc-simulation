@@ -8,7 +8,7 @@
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, type SimParams } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_WORKERS, type SimParams } from '../config';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import type { ConfirmOrderRequest, Package, PackageContentLine, TemperatureZone } from '../domain/contract';
 import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
@@ -252,7 +252,7 @@ export class Simulation {
         point: (c) => this.backendPoint(c),
         wire: (c) => this.codes.toBackend(c),
         carts: this.carts,
-        speedFactor: (id) => this.real?.speedFactor(id) ?? 1,
+        speedFactor: (id) => (this.real?.speedFactor(id) ?? 1) * this.speedBoost,
       };
     }
   }
@@ -272,6 +272,13 @@ export class Simulation {
    * 실서버 가상 작업자 수(0~10). 늘리면 REAL_LINK.virtualAccounts 앞에서부터 각자 토큰으로 일을 시작한다.
    * 줄이면 들고 있는 작업을 마친 뒤 멈춘다(작업을 버려 두지 않음). 다른 기기(조회 전용)에서는 켜지 않는다.
    */
+  /** 실서버 속도 배수(화면 슬라이더) — 서버 speedFactor 위에 곱한다. 1 = 그대로 */
+  speedBoost = 1;
+  setSpeedBoost(v: number) {
+    this.speedBoost = Math.max(1, Math.min(REAL_WORKERS.speedBoostMax, v));
+    for (const w of this.observedWorkers) w.setSpeed(this.params.walkSpeed * (this.real?.speedFactor(w.workerId) ?? 1) * this.speedBoost);
+  }
+
   setVirtualWorkers(n: number) {
     const ctx = this.realCtx;
     if (!ctx || this.realTokens?.serverInjected) return;
@@ -492,7 +499,7 @@ export class Simulation {
       w.pda = view;
       w.lastSeenMs = now;
       // 걷는 속도 = 기본 × 서버 속도 배율(capacity speedFactor) — 실제 PDA 작업자 아바타도 그 사람 속도로
-      w.setSpeed(this.params.walkSpeed * real.speedFactor(wid));
+      w.setSpeed(this.params.walkSpeed * real.speedFactor(wid) * this.speedBoost);
       w.aim(target, key);
     }
     for (let i = this.observedWorkers.length - 1; i >= 0; i--) {

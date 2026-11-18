@@ -147,6 +147,11 @@ export const REAL_WORKERS = {
   unconfirmedResendSec: 3,
   /** RETURN 실적 뒤 서버 반영(pendingQty)을 기다리는 최대 초 [시뮬] */
   returnConfirmWaitSec: 30,
+  /**
+   * 속도 배수 최대 — 화면에서 고른 배수를 서버 속도 배율(speedFactor) 위에 곱한다(사용자 2026-11-18 "배수 넣어서 더 빠르게").
+   * 가상 작업자의 걷기·손일, 실제 PDA 작업자 아바타의 걷기에만. 서버 응답 기다림·조회 주기는 그대로(실제 시각) [시뮬]
+   */
+  speedBoostMax: 10,
   /** 한 번에 켤 수 있는 최대 인원 = REAL_LINK.virtualAccounts 수(10) [확정 사용자 2026-11-16] */
 };
 

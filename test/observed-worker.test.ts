@@ -95,6 +95,18 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(cue('OP-other')).toBe('CRT-A-03');
   });
 
+  it('속도 배수: 서버 speedFactor 위에 곱한다(1~최대), 가상 작업자 배율에도', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const ctx = (sim as unknown as { realCtx: { speedFactor: (id: string) => number } }).realCtx;
+    expect(ctx.speedFactor('OP-x')).toBe(1);
+    sim.setSpeedBoost(4);
+    expect(ctx.speedFactor('OP-x')).toBe(4);
+    sim.setSpeedBoost(99);
+    expect(sim.speedBoost).toBe(10);
+    sim.setSpeedBoost(0);
+    expect(sim.speedBoost).toBe(1);
+  });
+
   it('PDA 따라가기: 아바타가 아직 걷는 중인데 서버에 집품이 오면 방금 집은 칸으로 순간이동 → 다음 칸으로 걷는다', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;
