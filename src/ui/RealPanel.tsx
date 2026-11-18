@@ -186,7 +186,7 @@ export function RealOrders() {
           return (
             <Fragment key={r.shipmentId}>
             <tr
-              title={`${r.shipmentId}\n${r.fulfillmentId}\n누르면 바코드 탭에 이 주문의 바코드 · 고른 줄을 다시 누르면 선택 취소`}
+              title={`${r.shipmentId}\n${r.fulfillmentId}\n누르면 이 주문을 고름(3D 말풍선·바코드 탭) · 고른 줄을 다시 누르면 선택 취소`}
               className={`clickable${focus.shipmentId === r.shipmentId ? ' on' : ''}`}
               onClick={() => (focus.shipmentId === r.shipmentId ? focus.clear() : focus.show(r.shipmentId))}
             >

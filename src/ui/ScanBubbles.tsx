@@ -65,16 +65,16 @@ export function ScanBubbles() {
     return () => window.removeEventListener('keydown', onKey);
   }, [controller]);
 
-  // 출하대기 랙 말풍선 위치(랙 1 위) — 작업자 말풍선과 같은 방식
-  const rackRef = useRef<HTMLDivElement | null>(null);
+  // 출하대기 랙 말풍선 위치(랙마다 그 랙 위) — 작업자 말풍선과 같은 방식
+  const rackRefs = useRef(new Map<string, HTMLDivElement>());
   useEffect(() => {
     let raf = 0;
     const v = new THREE.Vector3();
     const loop = () => {
       const cam = cameraTap.camera;
-      const el = rackRef.current;
-      const p = sim.backendPoint(RACK_AT);
-      if (el && cam && p) {
+      for (const [rack, el] of rackRefs.current) {
+        const p = sim.backendPoint(rack);
+        if (!cam || !p) continue;
         v.set(p.x, RACK_Y, p.z).project(cam);
         const show = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
         const x = ((v.x + 1) / 2) * cameraTap.width;
@@ -108,12 +108,21 @@ export function ScanBubbles() {
           <Bubble w={w} />
         </div>
       ))}
-      <RackBubble innerRef={rackRef} shipmentId={view.scanShipment ?? null} />
+      {sim.racks.map((rack) => (
+        <RackBubble
+          key={rack}
+          rack={rack}
+          innerRef={(el) => {
+            if (el) rackRefs.current.set(rack, el);
+            else rackRefs.current.delete(rack);
+          }}
+          shipmentId={view.scanShipment ?? null}
+        />
+      ))}
     </div>
   );
 }
 
-const RACK_AT = 'DSP-A-01';
 const RACK_Y = 1.8;
 /** 한 번에 보이는 포장 수 — 넘으면 "외 N개" */
 const RACK_MAX = 6;
@@ -123,19 +132,19 @@ const RACK_MAX = 6;
  * 출고가 출하 대기(READY·부분 인계)인 밀봉 포장(SEALED)의 라벨 QR(`Package.qrCode` — 라이더 인계 때 찍음)·주문번호·숫자 인계 코드(F-8).
  * 서버는 포장이 어느 랙에 있는지 모른다(BR-52 R20) — 랙 1 위에 모아 보인다. 주문을 고르면 그 주문 것만.
  */
-function RackBubble({ innerRef, shipmentId }: { innerRef: React.MutableRefObject<HTMLDivElement | null>; shipmentId: string | null }) {
+function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (el: HTMLDivElement | null) => void; shipmentId: string | null }) {
   const { sim } = useApp();
   const [open, setOpen] = useState(true);
   const real = sim.real;
   const list = (real?.shipments() ?? [])
-    .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId))
+    .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId) && sim.rackFor(r.shipmentId) === rack)
     .filter((r) => !shipmentId || r.shipmentId === shipmentId)
     .flatMap((r) => (r.info!.packages ?? []).filter((p) => p.state === 'SEALED').map((p) => ({ r, p })));
   if (!list.length) return null;
   return (
     <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
       <div className="sb-head">
-        출하대기 랙 · 포장 {list.length}개 <span className="sub">라벨 QR — 라이더 인계 때 찍음</span>
+        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sub">라벨 QR — 라이더 인계 때 찍음</span>
         <button className="sb-x" onClick={() => setOpen(!open)} title={open ? '접기' : '펼치기'}>
           {open ? '▾' : '▸'}
         </button>
@@ -151,7 +160,7 @@ function RackBubble({ innerRef, shipmentId }: { innerRef: React.MutableRefObject
           </div>
         ))}
       {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 실제 주문 탭에서 주문을 고르면 그 주문 것만</div>}
-      <div className="note">서버는 포장이 어느 랙에 있는지 모릅니다(R20) — 랙 1 위에 모아 보입니다.</div>
+      <div className="note">서버는 포장이 어느 랙에 있는지 모릅니다(R20) — 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1.</div>
     </div>
   );
 }
@@ -185,12 +194,13 @@ function Bubble({ w }: { w: ObservedWorker }) {
         <Close />
       </div>
       <Barcode value={stop.location} caption="② 칸 위치" height={36} onGo={() => controller.focusBackendCode(stop.location)} />
+      {w.pda?.shipmentId && <CartAgain cart={sim.serverCart(w.pda.shipmentId) ?? sim.cartFor(w.pda.shipmentId)} />}
       {l.barcode ? (
         <Barcode value={l.barcode} kind={kindOf(l.barcode)} caption={stop.qty > 1 ? `③ 상품 ${l.sku} — 한 번 찍고 나머지 ${stop.qty - 1}개는 스캔·+·수기` : `③ 상품 ${l.sku} — 한 번 찍기`} height={36} />
       ) : (
         <div className="note warn">작업 지시 줄에 상품 바코드가 없습니다 — 오른쪽 스캔 판의 상품 정보 바코드(참고)를 보세요.</div>
       )}
-      {more.length > 0 && <div className="note">같은 상품 다른 바코드 {more.join(', ')} — PDA 는 첫 값만 비교(C-1)</div>}
+      {more.length > 0 && <div className="note">같은 상품 다른 바코드 {more.join(', ')} — PDA 는 이 중 아무거나 받음</div>}
       {stop.pick && <LotLabel l={l} p={stop.pick} height={36} />}
       {stop.otherLocations.length > 0 && <div className="note">지시 칸이 비었으면 같은 LOT 칸: {stop.otherLocations.join(', ')}</div>}
     </>
@@ -231,6 +241,22 @@ function ReturnBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind:
       )}
       {p.suggested.length > 1 && <div className="note">다른 추천 칸: {p.suggested.slice(1).join(', ')}</div>}
     </>
+  );
+}
+
+/**
+ * 카트 다시 찍기(사용자 2026-11-18 "들고간 카트 못찍었을때를 대비해서 카트 누르면 다시 찍을수있게"): 카트 단계가 지난 말풍선에서
+ * 누르면 그 주문 카트 바코드를 다시 띄운다. 카트 = 서버가 아는 이 주문 카트(첫 집품 뒤), 아니면 안내 카트.
+ */
+function CartAgain({ cart }: { cart: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="cart-again">
+      <button className="btn ghost" onClick={() => setOpen(!open)} title="PDA 에서 카트를 못 찍었으면 눌러 다시 띄움(같은 카트를 찍어야 함 — 다른 카트는 CART_MISMATCH)">
+        카트 {cart} {open ? '닫기' : '다시 찍기'}
+      </button>
+      {open && <Barcode value={cart} caption={`카트 ${cart} — 이 주문을 담는 장바구니`} height={36} />}
+    </div>
   );
 }
 
@@ -278,6 +304,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
       return (
         <>
           {head('③ 배차 요청')}
+          <CartAgain cart={c.cart} />
           <div className="note">찍을 바코드 없음 — PDA 에서 예상 포장 시간을 골라 배차를 요청하세요. 서버에 요청이 오면 다음 단계로 넘어갑니다.</div>
         </>
       );
@@ -285,6 +312,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
       return (
         <>
           {head('④ 담기 — 상품 찍고 밀봉')}
+          <CartAgain cart={c.cart} />
           {c.bag.map(({ line: l, left }) =>
             l.barcode ? (
               <Barcode key={l.orderLineId} value={l.barcode} kind={kindOf(l.barcode)} caption={`${l.productName ?? l.sku} — ${left}번 찍기`} height={32} />
@@ -304,9 +332,15 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
           {/* 출하대기 랙 2곳(DSP-A-01·02) — PDA 는 DSP- 면 어느 랙이든 받고 서버에 보내지 않는다(둘 중 하나) */}
           <Barcode value="DSP-A-01" caption="출하대기 랙 1 DSP-A-01" height={36} onGo={() => controller.focusBackendCode('DSP-A-01')} />
           <Barcode value="DSP-A-02" caption="출하대기 랙 2 DSP-A-02 (둘 중 하나)" height={36} onGo={() => controller.focusBackendCode('DSP-A-02')} />
-          <button className="btn" onClick={() => sim.passScan(w.workerId)} title="서버는 랙 스캔을 모릅니다(마지막 밀봉에서 이미 패킹 완료) — 찍었으면 눌러 랙에 올림. 이 작업자가 다음 작업을 받아도 넘어갑니다">
-            랙 찍음 → 랙에 올림
-          </button>
+          {/* PDA 에서 찍은 랙을 고른다 — 서버는 랙을 모름(R-20). 이 작업자가 다음 작업을 받아도 넘어가지만 그때는 어느 랙인지 몰라 랙 1 */}
+          <div className="btn-row">
+            <button className="btn" onClick={() => sim.passScan(w.workerId, 'DSP-A-01')} title="랙 1(DSP-A-01)을 찍었으면">
+              랙 1 찍음
+            </button>
+            <button className="btn" onClick={() => sim.passScan(w.workerId, 'DSP-A-02')} title="랙 2(DSP-A-02)를 찍었으면">
+              랙 2 찍음
+            </button>
+          </div>
           <div className="note">찍은 뒤 PDA 에서 "패킹 끝". 포장은 그때부터 출하대기 랙에 그립니다(그 전엔 패킹대).</div>
         </>
       );

@@ -221,8 +221,10 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     const w = sim.observedWorkers[0];
     expect(w.cue).toMatchObject({ kind: 'PACK', step: 'RACK' });
     expect(sim.onRack('ORD-1-S1')).toBe(false); // 아직 패킹대
-    sim.passScan(w.workerId); // 랙 찍음
+    expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-01'); // 모르면 랙 1
+    sim.passScan(w.workerId, 'DSP-A-02'); // 랙 2 찍음
     expect(sim.onRack('ORD-1-S1')).toBe(true);
+    expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-02');
     expect(w.cue).toBeNull();
     expect(w.state).toBe('IDLE');
 

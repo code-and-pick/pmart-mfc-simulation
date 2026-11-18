@@ -558,16 +558,26 @@ export class Simulation {
    * 스캔 안내: 서버가 모르는 스캔(피킹 카트, 포장의 패킹대·카트, 복귀의 "실었어요")을 실제 PDA 로 찍었다고 화면에서 넘긴다.
    * 서버를 부르지 않는다 — 다음 단계를 그리기 위한 표시일 뿐이다.
    */
-  passScan(workerId: string) {
+  passScan(workerId: string, rack?: string) {
     const w = this.observedWorkers.find((x) => x.workerId === workerId);
     const c = w?.cue;
     if (!w || !c) return;
+    if (c.kind === 'PACK' && c.step === 'RACK' && rack) this.rackChosen.set(c.shipmentId, rack);
     if (c.kind === 'CART') w.passed.add(`${c.taskId}:CART`);
     else if (c.kind === 'PACK' && (c.step === 'STATION' || c.step === 'CART' || c.step === 'RACK')) w.passed.add(`${c.taskId}:PACK-${c.step}`);
     else if (c.kind === 'RETURN' && c.step === 'FROM') w.passed.add(`${c.taskId}:${c.piece.line.orderLineId}:${c.piece.lotId}:LOADED`);
     else return;
     this.observedPoll = -1;
     this.syncObservedWorkers();
+  }
+
+  /** 출하대기 랙 2곳(백엔드 mfc_layout.py DISPATCH_STAGING) */
+  readonly racks = ['DSP-A-01', 'DSP-A-02'] as const;
+  /** 화면에서 "랙 N 찍음"으로 고른 랙(출고 → 랙). 서버는 랙을 모른다(R-20) — 이 화면에서만 */
+  private readonly rackChosen = new Map<string, string>();
+  /** 그 출고 포장을 그릴 랙 — 화면에서 고른 랙, 모르면(다른 화면·다음 작업으로 넘어감) 랙 1 */
+  rackFor(shipmentId: string): string {
+    return this.rackChosen.get(shipmentId) ?? this.racks[0];
   }
 
   /** 끝난 PACK 인데 ⑤ 랙을 아직 안 찍었다고 볼 것 — 출고 출하 대기(READY·부분 인계), 화면에서 "랙 찍음" 안 누름 */

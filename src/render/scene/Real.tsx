@@ -109,9 +109,16 @@ export function RealShipLabels() {
       .shipments()
       .filter((r) => r.info && ['READY', 'PARTIALLY_HANDED_OVER', 'PREPARING'].includes(r.info.state) && SHIP_LABEL_STAGES.has(dispatchView(r).stage))
       .filter((r) => r.info!.state !== 'PREPARING' || !!r.info!.dispatchRequest);
-    const texts = rows.slice(0, MAX_SHIP_LABELS).map((r) => `${orderText(real.orderNumberOf(r.shipmentId), r.shipmentId)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
-    if (rows.length > MAX_SHIP_LABELS) texts.push(`외 ${rows.length - MAX_SHIP_LABELS}건`);
-    const key = texts.join('|');
+    // 랙에 올렸다고 본 출고는 그 랙(화면에서 고른 랙) 위, 나머지(포장 중·랙 찍기 전)는 랙 1 위
+    const byRack = new Map<string, string[]>();
+    for (const r of rows) {
+      const rk = sim.onRack(r.shipmentId) ? sim.rackFor(r.shipmentId) : sim.racks[0];
+      const list = byRack.get(rk) ?? [];
+      byRack.set(rk, list);
+      if (list.length < MAX_SHIP_LABELS) list.push(`${orderText(real.orderNumberOf(r.shipmentId), r.shipmentId)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
+      else if (list.length === MAX_SHIP_LABELS) list.push('외 더 있음');
+    }
+    const key = [...byRack].map(([k, v]) => `${k}:${v.join('|')}`).join('#');
     if (key === ver.current) return;
     ver.current = key;
     for (const c of [...labels.children]) {
@@ -120,13 +127,15 @@ export function RealShipLabels() {
       s.material.dispose();
       labels.remove(s);
     }
-    const p = sim.backendPoint('DSP-A-01');
-    if (!p) return;
-    texts.forEach((t, i) => {
-      const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18 });
-      s.position.set(p.x, 2.4 + i * 0.45, p.z);
-      labels.add(s);
-    });
+    for (const [rk, texts] of byRack) {
+      const p = sim.backendPoint(rk);
+      if (!p) continue;
+      texts.forEach((t, i) => {
+        const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18 });
+        s.position.set(p.x, 2.4 + i * 0.45, p.z);
+        labels.add(s);
+      });
+    }
   });
   return <primitive object={labels} />;
 }
@@ -153,9 +162,6 @@ const WORK_KO: Record<StockWorkState, string> = {
   UNSTOWED: '미적치',
 };
 
-/** 출하대기 랙(그리기 자리) — 서버는 포장이 어느 랙에 있는지 모른다(BR-52 R20) */
-const RACK_AT = 'DSP-A-01';
-
 /**
  * 실서버 재고(주문에 나온 SKU 만, GET /mfcs/{id}/stock): 선반 칸의 STORED 수량은 그 칸에, 집품·포장 등은 그 위치(패킹대·대기 지점)에
  * 상자로 쌓아 보인다. PDA 가 집으면 다음 조회에서 선반에서 빠지고 포장 구역에 생긴다. 수량은 서버 응답 그대로. 그리는 자리만 두 가지 예외:
@@ -173,20 +179,22 @@ export function RealStock() {
     if (!real) return;
     const held = sim.heldCarts();
     const racked = real.shipments().filter((r) => r.info?.state === 'READY' && sim.onRack(r.shipmentId)).map((r) => r.shipmentId);
-    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}|${racked.join(',')}`;
+    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}|${racked.map((id) => `${id}@${sim.rackFor(id)}`).join(',')}`;
     if (sig === ver.current) return;
     ver.current = sig;
-    // 출하 대기 출고의 밀봉 포장 내용(SKU → 수량) — 그만큼의 PACKED 를 랙에
-    const toRack = new Map<string, number>();
+    // 출하 대기 출고의 밀봉 포장 내용(랙 → SKU → 수량) — 그만큼의 PACKED 를 그 출고의 랙(화면에서 고른 랙, 모르면 랙 1)에
+    const toRack = new Map<string, Map<string, number>>();
     for (const r of real.shipments()) {
       if (r.info?.state !== 'READY' || !racked.includes(r.shipmentId)) continue;
+      const rk = sim.rackFor(r.shipmentId);
+      const bySku = toRack.get(rk) ?? new Map<string, number>();
+      toRack.set(rk, bySku);
       for (const p of r.info.packages ?? []) {
         if (p.state !== 'SEALED') continue;
-        for (const c of p.contents as { sku: string; qty: number }[]) toRack.set(c.sku, (toRack.get(c.sku) ?? 0) + c.qty);
+        for (const c of p.contents as { sku: string; qty: number }[]) bySku.set(c.sku, (bySku.get(c.sku) ?? 0) + c.qty);
       }
     }
-    const rackPoint = sim.backendPoint(RACK_AT);
-    let rackGuess = 0;
+    const rackGuess = new Map<string, number>();
     const m = mesh.current;
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color();
@@ -197,17 +205,20 @@ export function RealStock() {
     for (const u0 of real.stockUnits()) {
       let u = u0;
       if (u.workState === 'PICKED' && held.has(u.locationCode)) continue; // 작업자 카트 위에 그림
-      if (u.workState === 'PACKED' && u.locationCode.startsWith('PAK-') && rackPoint) {
-        const take = Math.min(toRack.get(u.sku) ?? 0, u.qty);
-        if (take > 0) {
-          toRack.set(u.sku, (toRack.get(u.sku) ?? 0) - take);
-          rackGuess += take;
-          const g = points.get(RACK_AT) ?? { x: rackPoint.x, z: rackPoint.z, table: true, by: new Map() };
+      if (u.workState === 'PACKED' && u.locationCode.startsWith('PAK-')) {
+        for (const [rk, bySku] of toRack) {
+          const rp = sim.backendPoint(rk);
+          const take = rp ? Math.min(bySku.get(u.sku) ?? 0, u.qty) : 0;
+          if (take <= 0) continue;
+          bySku.set(u.sku, (bySku.get(u.sku) ?? 0) - take);
+          rackGuess.set(rk, (rackGuess.get(rk) ?? 0) + take);
+          const g = points.get(rk) ?? { x: rp!.x, z: rp!.z, table: true, by: new Map() };
           g.by.set('PACKED', (g.by.get('PACKED') ?? 0) + take);
-          points.set(RACK_AT, g);
-          if (take === u.qty) continue;
+          points.set(rk, g);
           u = { ...u, qty: u.qty - take };
+          if (u.qty <= 0) break;
         }
+        if (u.qty <= 0) continue;
       }
       const loc = u.workState === 'STORED' ? sim.backendLocation(u.locationCode) : null;
       if (loc) {
@@ -280,8 +291,8 @@ export function RealStock() {
     }
     for (const [code, g] of points) {
       const text =
-        code === RACK_AT && rackGuess > 0
-          ? `${code} 포장 ${rackGuess} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
+        rackGuess.get(code)
+          ? `${code} 포장 ${rackGuess.get(code)} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
           : `${code} ${[...g.by].map(([ws, q]) => `${WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       s.position.set(g.x, (g.table ? 0.9 : 0.02) + 0.9, g.z);

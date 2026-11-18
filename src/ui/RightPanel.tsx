@@ -236,10 +236,8 @@ export function RightPanel() {
   const focus = useMemo(
     () => ({
       shipmentId: scanShipment,
-      show: (id: string) => {
-        view.setScanShipment(id);
-        setTab('scan');
-      },
+      // 주문을 골라도 탭은 그대로(사용자 2026-11-18 "주문 눌렀을때 바코드 탭으로 안넘어갔으면") — 3D 말풍선·바코드 탭이 그 주문을 본다
+      show: (id: string) => view.setScanShipment(id),
       clear: () => view.setScanShipment(null),
     }),
     [scanShipment, view],

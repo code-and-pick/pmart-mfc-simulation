@@ -4,7 +4,7 @@ import { createContext, useContext } from 'react';
 export interface ScanFocus {
   /** 바코드 탭에 보일 출고(없으면 진행 중 작업 전부) */
   shipmentId: string | null;
-  /** 그 출고를 고르고 바코드 탭으로 넘어간다 */
+  /** 그 출고를 고른다(탭은 그대로 — 바코드 탭·3D 말풍선이 그 주문을 본다) */
   show: (shipmentId: string) => void;
   clear: () => void;
 }
