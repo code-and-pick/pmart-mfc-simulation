@@ -146,8 +146,6 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
           <Stat v={s.riders.length} k="라이더" />
           <Stat v={s.shipRack.overflow} k="랙 초과(바닥)" />
         </div>
-        {/* 접는 "규칙 ›" 대신 한 줄로(사용자 2026-11-20 "출하대기에 규칙, 이건 뭔데") */}
-        <div className="note">랙 2개 · 라이더는 건물 안에 안 들어오고 랙 앞에서 QR 로 받아 감</div>
       </>
     );
   }
