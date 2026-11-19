@@ -54,7 +54,8 @@ export function orderStatus(sim: Simulation, r: RealShipment): { dots: Dot[]; te
 
 function mins(iso: string, now: number): string {
   const m = Math.max(0, Math.floor((now - Date.parse(iso)) / 60000));
-  return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간 ${m % 60}분`;
+  // 표 칸이 좁아 1시간 넘으면 시간만(상세 아님)
+  return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간`;
 }
 
 function Detail({ r }: { r: RealShipment }) {
@@ -142,7 +143,7 @@ export function OrderCards() {
                   </div>
                 </td>
                 <td>
-                  <span className="ot-st">{st.text}</span>
+                  <span className="ot-st" title={st.text}>{st.text}</span>
                   {flags && <span className="oc-flag">{flags}</span>}
                 </td>
                 <td>

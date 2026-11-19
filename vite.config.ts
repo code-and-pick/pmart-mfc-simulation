@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import { Agent } from 'node:http';
 import { defineConfig } from 'vitest/config';
 import { simAuthPlugin } from './server/simAuth';
 import { labelsPlugin } from './server/labels';
@@ -18,7 +19,8 @@ export default defineConfig({
     // LAN 의 다른 기기에서도 연다(http://<이 PC IP>:5180). 다른 기기는 토큰을 받지 못하고 조회만 된다(server/simAuth.ts).
     host: true,
     proxy: {
-      '/api': { target: gateway, changeOrigin: true },
+      // IPv4 로만 붙는다 — D603-16 이 IPv6 링크 로컬(fe80::…)을 먼저 돌려주면 프록시가 거기에 붙으려다 멈춘다(2026-11-20, 게이트웨이는 정상인데 /api 만 시간 초과)
+      '/api': { target: gateway, changeOrigin: true, agent: new Agent({ family: 4, keepAlive: true }) },
     },
   },
   build: {
