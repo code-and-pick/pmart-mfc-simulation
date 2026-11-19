@@ -86,6 +86,13 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 같은 요청이 이미 있음: 클라이언트 `docs/backend-requests.md` **BR-52 R20**(11-10, "피킹한 사람에게 같은 주문 패킹 배정·출하대기 랙 위치", OPEN — 백엔드 회신 11-14 "다음 차례 후보"). 시뮬레이터도 같은 것이 필요하다는 기록 — 따로 만들 필요 없이 R20 에 같이 넣어 주면 된다.
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
+### R-25 LAN 게이트웨이 CORS 허용 출처에 시뮬레이터 개발 서버 `http://localhost:5180` — 높음 (2026-11-19 추가)
+- 증상: 실서버 모드 가상 작업자의 다음 작업 받기(`POST /mfcs/{mfcId}/workers/{workerId}/next-tasks`)가 본문 없는 403. 화면에서 보내는 쓰기 요청 전부가 같다(읽기는 브라우저가 Origin 을 안 붙여 정상).
+- 실측(11-19, 개발 서버 프록시 경유, 부수 효과 없는 `POST /order-drafts` 빈 본문·직원 토큰): `Origin` 없음 → 400(본문 검사까지 감), `Origin: http://localhost:5180` → **403 본문 없음**, `Origin: http://127.0.0.1:5180` → 403 본문 없음. 서비스·게이트웨이 보안 필터의 403 은 `code` 가 붙으므로(common-security `ProblemAuthHandlers`, gateway `ProblemResponseWriter`) 이건 게이트웨이 CORS 거부(`pmart.gateway.cors.allowed-origins` 밖 출처)로 본다.
+- 원하는 것: LAN 설정(pmart-config `api-gateway` LAN)의 `pmart.gateway.cors.allowed-origins` 에 `http://localhost:5180`(시뮬레이터 `npm run dev`, 이 PC 브라우저)을 더해 주세요. 자격 증명(쿠키)은 필요 없다(Bearer 만). 예전에 가상 작업자 쓰기가 됐다면 그 뒤 허용 목록이 바뀌었는지도 알려 주면 좋다.
+  - 다른 PC 에서 `http://<IP>:5180` 으로 연 화면은 조회만이라(개발 서버가 쓰기를 403 `LAN_READ_ONLY` 로 막음) 더할 필요 없다.
+- 그동안 시뮬레이터: 우회하지 않는다(개발 서버 프록시에서 Origin 을 빼는 방법은 게이트웨이 출처 검사를 피하는 것이라 쓰지 않음 — 사용자 11-19 "1번"). 가상 작업자·화면의 "찍음" 밖 쓰기는 이 요청 전까지 403. 실제 주문 넣기(R-21)는 개발 서버가 직접 보내 Origin 이 없어 영향 없음.
+
 ### R-24 배차 상세 `assignment.vehicleType` 이 늘 null — 낮음 (2026-11-19 추가)
 - 실측(11-19, 관찰 계정, 읽기만): `GET /deliveries/{id}/dispatch` 6건(ASSIGNED 1·CLOSED 5) 모두 `assignment.vehicleType` 키는 있고 값 null.
 - 원인(백엔드 코드 읽음): `delivery-dispatch-service` `api/DispatchViews.java` `assignment(DeliveryRow)` 가 `vehicleType` 을 넣지 않는다. 차종은 수락한 제안 행(`offer.vehicle_type`, `OfferService` 가 라이더 차종으로 채움)에만 있다 — `DispatchEngine` 재배송 경로는 이미 `store.offer(acceptedOfferId).vehicleType` 로 읽는다.
