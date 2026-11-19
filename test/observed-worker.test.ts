@@ -1,6 +1,6 @@
 // 실서버의 실제 PDA 작업자 — 서버가 확정한 마지막 집품 칸에 세운다(SIM-2a, 그리기만).
-import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARAMS } from '../src/config';
+import { describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PARAMS, REAL_LINK } from '../src/config';
 import type { TaskDetail } from '../src/domain/contract';
 import { Simulation } from '../src/sim/simulation';
 
@@ -240,6 +240,41 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     const next = { ...pick([1, 1]), taskId: 'ORD-2-S1-PICK', shipmentId: 'ORD-2-S1', state: 'ASSIGNED' } as unknown as TaskDetail;
     r2.tasks.set(next.taskId, { summary: next, detail: next, firstSeenMs: 0, closed: null });
     expect(sim2.onRack('ORD-1-S1')).toBe(true);
+  });
+
+  it('⑤ 랙: 아바타가 랙에 서고 rackAutoSec 지나면 랙에 둔 것으로(PDA 는 다음 건, 서버는 모름) → 피킹 대기 자리로', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(Date.parse('2026-11-19T04:00:00Z'));
+      const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+      const real = sim.real!;
+      const sync = () => {
+        real.polls++;
+        (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+      };
+      const p = pick([0, 0]);
+      const pack = { ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'COMPLETED', packingLocations: ['CRT-A-07'] } as unknown as TaskDetail;
+      real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+      real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'READY', dispatchRequest: {}, packages: [{ state: 'SEALED', contents: [] }] } as never, readMs: 0, sig: '' });
+      sync();
+      const w = sim.observedWorkers[0];
+      expect(w.cue).toMatchObject({ kind: 'PACK', step: 'RACK' });
+      await walk(sim, 120); // 랙까지 걷기
+      sync(); // 도착 시각 기록
+      expect(w.cue).toMatchObject({ step: 'RACK' });
+      vi.setSystemTime(Date.now() + (REAL_LINK.rackAutoSec - 1) * 1000);
+      sync();
+      expect(w.cue).toMatchObject({ step: 'RACK' }); // 아직
+      vi.setSystemTime(Date.now() + 2000);
+      sync(); // 넘김 표시
+      sync(); // 다음 조회: 열린 작업 없음 → 대기 자리로
+      expect(w.cue).toBeNull();
+      expect(w.state).toBe('IDLE');
+      expect(sim.onRack('ORD-1-S1')).toBe(true);
+      expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-01'); // 버튼 안 눌렀으면 랙 1(추정)
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('피킹 끝 · 패킹 배정 전(서버 pickedBy 만): 사라지지 않고 카트 끌고 포장대 앞에서 "다음 작업 받기" 안내 → 배정되면 ① 패킹대', () => {

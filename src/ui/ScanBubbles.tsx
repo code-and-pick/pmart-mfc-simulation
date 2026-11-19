@@ -7,6 +7,7 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
+import { REAL_LINK } from '../config';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
@@ -355,7 +356,9 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
               랙 2 찍음
             </button>
           </div>
-          <div className="note">찍은 뒤 PDA 에서 "패킹 끝". 포장은 그때부터 출하대기 랙에 그립니다(그 전엔 패킹대).</div>
+          <div className="note">
+            PDA 는 랙을 찍으면 다음 건으로 넘어가지만 서버에 보내지 않습니다 — 작업자가 랙에 서고 {REAL_LINK.rackAutoSec}초 지나면 랙에 둔 것으로 넘깁니다(버튼을 안 누르면 랙 1, 추정). 그다음 피킹 대기 자리로 갑니다.
+          </div>
         </>
       );
   }

@@ -504,6 +504,12 @@ export class Simulation {
           w.progressMark = mark;
           w.carrying = w.hasCart ? this.cartLoad(s.shipmentId) : [];
           view.step = PACK_STEP_KO[pc.step];
+          // ⑤ 랙: 아바타가 랙에 서고 rackAutoSec 지나면 랙에 둔 것으로(PDA 는 이미 다음 건, 서버는 모름) → 다음 조회 때 피킹 대기 자리로
+          if (pc.step === 'RACK' && !w.moving && Math.hypot(w.pos.x - target.x, w.pos.z - target.z) < 0.6) {
+            const since = this.rackArrived.get(s.taskId) ?? now;
+            this.rackArrived.set(s.taskId, since);
+            if (now - since >= REAL_LINK.rackAutoSec * 1000) w.passed.add(`${s.taskId}:PACK-RACK`);
+          }
         } else if (!s.assignment?.workerId) {
           // 배정 전 PACK(pickedBy) — 카트 끌고 포장대 앞에서 "다음 작업 받기" 기다림
           w.cue = { kind: 'NEXT', taskId: s.taskId, shipmentId: s.shipmentId ?? '', cart: this.serverCart(s.shipmentId) };
@@ -590,6 +596,9 @@ export class Simulation {
     this.observedPoll = -1;
     this.syncObservedWorkers();
   }
+
+  /** ⑤ 랙 단계에서 아바타가 랙에 선 시각(작업 ID → ms) — rackAutoSec 뒤 저절로 넘김 */
+  private readonly rackArrived = new Map<string, number>();
 
   /** 출하대기 랙 2곳(백엔드 mfc_layout.py DISPATCH_STAGING) */
   readonly racks = ['DSP-A-01', 'DSP-A-02'] as const;
