@@ -1,5 +1,6 @@
 // 머리줄(pmart-rider-simulation ConsoleHeader 참고) — 왼쪽: 이름·센터·데이터 출처·작업자 수, 오른쪽: 시각·속도.
 // 3D 보기 조작(구역·번호판·벽)은 3D 위 떠 있는 칩 줄 ViewBar 로(2026-11-20 — 머리줄에서 두 줄로 깨지던 것).
+import { useState } from 'react';
 import { useApp, useTick, useView } from '../app/context';
 import { SPEEDS } from '../config';
 import type { LabelMode, RightView } from '../render/controller';
@@ -31,9 +32,7 @@ export function TopBar() {
         <span className="chip" title="센터">
           {sim.params.mfcId}
         </span>
-        <span className={`badge ${sim.mode}`} title={mock ? '가상(MOCK) — 시뮬레이터가 흉내 낸 값' : '실서버(LAN 백엔드)에서 읽은 값'}>
-          {mock ? 'MOCK' : '실서버'}
-        </span>
+        <ModeSwitch />
         <span className="stat" title={mock ? '작업 중 / 전체 작업자' : '작업 중 / 화면의 작업자(실제 PDA + 가상)'}>
           작업자 <b>{busy}</b>/{people.length}
         </span>
@@ -88,5 +87,36 @@ export function ViewBar() {
         ))}
       </div>
     </div>
+  );
+}
+
+/**
+ * MOCK ↔ 실서버 — 머리줄에서 바로 바꾼다(사용자 2026-11-20 "상단바에서 터치로 바꿀 수 있게"). 바꾸면 설정을 저장하고 화면을 다시 연다.
+ * 가상 작업자가 돌고 있으면 한 번 더 눌러야 바뀐다(다시 열면 멈춤 — 서버에 남은 작업은 "끊긴 작업"으로 이어 하기).
+ */
+function ModeSwitch() {
+  const { sim, settings, restart } = useApp();
+  const [arm, setArm] = useState<'mock' | 'http' | null>(null);
+  const mock = sim.mode === 'mock';
+  const running = sim.virtualWorkers.filter((w) => !w.left).length;
+  const go = (m: 'mock' | 'http') => {
+    if (m === sim.mode) return;
+    if (running && arm !== m) {
+      setArm(m);
+      setTimeout(() => setArm(null), 4000);
+      return;
+    }
+    restart({ mode: m, http: settings.http });
+  };
+  return (
+    <span className="mode-sw" title={mock ? '가상(MOCK) — 시뮬레이터가 흉내 낸 값' : '실서버(LAN 백엔드)에서 읽은 값'}>
+      <button className={mock ? 'on mock' : ''} onClick={() => go('mock')}>
+        MOCK
+      </button>
+      <button className={!mock ? 'on http' : ''} onClick={() => go('http')}>
+        실서버
+      </button>
+      {arm && <span className="mode-warn">가상 작업자 {running}명이 멈춥니다 — 한 번 더 누르면 전환</span>}
+    </span>
   );
 }

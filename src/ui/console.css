@@ -841,3 +841,10 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .sw i { width: 11px; height: 11px; display: inline-block; flex: none; }
 .panel.left .sec.help { padding: 12px 12px 14px; }
 .panel.left .sec.help > summary h4 { font-size: 13px; color: var(--text); margin-bottom: 10px; }
+/* MOCK ↔ 실서버 전환(머리줄) */
+.mode-sw { position: relative; display: inline-flex; border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px; padding: 2px; gap: 2px; }
+.mode-sw button { border: 0; background: transparent; color: var(--head-sub); font: inherit; font-size: 12px; font-weight: 700; padding: 3px 11px; border-radius: 999px; cursor: pointer; }
+.mode-sw button.on.mock { background: #475569; color: #fff; }
+.mode-sw button.on.http { background: var(--accent); color: #fff; }
+.mode-sw button:not(.on):hover { color: #fff; }
+.mode-warn { position: absolute; top: 120%; left: 0; z-index: 60; white-space: nowrap; background: #b45309; color: #fff; font-size: 12px; padding: 5px 9px; border-radius: 7px; }
