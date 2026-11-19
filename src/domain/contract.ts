@@ -558,6 +558,8 @@ export interface DispatchAttempt {
 export interface DeliveryDispatch {
   deliveryId: string;
   version: number;
+  /** (delivery-dispatch 0.13.1, R-27 PR #263) 배송지 동 단위(예 "서초구 서초동") — 회수면 회수지, 모르면 null. 배포 전엔 칸 없음 */
+  dropAreaLabel?: string | null;
   orderId?: string;
   shipmentId?: string;
   mfcId?: string;

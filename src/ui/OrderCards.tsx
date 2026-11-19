@@ -135,7 +135,7 @@ function Detail({ r }: { r: RealShipment }) {
         <dt>전달</dt>
         <dd>{os ? os.deliveryNote || '요청사항 없음' : '배송이 생기면 보임'}</dd>
         <dt>배송지</dt>
-        <dd className="muted">MFC 계정엔 주소가 안 옴 — 백엔드 요청 R-27</dd>
+        {r.dispatch?.dropAreaLabel ? <dd>{r.dispatch.dropAreaLabel}</dd> : <dd className="muted">아직 안 옴 — R-27 배포 전</dd>}
         <dt>피킹</dt>
         <dd>{who(r.pick)}</dd>
         <dt>{r.ret && !r.pack ? '복귀' : '패킹'}</dt>
