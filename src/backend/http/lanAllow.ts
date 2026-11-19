@@ -13,6 +13,7 @@ const ALLOWED: RegExp[] = [
   new RegExp(`^/api/v1/mfcs/${ID}/stock$`), // 주문 SKU 재고(?sku)
   new RegExp(`^/api/v1/skus/${ID}$`), // 상품 바코드
   new RegExp(`^/api/v1/shipments/${ID}$`), // 출고(포장·배차 요청)
+  new RegExp(`^/api/v1/centers/${ID}$`), // 센터 이름(center-master) — 사업장 정보, 개인정보 없음
   new RegExp(`^/api/v1/shipments$`), // 센터 출고 목록(?mfcId) — 피킹·패킹 시작 시각, 개인정보 없음(fulfillment 0.15.0)
   new RegExp(`^/api/v1/deliveries$`), // 직원 배송 찾기(?mfcId) — 요약, 개인정보 없음
   new RegExp(`^/api/v1/deliveries/${ID}/dispatch$`), // 배차 상태·시도

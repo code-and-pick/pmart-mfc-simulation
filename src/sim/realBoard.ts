@@ -42,6 +42,8 @@ export interface RealReader {
   listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
+  /** (center-master) 센터 이름 — 화면에 MFC ID 대신 */
+  getCenterName?(centerId: string): Promise<string | null>;
   /** (fulfillment 0.15.0) 센터 출고 목록 — 피킹·패킹 시작 시각 */
   listCenterShipments?(mfcId: string): Promise<CenterShipment[]>;
   /** (delivery-execution) 배송 상세의 주문 요약 — 품목·금액·배송 요청사항 */
@@ -284,6 +286,7 @@ export class RealBoard {
     this.busy = true;
     this.lastPollMs = this.nowMs();
     try {
+      await this.refreshCenterName(this.nowMs());
       await this.refreshWorkers();
       const list = await this.reader.listTasks(this.mfcId, [...this.opt.openStates]);
       const now = this.nowMs();
@@ -376,6 +379,21 @@ export class RealBoard {
   readonly centerShipments = new Map<string, CenterShipment>();
   /** 배송 → 주문 요약(품목·금액·배송 요청사항) — 배송마다 한 번, 실패하면 1분 뒤 다시 */
   readonly orderSummaries = new Map<string, { data: DeliveryOrderSummary | null; readMs: number; failed?: boolean }>();
+
+  /** 센터 이름(center-master) — 한 번 읽고, 못 읽으면 1분 뒤 다시. 모르면 null(화면은 ID) */
+  centerName: string | null = null;
+  private centerNameReadMs = 0;
+
+  /** 작업 조회가 실패해도 이름은 따로 — 조회 맨 앞에서 */
+  private async refreshCenterName(now: number) {
+    if (this.centerName || !this.reader.getCenterName || now - this.centerNameReadMs < 60_000) return;
+    this.centerNameReadMs = now;
+    try {
+      this.centerName = await this.reader.getCenterName(this.mfcId);
+    } catch {
+      /* ID 로 보인다 */
+    }
+  }
 
   private async refreshOrderFacts(now: number) {
     if (this.reader.listCenterShipments) {

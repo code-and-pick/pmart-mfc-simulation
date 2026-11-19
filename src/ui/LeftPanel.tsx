@@ -211,7 +211,7 @@ function RealOrderControls() {
             <dt>결제</dt>
             <dd>시험 결제</dd>
             <dt>센터</dt>
-            <dd>{sim.params.mfcId}</dd>
+            <dd>{sim.centerLabel}</dd>
           </dl>
           <div className="ask-warn">⚠ 실서버에 진짜 주문 — 배차까지 흘러가고, 주문 내역·배송 알림이 내 휴대폰으로 갑니다</div>
           <div className="ask-acts">
@@ -451,7 +451,10 @@ function BackendSettings() {
         <span>계정</span>
         <b>{REAL_LINK.observerAccount}</b>
         <span>센터</span>
-        <b>{sim.params.mfcId}</b>
+        <b>
+          {sim.centerLabel}
+          {sim.centerLabel !== sim.params.mfcId && <span className="muted"> · {sim.params.mfcId}</span>}
+        </b>
       </div>
       <div className="btn-row">
         <button className="btn ghost" onClick={runProbe}>

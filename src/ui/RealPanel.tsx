@@ -136,7 +136,7 @@ export function RealOrders() {
       <>
         <div className="note">
           {real.lastOkMs
-            ? `${sim.params.mfcId} 에 열린 작업이 없습니다. 고객 앱에서 주문하면 ${REAL_LINK.pollSec}초 안팎에 여기 나타나고, 피킹이 시작되면 3D 선반에 지시 칸이 표시됩니다.`
+            ? `${sim.centerLabel} 에 열린 작업이 없습니다. 고객 앱에서 주문하면 ${REAL_LINK.pollSec}초 안팎에 여기 나타나고, 피킹이 시작되면 3D 선반에 지시 칸이 표시됩니다.`
             : '실서버 첫 조회 중…'}
         </div>
         <ReturnPickups />

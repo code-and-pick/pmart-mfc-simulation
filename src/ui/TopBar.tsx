@@ -29,8 +29,8 @@ export function TopBar() {
       <div className="brand">
         <span className="title">MFC 가상 현장</span>
         {view.rightView && <span className="sub">{VIEW_KO[view.rightView]}</span>}
-        <span className="chip" title="센터">
-          {sim.params.mfcId}
+        <span className="chip" title={`센터 ${sim.params.mfcId}`}>
+          {sim.centerLabel}
         </span>
         <ModeSwitch />
         <span className="stat" title={mock ? '작업 중 / 전체 작업자' : '작업 중 / 화면의 작업자(실제 PDA + 가상)'}>

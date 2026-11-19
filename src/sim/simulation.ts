@@ -400,6 +400,12 @@ export class Simulation {
     for (const w of this.observedWorkers) w.setSpeed(this.params.walkSpeed * (this.real?.speedFactor(w.workerId) ?? 1) * this.speedBoost);
   }
 
+  /** 화면에 보일 센터 이름 — 실서버는 center-master 이름, 못 읽었으면 ID, MOCK 은 "가상 센터" (사용자 2026-11-20 "MFC 식별값 말고 이름으로") */
+  get centerLabel(): string {
+    if (this.mode === 'mock') return `가상 센터 (${this.params.mfcId})`;
+    return this.real?.centerName ?? this.params.mfcId;
+  }
+
   /** 시험 입고 계획(MI-3·R-23) — 취급 상품 중 판매 가능이 적은 SKU 를 관찰 계정으로 읽어서 고른다(읽기만) */
   async planTestInbound(): Promise<InboundPlanLine[]> {
     const h = this.realHttp;

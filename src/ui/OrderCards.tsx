@@ -189,7 +189,7 @@ function OrderCard({ r }: { r: RealShipment }) {
         <li>
           <span>픽업</span>
           <b>
-            {sim.params.mfcId} · {rack}
+            {sim.centerLabel} · {rack}
           </b>
         </li>
         <li>

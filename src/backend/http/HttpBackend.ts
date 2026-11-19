@@ -178,6 +178,12 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   /** delivery-dispatch 배차 조회 — 배차 상태·배정 라이더·시도(반경) */
+  /** center-master getCenter(OPERATOR) — 센터 이름만 쓴다(화면 번호 규칙: 센터는 이름으로, ADR-0070) */
+  async getCenterName(centerId: string): Promise<string | null> {
+    const r: { name?: string | null } = await this.request('GET', `/centers/${enc(centerId)}`);
+    return r.name ?? null;
+  }
+
   /** mfc-fulfillment listCenterShipments(0.15.0 F-9) — 끝나지 않은 출고(피킹·패킹 시작 시각, 출하 대기 시각). 개인정보 없음 */
   async listCenterShipments(mfcId: string): Promise<CenterShipment[]> {
     const r: { items?: CenterShipment[] } = await this.request('GET', `/shipments?mfcId=${enc(mfcId)}&size=100`);
