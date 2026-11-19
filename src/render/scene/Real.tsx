@@ -108,7 +108,9 @@ export function RealShipLabels() {
     const rows = real
       .shipments()
       .filter((r) => r.info && ['READY', 'PARTIALLY_HANDED_OVER', 'PREPARING'].includes(r.info.state) && SHIP_LABEL_STAGES.has(dispatchView(r).stage))
-      .filter((r) => r.info!.state !== 'PREPARING' || !!r.info!.dispatchRequest);
+      .filter((r) => r.info!.state !== 'PREPARING' || !!r.info!.dispatchRequest)
+      // 랙에 올라간 출고는 랙 말풍선이 주문번호·단계를 보인다 — 같은 글을 3D 이름표로 또 띄우지 않는다(사용자 2026-11-20 "겹치고 어수선")
+      .filter((r) => !sim.onRack(r.shipmentId));
     // 랙에 올렸다고 본 출고는 그 랙(화면에서 고른 랙) 위, 나머지(포장 중·랙 찍기 전)는 랙 1 위
     const byRack = new Map<string, string[]>();
     for (const r of rows) {

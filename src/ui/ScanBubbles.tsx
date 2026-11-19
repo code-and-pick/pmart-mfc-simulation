@@ -13,6 +13,7 @@ import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
 import { LotLabel } from './ScanBoard';
 import { Why } from './Why';
+import { orderStatus } from './OrderCards';
 import { TEMP_KO } from './text';
 
 const HEAD_Y = 2.0;
@@ -126,7 +127,8 @@ export function ScanBubbles() {
   );
 }
 
-const RACK_Y = 1.8;
+// 랙 위 이름표(바닥 구역 이름 2.4 m·재고 표시)보다 위에 띄워 겹치지 않게(사용자 2026-11-20 "팝업창 아래가 너무 겹치고 어수선")
+const RACK_Y = 3.6;
 /** 한 번에 보이는 포장 수 — 넘으면 "외 N개" */
 const RACK_MAX = 6;
 
@@ -146,25 +148,35 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
     .filter((r) => !shipmentId || r.shipmentId === shipmentId)
     .flatMap((r) => (r.info!.packages ?? []).filter((p) => p.state === 'SEALED').map((p) => ({ r, p })));
   if (!list.length) return null;
+  const guess = list.some(({ r }) => !sim.serverRack(r.shipmentId));
   return (
     <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
       <div className="sb-head">
         출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개
+        {guess && <span className="guess" title="PDA 가 랙을 서버에 안 올린 포장 — 화면에서 고른 랙, 모르면 랙 1">추정</span>}
         <button className="sb-x" onClick={() => setOpen(!open)} title={open ? '접기' : '펼치기'}>
           {open ? '▾' : '▸'}
         </button>
       </div>
       {open && (
         <div className="rk">
-          {list.slice(0, RACK_MAX).map(({ r, p }) => {
-            const no = p.orderNumber ?? r.info!.orderNumber;
+          {list.slice(0, RACK_MAX).map(({ r, p }, i) => {
             const t = p.temperatureZone ?? 'AMBIENT';
             const on = pick === p.packageId;
+            // 주문마다 머리 한 줄(주문번호 · 지금 단계), 그 밑에 포장 줄(온도 · 인계 번호)
+            const first = i === 0 || list[i - 1].r.shipmentId !== r.shipmentId;
+            const st = first ? orderStatus(sim, r) : null;
             return (
               <div key={p.packageId} className={`rk-row ${on ? 'on' : ''}`}>
+                {st && (
+                  <div className={`rk-ord tone-${st.tone}`}>
+                    <b>{r.info!.orderNumber ?? p.orderNumber ?? <span className="muted">번호 없음</span>}</b>
+                    <span>{st.text}</span>
+                  </div>
+                )}
                 <button className="rk-line" onClick={() => setPick(on ? null : p.packageId)} title={on ? '접기' : 'QR·시스템 번호 보기'}>
                   <span className={`rk-t t-${t}`}>{TEMP_KO[t]}</span>
-                  <span className="rk-o">{no ?? <span className="muted">번호 없음</span>}</span>
+                  <span className="rk-o muted">인계 번호</span>
                   {p.handoverCode && <span className="rk-c">{p.handoverCode}</span>}
                   <span className="rk-m">{on ? '⌄' : 'QR ›'}</span>
                 </button>
@@ -196,7 +208,6 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
         </div>
       )}
       {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 주문을 고르면 그 주문 것만</div>}
-      <Why>PDA 가 랙을 찍어 서버에 올린 포장은 서버 랙 그대로(F-12). 서버가 모르는 포장은 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1(추정).</Why>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 // "왜? ›" — 긴 설명은 눌렀을 때만(사용자 2026-11-20 "주절주절 … 구리게", 시안 mock2). 화면에는 할 일 한 줄만 둔다.
 import { useState, type ReactNode } from 'react';
 
-export function Why({ children, label = '왜?' }: { children: ReactNode; label?: string }) {
+export function Why({ children, label = '설명' }: { children: ReactNode; label?: string }) {
   const [open, setOpen] = useState(false);
   return (
     <div className={`why ${open ? 'open' : ''}`}>
