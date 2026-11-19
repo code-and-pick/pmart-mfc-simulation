@@ -73,8 +73,11 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.pda?.location).toBe('A-C1-05-1-04');
     expect(w.pda?.nextLocation).toBe('A-C1-04-6-02');
 
-    // 열린 작업이 없어지면 바로 빼지 않고 쉬는 상태로, 말풍선 없음 — 피킹 대기 자리로 걸어간다
+    // 열린 작업이 없어지면: 피킹이 막 끝난 사이(PACK 이 보이기 전)는 observedGraceSec 동안 그대로, 그 뒤 쉬는 상태·말풍선 없음 — 피킹 대기 자리로 걸어간다
     real.tasks.get(d2.taskId)!.closed = { atMs: 0, state: 'COMPLETED' };
+    sync();
+    expect(w.state).toBe('PICKING'); // 아직 기다림
+    w.lastSeenMs -= REAL_LINK.observedGraceSec * 1000 + 1;
     sync();
     expect(sim.observedWorkers).toHaveLength(1);
     expect(w.state).toBe('IDLE');
@@ -459,5 +462,29 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(sim.onRack('ORD-1-S1')).toBe(true);
     expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-02');
     expect(sim.serverRack('ORD-1-S1')).toBe('DSP-A-02');
+  });
+
+  it('피킹 끝 → PACK 에 pickedBy 가 아직 없어도 같은 출고 PICK 담당으로 이어 붙이고, 배차 요청이 먼저 와도 카트를 든 채 포장대로', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const p = pick([0, 0]);
+    real.tasks.set(p.taskId, { summary: { ...p, state: 'COMPLETED' }, detail: { ...p, state: 'COMPLETED' }, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    const pack = { ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'READY', assignment: { workerId: null, assignmentVersion: 0 }, pickedBy: null, packingLocations: ['CRT-A-07'] } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
+    sync();
+    const w = sim.observedWorkers[0];
+    expect(w?.cue).toMatchObject({ kind: 'NEXT' });
+    expect(w.hasCart).toBe(true);
+    // PDA 가 패킹 시작 + 배차 요청까지 바로 — 아바타는 아직 포장대로 걷는 중
+    const started = { ...pack, state: 'IN_PROGRESS', assignment: { workerId: 'OP-990d2c09', assignmentVersion: 1 } } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: started, detail: started, firstSeenMs: 0, closed: null });
+    real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'PREPARING', packages: [], dispatchRequest: { state: 'REQUESTED' } } as never, readMs: 0, sig: '' });
+    sync();
+    expect(w.cue).toMatchObject({ kind: 'PACK', step: 'STATION' }); // 배차 요청만으로는 안 넘어감(PDA 화면과 같음) — 카트 든 채 포장대로
+    expect(w.hasCart).toBe(true);
   });
 });

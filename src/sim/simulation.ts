@@ -459,9 +459,15 @@ export class Simulation {
     }
     // 피킹 끝 ~ PDA "다음 작업 받기" 전: 그 주문 PACK 은 배정 전(READY·WAITING)이고 서버 pickedBy 만 이 사람 → 사라지지 않게
     // 카트를 끌고 포장대 앞에서 기다리는 모습으로 둔다(사용자 2026-11-19 "패킹하러가야하는데 말풍선도 안떠", "카트도 같이 안끌고가는데")
+    // 서버가 PACK 에 pickedBy 를 적기 전이면 같은 출고 PICK 의 담당으로(사용자 2026-11-19 "패킹 한번 끊기고")
+    const picker = new Map<string, string>();
     for (const t of real.tasks.values()) {
       const s = t.summary;
-      const wid = s.pickedBy;
+      if (s.taskType === 'PICK' && s.shipmentId && s.assignment?.workerId) picker.set(s.shipmentId, s.assignment.workerId);
+    }
+    for (const t of real.tasks.values()) {
+      const s = t.summary;
+      const wid = s.pickedBy ?? (s.shipmentId ? picker.get(s.shipmentId) : undefined);
       if (t.closed || !wid || s.assignment?.workerId || s.taskType !== 'PACK' || (s.state !== 'READY' && s.state !== 'WAITING')) continue;
       if (virtualIds.has(wid) || byWorker.has(wid)) continue;
       byWorker.set(wid, t);
@@ -617,7 +623,11 @@ export class Simulation {
             target = at;
             key = `${s.taskId}:${pc.step === 'RACK' ? pc.rack : pc.station}`;
           }
-          w.hasCart = pc.step === 'STATION' || pc.step === 'CART'; // 피킹한 카트를 끌고 와 포장대에서 내린다
+          // 피킹한 카트를 끌고 와 포장대에서 내린다 — PDA 가 배차 요청까지 빨리 가도 아바타가 포장대에 닿기 전엔 카트를 든 채로
+          const stPt = this.backendPoint(pc.station);
+          const atStation = !!stPt && !w.moving && Math.hypot(w.pos.x - stPt.x, w.pos.z - stPt.z) < 1.2;
+          const cartScanned = w.passed.has(`${s.taskId}:PACK-CART`);
+          w.hasCart = pc.step === 'STATION' || pc.step === 'CART' || (pc.step === 'DISPATCH' && !atStation && !cartScanned);
           // PDA 따라가기: 담기(서버에 배차 요청이 옴)·랙(밀봉 끝, READY) 단계면 PDA 는 이미 패킹대를 거쳤다 → 아직 걷는 중이면 패킹대로 순간이동.
           // 단계가 바뀔 때 한 번만(랙으로 걷는 중에 되돌리지 않게)
           const st = this.backendPoint(pc.station);
@@ -650,6 +660,10 @@ export class Simulation {
     for (let i = this.observedWorkers.length - 1; i >= 0; i--) {
       const w = this.observedWorkers[i];
       if (byWorker.has(w.workerId)) continue;
+      // 피킹이 막 끝나 PACK 이 그 사람 것으로 보이기 전(작업이 바뀌는 사이)은 그대로 둔다 — 바로 대기 자리로 보내면 카트를 내려놓고 갔다 다시 온다.
+      // 랙까지 끝난 것(PACK·복귀)은 기다리지 않는다
+      const between = w.cue?.kind === 'PICK' || w.cue?.kind === 'CART' || w.cue?.kind === 'NEXT';
+      if (between && now - w.lastSeenMs < REAL_LINK.observedGraceSec * 1000) continue;
       w.state = 'IDLE';
       w.currentTarget = null;
       w.cue = null;
