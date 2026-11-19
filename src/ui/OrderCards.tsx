@@ -1,6 +1,4 @@
-// 실제 주문 — 관리자가 한눈에(ADR-0070 "겉은 직관적으로, 들어가면 상세", 사용자 2026-11-20 "오른쪽 표 … 직관적으로 보이겠냐").
-// 표 한 줄: 주문번호(+대표 상품) · 지금 단계 하나(색) · 진행 점 5개(피킹 → 패킹 → 랙 → 배차 → 인계) · 경과.
-// 줄을 누르면(주문 고르기 — 3D 말풍선·바코드 탭도 그 주문) 바로 아래 단계 막대·담당자·수량·배차 상세·서버 상태 원문·시스템 번호.
+// 실제 주문 카드 — 관리자가 한눈에(ADR-0070, 라이더 관제 카드 참고). 아래 OrderCard 설명.
 import { Fragment } from 'react';
 import { useApp } from '../app/context';
 import type { Simulation } from '../sim/simulation';
@@ -52,13 +50,9 @@ export function orderStatus(sim: Simulation, r: RealShipment): { dots: Dot[]; te
   return { dots, text: '랙 · 배차 요청 전', tone: 'wait' };
 }
 
-function mins(iso: string, now: number): string {
-  const m = Math.max(0, Math.floor((now - Date.parse(iso)) / 60000));
-  // 표 칸이 좁아 1시간 넘으면 시간만(상세 아님)
-  return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간`;
-}
-
 const won = (n: number) => `${n.toLocaleString()}원`;
+const clock = (iso: string | null | undefined) =>
+  iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }) : null;
 
 /** 걸린 시간 "3분 12초" — 시작 전이면 null */
 function dur(fromIso: string | null | undefined, toMs: number | null): string | null {
@@ -69,185 +63,167 @@ function dur(fromIso: string | null | undefined, toMs: number | null): string | 
   return m < 60 ? `${m}분 ${sec % 60}초` : `${Math.floor(m / 60)}시간 ${m % 60}분`;
 }
 
-/** 피킹·패킹에 걸린 시간 — 시작(센터 출고 목록 startedAt, 진행 중이면 작업 activeStart) ~ 끝(작업 completedAt, 진행 중이면 지금). 서버 값만 */
-export function stageTimes(sim: Simulation, r: RealShipment): { pick: string | null; pack: string | null; pickRunning: boolean; packRunning: boolean } {
+interface Stage {
+  start: string | null;
+  text: string | null;
+  running: boolean;
+}
+
+/** 피킹·패킹에 걸린 시간 — 시작(센터 출고 목록 startedAt, 진행 중이면 작업 activeStart) ~ 끝(작업 completedAt, 없으면 다음 단계 시작·출하 대기 시각). 서버 값만 */
+export function stageTimes(sim: Simulation, r: RealShipment): { pick: Stage; pack: Stage; readyAt: string | null } {
   const c = sim.real?.centerShipments.get(r.shipmentId);
   const readyAt = c?.readyAt ?? r.info?.readyAt ?? null;
   const packStart = c?.pack?.startedAt ?? (r.pack ?? r.ret)?.detail?.activeStart?.startedAt ?? null;
-  // 끝 = 작업 completedAt, 없으면 다음 단계 시작(피킹 → 패킹 시작, 패킹 → 출하 대기 시각). 끝난 작업인데 끝 시각을 모르면 진행 중으로 세지 않는다
-  const one = (t: RealTask | undefined, started: string | null | undefined, next: string | null) => {
+  const one = (t: RealTask | undefined, started: string | null | undefined, next: string | null): Stage => {
     const s = started ?? t?.detail?.activeStart?.startedAt ?? null;
     const st = t?.closed?.state ?? t?.summary.state;
     const done = st === 'COMPLETED' || st === 'CLOSED_PARTIAL';
     const end = t?.summary.completedAt ?? t?.detail?.completedAt ?? next ?? null;
-    if (done && !end) return { text: null, running: false };
-    return { text: dur(s, end ? Date.parse(end) : null), running: !!s && !end && !done };
+    if (done && !end) return { start: s, text: null, running: false };
+    return { start: s, text: dur(s, end ? Date.parse(end) : null), running: !!s && !end && !done };
   };
-  const p = one(r.pick, c?.pick?.startedAt, packStart);
-  const k = one(r.pack ?? r.ret, packStart, readyAt);
-  return { pick: p.text, pack: k.text, pickRunning: p.running, packRunning: k.running };
+  return { pick: one(r.pick, c?.pick?.startedAt, packStart), pack: one(r.pack ?? r.ret, packStart, readyAt), readyAt };
 }
 
-function Detail({ r }: { r: RealShipment }) {
+/**
+ * 주문 카드(라이더 관제 카드 참고 — 사용자 2026-11-20 "주문 내역이 중요하다니까 가격이랑 상품은 왜 다시 축소했어", "라이더 쪽 … UI가 직관적이잖아").
+ * 펼치지 않아도 보이는 것: 주문번호·합계 금액 / 단계 칩 / 단계마다 시각·걸린 시간·담당 / 배송지·전달 요청 / 상품 전부(수량·금액).
+ * 카드를 누르면 그 주문을 고른다(3D 말풍선·바코드 탭). "시스템 번호"만 접어 둔다.
+ */
+function OrderCard({ r }: { r: RealShipment }) {
   const { sim } = useApp();
   const real = sim.real!;
+  const focus = useScanFocus();
+  const on = focus.shipmentId === r.shipmentId;
+  const st = orderStatus(sim, r);
+  const tm = stageTimes(sim, r);
   const v = dispatchView(r);
-  const who = (t?: RealTask) => {
-    if (!t) return '—';
-    const s = t.summary;
-    const w = s.assignment?.workerId ? real.workerName(s.assignment.workerId) : s.pickedBy ? `${real.workerName(s.pickedBy)}(피킹한 사람, 다음 작업)` : '담당 전';
-    return `${w} · ${s.completedQty}/${s.plannedQty}`;
-  };
   const os = real.orderSummaryOf(r);
-  // 품목: 배송 상세의 주문 요약(금액 포함), 배송 전이면 피킹 작업 줄(수량만)
-  const lines = os?.items?.length
+  const c = real.centerShipments.get(r.shipmentId);
+  const items = os?.items?.length
     ? os.items.map((i) => ({ k: i.orderLineId ?? i.name, name: `${i.name}${i.optionLabel ? ` (${i.optionLabel})` : ''}`, qty: i.qty, amt: i.lineAmount as number | null }))
     : ((r.pick ?? r.pack)?.detail?.lines ?? []).map((l) => ({ k: l.orderLineId, name: l.productName ?? l.sku, qty: l.plannedQty, amt: null as number | null }));
-  const tm = stageTimes(sim, r);
+  const who = (t?: RealTask) => (t?.summary.assignment?.workerId ? real.workerName(t.summary.assignment.workerId) : t?.summary.pickedBy ? real.workerName(t.summary.pickedBy) : null);
+  const flag = [r.pick, r.pack, r.ret].some((x) => x?.summary.late) ? '늦음' : [r.pick, r.pack, r.ret].some((x) => x?.summary.idle) ? '30분 멈춤' : '';
+  // 단계 칩 — 지금 단계만 채운 칩(라이더 카드처럼), 끝난 단계는 ✓
+  const chipText = ['피킹', '패킹', '랙', '배차', '인계'];
+  // 배차를 기다린 시간(점원 배차 요청부터)
+  const dispSince = c?.dispatchRequestedAt ?? r.info?.dispatchRequest?.requestedAt ?? null;
+  const waitingRider = st.dots[3] === 'now' || st.dots[3] === 'bad';
+  const rack = sim.rackFor(r.shipmentId).replace('DSP-A-0', '랙 ');
   return (
-    <div className="oc-d" onClick={(e) => e.stopPropagation()}>
-      <table className="od-items">
-        <tbody>
-          {lines.map((l) => (
-            <tr key={l.k}>
-              <td>{l.name}</td>
-              <td>×{l.qty}</td>
-              <td>{l.amt != null ? won(l.amt) : ''}</td>
-            </tr>
-          ))}
-        </tbody>
-        {os?.itemAmount != null && (
-          <tfoot>
-            <tr>
-              <td colSpan={2}>상품 합계</td>
-              <td>{won(os.itemAmount)}</td>
-            </tr>
-          </tfoot>
-        )}
-      </table>
-      <dl>
-        <dt>시간</dt>
-        <dd>
-          피킹 {tm.pick ?? '시작 전'}
-          {tm.pickRunning ? '째' : ''} · 패킹 {tm.pack ?? '시작 전'}
-          {tm.packRunning ? '째' : ''}
-        </dd>
-        <dt>전달</dt>
-        <dd>{os ? os.deliveryNote || '요청사항 없음' : '배송이 생기면 보임'}</dd>
-        <dt>배송지</dt>
-        {r.dispatch?.dropAreaLabel ? <dd>{r.dispatch.dropAreaLabel}</dd> : <dd className="muted">아직 안 옴 — R-27 배포 전</dd>}
+    <div className={`ocd tone-${st.tone} ${on ? 'on' : ''}`} onClick={() => (on ? focus.clear() : focus.show(r.shipmentId))} title={on ? '다시 누르면 선택 취소' : '누르면 3D 말풍선·바코드가 이 주문'}>
+      <div className="ocd-h">
+        <b className="ocd-no">
+          <OrderNo shipmentId={r.shipmentId} />
+        </b>
+        {flag && <span className="oc-flag">{flag}</span>}
+        <span className="ocd-amt">{os?.itemAmount != null ? won(os.itemAmount) : ''}</span>
+      </div>
+      <div className="ocd-chips">
+        {st.dots.map((d, i) => (
+          <Fragment key={STEPS[i]}>
+            {i > 0 && <span className="ocd-sep">›</span>}
+            <span className={`ocd-chip ${d}`}>
+              {d === 'done' ? '✓ ' : ''}
+              {chipText[i]}
+            </span>
+          </Fragment>
+        ))}
+      </div>
+      <dl className="ocd-rows">
         <dt>피킹</dt>
-        <dd>{who(r.pick)}</dd>
-        <dt>{r.ret && !r.pack ? '복귀' : '패킹'}</dt>
-        <dd>{who(r.pack ?? r.ret)}</dd>
-        <dt>배차</dt>
-        <dd>{dispatchText(r).replace(/ RD-\S+/, '')}</dd>
-        {r.info?.packages?.length ? (
+        <dd>
+          {tm.pick.start ? (
+            <>
+              {clock(tm.pick.start)} · <b className={tm.pick.running ? 'run' : ''}>{tm.pick.text ?? '—'}{tm.pick.running ? '째' : ''}</b>
+            </>
+          ) : (
+            <span className="muted">시작 전</span>
+          )}
+        </dd>
+        <dt>패킹</dt>
+        <dd>
+          {tm.pack.start ? (
+            <>
+              {clock(tm.pack.start)} · <b className={tm.pack.running ? 'run' : ''}>{tm.pack.text ?? '—'}{tm.pack.running ? '째' : ''}</b>
+            </>
+          ) : (
+            <span className="muted">시작 전</span>
+          )}
+        </dd>
+        {(who(r.pick) || who(r.pack ?? r.ret)) && (
           <>
-            <dt>포장</dt>
-            <dd>
-              {r.info.packages.length}개 · 랙 {sim.rackFor(r.shipmentId).replace('DSP-A-0', '')}
-              {sim.serverRack(r.shipmentId) ? '' : ' (추정)'}
+            <dt>담당</dt>
+            <dd className="muted">
+              {who(r.pick) === who(r.pack ?? r.ret) || !who(r.pack ?? r.ret)
+                ? who(r.pick)
+                : `피킹 ${who(r.pick) ?? '—'} · 패킹 ${who(r.pack ?? r.ret)}`}
             </dd>
           </>
-        ) : null}
+        )}
+        {tm.readyAt && (
+          <>
+            <dt>랙</dt>
+            <dd>
+              {clock(tm.readyAt)} · {rack}
+              {sim.serverRack(r.shipmentId) ? '' : <span className="guess">추정</span>} · 포장 {r.info?.packages?.length ?? 0}개
+            </dd>
+          </>
+        )}
+        {(dispSince || waitingRider) && (
+          <>
+            <dt>배차</dt>
+            <dd className={st.tone === 'bad' ? 'bad' : ''}>
+              {dispSince ? `${clock(dispSince)} · ` : ''}
+              <b className={waitingRider ? 'warn' : ''}>
+                {waitingRider && dispSince ? `${dur(dispSince, null)}째 ` : ''}
+                {dispatchText(r).replace(/ RD-\S+/, '')}
+              </b>
+            </dd>
+          </>
+        )}
       </dl>
-      <div className="oc-raw">
-        서버 상태: 출고 {r.info?.state ?? '—'}
-        {v.dispatchState ? ` · 배차 ${v.dispatchState}` : ''}
-        {v.execState ? ` · 배송 ${v.execState}` : ''}
+      <ul className="ocd-route">
+        <li>
+          <span>배송지</span>
+          {r.dispatch?.dropAreaLabel ? <b>{r.dispatch.dropAreaLabel}</b> : <i>아직 안 옴(R-27 배포 전)</i>}
+        </li>
+        <li>
+          <span>전달</span>
+          {os ? <b>{os.deliveryNote || '요청사항 없음'}</b> : <i>배송이 생기면 보임</i>}
+        </li>
+      </ul>
+      <div className="ocd-items">
+        {items.map((l) => (
+          <div key={l.k}>
+            <span className="nm">{l.name}</span>
+            <span className="q">× {l.qty}</span>
+            <span className="a">{l.amt != null ? won(l.amt) : ''}</span>
+          </div>
+        ))}
       </div>
-      <SystemIds
-        ids={[
-          ['출고', r.shipmentId],
-          ['이행', r.fulfillmentId],
-          ['배송', r.delivery?.deliveryId],
-        ]}
-      />
-    </div>
-  );
-}
-
-/** 실제 주문 표 — 한 줄: 주문번호(+상품) · 지금 단계 · 진행 점 5개 · 경과. 줄을 누르면 바로 아래 상세(사용자 2026-11-20 "오른쪽 표에서 직관적으로") */
-/** 줄 겉에 바로: 피킹·패킹 걸린 시간, 상품 합계 */
-function OrderFacts({ r }: { r: RealShipment }) {
-  const { sim } = useApp();
-  const tm = stageTimes(sim, r);
-  const os = sim.real!.orderSummaryOf(r);
-  return (
-    <div className="ob-f">
-      <span className={tm.pickRunning ? 'run' : ''}>
-        <em>피킹</em> {tm.pick ?? '—'}
-      </span>
-      <span className={tm.packRunning ? 'run' : ''}>
-        <em>패킹</em> {tm.pack ?? '—'}
-      </span>
-      {os?.itemAmount != null && (
-        <span className="amt">
-          <em>금액</em> {won(os.itemAmount)}
-        </span>
-      )}
+      <div onClick={(e) => e.stopPropagation()}>
+        <SystemIds
+          ids={[
+            ['출고', r.shipmentId],
+            ['이행', r.fulfillmentId],
+            ['배송', r.delivery?.deliveryId],
+            ['서버 상태', `출고 ${r.info?.state ?? '—'}${v.dispatchState ? ` · 배차 ${v.dispatchState}` : ''}${v.execState ? ` · 배송 ${v.execState}` : ''}`],
+          ]}
+        />
+      </div>
     </div>
   );
 }
 
 export function OrderCards() {
   const { sim } = useApp();
-  const real = sim.real!;
-  const focus = useScanFocus();
-  const now = Date.now();
   return (
-    <table className="ot big">
-      <tbody>
-        {real.shipments().map((r) => {
-          const t = (r.pick ?? r.pack ?? r.ret)!.summary;
-          const st = orderStatus(sim, r);
-          const on = focus.shipmentId === r.shipmentId;
-          const head = t.headline;
-          const flags = [r.pick, r.pack, r.ret].some((x) => x?.summary.late) ? '늦음' : [r.pick, r.pack, r.ret].some((x) => x?.summary.idle) ? '30분 멈춤' : '';
-          return (
-            <Fragment key={r.shipmentId}>
-              <tr
-                className={`ot-r tone-${st.tone} ${on ? 'on' : ''}`}
-                onClick={() => (on ? focus.clear() : focus.show(r.shipmentId))}
-                title={on ? '다시 누르면 접기' : '누르면 상세 · 3D 말풍선·바코드가 이 주문'}
-              >
-                <td>
-                  {/* 한눈에: 큰 주문번호 · 색 배지(지금 단계) · 경과 / 단계 이름 붙은 막대 / 상품 */}
-                  <div className="ob-1">
-                    <b className="ob-no">
-                      <OrderNo shipmentId={r.shipmentId} />
-                    </b>
-                    <span className="ob-st">{st.text}</span>
-                    {flags && <span className="oc-flag">{flags}</span>}
-                    <span className="ob-t">{mins(t.createdAt, now)}</span>
-                  </div>
-                  <div className="ob-bar">
-                    {st.dots.map((d, i) => (
-                      <span key={STEPS[i]} className={`ob-s ${d}`}>
-                        <i />
-                        {STEPS[i]}
-                      </span>
-                    ))}
-                  </div>
-                  <div className="ob-p">
-                    {head?.productName ?? '—'}
-                    {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''}
-                  </div>
-                  <OrderFacts r={r} />
-                </td>
-              </tr>
-              {on && (
-                <tr className="ot-d">
-                  <td>
-                    <Detail r={r} />
-                  </td>
-                </tr>
-              )}
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
+    <div className="ocds">
+      {sim.real!.shipments().map((r) => (
+        <OrderCard key={r.shipmentId} r={r} />
+      ))}
+    </div>
   );
 }

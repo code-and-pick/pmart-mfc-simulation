@@ -699,3 +699,40 @@ details.sec > summary h4 > span { min-width: 0; flex: 1; text-align: right; }
 .oc-d dl { grid-template-columns: 44px 1fr; }
 .ot .od-items td { background: none; border-left: 0; border-right: 0; border-top: 0; border-radius: 0; padding: 4px 0; cursor: default; }
 .ot .od-items tfoot td { border-bottom: 0; }
+
+/* 주문 카드(라이더 관제 카드 참고) — 상품·금액 전부, 단계 칩, 단계마다 시각·걸린 시간 */
+.ocds { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 10px; font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; white-space: normal; }
+.ocd { background: var(--soft); border: 1px solid var(--line); border-left: 5px solid var(--line-strong); border-radius: 12px; padding: 14px 14px 10px; cursor: pointer; }
+.ocd:hover { border-color: var(--accent); }
+.ocd.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.ocd.tone-run { border-left-color: var(--accent); }
+.ocd.tone-wait { border-left-color: #d97706; }
+.ocd.tone-ok { border-left-color: var(--ok); }
+.ocd.tone-bad { border-left-color: var(--bad); }
+.ocd-h { display: flex; align-items: center; gap: 8px; }
+.ocd-no { font-size: 18px; font-weight: 800; letter-spacing: 0.4px; font-variant-numeric: tabular-nums; }
+.ocd-amt { margin-left: auto; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.ocd-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; margin: 10px 0 10px; }
+.ocd-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--card); color: var(--muted); border: 1px solid var(--line); white-space: nowrap; }
+.ocd-chip.done { color: var(--text); }
+.ocd-chip.now { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 800; }
+.ocd-chip.bad { background: var(--bad); border-color: var(--bad); color: #fff; font-weight: 800; }
+.ocd-sep { color: var(--line-strong); font-size: 11px; }
+.ocd-rows { display: grid; grid-template-columns: 34px 1fr; gap: 5px 10px; margin: 0 0 10px; font-size: 13px; font-variant-numeric: tabular-nums; }
+.ocd-rows dt { color: var(--muted); }
+.ocd-rows dd { margin: 0; }
+.ocd-rows b.run { color: var(--accent); }
+.ocd-rows b.warn { color: var(--warn-ink); }
+.ocd-rows dd.bad b { color: var(--bad); }
+.ocd-rows .guess { margin-left: 4px; }
+.ocd-route { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ocd-route li { display: flex; gap: 10px; align-items: baseline; }
+.ocd-route li::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex-shrink: 0; transform: translateY(-1px); }
+.ocd-route li:last-child::before { background: var(--muted); }
+.ocd-route span { color: var(--muted); width: 38px; flex-shrink: 0; }
+.ocd-route i { font-style: normal; color: var(--muted); }
+.ocd-items { border-top: 1px solid var(--line); padding-top: 8px; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+.ocd-items > div { display: grid; grid-template-columns: 1fr 34px 72px; gap: 6px; align-items: baseline; }
+.ocd-items .q { color: var(--muted); text-align: right; }
+.ocd-items .a { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ocd .sys-ids { margin-top: 8px; font-size: 11px; color: var(--muted); }
