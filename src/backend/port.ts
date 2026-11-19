@@ -45,6 +45,8 @@ export interface FulfillmentPort {
     body: { riderId: string; deliveryId: string; scannedCode: string; scannedAt?: string },
     idempotencyKey: string,
   ): Promise<HandoverAuthorization>;
+  /** 라벨 번호로 인계 허가(F-8 — QR 이 안 찍힐 때). QR 허가와 같은 fence. 서버는 6자리, MOCK 은 2~4자리(R-26 제안) */
+  authorizeHandoverByCode(body: { riderId: string; deliveryId: string; handoverCode: string }, idempotencyKey: string): Promise<HandoverAuthorization>;
   commitHandover(
     packageId: string,
     body: { handoverAuthorizationId: string; fenceVersion: number; riderId: string; handedOverAt?: string },

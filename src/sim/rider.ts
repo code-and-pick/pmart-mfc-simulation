@@ -5,7 +5,7 @@
 import { ApiProblem, ResultUnknown } from '../domain/contract';
 import type { P } from '../domain/navgrid';
 import { Agent } from './agent';
-import { RIDER_VEHICLE } from '../config';
+import { HANDOVER_CODE, RIDER_VEHICLE } from '../config';
 import type { VehicleType } from '../domain/contract';
 import { getOff, loadAndGetOn, offLot, rideTo, walkOn } from './realRider';
 import type { SiteContext } from './context';
@@ -62,13 +62,24 @@ export class Rider extends Agent {
       for (const s of staged) {
         this.activity = `QR 스캔 ${s.pkg.packageId}`;
         await this.wait(4);
+        // QR 이 안 찍히면 라벨 번호(2~4자리, R-26 제안)를 입력 [시뮬 비율]
+        const code = s.pkg.handoverCode;
+        const byCode = !!code && ctx.rng.next() < HANDOVER_CODE.qrFailRate;
+        if (byCode) {
+          this.activity = `QR 안 찍힘 → 번호 ${code} 입력`;
+          ctx.log(`${this.id} ${s.pkg.packageId} QR 인식 불가 → 번호 ${code} 로 픽업`);
+          await this.wait(6);
+        }
         const auth = await this.retry(() =>
-          ctx.port.authorizeHandover(
-            s.pkg.packageId,
-            { riderId: this.id, deliveryId: this.deliveryId, scannedCode: s.pkg.qrCode },
-            `${ctx.runId}:auth:${s.pkg.packageId}:${this.id}`,
-          ),
+          byCode
+            ? ctx.port.authorizeHandoverByCode({ riderId: this.id, deliveryId: this.deliveryId, handoverCode: code! }, `${ctx.runId}:authcode:${s.pkg.packageId}:${this.id}`)
+            : ctx.port.authorizeHandover(
+                s.pkg.packageId,
+                { riderId: this.id, deliveryId: this.deliveryId, scannedCode: s.pkg.qrCode },
+                `${ctx.runId}:auth:${s.pkg.packageId}:${this.id}`,
+              ),
         );
+        if (byCode) ctx.metrics.codeHandovers += 1;
         await this.wait(2);
         await this.retry(() =>
           ctx.port.commitHandover(

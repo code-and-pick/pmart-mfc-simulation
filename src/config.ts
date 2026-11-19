@@ -159,6 +159,21 @@ export const REAL_WORKERS = {
  * 앞마당 라이더 수단(그리기만 — 사용자 2026-11-18 "QR 찍고 나갈 때 운송수단으로", "수단에 따라 모델링"). 수단은 배차 배정의 vehicleType.
  * 입구 밖 먼 자리에서 수단을 타고 와 주차 자리에서 내리고, 걸어서 출하대기 랙 → 주차 자리에서 다시 타고 떠난다. 도보는 내내 걷는다 [시뮬]
  */
+/**
+ * 라이더 번호 인계 — QR 이 안 찍힐 때 포장 라벨의 2~4자리 번호를 입력해 픽업(사용자 2026-11-20 "2자리~4자리 숫자로", 백엔드 요청 R-26).
+ * 서버(F-8, fulfillment 0.13.0)는 아직 6자리 — 아래는 MOCK 이 흉내 내는 제안 값 [시뮬]
+ */
+export const HANDOVER_CODE = {
+  minLen: 2,
+  maxLen: 4,
+  /** 한 자리 수 번호가 이만큼 쓰이면(인계 기다리는 포장 기준) 한 자리 늘린다 — 2자리는 30개까지 [시뮬] */
+  maxFill: 0.3,
+  /** 같은 라이더·배송이 번호를 이만큼 틀리면 번호 입력 잠금(QR·직원 확인만) — 짧은 번호 찍어 맞히기 막기 [시뮬] */
+  failLimit: 5,
+  /** MOCK 라이더가 QR 을 못 찍어 번호로 넘기는 비율 [시뮬] */
+  qrFailRate: 0.2,
+};
+
 export const RIDER_VEHICLE = {
   /** 타고 움직이는 속도(m/s) — 앞마당 안이라 느리게 [시뮬] */
   rideSpeed: { MOTORCYCLE: 3, CAR: 2.5, E_BIKE: 2.6, BICYCLE: 2.2, KICKBOARD: 2.0, WALK: 1.4 } as Record<string, number>,

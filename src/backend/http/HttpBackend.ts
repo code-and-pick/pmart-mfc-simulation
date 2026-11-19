@@ -227,6 +227,11 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('POST', `/packages/${enc(packageId)}/handover-authorizations`, { body, idempotencyKey });
   }
 
+  /** mfc-fulfillment authorizeHandoverByCode(0.13.0, F-8) — 라벨 숫자(서버는 6자리 — 2~4자리는 R-26 뒤) */
+  authorizeHandoverByCode(body: { riderId: string; deliveryId: string; handoverCode: string }, idempotencyKey: string): Promise<HandoverAuthorization> {
+    return this.request('POST', '/packages/handover-code-authorizations', { body, idempotencyKey });
+  }
+
   commitHandover(
     packageId: string,
     body: { handoverAuthorizationId: string; fenceVersion: number; riderId: string; handedOverAt?: string },

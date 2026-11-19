@@ -156,7 +156,13 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
           <div key={p.packageId}>
             <div className="sub">
               주문 {p.orderNumber ?? r.info!.orderNumber ?? r.info!.orderId} · {p.temperatureZone ?? '-'} · 봉투 {p.bagCount}
-              {p.handoverCode ? ` · 숫자 인계 ${p.handoverCode}` : ''}
+              {p.handoverCode ? (
+                <>
+                  {' · '}QR 안 되면 번호 <b className="hcode">{p.handoverCode}</b>
+                </>
+              ) : (
+                ''
+              )}
             </div>
             <Barcode value={p.qrCode} caption={`포장 ${p.packageId} v${p.packageVersion}`} height={32} />
           </div>

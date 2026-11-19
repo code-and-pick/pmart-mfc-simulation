@@ -87,6 +87,16 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 같은 요청이 이미 있음: 클라이언트 `docs/backend-requests.md` **BR-52 R20**(11-10, "피킹한 사람에게 같은 주문 패킹 배정·출하대기 랙 위치", OPEN — 백엔드 회신 11-14 "다음 차례 후보"). 시뮬레이터도 같은 것이 필요하다는 기록 — 따로 만들 필요 없이 R20 에 같이 넣어 주면 된다.
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
+### R-26 라이더 번호 인계를 6자리 → 2~4자리로 — 중간 (2026-11-20 추가)
+- 사용자 2026-11-20: "QR 인식이 불가할 때 번호입력해서 픽업할 수 있는 기능 만들어. 2자리~4자리 숫자로".
+- 지금(읽음 11-20): fulfillment 0.13.0 F-8 `Package.handoverCode`(6자리 무작위) · `POST /packages/handover-code-authorizations {riderId, deliveryId, handoverCode}`(pattern `^[0-9]{6}$`) — 그 배송 출고의 SEALED 포장에서 숫자가 같은 것 → QR 허가와 같은 fence. 없으면 409 HANDOVER_CODE_MISMATCH, 둘 이상 409 HANDOVER_CODE_AMBIGUOUS. 라이더 앱(`pmart-clients apps/rider_app` delivery)이 이미 입력·호출함. 기능은 있고 **자리 수만** 바꾸고 싶다.
+- 원하는 것(이름·한도는 PC 3 이 정함 — 시뮬레이터 예):
+  1. **번호 2~4자리** — 센터에서 지금 인계를 기다리는(SEALED) 포장끼리 겹치지 않는 가장 짧은 자리. 한 자리 수의 번호가 일정 비율(예 30%)을 넘게 쓰이면 한 자리 늘린다(2자리 30개 → 3자리 300개 → 4자리). 인계되거나 무효가 되면 번호를 다시 쓸 수 있다. 센터 안에서 겹치지 않으니 직원이 번호로 불러도 된다(배송 안에서만 맞춰도 AMBIGUOUS 는 안 난다).
+  2. 계약 pattern `^[0-9]{2,4}$`(라벨·응답·입력). 라벨 인쇄(PDA `mfc_app` 라벨)는 그대로 그 값.
+  3. **틀린 입력 잠금** — 번호가 짧아 찍어 맞히기 쉬우므로, 같은 라이더·배송이 N 번(예 5) 틀리면 번호 입력을 막고(예 409 `HANDOVER_CODE_LOCKED`) QR·직원 확인만. 배정 라이더·배송번호 검사는 지금 그대로.
+- 라이더 앱 입력칸 자리 수(6 고정이면)는 PC 5/클라이언트 쪽 — 백엔드가 같이 알려 주면 좋다.
+- 시뮬레이터(11-20): MOCK 이 위 1·3 을 흉내(`config HANDOVER_CODE` [시뮬] · `domain/handoverCode.ts` · `MockBackend.authorizeHandoverByCode`), MOCK 라이더 20% 가 "QR 안 찍힘 → 번호 입력"으로 픽업. 실서버 모드는 서버 값(지금 6자리)을 출하대기 말풍선에 "QR 안 되면 번호"로 크게 보임. `HttpBackend.authorizeHandoverByCode` 는 있지만 실서버 라이더는 라이더 앱이라 시뮬레이터가 부르지 않음.
+
 ### R-25 LAN 게이트웨이 CORS 허용 출처에 시뮬레이터 개발 서버 `http://localhost:5180` — 높음 (2026-11-19 추가)
 - **됨·LAN 적용(11-19)**: pmart-config `api-gateway-lan.yml` fc6e2f0, 게이트웨이 이미지 c8bd692b. 회신 `docs/handoff/simulator/mfc/2026-11-19-simulator-reply-r23-r25.md`. 실측(14:55): `Origin: http://localhost:5180` POST → 400(본문 검사까지 감). `127.0.0.1:5180` 은 여전히 403 — 화면은 `localhost:5180` 으로 연다. 5180 은 예전부터 허용 목록에 없었다(5173~5176 만).
 - 증상: 실서버 모드 가상 작업자의 다음 작업 받기(`POST /mfcs/{mfcId}/workers/{workerId}/next-tasks`)가 본문 없는 403. 화면에서 보내는 쓰기 요청 전부가 같다(읽기는 브라우저가 Origin 을 안 붙여 정상).

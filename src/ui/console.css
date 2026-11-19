@@ -551,3 +551,4 @@ button.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--acce
 .why-t { margin-top: 3px; color: var(--muted); line-height: 1.45; }
 .scan-bubble .why-b, .scan-bubble .why-t { color: #64748b; }
 .guess { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: rgba(148, 163, 184, 0.22); color: var(--muted); font-size: 10px; font-weight: 600; vertical-align: 1px; }
+.hcode { font-size: 13px; letter-spacing: 1px; color: var(--accent); }

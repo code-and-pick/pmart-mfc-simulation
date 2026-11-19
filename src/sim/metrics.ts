@@ -18,6 +18,8 @@ export class Metrics {
   ordersBlockedStock = 0;
   shortageUnits = 0;
   apiErrors = 0;
+  /** 라이더가 QR 대신 라벨 번호로 픽업한 포장 수(R-26 제안, MOCK) */
+  codeHandovers = 0;
   readonly inbound = {
     trucksArrived: 0,
     trucksReceived: 0,

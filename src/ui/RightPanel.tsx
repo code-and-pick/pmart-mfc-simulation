@@ -44,6 +44,7 @@ function Kpis() {
     ['보충 이동 MOV', `${ib.replenishMoves}회 ${ib.replenishUnits}개`],
     ['재고 부족 차단', `${s.metrics.ordersBlockedStock}`],
     ['결품 보고(개)', `${s.metrics.shortageUnits}`],
+    ['번호 인계(QR 안 됨)', `${s.metrics.codeHandovers}`],
     ['API 오류', `${s.metrics.apiErrors}`],
   ];
   return (

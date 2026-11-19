@@ -25,6 +25,9 @@ import {
 } from '../../domain/contract';
 import type { ApiCallRecord, ApiListener, DomainEventRecord, EventListener, FulfillmentPort } from '../port';
 import { InventoryError, InventoryLedger } from './inventory';
+import { HANDOVER_CODE } from '../../config';
+import { handoverCodeValid, shortHandoverCode } from '../../domain/handoverCode';
+import { Rng } from '../../util/rng';
 
 interface TaskRec {
   detail: TaskDetail;
@@ -77,6 +80,9 @@ export class MockBackend implements FulfillmentPort {
   private readonly packages = new Map<string, { pkg: Package; shipmentId: string }>();
   private readonly executions = new Map<string, TaskExecution>();
   private readonly idem = new Map<string, IdemEntry>();
+  /** 번호 인계 틀린 횟수(라이더|배송) — HANDOVER_CODE.failLimit 넘으면 잠금 [시뮬] */
+  private readonly codeFails = new Map<string, number>();
+  private readonly codeRng = new Rng(20261120);
   private readonly apiListeners: ApiListener[] = [];
   private readonly eventListeners: EventListener[] = [];
   private seq = 0;
@@ -588,6 +594,9 @@ export class MockBackend implements FulfillmentPort {
         pack.remainingQty = pack.lines.reduce((a, l) => a + l.remainingQty, 0);
         pack.version += 1;
         const packageId = this.id('PKG');
+        // 라벨 번호(2~4자리, R-26 제안) — 센터에서 인계 기다리는 포장끼리 겹치지 않게
+        const taken = new Set<string>();
+        for (const { pkg: o } of this.packages.values()) if (o.state === 'SEALED' && o.handoverCode) taken.add(o.handoverCode);
         const pkg: Package = {
           packageId,
           packageVersion: 1,
@@ -596,6 +605,7 @@ export class MockBackend implements FulfillmentPort {
           version: 0,
           state: 'SEALED',
           qrCode: `${packageId}:1`,
+          handoverCode: shortHandoverCode(taken, () => this.codeRng.next(), HANDOVER_CODE),
           contents: structuredClone(body.contents) as PackageContentLine[],
           bagCount: body.bagCount,
           containsAlcohol: body.containsAlcohol ?? false,
@@ -630,7 +640,37 @@ export class MockBackend implements FulfillmentPort {
     key: string,
   ): Promise<HandoverAuthorization> {
     return this.call('POST', `/packages/${packageId}/handover-authorizations`, 201, () =>
-      this.idempotent(`auth:${packageId}`, key, body, () => {
+      this.idempotent(`auth:${packageId}`, key, body, () => this.authorizeCore(packageId, body)),
+    );
+  }
+
+  /**
+   * 라벨 번호로 인계 허가(F-8 흉내, 번호 2~4자리 R-26 제안). 그 배송 출고에서 번호가 같은 SEALED 포장 → QR 허가와 같은 검사·fence.
+   * 없으면 409 HANDOVER_CODE_MISMATCH(틀린 횟수 셈), 둘 이상 409 HANDOVER_CODE_AMBIGUOUS, failLimit 번 틀리면 409 HANDOVER_CODE_LOCKED [시뮬].
+   */
+  authorizeHandoverByCode(body: { riderId: string; deliveryId: string; handoverCode: string }, key: string): Promise<HandoverAuthorization> {
+    return this.call('POST', '/packages/handover-code-authorizations', 201, () =>
+      this.idempotent(`authcode:${body.riderId}`, key, body, () => {
+        if (!handoverCodeValid(body.handoverCode, HANDOVER_CODE)) throw problem(400, 'VALIDATION_FAILED', `번호 ${HANDOVER_CODE.minLen}~${HANDOVER_CODE.maxLen}자리`);
+        const fk = `${body.riderId}|${body.deliveryId}`;
+        if ((this.codeFails.get(fk) ?? 0) >= HANDOVER_CODE.failLimit) throw problem(409, 'HANDOVER_CODE_LOCKED', 'QR 또는 직원 확인으로');
+        const sh = [...this.shipments.values()].find((r) => r.shipment.deliveryId === body.deliveryId);
+        if (!sh) throw problem(409, 'DELIVERY_MISMATCH');
+        const hit = sh.shipment.packages.filter((p) => p.state === 'SEALED' && p.handoverCode === body.handoverCode);
+        if (hit.length === 0) {
+          this.codeFails.set(fk, (this.codeFails.get(fk) ?? 0) + 1);
+          throw problem(409, 'HANDOVER_CODE_MISMATCH');
+        }
+        if (hit.length > 1) throw problem(409, 'HANDOVER_CODE_AMBIGUOUS', 'QR 로');
+        this.codeFails.delete(fk);
+        return this.authorizeCore(hit[0].packageId, { riderId: body.riderId, deliveryId: body.deliveryId, scannedCode: hit[0].qrCode });
+      }),
+    );
+  }
+
+  private authorizeCore(packageId: string, body: { riderId: string; deliveryId: string; scannedCode: string }): HandoverAuthorization {
+    {
+      {
         const rec = this.packages.get(packageId);
         if (!rec) throw problem(404, 'NOT_FOUND');
         const { pkg, shipmentId } = rec;
@@ -663,8 +703,8 @@ export class MockBackend implements FulfillmentPort {
           fenceExpiresAt: pkg.fence.expiresAt!,
           authorizedAt: this.iso(now),
         } satisfies HandoverAuthorization;
-      }),
-    );
+      }
+    }
   }
 
   commitHandover(
