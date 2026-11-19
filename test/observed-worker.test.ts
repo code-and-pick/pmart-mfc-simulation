@@ -426,4 +426,23 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(sim.interruptedVirtual()).toEqual([]);
     expect(sim.pdaInUse('OP-990d2c09')).toBe(true);
   });
+
+  it('가상 작업자 켜는 순서: 끊긴 작업이 남은 계정(시작 기기 SIM-mfcw-pp-03)부터, 나머지는 번호 순', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    real.polls++;
+    const d = { ...pick([1, 1]), activeStart: { requestId: 'r', workerId: 'OP-990d2c09', deviceId: 'SIM-mfcw-pp-03', startedAt: '' } } as unknown as TaskDetail;
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    const started: string[] = [];
+    (sim as unknown as { spawnVirtual(a: string, i: number, r: boolean): unknown }).spawnVirtual = (a: string) => {
+      started.push(a);
+      const w = { account: a, leaving: false, left: false, resumeOnly: false, skipped: false, workerId: null };
+      sim.virtualWorkers.push(w as never);
+      return w;
+    };
+    sim.setVirtualWorkers(1);
+    expect(started).toEqual(['mfcw-pp-03']);
+    sim.setVirtualWorkers(3);
+    expect(started).toEqual(['mfcw-pp-03', 'mfcw-pp-01', 'mfcw-pp-02']);
+  });
 });

@@ -403,8 +403,13 @@ export class Simulation {
     for (const w of this.virtualWorkers) if (w.workerId && !w.skipped) this.virtualUsed.set(w.workerId, Date.now());
     // 이어 하기 작업자(resumeOnly)는 인원 수에 넣지 않는다 — 슬라이더가 그 계정까지 닿으면 보통 작업자로 바꾼다
     const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left && !w.resumeOnly);
-    for (let i = 0; i < REAL_LINK.virtualAccounts.length && active.length < target; i++) {
-      const account = REAL_LINK.virtualAccounts[i];
+    // 켜는 순서: 서버에 끊긴 작업이 남은 계정부터(그 계정이 켜지면 다음 작업 받기가 들고 있던 작업·자기 PACK 을 먼저 준다), 나머지는 번호 순
+    // (사용자 2026-11-19 "이미 주문에 대해서 피킹 시작한 계정있으면 그것부터 먼저 걸리는거지?")
+    const cut = new Set(this.interruptedVirtual().map((c) => c.account));
+    const order = [...REAL_LINK.virtualAccounts.filter((a) => cut.has(a)), ...REAL_LINK.virtualAccounts.filter((a) => !cut.has(a))];
+    for (let k = 0; k < order.length && active.length < target; k++) {
+      const account = order[k];
+      const i = REAL_LINK.virtualAccounts.indexOf(account);
       const existing = this.virtualWorkers.find((w) => w.account === account);
       if (existing && !existing.left) {
         if (existing.resumeOnly) {

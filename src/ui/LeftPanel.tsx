@@ -299,7 +299,7 @@ function VirtualWorkers() {
         min={0}
         max={REAL_LINK.virtualAccounts.length}
         step={1}
-        hint="mfcw-pp-01부터 켭니다(실제 PDA 가 쓰는 계정은 건너뜀). 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
+        hint="끊긴 작업이 서버에 남은 계정부터, 그다음 mfcw-pp-01부터 켭니다(실제 PDA 가 쓰는 계정은 건너뜀). 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
         apply={(v) => sim.setVirtualWorkers(v)}
       />
       {speed}
@@ -310,7 +310,7 @@ function VirtualWorkers() {
       )}
       {cut.length > 0 && (
         <div className="probe">
-          <b>끊긴 가상 작업자 작업</b> — 서버에 남아 있습니다(시작한 기기가 가상 작업자). 이어 하면 그 작업과 자기가 피킹한 주문 패킹까지 하고 퇴근합니다.
+          <b>끊긴 가상 작업자 작업</b> — 서버에 남아 있습니다(시작한 기기가 가상 작업자). 위 슬라이더를 올리면 이 계정부터 켜집니다. 인원은 그대로 두고 이것만 하려면 이어 하기(그 작업·자기가 피킹한 주문 패킹까지 하고 퇴근).
           {cut.map((c) => (
             <div key={c.account}>
               {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? c.taskId.slice(-12)}{' '}
