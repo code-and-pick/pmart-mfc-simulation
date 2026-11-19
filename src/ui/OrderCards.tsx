@@ -202,10 +202,14 @@ function OrderCard({ r }: { r: RealShipment }) {
         </li>
       </ul>
       <div className="ocd-items">
+        <div className="ocd-ih">
+          <span>상품 {items.length}개</span>
+          <span />
+        </div>
         {items.map((l) => (
           <div key={l.k}>
             <span className="nm">{l.name}</span>
-            <span className="q">× {l.qty}</span>
+            <span className="q">수량 {l.qty}개</span>
             <span className="a">{l.amt != null ? won(l.amt) : ''}</span>
           </div>
         ))}
