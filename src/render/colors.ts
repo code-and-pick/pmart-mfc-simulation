@@ -8,8 +8,8 @@ export const ZONE_COLOR: Record<ZoneKind, number> = {
   FROZEN: 0x3d84cc,
   CHILLED: 0x2fae9f,
   AMBIENT: 0xc9a24a, // 상온 — 탁한 갈색 → 맑은 호박색(2026-11-20)
-  INBOUND_STORE: 0x5c9e62, // 입고창고 — 회색 → 초록(입고·검수와 구분, 2026-11-20)
-  RECEIVING: 0xd07a45, // 입고·검수 — 회색 → 주황(2026-11-20)
+  INBOUND_STORE: 0xd07a45, // 입고창고 — 주황(입고·검수와 구분, 사용자 2026-11-20)
+  RECEIVING: 0x2f3f8f, // 입고·검수 — 남색(사용자 2026-11-20)
   OFFICE: 0x3d3d44,
   PACKING: 0x9a6cc4, // 패킹 — 탁한 보라 → 맑은 보라(2026-11-20)
   QUARANTINE: 0x7a3434,
