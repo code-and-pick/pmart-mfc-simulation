@@ -1,24 +1,13 @@
-import { useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { useApp, useTick, useView } from '../app/context';
+import type { RightView } from '../render/controller';
 import { fmtClock, fmtDur } from '../sim/metrics';
 import { RealOrders, RealStockTable, RealSummary } from './RealPanel';
 import { ScanBoard } from './ScanBoard';
 import { ScanFocusContext } from './scanFocus';
 
-type Tab = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
-const REAL_TABS: { t: Tab; text: string }[] = [
-  { t: 'orders', text: '실제 주문' },
-  { t: 'inventory', text: '주문 상품 재고' },
-  { t: 'scan', text: '바코드' },
-  { t: 'api', text: 'API 호출' },
-];
-const TABS: { t: Tab; text: string }[] = [
-  { t: 'api', text: 'API 호출' },
-  { t: 'events', text: '계약 이벤트' },
-  { t: 'logs', text: '현장' },
-  { t: 'inventory', text: '재고' },
-  { t: 'scan', text: '바코드' },
-];
+// 오른쪽 화면은 왼쪽 아이콘 메뉴(Rail)가 고른다 — ViewController.rightView
+type Tab = RightView;
 
 function Kpis() {
   const { sim: s } = useApp();
@@ -229,9 +218,9 @@ export function RightPanel() {
   const { sim } = useApp();
   useTick();
   const real = !!sim.real;
-  const [tab, setTab] = useState<Tab>(real ? 'orders' : 'api');
   // 고른 출고는 ViewController 에 둔다 — 3D 스캔 말풍선(ScanBubbles)도 같은 값을 본다
   const view = useView();
+  const tab = view.rightView;
   const scanShipment = view.scanShipment;
   const focus = useMemo(
     () => ({
@@ -242,18 +231,12 @@ export function RightPanel() {
     }),
     [scanShipment, view],
   );
+  if (!tab) return null;
   return (
     <ScanFocusContext.Provider value={focus}>
     <div className="panel right">
       {real ? <RealSummary /> : <Kpis />}
       {!real && <Board />}
-      <div className="tabs">
-        {(real ? REAL_TABS : TABS).map((x) => (
-          <button key={x.t} className={tab === x.t ? 'on' : undefined} onClick={() => setTab(x.t)}>
-            {x.text}
-          </button>
-        ))}
-      </div>
       <Log tab={tab} />
     </div>
     </ScanFocusContext.Provider>

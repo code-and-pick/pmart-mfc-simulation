@@ -5,6 +5,7 @@ import { DEFAULT_PARAMS } from './config';
 import { SceneRegistry, Ticker, ViewController } from './render/controller';
 import { Simulation } from './sim/simulation';
 import './ui/styles.css';
+import './ui/console.css';
 
 const KEY = 'pmart-sim-settings';
 

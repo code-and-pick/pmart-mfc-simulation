@@ -246,3 +246,13 @@ export const REAL_ORDER = {
   orderNumberWaitSec: 15,
   pollMs: 1000,
 };
+
+/** "확인할 일" 띠(pmart-rider-simulation IssueBar 참고) 기준 — 업무 문서에 없는 화면 알림 기준 [시뮬] */
+export const ISSUES = {
+  /** 피킹한 사람이 이만큼(분) 넘게 그 주문 패킹을 안 받음(PACK READY·담당 없음) [시뮬] */
+  packWaitMin: 5,
+  /** PICK 이 이만큼(분) 넘게 배정 전(READY) [시뮬] */
+  pickWaitMin: 10,
+  /** 한 번에 보이는 카드 수 — 넘으면 "n건 더" [시뮬] */
+  shown: 4,
+};

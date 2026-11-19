@@ -64,6 +64,22 @@ export interface CameraRequest {
 
 export type LabelMode = 'all' | 'rack' | 'off';
 
+/** 오른쪽 패널 화면(왼쪽 아이콘 메뉴로 고름) */
+export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
+/** 왼쪽 패널 화면 */
+export type LeftView = 'settings' | 'legend';
+export type Theme = 'dark' | 'light';
+
+/** 이 브라우저에 기억하는 화면 편의 설정(테마) — 못 읽으면 기본(어둡게). 토큰·업무 값은 두지 않는다 */
+const THEME_KEY = 'pmart-sim-theme';
+function loadTheme(): Theme {
+  try {
+    return typeof localStorage !== 'undefined' && localStorage.getItem(THEME_KEY) === 'light' ? 'light' : 'dark';
+  } catch {
+    return 'dark';
+  }
+}
+
 export class ViewController extends Emitter {
   readonly views: ZoneView[];
   selection: Selection = null;
@@ -77,10 +93,17 @@ export class ViewController extends Emitter {
   labelMode: LabelMode = 'all';
   /** 로케이션 정면 보기 중 근접 클리핑 거리 (맞은편 랙 숨김) */
   nearCut = 0;
+  /** 오른쪽 패널(null = 접음) — 실서버는 실제 주문, MOCK 은 API 호출부터 */
+  rightView: RightView | null;
+  /** 왼쪽 패널(null = 접음) */
+  leftView: LeftView | null = 'settings';
+  /** 화면 테마(pmart-rider-simulation 과 같은 토큰, 기본 어둡게) */
+  theme: Theme = loadTheme();
   private cameraRequest: CameraRequest | null = null;
 
   constructor(private readonly sim: Simulation) {
     super();
+    this.rightView = sim.real ? 'orders' : 'api';
     this.views = zoneViews(sim.layout);
     this.focusZone('ALL', false);
   }
@@ -210,6 +233,27 @@ export class ViewController extends Emitter {
     if (this.selection?.kind === 'worker') {
       this.selection = null;
       this.follow = null;
+    }
+    this.emit();
+  }
+
+  /** 아이콘 메뉴: 오른쪽 화면 고르기 — 이미 열린 것을 다시 누르면 접는다 */
+  toggleRight(v: RightView) {
+    this.rightView = this.rightView === v ? null : v;
+    this.emit();
+  }
+
+  toggleLeft(v: LeftView) {
+    this.leftView = this.leftView === v ? null : v;
+    this.emit();
+  }
+
+  setTheme(t: Theme) {
+    this.theme = t;
+    try {
+      if (typeof localStorage !== 'undefined') localStorage.setItem(THEME_KEY, t);
+    } catch {
+      /* 저장 못 해도 이번 화면에선 바뀐다 */
     }
     this.emit();
   }

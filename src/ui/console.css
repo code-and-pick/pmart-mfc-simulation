@@ -1,0 +1,433 @@
+/*
+ * 2026-11-19 화면 개편 — pmart-rider-simulation 관제 화면(console.css·console-v2.css·rider-board.css)을 참고:
+ * 왼쪽 아이콘 메뉴 · 어두운 머리줄 · 맨 위 "확인할 일" 띠 · 색 토큰 하나로 어두운(기본)/밝은 테마. styles.css 뒤에 읽는다.
+ * 3D 는 화면 전체 뒤에 깔리고, 패널은 그 위에 반투명으로 뜬다(관제 지도 대신 3D 현장).
+ */
+:root,
+:root[data-theme='dark'] {
+  --bg: #0e1116;
+  --panel: rgba(23, 27, 34, 0.94);
+  --panel-solid: #171b22;
+  --soft: #1f242d;
+  --card: rgba(16, 19, 24, 0.96);
+  --line: #2b313b;
+  --line-strong: #3a414d;
+  --text: #e7eaf0;
+  --muted: #9aa3b2;
+  --accent: #5b9bff;
+  --btn: #2a4a7f;
+  --ok: #16a34a;
+  --warn: #ea580c;
+  --bad: #dc2626;
+  --head: #0a0c10;
+  --head-ink: #e5e9f2;
+  --head-sub: #8a96ab;
+  --rail: #0a0c10;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --rail-w: 64px;
+  --hi: #fde293;
+  --warn-ink: #fbbc04;
+  color-scheme: dark;
+  font-family: Pretendard, 'Noto Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', system-ui, sans-serif;
+}
+:root[data-theme='light'] {
+  --bg: #eef1f6;
+  --panel: rgba(255, 255, 255, 0.95);
+  --panel-solid: #ffffff;
+  --soft: #f6f7fa;
+  --card: rgba(255, 255, 255, 0.97);
+  --line: #e2e6ee;
+  --line-strong: #cbd2de;
+  --text: #0f172a;
+  --muted: #64748b;
+  --accent: #2563eb;
+  --btn: #2563eb;
+  --ok: #16a34a;
+  --warn: #ea580c;
+  --bad: #dc2626;
+  --head: #0b1220;
+  --head-ink: #e5e9f2;
+  --head-sub: #8a96ab;
+  --rail: #0b1220;
+  --shadow: 0 1px 2px rgba(15, 23, 42, 0.06), 0 2px 8px rgba(15, 23, 42, 0.05);
+  --hi: #b45309;
+  --warn-ink: #b45309;
+  color-scheme: light;
+}
+
+/* ───────── 뼈대: [아이콘 메뉴 | 머리줄 → 확인할 일 → 패널 줄] ───────── */
+#ui {
+  display: flex;
+}
+#ui > .shell {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+}
+.shell > * {
+  pointer-events: auto;
+}
+.shell > .stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  pointer-events: none;
+}
+.stage > .panel {
+  pointer-events: auto;
+}
+.stage-gap {
+  flex: 1;
+}
+
+/* ───────── 왼쪽 아이콘 메뉴 ───────── */
+.rail {
+  width: var(--rail-w);
+  flex-shrink: 0;
+  background: var(--rail);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 10px 6px;
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+}
+.rail-logo {
+  width: 32px;
+  height: 32px;
+  margin: 0 auto 10px;
+  border-radius: 9px;
+  background: var(--accent);
+  color: #fff;
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+}
+.rail button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #8a96ab;
+  padding: 8px 2px;
+  cursor: pointer;
+  font: inherit;
+}
+.rail button:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e9f2;
+}
+.rail button.on {
+  background: rgba(91, 155, 255, 0.18);
+  color: #fff;
+}
+.rail button.on::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 10px;
+  bottom: 10px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: #5b9bff;
+}
+.rail-i {
+  font-size: 18px;
+  line-height: 1;
+}
+.rail-l {
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.rail-badge {
+  position: absolute;
+  top: 3px;
+  right: 6px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--bad);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 16px;
+}
+.rail-sep {
+  height: 1px;
+  margin: 6px 8px;
+  background: rgba(255, 255, 255, 0.08);
+}
+.rail-theme {
+  margin-top: auto;
+}
+
+/* ───────── 머리줄 ───────── */
+.topbar {
+  position: static;
+  height: 52px;
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 0 14px;
+  background: var(--head);
+  color: var(--head-ink);
+  border-bottom: 0;
+  backdrop-filter: none;
+}
+.topbar .brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.topbar .title {
+  font-weight: 800;
+  font-size: 15px;
+  white-space: nowrap;
+}
+.topbar .sub {
+  color: var(--head-sub);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.topbar .chip {
+  padding: 2px 8px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--head-ink);
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.topbar .stat {
+  color: var(--head-sub);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.topbar .stat b {
+  color: var(--head-ink);
+  font-size: 14px;
+}
+.topbar .badge.http {
+  background: #2563eb;
+}
+.topbar .clock {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--head-ink);
+}
+.topbar .live {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+.topbar .live.paused {
+  background: #94a3b8;
+  box-shadow: none;
+}
+.topbar .seg {
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.topbar .seg button {
+  color: var(--head-sub);
+}
+.topbar .seg button + button {
+  border-left-color: rgba(255, 255, 255, 0.12);
+}
+.topbar .seg button.on {
+  background: rgba(91, 155, 255, 0.25);
+  color: #fff;
+}
+
+/* ───────── 확인할 일 띠 ───────── */
+.ib {
+  margin: 8px 8px 0;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+.ib-ok {
+  padding: 5px 14px;
+  font-size: 12px;
+  color: var(--ok);
+  background: color-mix(in srgb, var(--ok) 10%, var(--panel-solid));
+  border: 1px solid color-mix(in srgb, var(--ok) 30%, transparent);
+}
+.ib-bad,
+.ib-warn {
+  display: flex;
+  align-items: stretch;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 2px solid var(--ib-c);
+  background: color-mix(in srgb, var(--ib-c) 12%, var(--panel-solid));
+}
+.ib-bad {
+  --ib-c: var(--bad);
+}
+.ib-warn {
+  --ib-c: var(--warn);
+}
+.ib-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 12px 2px 4px;
+  border-right: 1px solid color-mix(in srgb, var(--ib-c) 35%, transparent);
+  flex-shrink: 0;
+}
+.ib-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  font-weight: 900;
+  color: #fff;
+  background: var(--ib-c);
+  animation: ib-pulse 1.6s ease-in-out infinite;
+}
+@keyframes ib-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--ib-c) 55%, transparent);
+  }
+  50% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ib-icon {
+    animation: none;
+  }
+}
+.ib-count {
+  display: grid;
+  gap: 2px;
+}
+.ib-count b {
+  font-size: 15px;
+  font-weight: 800;
+  color: var(--ib-c);
+  white-space: nowrap;
+}
+.ib-count span {
+  display: flex;
+  gap: 6px;
+}
+.ib-count em {
+  font-style: normal;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 999px;
+  color: #fff;
+}
+.ib-count em.bad {
+  background: var(--bad);
+}
+.ib-count em.warn {
+  background: var(--warn);
+}
+.ib-cards {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 6px;
+}
+.ib-card {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  text-align: left;
+  font: inherit;
+  color: var(--text);
+  background: var(--panel-solid);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--warn);
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ib-card:disabled {
+  cursor: default;
+}
+.ib-card.bad {
+  border-left-color: var(--bad);
+}
+.ib-card:not(:disabled):hover {
+  border-color: var(--ib-c);
+  border-left-width: 4px;
+}
+.ib-card-1 {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--warn);
+}
+.ib-card.bad .ib-card-1 {
+  color: var(--bad);
+}
+.ib-card-2 {
+  font-size: 11.5px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ib-more {
+  align-self: center;
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 4px 10px;
+  cursor: pointer;
+  font: inherit;
+  white-space: nowrap;
+}
+
+/* ───────── 패널(패널 줄 안에서 흐름 배치) ───────── */
+.panel {
+  position: relative;
+  top: auto;
+  bottom: auto;
+  height: 100%;
+  box-shadow: var(--shadow);
+}
+.panel.left {
+  left: auto;
+}
+.panel.right {
+  right: auto;
+}
+
+/* 3D 위 카드 — 왼쪽 패널·아이콘 메뉴 폭만큼 비켜 둔다 */
+#ui .pda {
+  left: calc(var(--rail-w) + 284px);
+}
+#ui[data-left='closed'] .pda {
+  left: calc(var(--rail-w) + 12px);
+}
+#ui[data-right='closed'] .zonecard {
+  right: 12px;
+}

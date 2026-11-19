@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import { useApp, useTick } from '../app/context';
+import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS } from '../config';
@@ -341,20 +341,28 @@ function VirtualWorkers() {
   );
 }
 
+/** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"색 구분"(접으면 그리지 않음) */
 export function LeftPanel() {
   const { sim } = useApp();
+  const view = useView();
+  if (!view.leftView) return null;
   return (
     <div className="panel left">
-      {sim.mode === 'mock' && <OutboundControls />}
-      {sim.mode === 'mock' && <InboundControls />}
-
-      <h3>색 구분</h3>
-      <Legend />
-      <p className="note">
-        구역 바닥을 클릭하면 그 구역으로 확대(랙 위 노란 판 = 랙 번호, 가까이 가면 선반 앞단에 칸 번호), 선반 상품을 클릭하면 로케이션 정보, 작업자를 클릭하면 PDA 화면을 봅니다. 드래그 회전 · 우클릭 이동 · 휠 확대.
-      </p>
-
-      <BackendSettings />
+      {view.leftView === 'legend' ? (
+        <>
+          <h3>색 구분</h3>
+          <Legend />
+          <p className="note">
+            구역 바닥을 클릭하면 그 구역으로 확대(랙 위 노란 판 = 랙 번호, 가까이 가면 선반 앞단에 칸 번호), 선반 상품을 클릭하면 로케이션 정보, 작업자를 클릭하면 PDA 화면을 봅니다. 드래그 회전 · 우클릭 이동 · 휠 확대.
+          </p>
+        </>
+      ) : (
+        <>
+          {sim.mode === 'mock' && <OutboundControls />}
+          {sim.mode === 'mock' && <InboundControls />}
+          <BackendSettings />
+        </>
+      )}
     </div>
   );
 }

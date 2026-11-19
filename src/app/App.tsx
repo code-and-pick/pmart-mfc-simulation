@@ -1,8 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { SiteScene } from '../render/scene/SiteScene';
 import { DetailCard, ZoneCard } from '../ui/Cards';
 import { ScanZoom } from '../ui/Barcode';
 import { LeftPanel } from '../ui/LeftPanel';
+import { IssueBar } from '../ui/IssueBar';
+import { Rail } from '../ui/Rail';
 import { RightPanel } from '../ui/RightPanel';
 import { ScanBubbles } from '../ui/ScanBubbles';
 import { TopBar } from '../ui/TopBar';
@@ -16,16 +18,30 @@ export function App({ app }: { app: AppCtx }) {
     const t = setTimeout(() => app.controller.focusBackendCode(code), 500);
     return () => clearTimeout(t);
   }, [app]);
+  // 테마·패널 접힘은 ViewController — 뼈대 data-* 로 CSS 가 색·카드 자리를 맞춘다
+  const view = app.controller;
+  useSyncExternalStore(view.subscribe, view.getVersion);
+  useEffect(() => {
+    document.documentElement.dataset.theme = view.theme;
+  }, [view.theme]);
   return (
     <AppContext.Provider value={app}>
       <div id="viewport">
         <SiteScene app={app} />
       </div>
       {app.sim.real && <ScanBubbles />}
-      <div id="ui">
-        <TopBar />
-        <LeftPanel />
-        <RightPanel />
+      {/* 뼈대(pmart-rider-simulation 참고): [왼쪽 아이콘 메뉴 | 머리줄 → 확인할 일 → [왼쪽 패널 · 3D · 오른쪽 패널]] */}
+      <div id="ui" data-left={view.leftView ? 'open' : 'closed'} data-right={view.rightView ? 'open' : 'closed'}>
+        <Rail />
+        <div className="shell">
+          <TopBar />
+          <IssueBar />
+          <div className="stage">
+            <LeftPanel />
+            <div className="stage-gap" />
+            <RightPanel />
+          </div>
+        </div>
         <ZoneCard />
         <DetailCard />
       </div>

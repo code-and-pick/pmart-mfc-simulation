@@ -1,5 +1,8 @@
 // 3D 가상 현장 (react-three-fiber). useFrame 은 등록 순서대로 돈다: 시뮬 진행 → 장면 갱신 → 카메라 → 번호 라벨.
-import { Canvas } from '@react-three/fiber';
+import { Canvas, useThree } from '@react-three/fiber';
+import { useEffect } from 'react';
+import * as THREE from 'three';
+import { useView } from '../../app/context';
 import { AppContext, type AppCtx } from '../../app/context';
 import { People, Riders, Trucks } from './Agents';
 import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
@@ -15,8 +18,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
       {/* Canvas 는 따로 그리는 트리라 문맥을 다시 넣어 준다 */}
       <AppContext.Provider value={app}>
         <SimDriver />
-        <color attach="background" args={[0x14161a]} />
-        <fog attach="fog" args={[0x14161a, 80, 160]} />
+        <Backdrop />
         <Lights />
         <Facility />
         <Goods />
@@ -40,4 +42,17 @@ export function SiteScene({ app }: { app: AppCtx }) {
       </AppContext.Provider>
     </Canvas>
   );
+}
+
+/** 3D 배경·안개 — 화면 테마(어둡게/밝게)를 따른다 */
+const BACKDROP = { dark: 0x14161a, light: 0xdde3ec } as const;
+function Backdrop() {
+  const view = useView();
+  const scene = useThree((s) => s.scene);
+  useEffect(() => {
+    const c = new THREE.Color(BACKDROP[view.theme]);
+    scene.background = c;
+    scene.fog = new THREE.Fog(c, 80, 160);
+  }, [scene, view.theme]);
+  return null;
 }
