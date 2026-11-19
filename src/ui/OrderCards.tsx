@@ -1,6 +1,7 @@
 // 실제 주문 — 관리자가 한눈에(ADR-0070 "겉은 직관적으로, 들어가면 상세", 사용자 2026-11-20 "오른쪽 표 … 직관적으로 보이겠냐").
-// 카드 겉: 주문번호 · 지금 단계 하나(색) · 경과 분 · 대표 상품 · 단계 막대(피킹 → 패킹 → 랙 → 배차 → 인계).
-// 카드를 누르면(주문 고르기 — 3D 말풍선·바코드 탭도 그 주문) 담당자·수량·배차 상세·서버 상태 원문·시스템 번호.
+// 표 한 줄: 주문번호(+대표 상품) · 지금 단계 하나(색) · 진행 점 5개(피킹 → 패킹 → 랙 → 배차 → 인계) · 경과.
+// 줄을 누르면(주문 고르기 — 3D 말풍선·바코드 탭도 그 주문) 바로 아래 단계 막대·담당자·수량·배차 상세·서버 상태 원문·시스템 번호.
+import { Fragment } from 'react';
 import { useApp } from '../app/context';
 import type { Simulation } from '../sim/simulation';
 import { dispatchText, dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
@@ -101,50 +102,77 @@ function Detail({ r }: { r: RealShipment }) {
   );
 }
 
+/** 실제 주문 표 — 한 줄: 주문번호(+상품) · 지금 단계 · 진행 점 5개 · 경과. 줄을 누르면 바로 아래 상세(사용자 2026-11-20 "오른쪽 표에서 직관적으로") */
 export function OrderCards() {
   const { sim } = useApp();
   const real = sim.real!;
   const focus = useScanFocus();
   const now = Date.now();
   return (
-    <div className="ocs">
-      {real.shipments().map((r) => {
-        const t = (r.pick ?? r.pack ?? r.ret)!.summary;
-        const st = orderStatus(sim, r);
-        const on = focus.shipmentId === r.shipmentId;
-        const head = t.headline;
-        const flags = [r.pick, r.pack, r.ret].some((x) => x?.summary.late) ? '늦음' : [r.pick, r.pack, r.ret].some((x) => x?.summary.idle) ? '30분 멈춤' : '';
-        return (
-          <div
-            key={r.shipmentId}
-            className={`oc ${on ? 'on' : ''} tone-${st.tone}`}
-            onClick={() => (on ? focus.clear() : focus.show(r.shipmentId))}
-            title={on ? '다시 누르면 선택 취소' : '누르면 상세 · 3D 말풍선·바코드가 이 주문'}
-          >
-            <div className="oc-h">
-              <b className="oc-no">
-                <OrderNo shipmentId={r.shipmentId} />
-              </b>
-              <span className="oc-st">{st.text}</span>
-              {flags && <span className="oc-flag">{flags}</span>}
-              <span className="oc-t">{mins(t.createdAt, now)}</span>
-            </div>
-            <div className="oc-p">
-              {head?.productName ?? '—'}
-              {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''}
-            </div>
-            <div className="oc-bar">
-              {st.dots.map((d, i) => (
-                <span key={STEPS[i]} className={`oc-s ${d}`}>
-                  <i />
-                  {STEPS[i]}
-                </span>
-              ))}
-            </div>
-            {on && <Detail r={r} />}
-          </div>
-        );
-      })}
-    </div>
+    <table className="ot">
+      <thead>
+        <tr>
+          <th>주문</th>
+          <th>지금</th>
+          <th title="피킹 · 패킹 · 랙 · 배차 · 인계">진행</th>
+          <th>경과</th>
+        </tr>
+      </thead>
+      <tbody>
+        {real.shipments().map((r) => {
+          const t = (r.pick ?? r.pack ?? r.ret)!.summary;
+          const st = orderStatus(sim, r);
+          const on = focus.shipmentId === r.shipmentId;
+          const head = t.headline;
+          const flags = [r.pick, r.pack, r.ret].some((x) => x?.summary.late) ? '늦음' : [r.pick, r.pack, r.ret].some((x) => x?.summary.idle) ? '30분 멈춤' : '';
+          return (
+            <Fragment key={r.shipmentId}>
+              <tr
+                className={`ot-r tone-${st.tone} ${on ? 'on' : ''}`}
+                onClick={() => (on ? focus.clear() : focus.show(r.shipmentId))}
+                title={on ? '다시 누르면 접기' : '누르면 상세 · 3D 말풍선·바코드가 이 주문'}
+              >
+                <td>
+                  <b className="ot-no">
+                    <OrderNo shipmentId={r.shipmentId} />
+                  </b>
+                  <div className="ot-p">
+                    {head?.productName ?? '—'}
+                    {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}` : ''}
+                  </div>
+                </td>
+                <td>
+                  <span className="ot-st">{st.text}</span>
+                  {flags && <span className="oc-flag">{flags}</span>}
+                </td>
+                <td>
+                  <span className="ot-dots" aria-label={STEPS.map((n, i) => `${n} ${st.dots[i]}`).join(', ')}>
+                    {st.dots.map((d, i) => (
+                      <i key={STEPS[i]} className={d} title={STEPS[i]} />
+                    ))}
+                  </span>
+                </td>
+                <td className="ot-t">{mins(t.createdAt, now)}</td>
+              </tr>
+              {on && (
+                <tr className="ot-d">
+                  <td colSpan={4}>
+                    <div className="ot-steps">
+                      {st.dots.map((d, i) => (
+                        <span key={STEPS[i]} className={`oc-s ${d}`}>
+                          <i />
+                          {STEPS[i]}
+                        </span>
+                      ))}
+                    </div>
+                    <Detail r={r} />
+                  </td>
+                </tr>
+              )}
+            </Fragment>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }

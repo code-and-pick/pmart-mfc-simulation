@@ -46,20 +46,20 @@ function Ground({ L }: { L: Layout }) {
     <>
       <mesh rotation={flat} position={[30, -0.02, 20]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color={0x1b1d21} roughness={1} />
+        <meshStandardMaterial color={0x3a4352} roughness={1} />
       </mesh>
       <mesh rotation={flat} position={[L.width / 2, -0.01, L.buildingDepth / 2]} receiveShadow>
         <planeGeometry args={[L.width, L.buildingDepth]} />
-        <meshStandardMaterial color={0x3a3c40} roughness={0.95} />
+        <meshStandardMaterial color={0x6b7480} roughness={0.95} />
       </mesh>
       {/* 남쪽 앞마당(라이더), 동쪽 입고 차량 진입로 */}
       <mesh rotation={flat} position={[30, -0.015, 36]} receiveShadow>
         <planeGeometry args={[19.7, 8]} />
-        <meshStandardMaterial color={0x2a2c30} roughness={1} />
+        <meshStandardMaterial color={0x525b68} roughness={1} />
       </mesh>
       <mesh rotation={flat} position={[68, -0.015, L.points.truckDock.z]} receiveShadow>
         <planeGeometry args={[40, 5]} />
-        <meshStandardMaterial color={0x26282c} roughness={1} />
+        <meshStandardMaterial color={0x4c5562} roughness={1} />
       </mesh>
     </>
   );

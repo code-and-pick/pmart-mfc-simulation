@@ -3,17 +3,18 @@ import type { ZoneKind } from '../domain/layout';
 import type { InboundState } from '../sim/inbound';
 import type { WorkerState } from '../sim/worker';
 
+// 구역 바닥 — 채도 낮추고 밝게(어두운 테마에서 칙칙·핏빛이던 것, 사용자 2026-11-20). 격리는 붉은 기만 남김
 export const ZONE_COLOR: Record<ZoneKind, number> = {
-  FROZEN: 0x2b4e7e,
-  CHILLED: 0x2f6f73,
-  AMBIENT: 0x6b5b3e,
-  INBOUND_STORE: 0x4a4a52,
-  RECEIVING: 0x55505e,
-  OFFICE: 0x3d3d44,
-  PACKING: 0x6a4a6e,
-  QUARANTINE: 0x7a3434,
-  SHIPPING: 0x7a6a2a,
-  PARKING: 0x2e2e2e,
+  FROZEN: 0x4a78ad,
+  CHILLED: 0x4a9590,
+  AMBIENT: 0x9a8662,
+  INBOUND_STORE: 0x707885,
+  RECEIVING: 0x7a7488,
+  OFFICE: 0x646b78,
+  PACKING: 0x8c7494,
+  QUARANTINE: 0xa86a6a,
+  SHIPPING: 0xa39352,
+  PARKING: 0x555d6a,
 };
 
 export const TEMP_COLOR: Record<TemperatureZone, number> = {

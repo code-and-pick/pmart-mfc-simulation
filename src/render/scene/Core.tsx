@@ -169,7 +169,7 @@ export function Lights() {
   }, [scene]);
   return (
     <>
-      <hemisphereLight args={[0xdfe8ff, 0x2a2622, 1.15]} />
+      <hemisphereLight args={[0xeef3ff, 0x4a5262, 1.45]} />
       <directionalLight
         ref={sun}
         color={0xffffff}

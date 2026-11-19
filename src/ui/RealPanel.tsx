@@ -108,17 +108,21 @@ function ReturnPickups() {
     <>
       <ReturnHandovers />
       <h4 className="oc-sec">회수 배송 {rp.length}건 → 회수 반입 {BACKEND_FACTS.returnIntake.code}</h4>
-      <div className="ocs">
-        {rp.map((d) => (
-          <div key={d.deliveryId} className={`oc tone-${d.riderId ? 'ok' : 'wait'}`} title="시스템 번호는 주문 상세에서">
-            <div className="oc-h">
-              <b className="oc-no">{d.deliveryNumber ?? <span className="muted">번호 없음</span>}</b>
-              <span className="oc-st">{RETURN_STATE_KO[d.state] ?? d.state}</span>
-              <span className="oc-t">{d.riderId ? '라이더 있음' : '라이더 없음'}</span>
-            </div>
-          </div>
-        ))}
-      </div>
+      <table className="ot">
+        <tbody>
+          {rp.map((d) => (
+            <tr key={d.deliveryId} className={`ot-r tone-${d.riderId ? 'ok' : 'wait'}`}>
+              <td>
+                <b className="ot-no">{d.deliveryNumber ?? <span className="muted">번호 없음</span>}</b>
+              </td>
+              <td>
+                <span className="ot-st">{RETURN_STATE_KO[d.state] ?? d.state}</span>
+              </td>
+              <td className="ot-t">{d.riderId ? '라이더 있음' : '라이더 없음'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </>
   );
 }
