@@ -86,6 +86,12 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 같은 요청이 이미 있음: 클라이언트 `docs/backend-requests.md` **BR-52 R20**(11-10, "피킹한 사람에게 같은 주문 패킹 배정·출하대기 랙 위치", OPEN — 백엔드 회신 11-14 "다음 차례 후보"). 시뮬레이터도 같은 것이 필요하다는 기록 — 따로 만들 필요 없이 R20 에 같이 넣어 주면 된다.
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
+### R-24 배차 상세 `assignment.vehicleType` 이 늘 null — 낮음 (2026-11-19 추가)
+- 실측(11-19, 관찰 계정, 읽기만): `GET /deliveries/{id}/dispatch` 6건(ASSIGNED 1·CLOSED 5) 모두 `assignment.vehicleType` 키는 있고 값 null.
+- 원인(백엔드 코드 읽음): `delivery-dispatch-service` `api/DispatchViews.java` `assignment(DeliveryRow)` 가 `vehicleType` 을 넣지 않는다. 차종은 수락한 제안 행(`offer.vehicle_type`, `OfferService` 가 라이더 차종으로 채움)에만 있다 — `DispatchEngine` 재배송 경로는 이미 `store.offer(acceptedOfferId).vehicleType` 로 읽는다.
+- 원하는 것: 배차 상세의 `assignment.vehicleType` 에 수락한 제안의 차종(없으면 라이더 차종)을 채워 주세요. 계약(0.x `Assignment.vehicleType: string`)은 그대로.
+- 받는 쪽: 시뮬레이터 앞마당 라이더 수단 모델(오토바이·자전거·전기자전거·킥보드·승용차·도보). 지금은 늘 null 이라 기본값 오토바이로만 보인다.
+
 ### R-23 [LAN 시험 전용] 시험 입고 차량 — 승인 없이 MFC 입고 예정 만들기(재고 채우기만) — 중간 (2026-11-19 추가)
 - 왜: 실서버로 주문·가상 작업자를 계속 돌리면 재고가 줄어 품절이 난다. 지금 재고를 넣는 길은 백엔드 seed(`Seed.java --initial-stock`, PC 1 이 직접)뿐이라 시뮬레이터 화면에서 채울 수 없다. MOCK 의 "입고 차량 지금 부르기"처럼 **화면 버튼 하나로 MFC 재고를 채우고 싶다**(사용자 2026-11-19 "정식 구현은 아니고 mfc 재고를 채우는 기능만").
 - 정식 입고(CDC 출고 → 운송 → TRF → `/inbound-promises/*`, 아직 501)·SCM 발주·CDC WMS 는 **요청하지 않는다.** CDC·SCM 서비스를 흉내 내는 새 서비스도 필요 없다고 본다 — 이미 있는 **초기 보유 반입 경로**(INITIAL_STOCK 승인 → mfc-inbound 입고 예정 EXPECTED → 현장 수령 → mfc-inventory ConfirmReceipt → INSPECT → PUTAWAY, ADR-0040 결정 8, mfc-inbound `CLAUDE.md`)가 MFC 쪽 일을 다 한다. 빠진 것은 **승인 단계 없이 입고 예정을 만드는 입구** 하나뿐이다.
