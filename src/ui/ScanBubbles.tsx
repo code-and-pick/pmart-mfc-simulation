@@ -18,7 +18,8 @@ import { TEMP_KO } from './text';
 
 const HEAD_Y = 2.0;
 /** 위 막대(상단 바) 아래부터 띄운다(px) */
-const EDGE_TOP = 44;
+// 말풍선이 올라갈 수 있는 맨 위 — 머리줄·확인할 일 띠·구역 칩 줄(약 150px) 아래(사용자 2026-11-20 확대 때 랙 말풍선이 칩 줄에 가림)
+const EDGE_TOP = 160;
 const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
 
 export function ScanBubbles() {

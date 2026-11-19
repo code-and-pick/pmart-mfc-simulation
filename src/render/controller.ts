@@ -148,11 +148,12 @@ export class ViewController extends Emitter {
     const r = v.rect;
     const cx = (r.x0 + r.x1) / 2;
     const cz = (r.z0 + r.z1) / 2;
-    const size = Math.max(r.x1 - r.x0, (r.z1 - r.z0) * 1.15);
+    // 위 머리줄·확인할 일·칩 줄(약 150px)과 좌우 패널이 가리므로 앞뒤로 긴 구역(냉동 A 등)은 더 물러선다
+    const size = Math.max((r.x1 - r.x0) * 1.1, (r.z1 - r.z0) * 1.45);
     // 구역은 위에서 비스듬히(약 60°) 가깝게 — 랙 번호판이 읽힐 만큼(사용자 2026-11-20 "랙 식별 번호만 보일 만큼 위에서 비스듬하게"). 전체는 그대로
     // 구역 전체가 들어오는 거리는 그대로, 각도만 더 위에서(약 63°) — 위 머리줄·칩 줄에 가리지 않게 목표를 조금 앞으로
     const dist = key === 'ALL' ? 62 : size * 0.85 + 3;
-    const target = new THREE.Vector3(cx, 0, key === 'ALL' ? cz + 1 : cz - dist * 0.06);
+    const target = new THREE.Vector3(cx, 0, key === 'ALL' ? cz + 1 : cz - dist * 0.12);
     const pos = key === 'ALL' ? new THREE.Vector3(cx, dist * 0.78, cz + dist * 0.72) : new THREE.Vector3(cx, dist * 0.92, cz + dist * 0.42);
     this.cameraRequest = { pos, target, animate };
     this.emit();
