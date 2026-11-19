@@ -193,8 +193,13 @@ export class ViewController extends Emitter {
   setScanShipment(id: string | null) {
     this.scanShipment = id;
     if (id) {
-      const w = this.sim.observedWorkers.find((x) => x.pda?.shipmentId === id);
-      if (w) this.focusPerson(w.id);
+      // 출하대기 랙까지 끝난 출고는 작업자 대신 그 포장이 있는 랙으로(사용자 2026-11-19 "출하대기 끝나면 작업자 따라다니지 말고 출하대기랙으로")
+      if (this.sim.onRack(id)) {
+        this.focusBackendCode(this.sim.rackFor(id));
+      } else {
+        const w = this.sim.observedWorkers.find((x) => x.cue && x.pda?.shipmentId === id);
+        if (w) this.focusPerson(w.id);
+      }
     }
     this.emit();
   }

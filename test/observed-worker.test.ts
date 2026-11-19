@@ -2,6 +2,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PARAMS, REAL_LINK } from '../src/config';
 import type { TaskDetail } from '../src/domain/contract';
+import { ViewController } from '../src/render/controller';
 import { Simulation } from '../src/sim/simulation';
 
 function pick(rem: [number, number]): TaskDetail {
@@ -272,6 +273,14 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
       expect(w.state).toBe('IDLE');
       expect(sim.onRack('ORD-1-S1')).toBe(true);
       expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-01'); // 버튼 안 눌렀으면 랙 1(추정)
+      // 실제 주문 탭에서 그 주문을 누르면 작업자가 아니라 그 랙으로
+      const view = new ViewController(sim);
+      view.select({ kind: 'worker', id: w.id });
+      view.setScanShipment('ORD-1-S1');
+      const rack = sim.backendPoint('DSP-A-01')!;
+      const req = view.takeCameraRequest()!;
+      expect(Math.hypot(req.target.x - rack.x, req.target.z - rack.z)).toBeLessThan(0.01);
+      expect(view.follow).toBeNull();
     } finally {
       vi.useRealTimers();
     }
