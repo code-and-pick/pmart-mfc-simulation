@@ -94,6 +94,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 그동안 시뮬레이터: 우회하지 않는다(개발 서버 프록시에서 Origin 을 빼는 방법은 게이트웨이 출처 검사를 피하는 것이라 쓰지 않음 — 사용자 11-19 "1번"). 가상 작업자·화면의 "찍음" 밖 쓰기는 이 요청 전까지 403. 실제 주문 넣기(R-21)는 개발 서버가 직접 보내 Origin 이 없어 영향 없음.
 
 ### R-24 배차 상세 `assignment.vehicleType` 이 늘 null — 낮음 (2026-11-19 추가)
+- **고침·LAN 반영(11-19)**: 백엔드 `b34358c4` dispatch 0.11.1 — 수락한 제안의 차종(제안 없이 배정되면 null). 회신 `docs/handoff/simulator/mfc/2026-11-19-simulator-reply-r24-vehicle.md`. 실측(관찰 계정, 14:40): 배차 6건 CAR 1·BICYCLE 5. 시뮬레이터 코드 변경 없음(값 그대로 모델). 회신에 적힌 값 이름(E_BICYCLE_PAS 등)은 rider 계약 `VehicleType`(MOTORCYCLE·BICYCLE·E_BIKE·KICKBOARD·CAR·WALK)·백엔드 코드에 없다 — 계약대로 둔다.
 - 실측(11-19, 관찰 계정, 읽기만): `GET /deliveries/{id}/dispatch` 6건(ASSIGNED 1·CLOSED 5) 모두 `assignment.vehicleType` 키는 있고 값 null.
 - 원인(백엔드 코드 읽음): `delivery-dispatch-service` `api/DispatchViews.java` `assignment(DeliveryRow)` 가 `vehicleType` 을 넣지 않는다. 차종은 수락한 제안 행(`offer.vehicle_type`, `OfferService` 가 라이더 차종으로 채움)에만 있다 — `DispatchEngine` 재배송 경로는 이미 `store.offer(acceptedOfferId).vehicleType` 로 읽는다.
 - 원하는 것: 배차 상세의 `assignment.vehicleType` 에 수락한 제안의 차종(없으면 라이더 차종)을 채워 주세요. 계약(0.x `Assignment.vehicleType: string`)은 그대로.
@@ -112,6 +113,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - R-10(정기 입고 `/inbound-promises` 수령 뒤 작업)과는 별개 — 정식 입고가 생기면 이 시험 입구는 없애도 된다.
 
 ### R-22 R-21 허용 목록에 시뮬레이터 "시험 고객" 더하기 — 낮음 (2026-11-19 추가)
+- **보류(백엔드 회신 11-19 `2026-11-19-simulator-reply-r22.md`)**: 요청한 계정은 Google 실제 계정이고 안드로이드 단말 1대 등록(알림 감)·필수 약관 동의 안 함(구매 불가) → 넣지 않음. 사용자가 정할 것: 그 계정 주인과 맞추기, 또는 남는 Google 계정으로 새 시험 고객.
 - 왜: R-21 허용 목록이 지금 사용자 Google 계정 하나뿐이다(백엔드 `6bf69d04`). 실제 계정이라 시험 주문이 고객 앱 주문 내역에 보이고 배송 알림이 사용자 휴대폰으로 간다. 시험을 여러 번 돌릴 때 알림 없는 계정이 하나 있어야 한다.
 - 원하는 것: 백엔드 11-18 LAN 시험 주문에 쓴 시험 고객 `CU-fdccbd6b-9817-4e95-b55a-2c4e71539116`(배송지 있음, 백엔드 `docs/worklog/mfc/2026-11-18.md`)을 "시험 고객"으로 허용 목록에 다시 넣어 주세요. 다른 계정이 낫다면 그 계정 ID 를 알려 주면 시뮬레이터 `src/config.ts REAL_ORDER.customers` 를 고친다.
   - 그 계정에 고객 앱 단말(`push_token`)이 없는지 한 번 봐 주면 좋다 — 없으면 휴대폰 푸시가 가지 않는다(알림함에는 쌓임, notification 0.4.1).
