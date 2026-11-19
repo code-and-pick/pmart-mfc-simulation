@@ -133,7 +133,23 @@ export function Picker() {
           return;
         }
       }
-      // 3) 구역 바닥 → 그 구역으로 확대
+      // 3) 패킹대·출하대기 랙(실서버) → 그 자리 주문 팝업
+      if (sim.real) {
+        const hit = new THREE.Vector3();
+        for (const y of [0.9, 1.2]) {
+          if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), hit)) continue;
+          const places = [
+            ...sim.layout.stations.map((s) => ({ code: `PAK-A-${String(s.index + 1).padStart(2, '0')}`, p: s.table, r: 0.95 })),
+            ...['DSP-A-01', 'DSP-A-02'].map((c) => ({ code: c, p: sim.backendPoint(c), r: 1.3 })),
+          ];
+          const near = places.find((x) => x.p && Math.hypot(hit.x - x.p.x, hit.z - x.p.z) < x.r);
+          if (near) {
+            controller.select({ kind: 'place', code: near.code }, false);
+            return;
+          }
+        }
+      }
+      // 4) 구역 바닥 → 그 구역으로 확대
       const hz = raycaster.intersectObjects([...registry.zoneFloors.values()], false)[0];
       const zid = hz?.object.userData.zoneId as string | undefined;
       const v = controller.views.find((x) => x.zoneId === zid);

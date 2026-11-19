@@ -90,7 +90,7 @@ export function stageTimes(sim: Simulation, r: RealShipment): { pick: Stage; pac
  * 펼치지 않아도 보이는 것: 주문번호·합계 금액 / 단계 칩 / 단계마다 시각·걸린 시간·담당 / 배송지·전달 요청 / 상품 전부(수량·금액).
  * 카드를 누르면 그 주문을 고른다(3D 말풍선·바코드 탭). "시스템 번호"만 접어 둔다.
  */
-function OrderCard({ r }: { r: RealShipment }) {
+export function OrderCard({ r }: { r: RealShipment }) {
   const { sim } = useApp();
   const real = sim.real!;
   const focus = useScanFocus();

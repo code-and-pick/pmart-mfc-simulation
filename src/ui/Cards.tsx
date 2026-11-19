@@ -205,7 +205,7 @@ function DetailBody() {
   );
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
   if (!sel) return null;
-  const following = controller.follow !== null && controller.follow === (sel.kind === 'location' ? null : sel.id);
+  const following = controller.follow !== null && controller.follow === (sel.kind === 'worker' || sel.kind === 'inbound' ? sel.id : null);
   const follow = (
     <button className={`follow ${following ? 'on' : ''}`} title="카메라가 이 사람을 따라갑니다(오른쪽 끌기로 화면을 옮기면 꺼짐)" onClick={() => controller.setFollow(!following)}>
       {following ? '따라가는 중' : '따라가기'}
@@ -289,6 +289,7 @@ function DetailBody() {
       </>
     );
   }
+  if (sel.kind === 'place') return null;
   const w = sim.siteWorkers().find((x) => x.id === sel.id);
   if (!w) return null;
   const d = w.pda;
@@ -343,6 +344,7 @@ export function DetailCard() {
   // 선택한 사람이 사라졌으면(인원 축소) 카드를 닫는다
   const exists =
     !!sel &&
+    sel.kind !== 'place' &&
     (sel.kind === 'location' ||
       (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;

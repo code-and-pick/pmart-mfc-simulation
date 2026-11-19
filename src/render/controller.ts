@@ -8,6 +8,8 @@ export type Selection =
   | { kind: 'worker'; id: string }
   | { kind: 'inbound'; id: string }
   | { kind: 'location'; sku: string }
+  /** 패킹대(PAK-A-0N)·출하대기 랙(DSP-A-0N) — 그 자리 주문 팝업(사용자 2026-11-20) */
+  | { kind: 'place'; code: string }
   | null;
 
 /** 화면에서 고를 수 있는 구역 (상단 버튼). rect 는 확대 범위. */
@@ -209,7 +211,7 @@ export class ViewController extends Emitter {
     if (s?.kind === 'location') {
       const sku = this.sim.skuMap.get(s.sku);
       if (sku && fly) this.focusLocation(sku.location);
-    } else if (s && fly) this.focusPerson(s.id);
+    } else if (s && s.kind !== 'place' && fly) this.focusPerson(s.id);
     this.emit();
   }
 

@@ -2,6 +2,7 @@ import { useEffect, useSyncExternalStore } from 'react';
 import { SiteScene } from '../render/scene/SiteScene';
 import { DetailCard, ZoneCard } from '../ui/Cards';
 import { ScanZoom } from '../ui/Barcode';
+import { PlaceCard } from '../ui/PlaceCard';
 import { LeftPanel } from '../ui/LeftPanel';
 import { IssueBar } from '../ui/IssueBar';
 import { Rail } from '../ui/Rail';
@@ -46,6 +47,7 @@ export function App({ app }: { app: AppCtx }) {
         </div>
         <ZoneCard />
         <DetailCard />
+        <PlaceCard />
       </div>
       <ScanZoom />
     </AppContext.Provider>

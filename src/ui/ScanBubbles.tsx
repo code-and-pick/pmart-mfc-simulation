@@ -138,7 +138,7 @@ const RACK_MAX = 6;
  * 서버는 포장이 어느 랙에 있는지 모른다(BR-52 R20) — 랙 1 위에 모아 보인다. 주문을 고르면 그 주문 것만.
  */
 function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (el: HTMLDivElement | null) => void; shipmentId: string | null }) {
-  const { sim } = useApp();
+  const { sim, controller } = useApp();
   const [open, setOpen] = useState(true);
   // 한눈에는 화면 번호(주문번호·라벨 번호)만, 줄을 누르면 그 포장의 QR·시스템 번호(ADR-0070 — 사용자 2026-11-20 "버튼을 누르면 세부적으로, 관리자가 바로 볼 때는 직관적으로")
   const [pick, setPick] = useState<string | null>(null);
@@ -151,10 +151,18 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   const guess = list.some(({ r }) => !sim.serverRack(r.shipmentId));
   return (
     <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
-      <div className="sb-head">
-        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개
+      {/* 제목을 누르면 이 랙의 주문 팝업(PlaceCard) — 말풍선이 랙을 덮어 3D 랙을 누르기 어렵다 */}
+      <div className="sb-head clickable" onClick={() => controller.select({ kind: 'place', code: rack }, false)} title="이 랙의 주문 보기">
+        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sb-more">주문 ›</span>
         {guess && <span className="guess" title="PDA 가 랙을 서버에 안 올린 포장 — 화면에서 고른 랙, 모르면 랙 1">추정</span>}
-        <button className="sb-x" onClick={() => setOpen(!open)} title={open ? '접기' : '펼치기'}>
+        <button
+          className="sb-x"
+          onClick={(e) => {
+            e.stopPropagation();
+            setOpen(!open);
+          }}
+          title={open ? '접기' : '펼치기'}
+        >
           {open ? '▾' : '▸'}
         </button>
       </div>

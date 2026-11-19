@@ -400,6 +400,33 @@ export class Simulation {
     for (const w of this.observedWorkers) w.setSpeed(this.params.walkSpeed * (this.real?.speedFactor(w.workerId) ?? 1) * this.speedBoost);
   }
 
+  /**
+   * 그 자리(패킹대 PAK-·출하대기 랙 DSP-)에 있는 출고 — 서버 값으로만(사용자 2026-11-20 "작업 중인 패킹대 … 인계랙 클릭하면 주문내역 팝업").
+   * 랙: 출하 대기(READY·일부 인계)이고 랙에 있는 것(서버 랙 → 화면 랙 → 랙 1 추정). 패킹대: PACK 이 시작됐고 끝나지 않은 것 —
+   * 그 작업자의 안내(PACK 패킹대) 또는 포장 packingLocation(0.20.0), 모르면 PAK-A-01(추정, 서버가 패킹대를 주지 않음).
+   */
+  shipmentsAt(code: string): { shipmentId: string; guess: boolean }[] {
+    const real = this.real;
+    if (!real) return [];
+    const out: { shipmentId: string; guess: boolean }[] = [];
+    for (const r of real.shipments()) {
+      if (code.startsWith('DSP-')) {
+        const st = r.info?.state;
+        if ((st === 'READY' || st === 'PARTIALLY_HANDED_OVER') && this.onRack(r.shipmentId) && this.rackFor(r.shipmentId) === code)
+          out.push({ shipmentId: r.shipmentId, guess: !this.serverRack(r.shipmentId) });
+        continue;
+      }
+      const pk = r.pack;
+      const pst = pk?.closed?.state ?? pk?.summary.state;
+      if (!pk || (pst !== 'IN_PROGRESS' && pst !== 'ASSIGNED')) continue;
+      const cue = [...this.observedWorkers, ...this.virtualWorkers].map((w) => ('cue' in w ? (w as { cue?: ScanCue | null }).cue : null)).find((c) => c?.kind === 'PACK' && c.shipmentId === r.shipmentId);
+      const fromPkg = r.info?.packages?.find((p) => p.packingLocation)?.packingLocation ?? null;
+      const station = (cue && cue.kind === 'PACK' ? cue.station : null) ?? fromPkg;
+      if ((station ?? 'PAK-A-01') === code) out.push({ shipmentId: r.shipmentId, guess: !station });
+    }
+    return out;
+  }
+
   /** 화면에 보일 센터 이름 — 실서버는 center-master 이름, 못 읽었으면 ID, MOCK 은 "가상 센터" (사용자 2026-11-20 "MFC 식별값 말고 이름으로") */
   get centerLabel(): string {
     if (this.mode === 'mock') return `가상 센터 (${this.params.mfcId})`;
