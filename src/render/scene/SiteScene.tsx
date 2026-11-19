@@ -45,8 +45,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
 }
 
 /** 3D 배경·안개 — 화면 테마(어둡게/밝게)를 따른다 */
-// 어두운 테마도 칠흑 대신 부드러운 회청색(사용자 2026-11-20 "바닥색이 왜 이렇게 칙칙해 … 공포스럽잖아")
-const BACKDROP = { dark: 0x2b3442, light: 0xdde3ec } as const;
+const BACKDROP = { dark: 0x14161a, light: 0xdde3ec } as const;
 function Backdrop() {
   const view = useView();
   const scene = useThree((s) => s.scene);
