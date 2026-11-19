@@ -110,15 +110,7 @@ export function OrderCards() {
   const focus = useScanFocus();
   const now = Date.now();
   return (
-    <table className="ot">
-      <thead>
-        <tr>
-          <th>주문</th>
-          <th>지금</th>
-          <th title="피킹 · 패킹 · 랙 · 배차 · 인계">진행</th>
-          <th>경과</th>
-        </tr>
-      </thead>
+    <table className="ot big">
       <tbody>
         {real.shipments().map((r) => {
           const t = (r.pick ?? r.pack ?? r.ret)!.summary;
@@ -134,38 +126,32 @@ export function OrderCards() {
                 title={on ? '다시 누르면 접기' : '누르면 상세 · 3D 말풍선·바코드가 이 주문'}
               >
                 <td>
-                  <b className="ot-no">
-                    <OrderNo shipmentId={r.shipmentId} />
-                  </b>
-                  <div className="ot-p">
+                  {/* 한눈에: 큰 주문번호 · 색 배지(지금 단계) · 경과 / 단계 이름 붙은 막대 / 상품 */}
+                  <div className="ob-1">
+                    <b className="ob-no">
+                      <OrderNo shipmentId={r.shipmentId} />
+                    </b>
+                    <span className="ob-st">{st.text}</span>
+                    {flags && <span className="oc-flag">{flags}</span>}
+                    <span className="ob-t">{mins(t.createdAt, now)}</span>
+                  </div>
+                  <div className="ob-bar">
+                    {st.dots.map((d, i) => (
+                      <span key={STEPS[i]} className={`ob-s ${d}`}>
+                        <i />
+                        {STEPS[i]}
+                      </span>
+                    ))}
+                  </div>
+                  <div className="ob-p">
                     {head?.productName ?? '—'}
-                    {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}` : ''}
+                    {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''}
                   </div>
                 </td>
-                <td>
-                  <span className="ot-st" title={st.text}>{st.text}</span>
-                  {flags && <span className="oc-flag">{flags}</span>}
-                </td>
-                <td>
-                  <span className="ot-dots" aria-label={STEPS.map((n, i) => `${n} ${st.dots[i]}`).join(', ')}>
-                    {st.dots.map((d, i) => (
-                      <i key={STEPS[i]} className={d} title={STEPS[i]} />
-                    ))}
-                  </span>
-                </td>
-                <td className="ot-t">{mins(t.createdAt, now)}</td>
               </tr>
               {on && (
                 <tr className="ot-d">
-                  <td colSpan={4}>
-                    <div className="ot-steps">
-                      {st.dots.map((d, i) => (
-                        <span key={STEPS[i]} className={`oc-s ${d}`}>
-                          <i />
-                          {STEPS[i]}
-                        </span>
-                      ))}
-                    </div>
+                  <td>
                     <Detail r={r} />
                   </td>
                 </tr>

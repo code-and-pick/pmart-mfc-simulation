@@ -108,17 +108,17 @@ function ReturnPickups() {
     <>
       <ReturnHandovers />
       <h4 className="oc-sec">회수 배송 {rp.length}건 → 회수 반입 {BACKEND_FACTS.returnIntake.code}</h4>
-      <table className="ot">
+      <table className="ot big">
         <tbody>
           {rp.map((d) => (
             <tr key={d.deliveryId} className={`ot-r tone-${d.riderId ? 'ok' : 'wait'}`}>
               <td>
-                <b className="ot-no">{d.deliveryNumber ?? <span className="muted">번호 없음</span>}</b>
+                <div className="ob-1">
+                  <b className="ob-no">{d.deliveryNumber ?? <span className="muted">번호 없음</span>}</b>
+                  <span className="ob-st">{RETURN_STATE_KO[d.state] ?? d.state}</span>
+                  <span className="ob-t">{d.riderId ? '라이더 있음' : '라이더 없음'}</span>
+                </div>
               </td>
-              <td>
-                <span className="ot-st">{RETURN_STATE_KO[d.state] ?? d.state}</span>
-              </td>
-              <td className="ot-t">{d.riderId ? '라이더 있음' : '라이더 없음'}</td>
             </tr>
           ))}
         </tbody>
