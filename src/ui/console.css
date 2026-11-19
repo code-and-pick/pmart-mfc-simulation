@@ -573,3 +573,39 @@ button.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--acce
 .rk-sys { margin-top: 4px; font-size: 11px; color: #9aa3b2; }
 .rk-sys summary { cursor: pointer; }
 .rk-sys code { font-size: 10.5px; color: #cbd5e1; word-break: break-all; }
+
+/* 실제 주문 카드(ADR-0070 — 겉은 한눈에, 누르면 상세) */
+.ocs { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; white-space: normal; }
+.oc { border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: 10px; background: var(--soft); padding: 8px 10px; cursor: pointer; }
+.oc:hover { border-color: var(--accent); }
+.oc.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.oc.tone-run { border-left-color: var(--accent); }
+.oc.tone-wait { border-left-color: var(--warn-ink); }
+.oc.tone-ok { border-left-color: var(--ok); }
+.oc.tone-bad { border-left-color: var(--bad); }
+.oc.tone-done { border-left-color: var(--muted); opacity: 0.8; }
+.oc-h { display: flex; align-items: center; gap: 8px; }
+.oc-no { font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0.3px; }
+.oc-st { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--card); }
+.tone-run .oc-st { color: var(--accent); }
+.tone-wait .oc-st { color: var(--warn-ink); }
+.tone-ok .oc-st { color: var(--ok); }
+.tone-bad .oc-st { color: #fff; background: var(--bad); }
+.oc-flag { font-size: 11px; font-weight: 700; color: #fff; background: var(--bad); border-radius: 5px; padding: 1px 6px; }
+.oc-t { margin-left: auto; color: var(--muted); font-size: 11.5px; white-space: nowrap; }
+.oc-p { color: var(--muted); font-size: 12px; margin: 4px 0 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.oc-bar { display: flex; gap: 2px; }
+.oc-s { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10.5px; color: var(--muted); }
+.oc-s i { display: block; width: 100%; height: 5px; border-radius: 3px; background: var(--line); }
+.oc-s.done i { background: var(--ok); }
+.oc-s.now i { background: var(--accent); animation: oc-pulse 1.4s ease-in-out infinite; }
+.oc-s.bad i { background: var(--bad); }
+.oc-s.now, .oc-s.bad { color: var(--text); font-weight: 700; }
+@keyframes oc-pulse { 50% { opacity: 0.45; } }
+.oc-d { margin-top: 8px; padding-top: 8px; border-top: 1px solid var(--line); cursor: default; font-size: 12px; }
+.oc-d dl { display: grid; grid-template-columns: 34px 1fr; gap: 3px 10px; margin: 0; }
+.oc-d dt { color: var(--muted); }
+.oc-d dd { margin: 0; }
+.oc-raw { margin-top: 6px; color: var(--muted); font-size: 11px; }
+.oc-d .sys-ids { margin-top: 4px; font-size: 11px; }
+h4.oc-sec { margin: 10px 0 6px; font-size: 12px; color: var(--muted); font-family: Pretendard, 'Malgun Gothic', sans-serif; }

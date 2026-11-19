@@ -1,13 +1,10 @@
 // 실서버 관찰 화면: 실제 주문(출고)별 PICK·PACK 상태와 담당 작업자. 서버가 준 값만 보인다.
 // 주문 줄을 누르면 "바코드" 탭으로 넘어가 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)를 보인다.
-import { OrderNo } from './OrderNo';
-import { Fragment } from 'react';
+import { OrderCards } from './OrderCards';
 import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
-import { useScanFocus } from './scanFocus';
 import { Why } from './Why';
-import { dispatchText, dispatchView, type DispatchStage, type RealShipment, type RealTask } from '../sim/realBoard';
 
 export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
   WAITING: '대기',
@@ -22,19 +19,6 @@ export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
   CHECKING: '확인 중',
 };
 
-const STATE_CLASS: Partial<Record<TaskState | 'CHECKING', string>> = {
-  IN_PROGRESS: 'st-run',
-  ASSIGNED: 'st-asg',
-  READY: 'st-ready',
-  BLOCKED: 'st-bad',
-  FAILED: 'st-bad',
-  COMPLETED: 'st-done',
-  CANCELLED: 'st-done',
-  CLOSED_PARTIAL: 'st-done',
-  CHECKING: 'st-wait',
-};
-
-/** 실서버 요약 — 열린 작업 수 */
 export function RealSummary() {
   const { sim } = useApp();
   const real = sim.real!;
@@ -57,50 +41,6 @@ export function RealSummary() {
         </div>
       ))}
     </div>
-  );
-}
-
-function TaskCell({ t }: { t?: RealTask }) {
-  const { sim } = useApp();
-  if (!t) return <td className="muted">—</td>;
-  const s = t.summary;
-  const state = t.closed ? t.closed.state : s.state;
-  const flags = [s.late && '늦음', s.idle && '30분 실적 없음'].filter(Boolean).join(' · ');
-  return (
-    <td>
-      <span className={`st ${STATE_CLASS[state] ?? ''}`}>{TASK_STATE_KO[state]}</span> {s.completedQty}/{s.plannedQty}
-      <div className="sub">
-        {sim.real!.workerName(s.assignment?.workerId)}
-        {/* fulfillment 0.18.0 pickedBy — 담당 없는 PACK 은 피킹한 사람이 다음 작업으로 받는다(capacity 0.19.0) */}
-        {s.taskType === 'PACK' && !s.assignment?.workerId && s.pickedBy ? <> · 피킹한 {sim.real!.workerName(s.pickedBy)} 다음 작업</> : null}
-        {flags && <span className="warn"> · {flags}</span>}
-      </div>
-    </td>
-  );
-}
-
-const STAGE_CLASS: Partial<Record<DispatchStage, string>> = {
-  REQUESTED: 'st-wait',
-  WAITING_DISPATCH: 'st-wait',
-  DISPATCHING: 'st-ready',
-  ASSIGNED: 'st-asg',
-  AT_STORE: 'st-run',
-  OUT_FOR_DELIVERY: 'st-done',
-  DELIVERED: 'st-done',
-  ENDED: 'st-done',
-  DISPATCH_FAILED: 'st-bad',
-  SHIPMENT_CANCELLED: 'st-done',
-};
-
-function DispatchCell({ r }: { r: RealShipment }) {
-  const v = dispatchView(r);
-  // 배차(delivery-dispatch)와 배송 수행(delivery-execution)은 다른 서비스의 다른 상태 — 둘 다 출처를 붙여 보인다
-  const src = [v.dispatchState && `배차 ${v.dispatchState}`, v.execState && `배송 ${v.execState}`].filter(Boolean).join(' · ');
-  return (
-    <td>
-      <span className={`st ${STAGE_CLASS[v.stage] ?? ''}`}>{dispatchText(r)}</span>
-      <div className="sub">{src || (r.info ? `출고 ${r.info.state}` : '')}</div>
-    </td>
   );
 }
 
@@ -143,7 +83,7 @@ function ReturnHandovers() {
           {hs.map((h) => (
             <tr key={h.deliveryId} title={h.deliveryId}>
               <td>
-                <div>{h.deliveryNumber ?? <span className="muted">{h.deliveryId.slice(-8)} · 번호 없음</span>}</div>
+                <div>{h.deliveryNumber ?? <span className="muted">번호 없음</span>}</div>
                 <div className="sub">
                   {PURPOSE_KO[h.purpose ?? ''] ?? h.purpose ?? '—'} · {RETURN_STATE_KO[h.state] ?? h.state}
                 </div>
@@ -167,30 +107,18 @@ function ReturnPickups() {
   return (
     <>
       <ReturnHandovers />
-      <h4>회수 배송 → {sim.params.mfcId} (회수 반입 {BACKEND_FACTS.returnIntake.code})</h4>
-      <table className="inv real">
-        <thead>
-          <tr>
-            <th>배송 · 주문</th>
-            <th>상태</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rp.map((d) => (
-            <tr key={d.deliveryId} title={`${d.deliveryId}\n${d.orderId ?? ''}`}>
-              <td>
-                {/* 화면 번호(ADR-0070): 배송 = 주문번호-순번, 없으면 ID 끝 8자리 회색. 시스템 ID 는 줄 title */}
-                <div>{d.deliveryNumber ?? <span className="muted">{d.deliveryId.slice(-8)} · 번호 없음</span>}</div>
-                <div className="sub">{d.orderNumber ? `주문 ${d.orderNumber}` : '—'}</div>
-              </td>
-              <td>
-                {RETURN_STATE_KO[d.state] ?? d.state}
-                <div className="sub">{d.riderId ? '라이더 배정됨' : '라이더 없음'}</div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <h4 className="oc-sec">회수 배송 {rp.length}건 → 회수 반입 {BACKEND_FACTS.returnIntake.code}</h4>
+      <div className="ocs">
+        {rp.map((d) => (
+          <div key={d.deliveryId} className={`oc tone-${d.riderId ? 'ok' : 'wait'}`} title="시스템 번호는 주문 상세에서">
+            <div className="oc-h">
+              <b className="oc-no">{d.deliveryNumber ?? <span className="muted">번호 없음</span>}</b>
+              <span className="oc-st">{RETURN_STATE_KO[d.state] ?? d.state}</span>
+              <span className="oc-t">{d.riderId ? '라이더 있음' : '라이더 없음'}</span>
+            </div>
+          </div>
+        ))}
+      </div>
     </>
   );
 }
@@ -200,7 +128,6 @@ export function RealOrders() {
   const { sim } = useApp();
   const real = sim.real!;
   const rows = real.shipments();
-  const focus = useScanFocus();
   if (!rows.length) {
     return (
       <>
@@ -215,44 +142,7 @@ export function RealOrders() {
   }
   return (
     <>
-    <table className="inv real">
-      <thead>
-        <tr>
-          <th>출고 · 상품</th>
-          <th>PICK</th>
-          <th>PACK</th>
-          <th>배차</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => {
-          const head = (r.pick ?? r.pack ?? r.ret)!.summary.headline;
-          const created = new Date((r.pick ?? r.pack ?? r.ret)!.summary.createdAt);
-          return (
-            <Fragment key={r.shipmentId}>
-            <tr
-              title={`${r.shipmentId}\n${r.fulfillmentId}\n누르면 이 주문을 고름(3D 말풍선·바코드 탭) · 고른 줄을 다시 누르면 선택 취소`}
-              className={`clickable${focus.shipmentId === r.shipmentId ? ' on' : ''}`}
-              onClick={() => (focus.shipmentId === r.shipmentId ? focus.clear() : focus.show(r.shipmentId))}
-            >
-              <td>
-                <div>
-                  <OrderNo shipmentId={r.shipmentId} />
-                </div>
-                <div className="sub">
-                  {head?.productName ?? '—'}
-                  {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''} · {created.toLocaleTimeString()}
-                </div>
-              </td>
-              <TaskCell t={r.pick} />
-              <TaskCell t={r.pack ?? r.ret} />
-              <DispatchCell r={r} />
-            </tr>
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
+      <OrderCards />
     <ReturnPickups />
     </>
   );
