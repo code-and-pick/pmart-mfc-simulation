@@ -34,10 +34,24 @@ export function CameraRig() {
   const gl = useThree((s) => s.gl);
   const controls = useMemo(() => {
     const c = new OrbitControls(camera, gl.domElement);
+    // 지도처럼(사용자 2026-11-20 "구역 이동하고 싶으면 직직 화면 그어야 되고, 방향전환도 … 훽훽 막 바껴"):
+    // 왼쪽 끌기 = 바닥을 따라 이동, 오른쪽 끌기 = 천천히 돌리기, 휠 = 마우스가 가리킨 곳으로 확대, 화살표·WASD = 이동
+    c.mouseButtons = { LEFT: THREE.MOUSE.PAN, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+    c.touches = { ONE: THREE.TOUCH.PAN, TWO: THREE.TOUCH.DOLLY_ROTATE };
+    c.screenSpacePanning = false; // 바닥과 나란히 움직인다(위아래로 뜨지 않음)
     c.enableDamping = true;
-    c.maxPolarAngle = Math.PI * 0.49;
+    c.dampingFactor = 0.15;
+    c.rotateSpeed = 0.35;
+    c.panSpeed = 1.1;
+    c.zoomSpeed = 0.9;
+    c.zoomToCursor = true;
+    c.minPolarAngle = Math.PI * 0.12; // 바로 위에서 뒤집히지 않게
+    c.maxPolarAngle = Math.PI * 0.47;
     c.minDistance = 1.2;
     c.maxDistance = 130;
+    c.keyPanSpeed = 24;
+    c.listenToKeyEvents(window);
+    c.keys = { LEFT: 'ArrowLeft', UP: 'ArrowUp', RIGHT: 'ArrowRight', BOTTOM: 'ArrowDown' };
     return c;
   }, [camera, gl]);
   useEffect(() => {
@@ -48,14 +62,37 @@ export function CameraRig() {
     };
   }, [controls, registry]);
 
-  // 오른쪽 끌기(이동)·Shift+끌기로 시점을 옮기면 따라가기를 끈다 — 회전·확대는 따라가면서 된다
+  // 왼쪽 끌기(이동)로 시점을 옮기면 따라가기를 끈다 — 돌리기·확대는 따라가면서 된다. 클릭(6px 안)은 그대로
   useEffect(() => {
     const el = gl.domElement;
-    const down = (e: PointerEvent) => {
-      if (controller.follow && (e.button === 2 || (e.button === 0 && (e.shiftKey || e.ctrlKey || e.metaKey)))) controller.setFollow(false);
+    let start: { x: number; y: number } | null = null;
+    const down = (e: PointerEvent) => (start = e.button === 0 ? { x: e.clientX, y: e.clientY } : null);
+    const move = (e: PointerEvent) => {
+      if (start && controller.follow && Math.hypot(e.clientX - start.x, e.clientY - start.y) > 6) controller.setFollow(false);
     };
+    const up = () => (start = null);
     el.addEventListener('pointerdown', down);
-    return () => el.removeEventListener('pointerdown', down);
+    el.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    // 오른쪽 끌기가 브라우저 메뉴를 띄우지 않게
+    const menu = (e: Event) => e.preventDefault();
+    el.addEventListener('contextmenu', menu);
+    // WASD 이동(입력칸에 글자를 칠 때는 안 함)
+    const keys = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      const map: Record<string, string> = { w: 'ArrowUp', a: 'ArrowLeft', s: 'ArrowDown', d: 'ArrowRight' };
+      const k = map[e.key.toLowerCase()];
+      if (k) window.dispatchEvent(new KeyboardEvent('keydown', { key: k, code: k }));
+    };
+    window.addEventListener('keydown', keys);
+    return () => {
+      el.removeEventListener('pointerdown', down);
+      el.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', up);
+      el.removeEventListener('contextmenu', menu);
+      window.removeEventListener('keydown', keys);
+    };
   }, [gl, controller]);
 
   const tween = useRef<{ from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; t: number } | null>(null);

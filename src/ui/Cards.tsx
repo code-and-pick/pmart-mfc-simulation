@@ -215,7 +215,7 @@ function DetailBody() {
   if (!sel) return null;
   const following = controller.follow !== null && controller.follow === (sel.kind === 'location' ? null : sel.id);
   const follow = (
-    <button className={`follow ${following ? 'on' : ''}`} title="카메라가 이 사람을 따라갑니다(오른쪽 끌기로 화면을 옮기면 꺼짐)" onClick={() => controller.setFollow(!following)}>
+    <button className={`follow ${following ? 'on' : ''}`} title="카메라가 이 사람을 따라갑니다(왼쪽 끌기로 화면을 옮기면 꺼짐)" onClick={() => controller.setFollow(!following)}>
       {following ? '따라가는 중' : '따라가기'}
     </button>
   );

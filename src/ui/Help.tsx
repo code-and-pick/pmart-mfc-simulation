@@ -86,9 +86,10 @@ export function Help() {
     <>
       <Part title="조작">
         <ul className="help-list">
-          <Item k="회전">드래그</Item>
-          <Item k="이동">우클릭(또는 Shift) + 드래그</Item>
-          <Item k="확대">휠</Item>
+          <Item k="이동">왼쪽 끌기 · 화살표 / WASD</Item>
+          <Item k="돌리기">오른쪽 끌기(천천히)</Item>
+          <Item k="확대">휠 — 마우스가 가리킨 곳으로</Item>
+          <Item k="구역">위 구역 칩이나 바닥을 한 번 누르면 그 구역으로</Item>
           <Item k="누르면">구역 → 그 구역으로, 선반 → 칸 정보, 작업자 → PDA 화면·따라가기</Item>
           <Item k="번호판">랙 위 노란 판 = 랙 번호, 가까이 가면 칸 번호</Item>
           <Item k="말풍선">작업자가 지금 찍을 것</Item>
