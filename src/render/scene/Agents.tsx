@@ -10,6 +10,26 @@ import type { SiteWorker } from '../../sim/worker';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
 import { makeLabel } from '../sprites';
 import { Box } from './Facility';
+import { Humanoid, type HumanoidHandle, type HumanoidLook } from './Humanoid';
+
+/** 작업자 겉모습 — 파란 조끼(피킹·패킹)·주황 조끼(입고), 머리카락 몇 가지(사람 구분) */
+const HAIR = [0x2b1d14, 0x1a1a1a, 0x4a3426, 0x3b2f2a, 0x6b4f3a];
+function workerLook(id: string, kind: Kind): HumanoidLook {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  return {
+    shirt: [0xe8eaed, 0x9aa5b1, 0x37474f][h % 3],
+    pants: [0x263238, 0x3e4a59, 0x1f2933][(h >> 3) % 3],
+    vest: kind === 'worker' ? VEST_PICKER : VEST_INBOUND,
+    head: kind === 'inbound' && h % 2 === 0 ? 'cap' : 'hair',
+    headColor: kind === 'inbound' && h % 2 === 0 ? 0xff9800 : HAIR[(h >> 5) % HAIR.length],
+    pda: kind === 'worker',
+  };
+}
+/** 수단에 올라탔을 때 사람을 올리는 높이(m) — 좌석·발판 높이 − 엉덩이 높이 0.86 [시뮬, 그림만] */
+const RIDE_LIFT: Partial<Record<VehicleType, number>> = { MOTORCYCLE: -0.04, BICYCLE: 0.04, E_BIKE: 0.04, KICKBOARD: 0.15, CAR: -0.4 };
+/** 라이더 — 배달 재킷(청록)·흰 헬멧 */
+const RIDER_LOOK: HumanoidLook = { shirt: 0x263238, pants: 0x37474f, vest: 0x26c6da, head: 'helmet', headColor: 0xf5f5f5 };
 
 type Kind = 'worker' | 'inbound';
 
@@ -33,7 +53,10 @@ function useIdList<T>(list: () => T[], key: (x: T) => string): T[] {
 function Person({ id, kind }: { id: string; kind: Kind }) {
   const { sim, controller, registry } = useApp();
   const group = useRef<THREE.Group>(null!);
-  const bodyMat = useRef<THREE.MeshStandardMaterial>(null!);
+  const ringMat = useRef<THREE.MeshBasicMaterial>(null!);
+  const fig = useRef<HumanoidHandle>(null);
+  const last = useRef<{ x: number; z: number } | null>(null);
+  const look = useMemo(() => workerLook(id, kind), [id, kind]);
   const cart = useRef<THREE.Mesh>(null!);
   const bags = useRef<THREE.Mesh[]>([]);
   const tag = useMemo(() => makeLabel(id, { size: 30, bg: kind === 'worker' ? 'rgba(0,0,0,0.65)' : 'rgba(120,60,0,0.75)', screenPx: 15 }), [id, kind]);
@@ -46,17 +69,23 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     };
   }, [id, registry]);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     const a: SiteWorker | InboundWorker | undefined =
       kind === 'worker' ? sim.siteWorkers().find((x) => x.id === id) : sim.inboundWorkers.find((x) => x.id === id);
     if (!a) return;
     group.current.position.set(a.pos.x, 0, a.pos.z);
     group.current.rotation.y = a.heading;
-    bodyMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as SiteWorker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
+    // 상태 색 = 발밑 고리(범례 색과 같음)
+    ringMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as SiteWorker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
     const s = controller.selection;
-    const sel = s && s.kind !== 'location' && s.id === id;
-    bodyMat.current.emissive.setHex(sel ? 0x444444 : 0x000000);
-    cart.current.visible = a.hasCart || a.carrying.length > 0;
+    const sel = !!s && s.kind !== 'location' && s.id === id;
+    const moved = last.current ? Math.hypot(a.pos.x - last.current.x, a.pos.z - last.current.z) : 0;
+    last.current = { x: a.pos.x, z: a.pos.z };
+    const pushing = a.hasCart || a.carrying.length > 0;
+    fig.current?.animate(moved > 0.5 ? 0 : moved, dt, pushing ? 'push' : 'walk'); // 순간이동(0.5 m 넘게)은 걸음으로 치지 않음
+    fig.current?.highlight(sel);
+    ringMat.current.opacity = sel ? 1 : 0.85;
+    cart.current.visible = pushing;
     bags.current.forEach((b, i) => {
       const t = a.carrying[i];
       b.visible = t !== undefined;
@@ -69,21 +98,46 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   const per = isWorker ? 3 : 2;
   return (
     <group ref={group}>
-      <mesh position-y={0.66} castShadow userData={ud}>
-        <capsuleGeometry args={[0.22, 0.85, 4, 12]} />
-        <meshStandardMaterial ref={bodyMat} color={0x9aa0a6} roughness={0.5} />
+      {/* 클릭 판정(보이지 않음) — 고르기는 이 상자 하나로(Core Picker: 직계 자식 중 personId) */}
+      <mesh position-y={0.9} userData={ud}>
+        <boxGeometry args={[0.6, 1.8, 0.5]} />
+        <meshBasicMaterial visible={false} />
       </mesh>
-      <mesh position-y={1.42} castShadow userData={ud}>
-        <sphereGeometry args={[0.17, 16, 12]} />
-        <meshStandardMaterial color={0xf1d3b3} />
+      {/* 상태 색 고리 */}
+      <mesh rotation-x={-Math.PI / 2} position-y={0.02}>
+        <ringGeometry args={[0.32, 0.42, 28]} />
+        <meshBasicMaterial ref={ringMat} color={0x9aa0a6} transparent opacity={0.85} />
       </mesh>
-      <mesh position-y={0.95} castShadow userData={ud}>
-        <boxGeometry args={[0.46, 0.3, 0.3]} />
-        <meshStandardMaterial color={isWorker ? VEST_PICKER : VEST_INBOUND} />
-      </mesh>
-      <mesh ref={cart} position={[0, isWorker ? 0.45 : 0.12, isWorker ? 0.55 : 0.75]} castShadow>
-        {isWorker ? <boxGeometry args={[0.45, 0.5, 0.65]} /> : <boxGeometry args={[0.6, 0.14, 0.95]} />}
-        {isWorker ? <meshStandardMaterial color={0x4a90d9} transparent opacity={0.85} /> : <meshStandardMaterial color={0x546e7a} metalness={0.3} />}
+      <Humanoid ref={fig} look={look} />
+      <mesh ref={cart} position={[0, isWorker ? 0.5 : 0.12, isWorker ? 0.62 : 0.8]} castShadow>
+        {isWorker ? <boxGeometry args={[0.45, 0.42, 0.62]} /> : <boxGeometry args={[0.6, 0.14, 0.95]} />}
+        {isWorker ? <meshStandardMaterial color={0x4a90d9} transparent opacity={0.8} /> : <meshStandardMaterial color={0x546e7a} metalness={0.3} />}
+        {isWorker && (
+          <>
+            {/* 손잡이·다리·바퀴 */}
+            <mesh position={[0, 0.36, -0.36]}>
+              <boxGeometry args={[0.5, 0.03, 0.03]} />
+              <meshStandardMaterial color={0x90a4ae} metalness={0.6} roughness={0.3} />
+            </mesh>
+            {[-0.2, 0.2].map((x) => (
+              <mesh key={'h' + x} position={[x, 0.2, -0.34]}>
+                <boxGeometry args={[0.025, 0.34, 0.025]} />
+                <meshStandardMaterial color={0x90a4ae} metalness={0.6} roughness={0.3} />
+              </mesh>
+            ))}
+            {[
+              [-0.19, -0.27],
+              [0.19, -0.27],
+              [-0.19, 0.27],
+              [0.19, 0.27],
+            ].map(([x, z]) => (
+              <mesh key={'w' + x + ':' + z} position={[x, -0.43, z]} rotation-z={Math.PI / 2}>
+                <cylinderGeometry args={[0.06, 0.06, 0.04, 10]} />
+                <meshStandardMaterial color={0x263238} />
+              </mesh>
+            ))}
+          </>
+        )}
         {Array.from({ length: 8 }, (_, i) => {
           const gx = ((i % per) - (per - 1) / 2) * (bagSize + 0.01);
           const gy = Math.floor(i / per) * (bagSize * 0.9 + 0.01);
@@ -260,6 +314,8 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
   const door = useRef<THREE.Group>(null);
   const lid = useRef<THREE.Group>(null);
   const ang = useRef({ door: 0, lid: 0 });
+  const fig = useRef<HumanoidHandle>(null);
+  const last = useRef<{ x: number; z: number } | null>(null);
   const tag = useMemo(() => makeLabel(id, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [id]);
   const vehicle = sim.riders.find((x) => x.id === id)?.vehicle ?? 'MOTORCYCLE';
   useFrame((_, dt) => {
@@ -267,6 +323,11 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
     if (!r) return;
     group.current.position.set(r.pos.x, 0, r.pos.z);
     group.current.rotation.y = r.heading;
+    const moved = last.current ? Math.hypot(r.pos.x - last.current.x, r.pos.z - last.current.z) : 0;
+    last.current = { x: r.pos.x, z: r.pos.z };
+    // 킥보드는 서서 손잡이를 잡고(push 자세), 두 바퀴 수단은 앉아서(ride)
+    const riding0 = r.riding && r.vehicle !== 'WALK';
+    fig.current?.animate(moved > 0.5 ? 0 : moved, dt, !riding0 ? 'walk' : r.vehicle === 'KICKBOARD' ? 'push' : 'ride');
     // 문·뚜껑은 목표 각도로 천천히(약 RIDER_VEHICLE.hatchSec) — 문 70°, 트렁크·배달통 63°
     const k = Math.min(1, dt * 6);
     ang.current.door += ((r.door ? -1.2 : 0) - ang.current.door) * k;
@@ -276,7 +337,8 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
     box.current.visible = r.carrying > 0 && !r.stowed;
     // 타는 중이면 수단이 라이더와 같이 움직이고(라이더는 올라탄 높이, 승용차면 안에 앉아 보이지 않게), 아니면 주차 자리에 서 있다
     const riding = r.riding && r.vehicle !== 'WALK';
-    body.current.position.y = riding ? (r.vehicle === 'CAR' ? -0.4 : r.vehicle === 'KICKBOARD' ? 0.12 : 0.45) : 0;
+    // 올라탄 높이 = 좌석(또는 발판) 높이 − 사람 엉덩이 높이(Humanoid 0.86 m). 오토바이 좌석 0.82·자전거 0.9·킥보드 발판 0.15
+    body.current.position.y = riding ? (RIDE_LIFT[r.vehicle] ?? 0) : 0;
     body.current.visible = !(riding && r.vehicle === 'CAR');
     if (riding) {
       ride.current.position.set(r.pos.x, 0, r.pos.z);
@@ -293,15 +355,8 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
     <>
       <group ref={group}>
         <group ref={body}>
-          <mesh position-y={0.66} castShadow>
-            <capsuleGeometry args={[0.22, 0.85, 4, 12]} />
-            <meshStandardMaterial color={0x26c6da} />
-          </mesh>
-          <mesh position-y={1.44}>
-            <sphereGeometry args={[0.2, 16, 12]} />
-            <meshStandardMaterial color={0xffffff} />
-          </mesh>
-          <mesh ref={box} position={[0, 1.0, -0.3]} visible={false}>
+          <Humanoid ref={fig} look={RIDER_LOOK} />
+          <mesh ref={box} position={[0, 1.15, -0.32]} visible={false}>
             <boxGeometry args={[0.42, 0.36, 0.3]} />
             <meshStandardMaterial color={0x00897b} />
           </mesh>
@@ -319,13 +374,14 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
 export function Riders() {
   const { sim } = useApp();
   const riders = useIdList(
-    () => sim.riders.map((r) => ({ id: r.id, parking: r.parking })),
-    (r) => r.id,
+    () => sim.riders.map((r) => ({ id: r.id, parking: r.parking, vehicle: r.vehicle })),
+    // 수단이 바뀌면(배차 상세가 늦게 옴) 모델을 다시 만든다
+    (r) => r.id + ':' + r.vehicle,
   );
   return (
     <>
       {riders.map((r) => (
-        <RiderMesh key={r.id} id={r.id} parking={r.parking} />
+        <RiderMesh key={r.id + ':' + r.vehicle} id={r.id} parking={r.parking} />
       ))}
     </>
   );
