@@ -2,7 +2,7 @@
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
 import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import type { StockWorkState, TaskState } from '../../domain/contract';
@@ -173,8 +173,16 @@ const WORK_KO: Record<StockWorkState, string> = {
  *   가지 않아(BR-52 R20 OPEN) 서버 위치는 패킹대 그대로. 이름표에 "추정"으로 적는다
  */
 export function RealStock() {
-  const { sim } = useApp();
+  const { sim, registry } = useApp();
   const mesh = useRef<THREE.InstancedMesh>(null!);
+  // 상자 번호 → 칸 위치 코드(누르면 그 칸 상품 정보)
+  const cellOf = useRef<(string | null)[]>([]);
+  useEffect(() => {
+    registry.realCells = { mesh: mesh.current, codeAt: (i) => cellOf.current[i] ?? null };
+    return () => {
+      registry.realCells = null;
+    };
+  }, [registry]);
   const labels = useMemo(() => new THREE.Group(), []);
   const ver = useRef('');
   useFrame(() => {
@@ -204,7 +212,8 @@ export function RealStock() {
     const col = new THREE.Color();
     let n = 0;
 
-    const shelf = new Map<string, { loc: Location; normal: number; held: number }>();
+    const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number }>();
+    cellOf.current = [];
     const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number> }>();
     for (const u0 of real.stockUnits()) {
       let u = u0;
@@ -226,7 +235,7 @@ export function RealStock() {
       }
       const loc = u.workState === 'STORED' ? sim.backendLocation(u.locationCode) : null;
       if (loc) {
-        const g = shelf.get(loc.code) ?? { loc, normal: 0, held: 0 };
+        const g = shelf.get(loc.code) ?? { loc, code: u.locationCode, normal: 0, held: 0 };
         if (u.qualityState === 'NORMAL') g.normal += u.qty;
         else g.held += u.qty;
         shelf.set(loc.code, g);
@@ -244,7 +253,7 @@ export function RealStock() {
     }
 
     // 선반 칸: 앞(통로 쪽)부터 채운다
-    for (const { loc, normal, held } of shelf.values()) {
+    for (const { loc, code, normal, held } of shelf.values()) {
       const cols = Math.max(1, Math.floor((loc.slotW * 0.9) / (BOX + GAP)));
       const rows = 3;
       const layers = Math.max(1, Math.min(3, Math.floor((loc.levelH - 0.05) / (BOX + GAP))));
@@ -263,6 +272,7 @@ export function RealStock() {
         mtx.makeTranslation(loc.along === 'z' ? cross : a, y, loc.along === 'z' ? a : cross);
         m.setMatrixAt(n, mtx);
         m.setColorAt(n, col.setHex(i < normal ? TEMP_COLOR[loc.temp] : 0xd93025));
+        cellOf.current[n] = code;
         n++;
       }
     }
@@ -286,6 +296,8 @@ export function RealStock() {
     m.count = n;
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    // 클릭 판정(레이캐스트)은 경계 구를 먼저 본다 — 상자가 바뀌면 다시 계산(안 하면 처음 빈 구라 상자를 못 누름)
+    m.computeBoundingSphere();
 
     for (const c of [...labels.children]) {
       const s = c as THREE.Sprite;

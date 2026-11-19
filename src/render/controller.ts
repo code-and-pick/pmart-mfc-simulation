@@ -88,6 +88,19 @@ export class ViewController extends Emitter {
   follow: string | null = null;
   /** 실제 주문 탭에서 고른 출고(바코드 탭·스캔 말풍선이 같이 쓴다). 없으면 null */
   scanShipment: string | null = null;
+  /** 3D 에서 누른 선반 칸(실서버, 백엔드 위치 코드) — 왼쪽 "구역" 화면에 그 칸 상품 정보(사용자 2026-11-20 "랙에 적치된 재고도 클릭하면 … 무슨 상품인지") */
+  cellFocus: string | null = null;
+
+  focusCell(code: string | null) {
+    this.cellFocus = code;
+    if (code) {
+      const loc = this.sim.backendLocation(code);
+      const key = loc ? (loc.temp === 'FROZEN' ? 'A' : loc.temp === 'CHILLED' ? 'B' : 'C-H') : null;
+      if (key) this.focusedZone = key;
+      this.leftView = 'zone';
+    }
+    this.emit();
+  }
   /** 오른쪽 실제 주문을 이 자리(패킹대 PAK-·출하대기 랙 DSP-)의 주문만으로 — 3D 에서 그 자리를 누름(사용자 2026-11-20 "오른쪽 탭에 해당 주문이 뜨게") */
   placeFilter: string | null = null;
 
@@ -292,5 +305,7 @@ export class SceneRegistry {
   readonly people = new Map<string, THREE.Group>();
   readonly zoneFloors = new Map<string, THREE.Mesh>();
   goods: { mesh: THREE.InstancedMesh; skuAt: (instance: number) => string } | null = null;
+  /** 실서버 선반 상자(RealStock) — 상자 번호 → 칸 위치 코드(선반 밖 자리 상자는 null) */
+  realCells: { mesh: THREE.InstancedMesh; codeAt: (instance: number) => string | null } | null = null;
   controls: OrbitControls | null = null;
 }

@@ -1,13 +1,61 @@
 // 실서버 구역 재고 — 구역 → 랙 → 단 → 칸(상품·수량). 센터 전체 재고(inventory 0.33.0 stock-units, R-15)를 평면 칸에 맞춰 센다.
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
-import { useState } from 'react';
-import { useApp } from '../app/context';
+import { useEffect, useState } from 'react';
+import { useApp, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
+
+const QUALITY_KO: Record<string, string> = { NORMAL: '정상', QUARANTINED: '격리', PENDING: '판정 전' };
+const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PACKED: '포장', CANCEL_RETURN_PENDING: '복귀 대기', UNSTOWED: '미적치' };
+
+/** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량 */
+function CellCard({ code }: { code: string }) {
+  const { sim, controller } = useApp();
+  const rows = sim.real!.fullStock.filter((u) => u.locationCode === code);
+  const loc = sim.backendLocation(code);
+  const rack = loc ? sim.layout.racks.find((r) => r.id === loc.rackId) : undefined;
+  const total = rows.reduce((a, u) => a + u.qty, 0);
+  return (
+    <div className="cellcard">
+      <div className="cc-h">
+        <b>{code}</b>
+        <span>
+          {rack ? `${rack.group}-${String(rack.rackNo).padStart(2, '0')} · ${loc!.level}단` : ''} · {total}개
+        </span>
+        <button className="place-x" onClick={() => controller.focusCell(null)} aria-label="닫기">
+          ✕
+        </button>
+      </div>
+      {rows.length ? (
+        rows.map((u) => (
+          <div key={`${u.sku}:${u.lotId}`} className="cc-item">
+            <div className="nm">{u.productName ?? u.sku}</div>
+            <div className="meta">
+              <span>{u.sku}</span>
+              {u.lotNo && <span>LOT {u.lotNo}</span>}
+              {u.expiryDate && <span>기한 {u.expiryDate}</span>}
+              <span className={u.qualityState !== 'NORMAL' ? 'bad' : ''}>{QUALITY_KO[u.qualityState] ?? u.qualityState}</span>
+              <span>{WORK_KO[u.workState] ?? u.workState}</span>
+              <b>{u.qty}개</b>
+            </div>
+          </div>
+        ))
+      ) : (
+        <div className="zst-none">이 칸은 비어 있습니다</div>
+      )}
+    </div>
+  );
+}
 
 export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   const { sim, controller } = useApp();
+  const view = useView();
   const [open, setOpen] = useState<string | null>(null);
   const real = sim.real!;
+  // 3D 에서 칸을 누르면 그 랙을 펼친다
+  const focusRack = view.cellFocus ? (sim.backendLocation(view.cellFocus)?.rackId ?? null) : null;
+  useEffect(() => {
+    if (focusRack) setOpen(focusRack);
+  }, [focusRack, view.cellFocus]);
   // 3D 노란 번호판과 같은 이름(C02-01)으로, 그 순서대로
   const label = (r: { group: string; rackNo: number }) => `${r.group}-${String(r.rackNo).padStart(2, '0')}`;
   const racks = sim.layout.racks.filter((r) => r.temp === temp).sort((a, b) => label(a).localeCompare(label(b)));
@@ -32,6 +80,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   ];
   return (
     <div className="zst">
+      {view.cellFocus && sim.backendLocation(view.cellFocus)?.temp === temp && <CellCard code={view.cellFocus} />}
       <div className="stats four">
         {stats.map(([k, v]) => (
           <div key={k} className="stat">
@@ -70,7 +119,15 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
                           rows
                             .sort((a, b) => a.code.localeCompare(b.code))
                             .map((x) => (
-                              <button key={`${x.code}:${x.sku}`} className="zst-cell" onClick={() => controller.focusBackendCode(x.code)} title="3D 에서 그 칸으로">
+                              <button
+                                key={`${x.code}:${x.sku}`}
+                                className={`zst-cell ${view.cellFocus === x.code ? 'on' : ''}`}
+                                onClick={() => {
+                                  controller.focusBackendCode(x.code);
+                                  controller.focusCell(x.code);
+                                }}
+                                title="3D 에서 그 칸으로"
+                              >
                                 <span className="code">{x.code}</span>
                                 <span className="nm">{x.name}</span>
                                 {x.quarantined && <span className="q">격리</span>}

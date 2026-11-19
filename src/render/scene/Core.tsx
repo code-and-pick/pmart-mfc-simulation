@@ -125,6 +125,16 @@ export function Picker() {
         controller.select({ kind, id: hp.object.userData.personId as string });
         return;
       }
+      // 2a) 실서버 선반 상자 → 그 칸 상품 정보(왼쪽 "구역")
+      if (registry.realCells) {
+        // 칸 정면 보기는 앞쪽(맞은편 랙)을 근접 클리핑으로 잘라 낸다 — 안 보이는 상자는 건너뛴다
+        const hc = raycaster.intersectObject(registry.realCells.mesh, false).find((h) => h.distance >= camera.near);
+        const code = hc?.instanceId !== undefined ? registry.realCells.codeAt(hc.instanceId) : null;
+        if (code) {
+          controller.focusCell(code);
+          return;
+        }
+      }
       // 2) 선반 상품
       if (registry.goods) {
         const hg = raycaster.intersectObject(registry.goods.mesh, false)[0];

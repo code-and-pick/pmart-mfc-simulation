@@ -601,6 +601,8 @@ export interface StockUnitRow {
   sku: string;
   productName?: string | null;
   lotId: string;
+  lotNo?: string | null;
+  expiryDate?: string | null;
   qualityState: StockQualityState;
   workState: StockWorkState;
   qty: number;
