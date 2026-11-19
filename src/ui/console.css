@@ -828,3 +828,16 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .otl li em { font-style: normal; color: var(--muted); }
 .otl li.ok span { color: var(--ok); }
 .otl li.warn span { color: var(--warn-ink); }
+
+/* 도움말 — 굵은 낱말 + 짧은 설명, 줄 사이 띄움(사용자 2026-11-20 "다닥다닥") */
+.help-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.help-list li { display: grid; grid-template-columns: 70px 1fr; gap: 10px; font-size: 13px; line-height: 1.5; }
+.help-list li b { font-weight: 700; color: var(--text); }
+.help-list li span { color: var(--muted); }
+.help-colors { display: flex; flex-direction: column; gap: 12px; }
+.hc-g { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; }
+.hc-g em { flex-basis: 100%; font-style: normal; font-size: 12px; font-weight: 700; color: var(--muted); }
+.sw { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; }
+.sw i { width: 11px; height: 11px; display: inline-block; flex: none; }
+.panel.left .sec.help { padding: 12px 12px 14px; }
+.panel.left .sec.help > summary h4 { font-size: 13px; color: var(--text); margin-bottom: 10px; }

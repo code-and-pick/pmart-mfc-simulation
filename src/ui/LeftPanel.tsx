@@ -8,13 +8,9 @@ import { TokenSource } from '../backend/http/tokens';
 import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, TEST_INBOUND } from '../config';
 import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
 import type { InboundPlanLine } from '../domain/testInbound';
-import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
-import type { InboundState } from '../sim/inbound';
 import { fmtClock } from '../sim/metrics';
 import type { HttpSettings } from '../sim/simulation';
-import type { WorkerState } from '../sim/worker';
 import { Help } from './Help';
-import { INBOUND_KO, STATE_KO } from './text';
 
 /** ⓘ — 마우스를 올리거나 누르면 한두 줄 설명 */
 export function Tip({ text }: { text: string }) {
@@ -90,34 +86,6 @@ function Ask({ title, children, onClose }: { title: string; children: ReactNode;
       </div>
     </div>,
     document.body,
-  );
-}
-
-const LEGEND_WORKER: WorkerState[] = ['IDLE', 'TO_CART', 'PICKING', 'WAIT_STATION', 'PACKING', 'TO_SHIP', 'ERROR'];
-const LEGEND_INBOUND: InboundState[] = ['RECEIVING', 'PUTAWAY', 'REPLENISH'];
-
-function Legend() {
-  const dot = (bg: string, square = false) => <i className="dot" style={{ background: bg, ...(square ? { borderRadius: 2 } : {}) }} />;
-  return (
-    <div className="legend">
-      {LEGEND_WORKER.map((s) => (
-        <span key={s}>
-          {dot(hex(STATE_COLOR[s]))}
-          {STATE_KO[s]}
-        </span>
-      ))}
-      {LEGEND_INBOUND.map((s) => (
-        <span key={s}>
-          {dot(hex(INBOUND_COLOR[s]))}입고 {INBOUND_KO[s]}
-        </span>
-      ))}
-      <span>{dot('#1e88e5', true)}파란 조끼 피킹·패킹</span>
-      <span>{dot('#ff9800', true)}주황 조끼 입고</span>
-      <span>{dot(hex(TEMP_COLOR.AMBIENT))}상온 상품</span>
-      <span>{dot(hex(TEMP_COLOR.CHILLED))}냉장 상품</span>
-      <span>{dot(hex(TEMP_COLOR.FROZEN))}냉동 상품</span>
-      <span>{dot('#26c6da')}라이더</span>
-    </div>
   );
 }
 
@@ -503,7 +471,7 @@ function BackendSettings() {
   );
 }
 
-/** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"색 구분"·"?"(접으면 그리지 않음) */
+/** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"도움말"(접으면 그리지 않음) */
 export function LeftPanel() {
   const { sim } = useApp();
   const view = useView();
@@ -512,11 +480,7 @@ export function LeftPanel() {
   const injected = !!sim.realTokens?.serverInjected;
   return (
     <div className="panel left">
-      {view.leftView === 'legend' ? (
-        <Sec title="색 구분">
-          <Legend />
-        </Sec>
-      ) : view.leftView === 'help' ? (
+      {view.leftView === 'help' ? (
         <Help />
       ) : mock ? (
         <>
