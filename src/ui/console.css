@@ -754,3 +754,34 @@ details.sec > summary h4 > span { min-width: 0; flex: 1; text-align: right; }
 .ocd-items .nm { grid-area: nm; }
 .ocd-items .q { grid-area: q; text-align: left; }
 .ocd-items .a { grid-area: a; }
+
+/* 오른쪽 패널 글씨 — 기록(API·이벤트 줄)만 고정폭, 나머지(재고·바코드)는 보통 글씨(2026-11-20) */
+.log { font-family: Pretendard, 'Noto Sans KR', 'Malgun Gothic', system-ui, sans-serif; font-size: 12.5px; }
+.log .row { font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace; font-size: 11.5px; overflow: hidden; }
+.log .row > span:last-child { overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.log .row.wrap > span:last-child { white-space: normal; }
+.log { overflow-x: hidden; }
+.log .note { font-size: 12px; }
+
+/* 재고 카드 */
+.stk { display: flex; flex-direction: column; gap: 10px; padding: 4px 0 10px; }
+.stk-h { color: var(--muted); font-size: 12px; }
+.stk-c { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; gap: 6px; }
+.stk-t { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 2px; }
+.stk-t .nm { flex: 1; font-size: 13.5px; font-weight: 700; line-height: 1.4; }
+.stk-t .tot { text-align: right; white-space: nowrap; }
+.stk-t .tot b { display: block; font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
+.stk-t .tot small { color: var(--muted); font-size: 11px; }
+.stk-r { display: flex; align-items: center; gap: 8px; width: 100%; padding: 8px 10px; border-radius: 8px; background: var(--card); border: 1px solid var(--line); color: var(--text); font: inherit; font-size: 13px; cursor: pointer; text-align: left; }
+.stk-r:hover { border-color: var(--accent); }
+.stk-r.off { cursor: default; opacity: 0.6; }
+.stk-r.off:hover { border-color: var(--line); }
+.stk-r .loc { font: 600 13px/1 Consolas, monospace; letter-spacing: 0.3px; }
+.stk-r .ws { font-size: 11.5px; padding: 2px 7px; border-radius: 999px; background: var(--soft); color: var(--muted); }
+.stk-r .ws-PICKED, .stk-r .ws-PACKED { background: rgba(91, 155, 255, 0.18); color: var(--accent); }
+.stk-r .ws.bad { background: rgba(220, 38, 38, 0.18); color: var(--bad); }
+.stk-r .q { margin-left: auto; font-size: 15px; font-variant-numeric: tabular-nums; }
+.stk-sku { color: var(--muted); font-size: 11px; text-align: right; }
+
+/* 접는 칸 제목: 화살표·글이 왼쪽부터, 부제만 오른쪽(도움말 제목이 오른쪽으로 쏠리던 것) */
+details.sec > summary h4 { justify-content: flex-start; gap: 6px; }

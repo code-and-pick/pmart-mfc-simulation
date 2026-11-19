@@ -4,7 +4,6 @@ import { OrderCards } from './OrderCards';
 import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
-import { Why } from './Why';
 
 export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
   WAITING: '대기',
@@ -155,50 +154,63 @@ export function RealOrders() {
 const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PACKED: '포장', CANCEL_RETURN_PENDING: '복귀 대기', UNSTOWED: '미적치' };
 
 /** 주문에 나온 SKU 의 실제 재고(서버 응답 그대로). 평면에 없는 위치는 표에만 나온다 */
+/**
+ * 주문에 나온 상품의 실제 재고(서버 응답 그대로) — 상품마다 카드: 이름·합계 / 위치마다 한 줄(위치 · 상태 · 수량).
+ * 위치를 누르면 3D 에서 그 칸으로. 평면에 없는 위치는 회색(사용자 2026-11-20 "재고·바코드 탭도 … 작고 빽빽").
+ */
 export function RealStockTable() {
-  const { sim } = useApp();
+  const { sim, controller } = useApp();
   const real = sim.real!;
-  const units = real.stockUnits().sort((a, b) => a.sku.localeCompare(b.sku) || a.locationCode.localeCompare(b.locationCode));
+  const units = real.stockUnits();
   if (!units.length) {
-    return <div className="note">열린 주문에 나온 상품이 없어 읽은 재고가 없습니다. 센터 전체 재고를 칸 단위로 읽는 API 는 없어 주문 상품만 읽습니다.</div>;
+    return <div className="note">열린 주문에 나온 상품이 없어 읽은 재고가 없습니다(센터 전체 재고를 칸 단위로 읽는 API 는 없음).</div>;
   }
   const names = new Map<string, string>();
   for (const t of real.tasks.values()) for (const l of t.detail?.lines ?? []) if (l.productName) names.set(l.sku, l.productName);
+  const bySku = new Map<string, typeof units>();
+  // 같은 칸·같은 상태는 LOT 이 달라도 한 줄로(수량 합) — 칸마다 한 번만 보이게
+  for (const u of units) {
+    const list = bySku.get(u.sku) ?? [];
+    const same = list.find((x) => x.locationCode === u.locationCode && x.workState === u.workState && x.qualityState === u.qualityState);
+    if (same) same.qty += u.qty;
+    else list.push({ ...u });
+    bySku.set(u.sku, list);
+  }
+  const groups = [...bySku].sort((x, y) => (names.get(x[0]) ?? x[0]).localeCompare(names.get(y[0]) ?? y[0]));
   return (
-    <>
-      <div className="note">주문 상품 {real.stock.size}개 재고</div>
-      <Why>
-        GET /mfcs/{sim.params.mfcId}/stock — 작업이 바뀌면 바로, 아니면 {REAL_LINK.stockRefreshSec}초마다 다시 읽습니다. 3D 의 다른 칸은 회색(수량 모름).
-      </Why>
-      <table className="inv real">
-        <thead>
-          <tr>
-            <th>상품</th>
-            <th>위치</th>
-            <th>상태</th>
-            <th>수량</th>
-          </tr>
-        </thead>
-        <tbody>
-          {units.map((u, i) => (
-            <tr key={i} title={u.sku}>
-              <td>
-                <div>{u.sku}</div>
-                <div className="sub">{names.get(u.sku) ?? ''}</div>
-              </td>
-              <td>
-                {u.locationCode}
-                {!sim.backendLocation(u.locationCode) && !sim.backendPoint(u.locationCode) && <div className="sub">평면에 없는 위치</div>}
-              </td>
-              <td>
-                {WORK_KO[u.workState] ?? u.workState}
-                {u.qualityState !== 'NORMAL' && <div className="sub warn">{u.qualityState}</div>}
-              </td>
-              <td>{u.qty}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </>
+    <div className="stk">
+      <div className="stk-h">
+        주문 상품 {groups.length}개 · 위치를 누르면 3D 에서 그 칸
+      </div>
+      {groups.map(([sku, us]) => {
+        const stored = us.filter((u) => u.workState === 'STORED' && u.qualityState === 'NORMAL').reduce((a, u) => a + u.qty, 0);
+        const total = us.reduce((a, u) => a + u.qty, 0);
+        return (
+          <div key={sku} className="stk-c">
+            <div className="stk-t">
+              <span className="nm">{names.get(sku) ?? sku}</span>
+              <span className="tot">
+                <b>{stored}</b>
+                <small>선반 · 전체 {total}</small>
+              </span>
+            </div>
+            {us
+              .sort((x, y) => x.locationCode.localeCompare(y.locationCode))
+              .map((u, i) => {
+                const onPlan = !!(sim.backendLocation(u.locationCode) || sim.backendPoint(u.locationCode));
+                return (
+                  <button key={i} className={`stk-r ${onPlan ? '' : 'off'}`} onClick={() => onPlan && controller.focusBackendCode(u.locationCode)} title={onPlan ? '3D 에서 그 칸으로' : '평면에 없는 위치'}>
+                    <span className="loc">{u.locationCode}</span>
+                    <span className={`ws ws-${u.workState}`}>{WORK_KO[u.workState] ?? u.workState}</span>
+                    {u.qualityState !== 'NORMAL' && <span className="ws bad">{u.qualityState === 'QUARANTINED' ? '격리' : u.qualityState}</span>}
+                    <b className="q">{u.qty}</b>
+                  </button>
+                );
+              })}
+            <div className="stk-sku">{sku}</div>
+          </div>
+        );
+      })}
+    </div>
   );
 }
