@@ -308,7 +308,7 @@ function TestInboundControls() {
     setBusy('입고 예정 만들고 수령하는 중…');
     try {
       const r = await sim.runTestInbound(p.lines, p.withVirtual);
-      push(`${r.receiptId.slice(-10)} · ${p.lines.length}품목 ${r.units}개 수령 → ${p.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+      push(`시험 입고 ${p.lines.length}품목 ${r.units}개 수령 → ${p.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
       controller.focusZone('RCV');
     } catch (e) {
       push(`시험 입고 실패 — ${why(e)}`, true);
@@ -417,7 +417,7 @@ function VirtualWorkers() {
           {cut.map((c) => (
             <div key={c.account} className="cut-r">
               <span>
-                {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? c.taskId.slice(-12)}
+                {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? '번호 없음'}
               </span>
               <button className="link" onClick={() => sim.resumeVirtual(c.account)}>
                 이어 하기

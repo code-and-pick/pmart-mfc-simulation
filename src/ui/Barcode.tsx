@@ -50,6 +50,7 @@ export function Barcode({
   caption,
   height = 56,
   onGo,
+  showValue = true,
 }: {
   value: string;
   kind?: 'code128' | 'ean13' | 'gs1';
@@ -57,6 +58,8 @@ export function Barcode({
   height?: number;
   /** 누르면 3D 에서 그 위치로(위치·카트 코드). 없으면 누르면 크게 */
   onGo?: () => void;
+  /** 바코드 밑 원문 글자 — 화면 번호만 보일 곳(ADR-0070)은 끈다(크게 버튼은 남김) */
+  showValue?: boolean;
 }) {
   const v = useScanView();
   const zoom = () => scanView.open({ value, kind, caption });
@@ -67,7 +70,7 @@ export function Barcode({
         <CodeImage value={value} kind={kind} mode={v.mode} size={v.mode === 'qr' && kind !== 'gs1' ? 120 : MAX_CSS_WIDTH} height={height} />
       </div>
       <div className="bc-val">
-        {value}
+        {showValue && value}
         <button className="bc-zoom" onClick={zoom} title="화면 가득 크게">
           크게
         </button>

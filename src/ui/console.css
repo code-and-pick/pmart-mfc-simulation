@@ -552,3 +552,24 @@ button.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--acce
 .scan-bubble .why-b, .scan-bubble .why-t { color: #64748b; }
 .guess { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 5px; background: rgba(148, 163, 184, 0.22); color: var(--muted); font-size: 10px; font-weight: 600; vertical-align: 1px; }
 .hcode { font-size: 13px; letter-spacing: 1px; color: var(--accent); }
+
+/* 출하대기 랙 말풍선 — 한 줄에 온도·주문번호·라벨 번호, 누르면 QR·시스템 번호(ADR-0070) */
+.scan-bubble.rack { min-width: 250px; }
+.rk { display: flex; flex-direction: column; gap: 3px; }
+.rk-line { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #eee; font: inherit; cursor: pointer; text-align: left; }
+.rk-line:hover, .rk-row.on .rk-line { border-color: #8ab4f8; }
+.rk-t { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #0f172a; }
+.rk-t.t-AMBIENT { background: #fbbf24; }
+.rk-t.t-CHILLED { background: #7dd3fc; }
+.rk-t.t-FROZEN { background: #a5b4fc; }
+.rk-o { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: 0.5px; }
+.rk-c { margin-left: auto; font: 700 14px/1 Consolas, monospace; letter-spacing: 1px; color: #8ab4f8; }
+.rk-m { color: #9aa3b2; font-size: 11px; margin-left: 6px; }
+.rk-c + .rk-m { margin-left: 6px; }
+.rk-o + .rk-m { margin-left: auto; }
+.rk-d { padding: 6px 4px 4px; }
+.rk-kv { display: grid; grid-template-columns: 32px 1fr; gap: 2px 8px; font-size: 11.5px; margin-top: 4px; }
+.rk-kv span { color: #9aa3b2; }
+.rk-sys { margin-top: 4px; font-size: 11px; color: #9aa3b2; }
+.rk-sys summary { cursor: pointer; }
+.rk-sys code { font-size: 10.5px; color: #cbd5e1; word-break: break-all; }

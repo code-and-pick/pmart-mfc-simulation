@@ -13,6 +13,7 @@ import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
 import { LotLabel } from './ScanBoard';
 import { Why } from './Why';
+import { TEMP_KO } from './text';
 
 const HEAD_Y = 2.0;
 /** 위 막대(상단 바) 아래부터 띄운다(px) */
@@ -137,6 +138,8 @@ const RACK_MAX = 6;
 function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (el: HTMLDivElement | null) => void; shipmentId: string | null }) {
   const { sim } = useApp();
   const [open, setOpen] = useState(true);
+  // 한눈에는 화면 번호(주문번호·라벨 번호)만, 줄을 누르면 그 포장의 QR·시스템 번호(ADR-0070 — 사용자 2026-11-20 "버튼을 누르면 세부적으로, 관리자가 바로 볼 때는 직관적으로")
+  const [pick, setPick] = useState<string | null>(null);
   const real = sim.real;
   const list = (real?.shipments() ?? [])
     .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId) && sim.rackFor(r.shipmentId) === rack)
@@ -146,28 +149,53 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   return (
     <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
       <div className="sb-head">
-        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sub">라벨 QR — 라이더 인계 때 찍음</span>
+        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개
         <button className="sb-x" onClick={() => setOpen(!open)} title={open ? '접기' : '펼치기'}>
           {open ? '▾' : '▸'}
         </button>
       </div>
-      {open &&
-        list.slice(0, RACK_MAX).map(({ r, p }) => (
-          <div key={p.packageId}>
-            <div className="sub">
-              주문 {p.orderNumber ?? r.info!.orderNumber ?? r.info!.orderId} · {p.temperatureZone ?? '-'} · 봉투 {p.bagCount}
-              {p.handoverCode ? (
-                <>
-                  {' · '}QR 안 되면 번호 <b className="hcode">{p.handoverCode}</b>
-                </>
-              ) : (
-                ''
-              )}
-            </div>
-            <Barcode value={p.qrCode} caption={`포장 ${p.packageId} v${p.packageVersion}`} height={32} />
-          </div>
-        ))}
-      {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 실제 주문 탭에서 주문을 고르면 그 주문 것만</div>}
+      {open && (
+        <div className="rk">
+          {list.slice(0, RACK_MAX).map(({ r, p }) => {
+            const no = p.orderNumber ?? r.info!.orderNumber;
+            const t = p.temperatureZone ?? 'AMBIENT';
+            const on = pick === p.packageId;
+            return (
+              <div key={p.packageId} className={`rk-row ${on ? 'on' : ''}`}>
+                <button className="rk-line" onClick={() => setPick(on ? null : p.packageId)} title={on ? '접기' : 'QR·시스템 번호 보기'}>
+                  <span className={`rk-t t-${t}`}>{TEMP_KO[t]}</span>
+                  <span className="rk-o">{no ?? <span className="muted">번호 없음</span>}</span>
+                  {p.handoverCode && <span className="rk-c">{p.handoverCode}</span>}
+                  <span className="rk-m">{on ? '⌄' : 'QR ›'}</span>
+                </button>
+                {on && (
+                  <div className="rk-d">
+                    <Barcode value={p.qrCode} height={32} showValue={false} />
+                    <div className="rk-kv">
+                      <span>봉투</span>
+                      <b>{p.bagCount}</b>
+                      {p.handoverCode && (
+                        <>
+                          <span>번호</span>
+                          <b>{p.handoverCode} — QR 이 안 되면 라이더가 입력</b>
+                        </>
+                      )}
+                    </div>
+                    <details className="rk-sys">
+                      <summary>시스템 번호</summary>
+                      <code>{p.packageId}</code> v{p.packageVersion}
+                      <button className="link" onClick={() => void navigator.clipboard?.writeText(p.packageId)}>
+                        복사
+                      </button>
+                    </details>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+      {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 주문을 고르면 그 주문 것만</div>}
       <Why>PDA 가 랙을 찍어 서버에 올린 포장은 서버 랙 그대로(F-12). 서버가 모르는 포장은 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1(추정).</Why>
     </div>
   );
