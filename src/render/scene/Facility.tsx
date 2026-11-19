@@ -91,7 +91,10 @@ function Zones({ L }: { L: Layout }) {
             </mesh>
             <Label
               text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label}
-              position={[r.x0 + w / 2, tall ? 2.4 : 3.6, z.kind === 'SHIPPING' ? r.z1 + 0.3 : r.z0 + Math.min(1.5, d / 2)]}
+              // 외부 출하대기는 라이더가 랙 앞에 서는 곳 — 이름을 머리 높이에 띄우면 라이더 이름표·머리와 겹친다(사용자 2026-11-20 "라이더 왔을 때 … 겹치는 거") → 바닥 앞 왼쪽 모서리에
+              position={
+                z.kind === 'SHIPPING' ? [r.x0 + 1.3, 0.3, r.z1 - 0.35] : [r.x0 + w / 2, tall ? 2.4 : 3.6, r.z0 + Math.min(1.5, d / 2)]
+              }
               opts={{ size: 40, bg: 'rgba(0,0,0,0.55)', screenPx: 17 }}
             />
           </group>
