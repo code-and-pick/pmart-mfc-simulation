@@ -67,8 +67,8 @@ export type LabelMode = 'all' | 'rack' | 'off';
 /** 오른쪽 패널 화면(왼쪽 아이콘 메뉴로 고름) */
 export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
 /** 왼쪽 패널 화면 */
-/** 왼쪽 패널 — 설정 · 도움말(색 구분은 도움말 안, 2026-11-20) */
-export type LeftView = 'settings' | 'help';
+/** 왼쪽 패널 — 설정 · 구역(구역 정보·재고, 2026-11-20 떠 있는 카드에서 옮김) · 도움말 */
+export type LeftView = 'settings' | 'zone' | 'help';
 export type Theme = 'dark' | 'light';
 
 /** 이 브라우저에 기억하는 화면 편의 설정(테마) — 못 읽으면 기본(어둡게). 토큰·업무 값은 두지 않는다 */
@@ -145,6 +145,8 @@ export class ViewController extends Emitter {
     this.follow = null;
     this.nearCut = 0;
     this.focusedZone = key;
+    // 구역을 고르면 왼쪽 "구역" 화면에 그 구역 정보를 고정해 보인다(사용자 2026-11-20 "팝업창으로 띄울 게 아니라 왼쪽탭에")
+    if (key !== 'ALL' && this.leftView !== null) this.leftView = 'zone';
     const r = v.rect;
     const cx = (r.x0 + r.x1) / 2;
     const cz = (r.z0 + r.z1) / 2;

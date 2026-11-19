@@ -858,7 +858,7 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .ocd-place .link { margin-left: auto; }
 
 /* 실서버 구역 재고 — 랙별 → 단별 → 칸 */
-.zonecard:has(.zst) { width: 360px; max-height: calc(100vh - 200px); display: flex; flex-direction: column; }
+
 .zst { display: flex; flex-direction: column; gap: 8px; min-height: 0; }
 .zst .stats.four { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .zst .stat { background: var(--soft); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; }
@@ -883,3 +883,12 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .zst-cell .q { font-size: 11px; color: var(--bad); }
 .zst-cell b { text-align: right; font-variant-numeric: tabular-nums; }
 .zst-none { font-size: 12px; color: var(--muted); padding: 2px 8px; }
+/* 왼쪽 "구역" 화면 */
+.panel.left:has(.zone-panel) { width: 340px; }
+.zone-panel { display: flex; flex-direction: column; gap: 10px; flex: 1; min-height: 0; }
+.zone-chips button { padding: 4px 9px; font-size: 12px; }
+.zone-h { font-size: 15px !important; color: var(--text) !important; margin: 2px 0 0 !important; }
+.zone-h span { font-weight: 400; font-size: 12px; color: var(--muted); }
+.zone-panel .zst-list { max-height: none; flex: 1; }
+.zone-panel .zst { flex: 1; min-height: 0; }
+.zone-panel .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }

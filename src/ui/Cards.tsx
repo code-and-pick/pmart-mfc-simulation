@@ -18,7 +18,7 @@ function Stat({ v, k }: { v: ReactNode; k: string }) {
   );
 }
 
-function ZoneBody({ zoneKey }: { zoneKey: string }) {
+export function ZoneBody({ zoneKey }: { zoneKey: string }) {
   const { sim: s, controller } = useApp();
   const inv = s.mock?.inventory;
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
@@ -152,26 +152,37 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
 
 /** PDA 카드의 작업 종류 이름 */
 const TASK_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '취소품 복귀', PUTAWAY: '적치', REPLENISH: '보충', MOVE: '재고 이동', INSPECT: '품질검사' };
-export function ZoneCard() {
+/** 왼쪽 패널 "구역" — 구역 고르기 칩 + 고른 구역 정보(구역 카드는 떠 있지 않고 여기 고정) */
+export function ZonePanel() {
   const { sim } = useApp();
   const view = useView();
   useTick();
   const key = view.focusedZone;
   const v = view.views.find((x) => x.key === key);
-  const show = !!v && key !== 'ALL';
   const zone = v ? sim.layout.zones.find((z) => z.id === v.zoneId) : undefined;
   return (
-    <div className={`card zonecard${show ? ' show' : ''}`}>
-      {show && v && (
+    <section className="sec zone-panel">
+      <div className="chips zone-chips">
+        {view.views
+          .filter((x) => x.key !== 'ALL')
+          .map((x) => (
+            <button key={x.key} className={x.key === key ? 'on' : ''} onClick={() => view.focusZone(x.key)}>
+              {x.label}
+            </button>
+          ))}
+      </div>
+      {v && key !== 'ALL' ? (
         <>
-          <div className="hd">
-            <b>{v.label}</b>
-            {zone?.docPyeong ? <span className="note">{zone.docPyeong}평</span> : null}
-          </div>
+          <h4 className="zone-h">
+            {v.label}
+            {zone?.docPyeong ? <span>{zone.docPyeong}평</span> : null}
+          </h4>
           <ZoneBody zoneKey={key} />
         </>
+      ) : (
+        <div className="scan-empty">구역을 고르면(위 칩 또는 3D 바닥) 랙 수·적치 수량·랙별·단별 재고가 여기에 나옵니다.</div>
       )}
-    </div>
+    </section>
   );
 }
 

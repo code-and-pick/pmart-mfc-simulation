@@ -11,6 +11,7 @@ import type { InboundPlanLine } from '../domain/testInbound';
 import { fmtClock } from '../sim/metrics';
 import type { HttpSettings } from '../sim/simulation';
 import { Help } from './Help';
+import { ZonePanel } from './Cards';
 
 /** ⓘ — 마우스를 올리거나 누르면 한두 줄 설명 */
 export function Tip({ text }: { text: string }) {
@@ -485,6 +486,8 @@ export function LeftPanel() {
     <div className="panel left">
       {view.leftView === 'help' ? (
         <Help />
+      ) : view.leftView === 'zone' ? (
+        <ZonePanel />
       ) : mock ? (
         <>
           <OutboundControls />

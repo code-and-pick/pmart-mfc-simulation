@@ -18,6 +18,7 @@ const MOCK_RIGHT: [RightView, string, string][] = [
 ];
 const LEFT: [LeftView, string, string][] = [
   ['settings', '⚙', '설정'],
+  ['zone', '▣', '구역'],
   ['help', '?', '도움말'],
 ];
 
