@@ -199,7 +199,11 @@ class FakeBe {
   }
   async sealPackage(s: string, body: { contents: { sku: string }[]; temperatureZone?: string; packingLocation?: string }) {
     this.calls.push(`seal ${s} ${body.contents.map((c) => c.sku).join('+')} ${body.temperatureZone ?? '-'} @${body.packingLocation ?? '-'}`);
-    return {};
+    return { packageId: `PKG-${body.temperatureZone ?? 'X'}` };
+  }
+  async stagePackage(id: string, rack: string) {
+    this.calls.push(`stage ${id} ${rack}`);
+    return { packageId: id, stagingLocation: rack };
   }
   async getCenterStock() {
     this.calls.push('stock');
@@ -278,6 +282,8 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(c[6]).toMatch(/^dispatch ORD-1-S1 \d+m$/); // 포장 시작 때 배차 요청
     // 장바구니로 집품했으면 packingLocation = 이 패킹대(필수 — 장바구니 → 패킹대)
     expect(c.slice(7, 9).sort()).toEqual(['seal ORD-1-S1 B-1 AMBIENT @PAK-A-01', 'seal ORD-1-S1 F-1 FROZEN @PAK-A-01']);
+    // ⑤ 랙: 밀봉한 포장마다 출하대기 랙에 올림(fulfillment 0.20.0 stagePackage, F-12)
+    expect(c.filter((x) => x.startsWith('stage')).sort()).toEqual(['stage PKG-AMBIENT DSP-A-01', 'stage PKG-FROZEN DSP-A-01']);
     expect(c).not.toContain('stock'); // 내가 내려놓은 곳을 알면 재고를 묻지 않는다
     expect(w.ordersDone).toBe(1);
     expect(new Set(be.bodies).size).toBe(2); // 집품마다 다른 Idempotency-Key

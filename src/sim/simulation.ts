@@ -255,6 +255,7 @@ export class Simulation {
         wire: (c) => this.codes.toBackend(c),
         carts: this.carts,
         speedFactor: (id) => (this.real?.speedFactor(id) ?? 1) * this.speedBoost,
+        pickRack: () => this.pickRack(),
         pdaInUse: (id) => this.pdaInUse(id),
         ownWork: (id) => this.ownWork(id),
         onSkipped: (account) => {
@@ -725,9 +726,22 @@ export class Simulation {
   readonly racks = ['DSP-A-01', 'DSP-A-02'] as const;
   /** 화면에서 "랙 N 찍음"으로 고른 랙(출고 → 랙). 서버는 랙을 모른다(R-20) — 이 화면에서만 */
   private readonly rackChosen = new Map<string, string>();
-  /** 그 출고 포장을 그릴 랙 — 화면에서 고른 랙, 모르면(다른 화면·다음 작업으로 넘어감) 랙 1 */
+  /** 서버가 아는 그 출고의 출하대기 랙 — 포장 `stagingLocation`(fulfillment 0.20.0, F-12). 아직 안 올렸으면 null */
+  serverRack(shipmentId: string): string | null {
+    const pk = this.real?.shipmentInfo.get(shipmentId)?.data.packages ?? [];
+    return pk.find((p) => p.stagingLocation)?.stagingLocation ?? null;
+  }
+
+  /** 그 출고 포장을 그릴 랙 — 서버 랙(F-12), 없으면 화면에서 고른 랙, 모르면 랙 1(추정) */
   rackFor(shipmentId: string): string {
-    return this.rackChosen.get(shipmentId) ?? this.racks[0];
+    return this.serverRack(shipmentId) ?? this.rackChosen.get(shipmentId) ?? this.racks[0];
+  }
+
+  /** 가상 작업자가 올릴 랙 — 지금 포장이 적은 쪽(같으면 랙 1) [시뮬] */
+  pickRack(): string {
+    const n = new Map<string, number>(this.racks.map((r) => [r, 0]));
+    for (const r of this.real?.shipments() ?? []) if (r.info?.state === 'READY' && this.onRack(r.shipmentId)) n.set(this.rackFor(r.shipmentId), (n.get(this.rackFor(r.shipmentId)) ?? 0) + 1);
+    return [...this.racks].sort((a, b) => (n.get(a) ?? 0) - (n.get(b) ?? 0))[0];
   }
 
   /** 끝난 PACK 인데 ⑤ 랙을 아직 안 찍었다고 볼 것 — 출고 출하 대기(READY·부분 인계), 화면에서 "랙 찍음" 안 누름 */
@@ -736,6 +750,7 @@ export class Simulation {
     if (s.taskType !== 'PACK' || t.closed?.state !== 'COMPLETED' || !s.shipmentId) return false;
     const st = this.real?.shipmentInfo.get(s.shipmentId)?.data.state;
     if (st !== 'READY' && st !== 'PARTIALLY_HANDED_OVER') return false;
+    if (this.serverRack(s.shipmentId)) return false; // PDA 가 랙을 찍어 서버에 올라감(F-12)
     return !this.observedWorkers.some((w) => w.passed.has(`${s.taskId}:PACK-RACK`));
   }
 
@@ -746,6 +761,7 @@ export class Simulation {
   onRack(shipmentId: string): boolean {
     const real = this.real;
     if (!real) return false;
+    if (this.serverRack(shipmentId)) return true; // 서버가 안다(F-12)
     const pack = [...real.tasks.values()].find((t) => t.summary.taskType === 'PACK' && t.summary.shipmentId === shipmentId);
     if (!pack || pack.closed?.state !== 'COMPLETED') return false;
     const wid = pack.summary.assignment?.workerId;

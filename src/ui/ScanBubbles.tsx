@@ -161,7 +161,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
           </div>
         ))}
       {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 실제 주문 탭에서 주문을 고르면 그 주문 것만</div>}
-      <div className="note">서버는 포장이 어느 랙에 있는지 모릅니다(R20) — 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1.</div>
+      <div className="note">PDA 가 랙을 찍어 서버에 올린 포장은 서버 랙 그대로(F-12). 서버가 모르는 포장은 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1(추정).</div>
     </div>
   );
 }
@@ -357,7 +357,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
             </button>
           </div>
           <div className="note">
-            PDA 는 랙을 찍으면 다음 건으로 넘어가지만 서버에 보내지 않습니다 — 작업자가 랙에 서고 {REAL_LINK.rackAutoSec}초 지나면 랙에 둔 것으로 넘깁니다(버튼을 안 누르면 랙 1, 추정). 그다음 피킹 대기 자리로 갑니다.
+            PDA 가 랙을 찍어 서버에 올리면(fulfillment 0.20.0) 바로 넘어갑니다. 서버에 안 오면 작업자가 랙에 서고 {REAL_LINK.rackAutoSec}초 뒤 랙에 둔 것으로 넘깁니다(버튼을 안 누르면 랙 1, 추정). 그다음 피킹 대기 자리로 갑니다.
           </div>
         </>
       );

@@ -185,7 +185,8 @@ export function RealStock() {
     // 출하 대기 출고의 밀봉 포장 내용(랙 → SKU → 수량) — 그만큼의 PACKED 를 그 출고의 랙(화면에서 고른 랙, 모르면 랙 1)에
     const toRack = new Map<string, Map<string, number>>();
     for (const r of real.shipments()) {
-      if (r.info?.state !== 'READY' || !racked.includes(r.shipmentId)) continue;
+      // 서버가 랙을 아는 출고(F-12)는 포장분 재고가 이미 랙 위치로 와 그대로 그려진다 — 추정에서 뺀다
+      if (r.info?.state !== 'READY' || !racked.includes(r.shipmentId) || sim.serverRack(r.shipmentId)) continue;
       const rk = sim.rackFor(r.shipmentId);
       const bySku = toRack.get(rk) ?? new Map<string, number>();
       toRack.set(rk, bySku);

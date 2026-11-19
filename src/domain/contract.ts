@@ -313,6 +313,10 @@ export interface Package {
   orderNumber?: string | null;
   /** (0.13.0, F-8) 라벨 숫자 6자리 — QR 이 안 찍힐 때 라이더가 입력 */
   handoverCode?: string | null;
+  /** (0.20.0, F-12) 밀봉한 패킹대 */
+  packingLocation?: string | null;
+  /** (0.20.0, F-12) 올려 둔 출하대기 랙(DSP-…) — null 이면 아직 패킹대 */
+  stagingLocation?: string | null;
   contents: PackageContentLine[];
   bagCount: number;
   containsAlcohol: boolean;

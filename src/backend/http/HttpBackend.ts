@@ -209,6 +209,11 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('GET', `/shipments/${enc(shipmentId)}`);
   }
 
+  /** mfc-fulfillment stagePackage(0.20.0, F-12·R-20) — 밀봉 포장을 출하대기 랙에. 포장분 PACKED 위치만 패킹대 → 랙(수량·예약 불변) */
+  stagePackage(packageId: string, stagingLocation: string, idempotencyKey: string): Promise<Package> {
+    return this.request('POST', `/packages/${enc(packageId)}/staging`, { body: { stagingLocation }, idempotencyKey });
+  }
+
   sealPackage(shipmentId: string, body: SealPackageRequest, idempotencyKey: string): Promise<Package> {
     return this.request('POST', `/shipments/${enc(shipmentId)}/packages`, { body, idempotencyKey });
   }

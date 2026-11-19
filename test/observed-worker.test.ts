@@ -445,4 +445,19 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     sim.setVirtualWorkers(3);
     expect(started).toEqual(['mfcw-pp-03', 'mfcw-pp-01', 'mfcw-pp-02']);
   });
+
+  it('서버가 랙을 알면(포장 stagingLocation, F-12) ⑤ 랙 단계 없이 그 랙 — 추정·자동 넘김 안 씀', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const p = pick([0, 0]);
+    const pack = { ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'COMPLETED', packingLocations: ['CRT-A-07'] } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    real.shipmentInfo.set('ORD-1-S1', { data: { shipmentId: 'ORD-1-S1', state: 'READY', dispatchRequest: {}, packages: [{ state: 'SEALED', contents: [], stagingLocation: 'DSP-A-02' }] } as never, readMs: 0, sig: '' });
+    real.polls++;
+    (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    expect(sim.observedWorkers).toHaveLength(0); // 랙 단계로 세우지 않음
+    expect(sim.onRack('ORD-1-S1')).toBe(true);
+    expect(sim.rackFor('ORD-1-S1')).toBe('DSP-A-02');
+    expect(sim.serverRack('ORD-1-S1')).toBe('DSP-A-02');
+  });
 });

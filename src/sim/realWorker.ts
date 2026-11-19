@@ -54,6 +54,8 @@ export interface RealSiteContext {
   onSkipped?: (account: string) => void;
   /** 이 운영자에게 서버에 남은 자기 일이 있나(열린 작업의 담당, 또는 자기가 피킹한 배정 전 PACK) — 이어 하기 작업자가 언제 멈출지 */
   ownWork?: (workerId: string) => boolean;
+  /** 밀봉한 포장을 올릴 출하대기 랙(없으면 DSP-A-01) */
+  pickRack?: () => string;
 }
 
 /** 가상 작업자가 작업 시작 때 보내는 기기 ID — 서버 작업 상세 activeStart.deviceId 로 돌아온다(끊긴 작업 찾기) */
@@ -422,6 +424,8 @@ export class RealWorker extends Agent {
     this.pda = this.view(task, 'PACK', '패킹대 대기');
     this.activity = '패킹대 대기';
     await this.walkTo(ctx.layout.points.packQueue);
+    /** 이번에 밀봉한 포장 — ⑤ 랙에 올릴 것 */
+    const sealed: string[] = [];
     const station = await ctx.stations.acquire(this.account);
     try {
       this.activity = `${station.id}로 이동`;
@@ -474,7 +478,7 @@ export class RealWorker extends Agent {
         n++;
         this.pda.step = `${g.temp ? TEMP_KO[g.temp] : ''} 봉투 밀봉·라벨 출력 (${n}/${groups.size})`;
         await this.work(12);
-        await this.retry(() =>
+        const pkg = await this.retry(() =>
           be.sealPackage(
             shipmentId,
             {
@@ -487,6 +491,7 @@ export class RealWorker extends Agent {
             this.key('seal', shipmentId, `:${g.loc ?? '-'}:${g.temp ?? '-'}`),
           ),
         );
+        if (pkg?.packageId) sealed.push(pkg.packageId);
         this.carrying.push(g.temp ?? 'AMBIENT');
       }
       for (const l of lines) this.dropped.delete(l.sku);
@@ -494,12 +499,23 @@ export class RealWorker extends Agent {
     } finally {
       ctx.stations.release(station);
     }
-    // 출하대기 랙(DSP-A-01) — 포장은 위치를 주지 않아 랙 1 앞에 두는 것으로 그린다
+    // ⑤ 출하대기 랙 — 랙에 올리고 서버에 알린다(fulfillment 0.20.0 stagePackage, F-12·R-20): 포장분 위치만 패킹대 → 랙
+    const rack = ctx.pickRack?.() ?? 'DSP-A-01';
     this.state = 'TO_SHIP';
-    this.activity = '출하대기 랙으로';
+    this.activity = `출하대기 랙 ${rack} 으로`;
     this.pda!.step = '출하대기 랙 적재';
-    await this.walkTo(ctx.point('DSP-A-01') ?? ctx.layout.points.shipDrop);
+    await this.walkTo(ctx.point(rack) ?? ctx.layout.points.shipDrop);
     await this.work(4 * Math.max(1, this.carrying.length));
+    for (const id of sealed) {
+      try {
+        await this.retry(() => be.stagePackage(id, rack, this.key('stage', id, `:${rack}`)));
+      } catch (e) {
+        // 랙 올리기가 거절돼도 포장·인계는 그대로(서버 위치만 패킹대) — 사유만 남긴다
+        const why = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}` : (e as Error).message;
+        this.lastProblem = `랙 올리기 ${why}`;
+        ctx.log(`${this.account} 포장 ${id} 랙 ${rack} 올리기 실패 — ${why}`);
+      }
+    }
     this.carrying = [];
     this.ordersDone += 1;
     ctx.log(`${this.account} 포장 완료 ${shipmentId}`);
