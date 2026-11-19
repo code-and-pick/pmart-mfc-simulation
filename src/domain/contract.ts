@@ -595,6 +595,19 @@ export interface NextTaskDetail {
 }
 
 /** mfc-inbound InboundTask (0.9.0) — 품질검사(INSPECT)·적치(PUTAWAY). 담당(assigneeId)이 있으면 담당만 실행(409 NOT_ASSIGNEE) */
+/** mfc-inventory listStockUnits 한 줄(GET /mfcs/{mfcId}/stock-units, 0.26.0·0.33.0 R-15) — 수량 > 0 인 위치·SKU·LOT 단위 */
+export interface StockUnitRow {
+  locationCode: string;
+  sku: string;
+  productName?: string | null;
+  lotId: string;
+  qualityState: StockQualityState;
+  workState: StockWorkState;
+  qty: number;
+  zone?: string | null;
+  temperatureZone?: string | null;
+}
+
 /** mfc-fulfillment CenterShipment(0.15.0 F-9, GET /shipments?mfcId=) 중 시뮬레이터가 쓰는 것 — 피킹·패킹 시작 시각, 출하 대기 시각 */
 export interface CenterShipment {
   shipmentId: string;

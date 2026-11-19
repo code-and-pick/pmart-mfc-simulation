@@ -13,6 +13,7 @@ import type {
   CapacityWorker,
   CenterStock,
   CenterShipment,
+  StockUnitRow,
   DeliveryOrderSummary,
   DeliveryDispatch,
   DispatchState,
@@ -42,6 +43,8 @@ export interface RealReader {
   listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
+  /** (inventory 0.33.0, R-15) 센터 전체 재고 단위 행 */
+  listAllStockUnits?(mfcId: string, maxPages: number): Promise<StockUnitRow[]>;
   /** (center-master) 센터 이름 — 화면에 MFC ID 대신 */
   getCenterName?(centerId: string): Promise<string | null>;
   /** (fulfillment 0.15.0) 센터 출고 목록 — 피킹·패킹 시작 시각 */
@@ -287,6 +290,7 @@ export class RealBoard {
     this.lastPollMs = this.nowMs();
     try {
       await this.refreshCenterName(this.nowMs());
+      await this.refreshFullStock(this.nowMs());
       await this.refreshWorkers();
       const list = await this.reader.listTasks(this.mfcId, [...this.opt.openStates]);
       const now = this.nowMs();
@@ -383,6 +387,25 @@ export class RealBoard {
   /** 센터 이름(center-master) — 한 번 읽고, 못 읽으면 1분 뒤 다시. 모르면 null(화면은 ID) */
   centerName: string | null = null;
   private centerNameReadMs = 0;
+
+  /** 센터 전체 재고(stock-units) — fullStockSec 마다. 구역·랙·단별 수량 화면용(사용자 2026-11-20) */
+  fullStock: StockUnitRow[] = [];
+  fullStockReadMs = 0;
+  fullStockVersion = 0;
+  fullStockError: string | null = null;
+  fullStockOpt = { everySec: 30, maxPages: 60 };
+
+  private async refreshFullStock(now: number) {
+    if (!this.reader.listAllStockUnits || now - this.fullStockReadMs < this.fullStockOpt.everySec * 1000) return;
+    this.fullStockReadMs = now;
+    try {
+      this.fullStock = await this.reader.listAllStockUnits(this.mfcId, this.fullStockOpt.maxPages);
+      this.fullStockError = null;
+      this.fullStockVersion++;
+    } catch (e) {
+      this.fullStockError = describe(e);
+    }
+  }
 
   /** 작업 조회가 실패해도 이름은 따로 — 조회 맨 앞에서 */
   private async refreshCenterName(now: number) {

@@ -6,6 +6,7 @@ import type { TemperatureZone } from '../domain/contract';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import { INBOUND_KO, STATE_KO, TEMP_KO } from './text';
 import { Barcode } from './Barcode';
+import { RealZoneStock } from './ZoneStock';
 import { BACKEND_FACTS } from '../config';
 
 function Stat({ v, k }: { v: ReactNode; k: string }) {
@@ -22,6 +23,8 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
   const inv = s.mock?.inventory;
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
   const temp: TemperatureZone | null = zoneKey === 'A' ? 'FROZEN' : zoneKey === 'B' ? 'CHILLED' : zoneKey === 'C-H' ? 'AMBIENT' : null;
+  // 실서버: 센터 전체 재고로 구역 → 랙 → 단 → 칸
+  if (temp && s.real) return <RealZoneStock temp={temp} />;
   if (temp) {
     const racks = s.layout.racks.filter((r) => r.temp === temp);
     const locs = s.layout.locationsByTemp[temp].length;

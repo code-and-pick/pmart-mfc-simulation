@@ -23,6 +23,14 @@ import { Rng } from '../util/rng';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
+
+/** 랙 하나의 실제 재고 — 단(level)마다 칸·상품·수량 */
+export interface RackStock {
+  rackId: string;
+  qty: number;
+  skus: Set<string>;
+  levels: Map<number, { code: string; sku: string; name: string; qty: number; quarantined: boolean }[]>;
+}
 import { RealRider, type SiteRider } from './realRider';
 import { CartPool } from './cartPool';
 import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
@@ -192,6 +200,7 @@ export class Simulation {
         returnShownMin: REAL_LINK.returnShownMin,
         backfillSec: REAL_LINK.backfillSec,
       });
+      this.real.fullStockOpt = { everySec: REAL_LINK.fullStockSec, maxPages: REAL_LINK.fullStockMaxPages };
       this.time = wallClockSec();
       this.speed = 1;
       this.realBaseUrl = http?.baseUrl ?? '/api/v1';
@@ -425,6 +434,33 @@ export class Simulation {
       if ((station ?? 'PAK-A-01') === code) out.push({ shipmentId: r.shipmentId, guess: !station });
     }
     return out;
+  }
+
+  private rackStockCache: { ver: number; byRack: Map<string, RackStock> } | null = null;
+  /**
+   * 랙별·단별 실제 재고(센터 전체 stock-units → 평면 칸). 평면에 없는 위치는 빠진다(카트·패킹대·랙 등 바닥 자리).
+   * 사용자 2026-11-20 "구역별 랙 갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수"
+   */
+  rackStock(): Map<string, RackStock> {
+    const real = this.real;
+    if (!real) return new Map();
+    if (this.rackStockCache?.ver === real.fullStockVersion) return this.rackStockCache.byRack;
+    const byRack = new Map<string, RackStock>();
+    for (const u of real.fullStock) {
+      const loc = this.backendLocation(u.locationCode);
+      if (!loc) continue;
+      let r = byRack.get(loc.rackId);
+      if (!r) byRack.set(loc.rackId, (r = { rackId: loc.rackId, qty: 0, skus: new Set(), levels: new Map() }));
+      r.qty += u.qty;
+      r.skus.add(u.sku);
+      let lv = r.levels.get(loc.level);
+      if (!lv) r.levels.set(loc.level, (lv = []));
+      const same = lv.find((x) => x.code === u.locationCode && x.sku === u.sku);
+      if (same) same.qty += u.qty;
+      else lv.push({ code: u.locationCode, sku: u.sku, name: u.productName ?? u.sku, qty: u.qty, quarantined: u.qualityState !== 'NORMAL' });
+    }
+    this.rackStockCache = { ver: real.fullStockVersion, byRack };
+    return byRack;
   }
 
   /** 화면에 보일 센터 이름 — 실서버는 center-master 이름, 못 읽었으면 ID, MOCK 은 "가상 센터" (사용자 2026-11-20 "MFC 식별값 말고 이름으로") */

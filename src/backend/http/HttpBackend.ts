@@ -10,6 +10,7 @@ import {
   type CapacityAssignment,
   type OrderFulfillmentView,
   type CenterStock,
+  type StockUnitRow,
   type CenterShipment,
   type DeliveryOrderSummary,
   type DispatchRequest,
@@ -138,6 +139,21 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
+  /** mfc-inventory listStockUnits(0.33.0, R-15) — 센터 전체를 nextCursor 가 null 일 때까지(최대 maxPages 쪽) */
+  async listAllStockUnits(mfcId: string, maxPages: number): Promise<StockUnitRow[]> {
+    const out: StockUnitRow[] = [];
+    let cursor: string | null = null;
+    for (let p = 0; p < maxPages; p++) {
+      const q = new URLSearchParams({ size: '200' });
+      if (cursor) q.set('cursor', cursor);
+      const r: { items?: StockUnitRow[]; nextCursor?: string | null } = await this.request('GET', `/mfcs/${enc(mfcId)}/stock-units?${q}`);
+      out.push(...(r.items ?? []));
+      cursor = r.nextCursor ?? null;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
   }

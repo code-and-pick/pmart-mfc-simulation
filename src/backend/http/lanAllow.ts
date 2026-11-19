@@ -11,6 +11,7 @@ const ALLOWED: RegExp[] = [
   new RegExp(`^/api/v1/tasks/${ID}$`), // 작업 상세
   new RegExp(`^/api/v1/mfcs/${ID}/workers$`), // 작업자 이름
   new RegExp(`^/api/v1/mfcs/${ID}/stock$`), // 주문 SKU 재고(?sku)
+  new RegExp(`^/api/v1/mfcs/${ID}/stock-units$`), // 센터 전체 재고(위치·상품·수량, inventory 0.33.0) — 개인정보 없음
   new RegExp(`^/api/v1/skus/${ID}$`), // 상품 바코드
   new RegExp(`^/api/v1/shipments/${ID}$`), // 출고(포장·배차 요청)
   new RegExp(`^/api/v1/centers/${ID}$`), // 센터 이름(center-master) — 사업장 정보, 개인정보 없음
