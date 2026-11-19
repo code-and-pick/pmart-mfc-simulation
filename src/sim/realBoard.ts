@@ -708,10 +708,10 @@ export class RealBoard {
 
   workerName(workerId: string | null | undefined): string {
     if (!workerId) return '미배정';
-    // ADR-0070: 직원은 이름 · 사번만 — 운영자 ID(OP-…)는 화면에 내지 않는다. 모르면 ID 끝 8자리 + 번호 없음
+    // ADR-0070: 직원은 이름 · 사번만 — 운영자 ID(OP-…)는 화면에 내지 않는다(끝자리도). 이름을 아직 못 읽었으면 "작업자 확인 중"
     const l = this.labels.get(workerId);
     if (l) return `${l.name} · ${l.employeeNo}`;
-    return this.workers.get(workerId)?.displayName ?? `…${workerId.slice(-8)}(번호 없음)`;
+    return this.workers.get(workerId)?.displayName ?? '작업자 확인 중';
   }
 
   /** 화면용 주문번호(fulfillment 0.13.0 — 작업·출고 응답의 orderNumber, ADR-0070). 없으면 null */

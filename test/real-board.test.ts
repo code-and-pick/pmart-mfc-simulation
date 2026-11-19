@@ -279,7 +279,7 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     expect(b.returnHandovers).toHaveLength(1); // 들고 있던 것은 그대로
   });
 
-  it('작업자 표시(ADR-0070): hr 이름·사번, 못 읽으면 capacity 사번, 둘 다 없으면 ID 끝 8자리 — OP-… 를 내지 않음', async () => {
+  it('작업자 표시(ADR-0070): hr 이름·사번, 못 읽으면 capacity 사번, 둘 다 없으면 "작업자 확인 중" — OP-… 를 내지 않음', async () => {
     const r = new FakeReader();
     const asked: string[][] = [];
     (r as unknown as { getEmployeeLabels: (ids: string[]) => Promise<unknown[]> }).getEmployeeLabels = async (ids) => {
@@ -290,7 +290,7 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     await b.tick();
     expect(asked).toEqual([['OP-a']]);
     expect(b.workerName('OP-a')).toBe('김현장 · P2026-00011');
-    expect(b.workerName('OP-12345678-zzzz')).toBe('…678-zzzz(번호 없음)');
+    expect(b.workerName('OP-12345678-zzzz')).toBe('작업자 확인 중'); // ID 끝자리도 내지 않음(2026-11-20)
 
     const r2 = new FakeReader();
     (r2 as unknown as { getEmployeeLabels: () => Promise<unknown[]> }).getEmployeeLabels = async () => {
