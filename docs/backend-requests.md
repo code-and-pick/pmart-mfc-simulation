@@ -87,6 +87,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
 ### R-25 LAN 게이트웨이 CORS 허용 출처에 시뮬레이터 개발 서버 `http://localhost:5180` — 높음 (2026-11-19 추가)
+- **됨·LAN 적용(11-19)**: pmart-config `api-gateway-lan.yml` fc6e2f0, 게이트웨이 이미지 c8bd692b. 회신 `docs/handoff/simulator/mfc/2026-11-19-simulator-reply-r23-r25.md`. 실측(14:55): `Origin: http://localhost:5180` POST → 400(본문 검사까지 감). `127.0.0.1:5180` 은 여전히 403 — 화면은 `localhost:5180` 으로 연다. 5180 은 예전부터 허용 목록에 없었다(5173~5176 만).
 - 증상: 실서버 모드 가상 작업자의 다음 작업 받기(`POST /mfcs/{mfcId}/workers/{workerId}/next-tasks`)가 본문 없는 403. 화면에서 보내는 쓰기 요청 전부가 같다(읽기는 브라우저가 Origin 을 안 붙여 정상).
 - 실측(11-19, 개발 서버 프록시 경유, 부수 효과 없는 `POST /order-drafts` 빈 본문·직원 토큰): `Origin` 없음 → 400(본문 검사까지 감), `Origin: http://localhost:5180` → **403 본문 없음**, `Origin: http://127.0.0.1:5180` → 403 본문 없음. 서비스·게이트웨이 보안 필터의 403 은 `code` 가 붙으므로(common-security `ProblemAuthHandlers`, gateway `ProblemResponseWriter`) 이건 게이트웨이 CORS 거부(`pmart.gateway.cors.allowed-origins` 밖 출처)로 본다.
 - 원하는 것: LAN 설정(pmart-config `api-gateway` LAN)의 `pmart.gateway.cors.allowed-origins` 에 `http://localhost:5180`(시뮬레이터 `npm run dev`, 이 PC 브라우저)을 더해 주세요. 자격 증명(쿠키)은 필요 없다(Bearer 만). 예전에 가상 작업자 쓰기가 됐다면 그 뒤 허용 목록이 바뀌었는지도 알려 주면 좋다.
@@ -101,6 +102,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 받는 쪽: 시뮬레이터 앞마당 라이더 수단 모델(오토바이·자전거·전기자전거·킥보드·승용차·도보). 지금은 늘 null 이라 기본값 오토바이로만 보인다.
 
 ### R-23 [LAN 시험 전용] 시험 입고 차량 — 승인 없이 MFC 입고 예정 만들기(재고 채우기만) — 중간 (2026-11-19 추가)
+- **PC 3 에 넘어감(11-19)**: 백엔드 `docs/architecture/service-requests/mfc-inbound-service.md` **MI-3**. 경로·한도·호출 계정은 PC 3 이 정해 회신.
 - 왜: 실서버로 주문·가상 작업자를 계속 돌리면 재고가 줄어 품절이 난다. 지금 재고를 넣는 길은 백엔드 seed(`Seed.java --initial-stock`, PC 1 이 직접)뿐이라 시뮬레이터 화면에서 채울 수 없다. MOCK 의 "입고 차량 지금 부르기"처럼 **화면 버튼 하나로 MFC 재고를 채우고 싶다**(사용자 2026-11-19 "정식 구현은 아니고 mfc 재고를 채우는 기능만").
 - 정식 입고(CDC 출고 → 운송 → TRF → `/inbound-promises/*`, 아직 501)·SCM 발주·CDC WMS 는 **요청하지 않는다.** CDC·SCM 서비스를 흉내 내는 새 서비스도 필요 없다고 본다 — 이미 있는 **초기 보유 반입 경로**(INITIAL_STOCK 승인 → mfc-inbound 입고 예정 EXPECTED → 현장 수령 → mfc-inventory ConfirmReceipt → INSPECT → PUTAWAY, ADR-0040 결정 8, mfc-inbound `CLAUDE.md`)가 MFC 쪽 일을 다 한다. 빠진 것은 **승인 단계 없이 입고 예정을 만드는 입구** 하나뿐이다.
 - 원하는 것(이름·경로는 PC 3 이 정한다 — 시뮬레이터 예):
