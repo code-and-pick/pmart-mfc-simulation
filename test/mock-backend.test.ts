@@ -242,8 +242,8 @@ describe('MockBackend — 계약 의미 (mfc-fulfillment 0.4.10)', () => {
   });
 });
 
-describe('라이더 번호 인계(QR 안 될 때, 2~4자리 — R-26 제안, MOCK)', () => {
-  it('밀봉 포장에 2자리 번호, 번호로 허가 = QR 과 같은 fence, 틀리면 MISMATCH, 다섯 번 틀리면 잠금', async () => {
+describe('라이더 번호 인계(QR 안 될 때 — fulfillment 0.23.0 4자리, R-26, MOCK)', () => {
+  it('밀봉 포장에 4자리 번호, 번호로 허가 = QR 과 같은 fence, 틀리면 MISMATCH(남은 횟수), 다섯 번 틀리면 잠금', async () => {
     const { be, pick, pack } = setup();
     const v = be.capacityAssign(pick.taskId, 'W1');
     await be.startTask(pick.taskId, { workerId: 'W1', assignmentVersion: v }, 's');
@@ -251,11 +251,12 @@ describe('라이더 번호 인계(QR 안 될 때, 2~4자리 — R-26 제안, MOC
     const pv = be.capacityAssign(pack.taskId, 'W1');
     await be.startTask(pack.taskId, { workerId: 'W1', assignmentVersion: pv }, 's2');
     const pkg = await be.sealPackage('SHP-1', { contents: contentsAll, bagCount: 1 }, 'seal');
-    expect(pkg.handoverCode).toMatch(/^[0-9]{2}$/);
+    expect(pkg.handoverCode).toMatch(/^[0-9]{4}$/);
     const d = be.deliveryAssign('SHP-1', 'R1');
     expect(await code(be.authorizeHandoverByCode({ riderId: 'R1', deliveryId: d, handoverCode: '1' }, 'v'))).toBe('VALIDATION_FAILED');
-    const wrong = pkg.handoverCode === '99' ? '98' : '99';
-    expect(await code(be.authorizeHandoverByCode({ riderId: 'R1', deliveryId: d, handoverCode: wrong }, 'w0'))).toBe('HANDOVER_CODE_MISMATCH');
+    const wrong = pkg.handoverCode === '9999' ? '9998' : '9999';
+    const e0 = await be.authorizeHandoverByCode({ riderId: 'R1', deliveryId: d, handoverCode: wrong }, 'w0').catch((e: ApiProblem) => e);
+    expect((e0 as ApiProblem).problem).toMatchObject({ code: 'HANDOVER_CODE_MISMATCH', details: [{ field: 'attemptsLeft', reason: '4' }] });
     const a = await be.authorizeHandoverByCode({ riderId: 'R1', deliveryId: d, handoverCode: pkg.handoverCode! }, 'ok');
     expect(a.packageId).toBe(pkg.packageId);
     // QR 로 다시 찍으면 같은 라이더의 살아 있는 fence — 진행 중

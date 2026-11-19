@@ -88,6 +88,8 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
 ### R-26 라이더 번호 인계를 6자리 → 2~4자리로 — 중간 (2026-11-20 추가)
+- **회신(11-20, PC 3 "백엔드 MFC (New)" 세션 메시지 — PR #260 fulfillment 0.23.0, PC 1 병합·LAN 배포 전)**: 사용자 결정 "앞으로 발생하는 주문 인계 번호는 다 4자리로" → **4자리 고정**(2→3→4 늘림 없음, 앞자리 0 포함). 센터에서 쓰는(OPEN·SEALED) 포장끼리 겹치지 않고 인계·무효 뒤 다시 씀. 배포 전 포장은 6자리 그대로. `POST /packages/handover-code-authorizations` 경로·본문·응답 그대로, pattern `^([0-9]{4}|[0-9]{6})$`. 틀림 409 `HANDOVER_CODE_MISMATCH` + details `[{field: attemptsLeft, reason: 남은 횟수}]`, 같은 라이더·배송 5번 틀림 409 `HANDOVER_CODE_LOCKED`(맞는 번호도 거절, QR·점원 확인 `/packages/{id}/handover-checks` 만, 푸는 API 없음). 4자리끼리는 AMBIGUOUS 없음. 라이더 앱 번호 입력 실서버 연결은 PC 3 이 라이더 앱 세션에 요청. 회신 문서 백엔드 `docs/handoff/simulator/mfc/2026-11-20-simulator-reply-r26-handover-code.md`(PR #260 안 — 아직 main 아님).
+- **시뮬레이터 맞춤(11-20)**: MOCK 4자리 고정·잠김 5번·MISMATCH 남은 횟수 details. 입력 형식 4 또는 6자리. 실서버 화면은 서버 값 그대로(배포 뒤 새 포장부터 4자리).
 - 사용자 2026-11-20: "QR 인식이 불가할 때 번호입력해서 픽업할 수 있는 기능 만들어. 2자리~4자리 숫자로".
 - 지금(읽음 11-20): fulfillment 0.13.0 F-8 `Package.handoverCode`(6자리 무작위) · `POST /packages/handover-code-authorizations {riderId, deliveryId, handoverCode}`(pattern `^[0-9]{6}$`) — 그 배송 출고의 SEALED 포장에서 숫자가 같은 것 → QR 허가와 같은 fence. 없으면 409 HANDOVER_CODE_MISMATCH, 둘 이상 409 HANDOVER_CODE_AMBIGUOUS. 라이더 앱(`pmart-clients apps/rider_app` delivery)이 이미 입력·호출함. 기능은 있고 **자리 수만** 바꾸고 싶다.
 - 원하는 것(이름·한도는 PC 3 이 정함 — 시뮬레이터 예):

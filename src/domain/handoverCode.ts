@@ -1,16 +1,19 @@
-// 라이더 번호 인계 — QR 이 안 찍힐 때 포장 라벨의 짧은 번호(2~4자리)를 입력해 픽업(사용자 2026-11-20, 백엔드 요청 R-26).
-// 번호는 센터에서 지금 인계를 기다리는(SEALED) 포장끼리 겹치지 않게, 가장 짧은 자리로. 그 자리의 번호가 maxFill 만큼 차면 한 자리 늘린다.
-// 서버(F-8)는 아직 6자리 — 이 규칙은 MOCK 이 흉내 내는 제안 값이다(config HANDOVER_CODE [시뮬]).
+// 라이더 번호 인계 — QR 이 안 찍힐 때 포장 라벨 번호를 입력해 픽업(사용자 2026-11-20, 백엔드 요청 R-26).
+// 백엔드 회신(PR #260, fulfillment 0.23.0): 4자리 고정, 센터에서 쓰는 포장끼리 겹치지 않음. 입력은 4자리 또는 옛 6자리.
+// 자리 늘림(minLen < maxLen)은 함수에 남겨 두지만 설정은 4~4.
 
 export interface HandoverCodeRule {
   minLen: number;
   maxLen: number;
+  /** 배포 전 포장 번호 자리(입력에서 받아 줌) */
+  legacyLen?: number;
   /** 한 자리 수에서 이만큼(0~1) 넘게 쓰이면 다음 자리로 */
   maxFill: number;
 }
 
-/** 입력 형식(minLen~maxLen 자리 숫자) */
+/** 입력 형식 — minLen~maxLen 자리 숫자, 또는 옛 legacyLen 자리(서버 pattern `^([0-9]{4}|[0-9]{6})$`) */
 export function handoverCodeValid(code: string, rule: HandoverCodeRule): boolean {
+  if (rule.legacyLen && new RegExp(`^[0-9]{${rule.legacyLen}}$`).test(code)) return true;
   return new RegExp(`^[0-9]{${rule.minLen},${rule.maxLen}}$`).test(code);
 }
 

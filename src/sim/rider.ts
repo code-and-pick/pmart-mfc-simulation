@@ -62,7 +62,7 @@ export class Rider extends Agent {
       for (const s of staged) {
         this.activity = `QR 스캔 ${s.pkg.packageId}`;
         await this.wait(4);
-        // QR 이 안 찍히면 라벨 번호(2~4자리, R-26 제안)를 입력 [시뮬 비율]
+        // QR 이 안 찍히면 라벨 번호(4자리, R-26·fulfillment 0.23.0)를 입력 [시뮬 비율]
         const code = s.pkg.handoverCode;
         const byCode = !!code && ctx.rng.next() < HANDOVER_CODE.qrFailRate;
         if (byCode) {

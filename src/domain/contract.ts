@@ -403,6 +403,8 @@ export interface Problem {
   code: string;
   detail?: string;
   retryable?: boolean;
+  /** 칸별 사유(예 HANDOVER_CODE_MISMATCH 의 {field: 'attemptsLeft', reason: '남은 횟수'} — fulfillment 0.23.0) */
+  details?: { field: string; reason: string }[];
 }
 
 /** 서버가 Problem 으로 거절했을 때. 타임아웃·연결 끊김은 이 오류가 아니다(결과 불명). */

@@ -60,8 +60,8 @@ interface IdemEntry {
   outcome: { ok: true; value: unknown } | { ok: false; problem: ApiProblem };
 }
 
-const problem = (status: number, code: string, detail?: string, retryable = false) =>
-  new ApiProblem({ status, code, detail, retryable });
+const problem = (status: number, code: string, detail?: string, retryable = false, details?: { field: string; reason: string }[]) =>
+  new ApiProblem({ status, code, detail, retryable, ...(details ? { details } : {}) });
 
 export interface MockOptions {
   mfcId: string;
@@ -645,7 +645,7 @@ export class MockBackend implements FulfillmentPort {
   }
 
   /**
-   * 라벨 번호로 인계 허가(F-8 흉내, 번호 2~4자리 R-26 제안). 그 배송 출고에서 번호가 같은 SEALED 포장 → QR 허가와 같은 검사·fence.
+   * 라벨 번호로 인계 허가(F-8·fulfillment 0.23.0 흉내 — 4자리, R-26). 그 배송 출고에서 번호가 같은 SEALED 포장 → QR 허가와 같은 검사·fence.
    * 없으면 409 HANDOVER_CODE_MISMATCH(틀린 횟수 셈), 둘 이상 409 HANDOVER_CODE_AMBIGUOUS, failLimit 번 틀리면 409 HANDOVER_CODE_LOCKED [시뮬].
    */
   authorizeHandoverByCode(body: { riderId: string; deliveryId: string; handoverCode: string }, key: string): Promise<HandoverAuthorization> {
@@ -658,8 +658,10 @@ export class MockBackend implements FulfillmentPort {
         if (!sh) throw problem(409, 'DELIVERY_MISMATCH');
         const hit = sh.shipment.packages.filter((p) => p.state === 'SEALED' && p.handoverCode === body.handoverCode);
         if (hit.length === 0) {
-          this.codeFails.set(fk, (this.codeFails.get(fk) ?? 0) + 1);
-          throw problem(409, 'HANDOVER_CODE_MISMATCH');
+          const n = (this.codeFails.get(fk) ?? 0) + 1;
+          this.codeFails.set(fk, n);
+          // 0.23.0: 남은 횟수를 details 로 — 5번째 틀림부터 잠금
+          throw problem(409, 'HANDOVER_CODE_MISMATCH', undefined, false, [{ field: 'attemptsLeft', reason: String(Math.max(0, HANDOVER_CODE.failLimit - n)) }]);
         }
         if (hit.length > 1) throw problem(409, 'HANDOVER_CODE_AMBIGUOUS', 'QR 로');
         this.codeFails.delete(fk);
