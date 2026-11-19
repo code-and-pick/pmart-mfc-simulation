@@ -601,3 +601,5 @@ table.inv.real tr.clickable:hover, table.inv.real tr.clickable.on { background: 
 .cart-again { margin: 4px 0; }
 .btn-row { display: flex; gap: 6px; }
 .code4 { font-size: 16px; letter-spacing: 2px; }
+.pda .follow { background: none; border: 1px solid var(--muted); color: var(--muted); border-radius: 4px; font-size: 11px; padding: 1px 6px; cursor: pointer; }
+.pda .follow.on { border-color: #4fc3f7; color: #4fc3f7; }

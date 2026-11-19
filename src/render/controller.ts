@@ -67,6 +67,8 @@ export type LabelMode = 'all' | 'rack' | 'off';
 export class ViewController extends Emitter {
   readonly views: ZoneView[];
   selection: Selection = null;
+  /** 카메라가 따라가는 사람(작업자·입고 작업자 id). 사람을 고르면 켜지고, 다른 곳으로 옮기거나 끄면 풀린다 */
+  follow: string | null = null;
   /** 실제 주문 탭에서 고른 출고(바코드 탭·스캔 말풍선이 같이 쓴다). 없으면 null */
   scanShipment: string | null = null;
   focusedZone = 'ALL';
@@ -104,6 +106,7 @@ export class ViewController extends Emitter {
   focusZone(key: string, animate = true) {
     const v = this.views.find((x) => x.key === key);
     if (!v) return;
+    this.follow = null;
     this.nearCut = 0;
     this.focusedZone = key;
     const r = v.rect;
@@ -119,6 +122,7 @@ export class ViewController extends Emitter {
 
   /** 로케이션(랙 칸) 정면으로 붙는다. */
   focusLocation(loc: Location) {
+    this.follow = null;
     const n = loc.along === 'z' ? new THREE.Vector3(loc.face, 0, 0) : new THREE.Vector3(0, 0, loc.face);
     // 위 단 선반판이 가리지 않도록 그 단 높이에서 정면으로 본다
     const target = new THREE.Vector3(loc.shelf.x, loc.shelf.y - 0.035 + loc.levelH / 2, loc.shelf.z);
@@ -144,6 +148,7 @@ export class ViewController extends Emitter {
     const p = this.sim.backendPoint(code);
     if (!p) return false;
     this.nearCut = 0;
+    this.follow = null;
     const t = new THREE.Vector3(p.x, 0.5, p.z);
     this.cameraRequest = { pos: t.clone().add(new THREE.Vector3(0, 8, 8)), target: t, animate: true };
     this.marker = { x: p.x, y: 0, z: p.z, until: performance.now() + 8000 };
@@ -151,16 +156,32 @@ export class ViewController extends Emitter {
     return true;
   }
 
+  /** 사람의 지금 자리(없으면 null) — 카메라 따라가기가 프레임마다 읽는다 */
+  personPos(id: string): { x: number; z: number } | null {
+    return [...this.sim.siteWorkers(), ...this.sim.inboundWorkers].find((x) => x.id === id)?.pos ?? null;
+  }
+
+  /** 고른 사람 따라가기 켜기·끄기 */
+  setFollow(on: boolean) {
+    const id = this.selection && (this.selection.kind === 'worker' || this.selection.kind === 'inbound') ? this.selection.id : null;
+    const next = on ? id : null;
+    if (next === this.follow) return;
+    this.follow = next;
+    if (next) this.focusPerson(next);
+    this.emit();
+  }
+
   focusPerson(id: string) {
     this.nearCut = 0;
-    const p = [...this.sim.siteWorkers(), ...this.sim.inboundWorkers].find((x) => x.id === id);
+    const p = this.personPos(id);
     if (!p) return;
-    const tTo = new THREE.Vector3(p.pos.x, 0.5, p.pos.z);
+    const tTo = new THREE.Vector3(p.x, 0.5, p.z);
     this.cameraRequest = { pos: tTo.clone().add(new THREE.Vector3(0, 7, 7)), target: tTo, animate: true };
   }
 
   select(s: Selection, fly = true) {
     this.selection = s;
+    this.follow = s && (s.kind === 'worker' || s.kind === 'inbound') ? s.id : null;
     if (s?.kind === 'location') {
       const sku = this.sim.skuMap.get(s.sku);
       if (sku && fly) this.focusLocation(sku.location);
@@ -181,7 +202,10 @@ export class ViewController extends Emitter {
   /** 스캔 말풍선 선택 취소 — 고른 출고와 고른 작업자를 함께 푼다(말풍선·바코드 탭 주문 고름이 사라짐) */
   clearScanSelection() {
     this.scanShipment = null;
-    if (this.selection?.kind === 'worker') this.selection = null;
+    if (this.selection?.kind === 'worker') {
+      this.selection = null;
+      this.follow = null;
+    }
     this.emit();
   }
 

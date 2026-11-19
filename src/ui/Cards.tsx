@@ -205,6 +205,12 @@ function DetailBody() {
   );
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
   if (!sel) return null;
+  const following = controller.follow !== null && controller.follow === (sel.kind === 'location' ? null : sel.id);
+  const follow = (
+    <button className={`follow ${following ? 'on' : ''}`} title="카메라가 이 사람을 따라갑니다(오른쪽 끌기로 화면을 옮기면 꺼짐)" onClick={() => controller.setFollow(!following)}>
+      {following ? '따라가는 중' : '따라가기'}
+    </button>
+  );
   if (sel.kind === 'location') {
     const k = sim.skuMap.get(sel.sku)!;
     const b = sim.mock?.inventory.get(sel.sku);
@@ -256,7 +262,7 @@ function DetailBody() {
         <div className="hd">
           <b>{w.id} · 입고 PDA</b>
           <span>
-            <StateBadge color={INBOUND_COLOR[w.state]} text={INBOUND_KO[w.state]} /> {close}
+            <StateBadge color={INBOUND_COLOR[w.state]} text={INBOUND_KO[w.state]} /> {follow} {close}
           </span>
         </div>
         {d ? (
@@ -294,7 +300,7 @@ function DetailBody() {
           {w.id} · PDA-{w.id}
         </b>
         <span>
-          <StateBadge color={STATE_COLOR[w.state]} text={STATE_KO[w.state]} /> {close}
+          <StateBadge color={STATE_COLOR[w.state]} text={STATE_KO[w.state]} /> {follow} {close}
         </span>
       </div>
       {d ? (

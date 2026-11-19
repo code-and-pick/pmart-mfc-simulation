@@ -48,7 +48,18 @@ export function CameraRig() {
     };
   }, [controls, registry]);
 
+  // 오른쪽 끌기(이동)·Shift+끌기로 시점을 옮기면 따라가기를 끈다 — 회전·확대는 따라가면서 된다
+  useEffect(() => {
+    const el = gl.domElement;
+    const down = (e: PointerEvent) => {
+      if (controller.follow && (e.button === 2 || (e.button === 0 && (e.shiftKey || e.ctrlKey || e.metaKey)))) controller.setFollow(false);
+    };
+    el.addEventListener('pointerdown', down);
+    return () => el.removeEventListener('pointerdown', down);
+  }, [gl, controller]);
+
   const tween = useRef<{ from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; t: number } | null>(null);
+  const shift = useMemo(() => new THREE.Vector3(), []);
   useFrame((_, dt) => {
     const req = controller.takeCameraRequest();
     if (req) {
@@ -68,6 +79,14 @@ export function CameraRig() {
       camera.position.lerpVectors(tw.from, tw.to, k);
       controls.target.lerpVectors(tw.tFrom, tw.tTo, k);
       if (tw.t >= 1) tween.current = null;
+    } else if (controller.follow) {
+      // 따라가기: 보는 점을 사람 쪽으로 부드럽게 옮기고 카메라도 같은 만큼 옮긴다(보는 각도·거리는 그대로)
+      const p = controller.personPos(controller.follow);
+      if (p) {
+        shift.set(p.x - controls.target.x, 0.5 - controls.target.y, p.z - controls.target.z).multiplyScalar(1 - Math.exp(-dt * 6));
+        controls.target.add(shift);
+        camera.position.add(shift);
+      }
     }
     controls.update();
     // 정면 보기에서 사용자가 크게 물러나거나 다가가면 클리핑을 푼다
