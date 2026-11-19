@@ -183,6 +183,20 @@ function Bubble({ w }: { w: ObservedWorker }) {
     );
   }
   if (c.kind === 'PACK') return <PackBubble w={w} c={c} />;
+  if (c.kind === 'NEXT') {
+    return (
+      <>
+        <div className="sb-head">
+          {w.id} · 피킹 끝 <span className="sub">패킹 배정 전</span>
+          <Close />
+        </div>
+        <div className="note">
+          PDA 에서 <b>다음 작업 받기</b>를 누르면 서버가 이 주문 패킹을 먼저 줍니다(피킹한 사람 = 이 작업자). 배정되면 ① 패킹대 찍기로 넘어갑니다.
+        </div>
+        {c.cart && <CartAgain cart={c.cart} />}
+      </>
+    );
+  }
   if (c.kind === 'RETURN') return <ReturnBubble w={w} c={c} />;
   const { stop, index, total } = c;
   const l = stop.line;

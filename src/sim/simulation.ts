@@ -335,6 +335,15 @@ export class Simulation {
       if (!wid || virtualIds.has(wid) || byWorker.has(wid) || !this.rackPending(t)) continue;
       byWorker.set(wid, t);
     }
+    // 피킹 끝 ~ PDA "다음 작업 받기" 전: 그 주문 PACK 은 배정 전(READY·WAITING)이고 서버 pickedBy 만 이 사람 → 사라지지 않게
+    // 카트를 끌고 포장대 앞에서 기다리는 모습으로 둔다(사용자 2026-11-19 "패킹하러가야하는데 말풍선도 안떠", "카트도 같이 안끌고가는데")
+    for (const t of real.tasks.values()) {
+      const s = t.summary;
+      const wid = s.pickedBy;
+      if (t.closed || !wid || s.assignment?.workerId || s.taskType !== 'PACK' || (s.state !== 'READY' && s.state !== 'WAITING')) continue;
+      if (virtualIds.has(wid) || byWorker.has(wid)) continue;
+      byWorker.set(wid, t);
+    }
     const cart = this.backendPoint('CRT-A-01') ?? this.layout.points.cartDepot;
     for (const [wid, t] of byWorker) {
       const s = t.summary;
@@ -495,6 +504,12 @@ export class Simulation {
           w.progressMark = mark;
           w.carrying = w.hasCart ? this.cartLoad(s.shipmentId) : [];
           view.step = PACK_STEP_KO[pc.step];
+        } else if (!s.assignment?.workerId) {
+          // 배정 전 PACK(pickedBy) — 카트 끌고 포장대 앞에서 "다음 작업 받기" 기다림
+          w.cue = { kind: 'NEXT', taskId: s.taskId, shipmentId: s.shipmentId ?? '', cart: this.serverCart(s.shipmentId) };
+          w.hasCart = true;
+          w.carrying = this.cartLoad(s.shipmentId);
+          view.step = '피킹 끝 · PDA 다음 작업 받기 전';
         }
         w.activity = view.step;
       }

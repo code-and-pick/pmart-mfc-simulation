@@ -239,6 +239,33 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(sim2.onRack('ORD-1-S1')).toBe(true);
   });
 
+  it('피킹 끝 · 패킹 배정 전(서버 pickedBy 만): 사라지지 않고 카트 끌고 포장대 앞에서 "다음 작업 받기" 안내 → 배정되면 ① 패킹대', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    const sync = () => {
+      real.polls++;
+      (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
+    };
+    const p = pick([0, 0]);
+    real.tasks.set(p.taskId, { summary: { ...p, state: 'COMPLETED' }, detail: { ...p, state: 'COMPLETED' }, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    const pack = { ...p, taskId: 'ORD-1-S1-PACK', taskType: 'PACK', state: 'READY', assignment: { workerId: null, assignmentVersion: 0 }, pickedBy: 'OP-990d2c09', packingLocations: ['CRT-A-07'] } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
+    sync();
+    expect(sim.observedWorkers).toHaveLength(1);
+    const w = sim.observedWorkers[0];
+    expect(w.workerId).toBe('OP-990d2c09');
+    expect(w.cue).toMatchObject({ kind: 'NEXT', shipmentId: 'ORD-1-S1', cart: 'CRT-A-07' });
+    expect(w.hasCart).toBe(true);
+    expect(sim.heldCarts().has('CRT-A-07')).toBe(true);
+    expect(w.state).toBe('WAIT_STATION');
+
+    // PDA 다음 작업 받기 → 서버가 이 PACK 을 배정
+    const assigned = { ...pack, state: 'ASSIGNED', assignment: { workerId: 'OP-990d2c09', assignmentVersion: 1 } } as unknown as TaskDetail;
+    real.tasks.set(pack.taskId, { summary: assigned, detail: assigned, firstSeenMs: 0, closed: null });
+    sync();
+    expect(w.cue).toMatchObject({ kind: 'PACK', step: 'STATION' });
+  });
+
   it('끌고 온 장바구니의 집품분(서버 PICKED)은 작업자 카트 위에 — 카트를 내려놓으면 카트 보관 자리로', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;

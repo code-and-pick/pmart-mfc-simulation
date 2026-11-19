@@ -23,7 +23,9 @@ export type ScanCue =
   /** 포장 — PDA 포장 화면 단계(패킹대 → 카트 → 배차 요청 → 담기·밀봉 → 출하대기 랙) */
   | { kind: 'PACK'; taskId: string; shipmentId: string; step: PackStep; station: string; cart: string; rack: string; bag: { line: TaskLine; left: number }[] }
   /** 취소품 복귀 — PDA 복귀 화면 단계(① 출발 위치 → ② 상품 싣기 → "실었어요" → ③ 선반 칸) */
-  | { kind: 'RETURN'; taskId: string; step: 'FROM' | 'TO'; piece: ReturnPiece; index: number; total: number };
+  | { kind: 'RETURN'; taskId: string; step: 'FROM' | 'TO'; piece: ReturnPiece; index: number; total: number }
+  /** 피킹 끝 · 그 주문 PACK 이 아직 배정 전(서버 pickedBy = 이 사람) — PDA 에서 "다음 작업 받기"를 누르면 서버가 이 PACK 을 먼저 준다(capacity 0.19.0) */
+  | { kind: 'NEXT'; taskId: string; shipmentId: string; cart: string | null };
 
 export class ObservedWorker extends Agent implements SiteWorker {
   state: WorkerState = 'IDLE';
