@@ -785,3 +785,24 @@ details.sec > summary h4 > span { min-width: 0; flex: 1; text-align: right; }
 
 /* 접는 칸 제목: 화살표·글이 왼쪽부터, 부제만 오른쪽(도움말 제목이 오른쪽으로 쏠리던 것) */
 details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
+
+/* 바코드 탭 — 위 한 줄(보기 방식·인쇄), 주문·작업·카트를 칸으로 나눔 */
+.scan { display: flex; flex-direction: column; gap: 10px; padding-bottom: 10px; }
+.scan-top { display: flex; align-items: center; gap: 10px; }
+.scan-top .scan-mode { display: inline-flex; gap: 4px; margin: 0; }
+.scan-print { margin-left: auto; font-size: 12px; color: var(--muted); }
+.scan-print a { color: var(--accent); }
+.scan-empty { background: var(--soft); border: 1px dashed var(--line-strong); border-radius: 10px; padding: 12px; font-size: 13px; color: var(--muted); line-height: 1.5; }
+.scan-sec { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+.scan-sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }
+.scan-sec-h b { font-size: 15px; }
+.scan-sec-h span { margin-left: auto; color: var(--muted); font-size: 12px; text-align: right; }
+.scan-sec-h .link { margin-left: auto; }
+.scan-sec details > summary { cursor: pointer; font-size: 12.5px; color: var(--muted); margin: 4px 0 8px; }
+.scan-sec .bc-grid { gap: 8px; }
+.scan-sec .bc-cap { font-size: 13px; font-weight: 700; color: #0f172a; }
+/* 칸 제목: 제목 한 줄, 설명은 그 밑 작게(좁은 패널에서 제목이 두 줄로 깨지던 것) */
+.scan-sec-h { flex-wrap: wrap; row-gap: 2px; }
+.scan-sec-h b { white-space: nowrap; }
+.scan-sec-h span { flex-basis: 100%; margin-left: 0; text-align: left; order: 3; }
+.scan-sec-h .link { order: 2; }

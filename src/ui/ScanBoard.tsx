@@ -14,6 +14,7 @@ import { OrderTimeline } from './OrderTimeline';
 import { TASK_STATE_KO } from './RealPanel';
 import { useScanFocus } from './scanFocus';
 import { scanView, useScanView } from './scanView';
+import { Why } from './Why';
 
 /** 화면에 나온 PICK 의 상품 바코드를 서버에서 (SKU 마다 한 번) 읽게 한다 */
 const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
@@ -156,7 +157,8 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
           }),
         )
         .sort((a, b) => (a.p.visitSeq ?? 9999) - (b.p.visitSeq ?? 9999));
-  if (!stops.length) return <div className="note">지시 칸이 아직 없습니다(피킹 시작 뒤 방문 순서가 정해집니다).</div>;
+  if (!stops.length)
+    return <div className="note">{t.closed || t.summary.state === 'COMPLETED' ? '피킹 끝 — 더 찍을 것 없음' : '지시 칸이 아직 없습니다(피킹 시작 뒤 방문 순서가 정해집니다).'}</div>;
   // ① 카트 — 서버가 아는 카트(첫 집품 뒤), 아니면 이 주문 안내 카트(다른 주문과 겹치지 않는 빈 카트)
   const known = sim.serverCart(s.shipmentId);
   const cart = known ?? sim.cartFor(s.shipmentId);
@@ -244,55 +246,72 @@ export function ScanBoard() {
       : [];
   useSkuBarcodes(tasks);
 
+  const KIND_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '취소품 복귀' };
   return (
     <div className="scan">
-      <div className="scan-mode">
-        <button className={view.mode === 'qr' ? 'on' : undefined} onClick={() => scanView.setMode('qr')}>
-          QR
-        </button>
-        <button className={view.mode === 'bar' ? 'on' : undefined} onClick={() => scanView.setMode('bar')}>
-          바코드
-        </button>
-        <span className="sub">값은 같음 · 위치 코드를 누르면 3D 에서 그 칸으로 · "크게" = 화면 가득</span>
-      </div>
-      <div className="note">
-        PDA 앱 입력칸의 카메라 버튼으로 화면을 찍거나, PC 브라우저라면 입력칸에 아래 글자를 치고 Enter. 인쇄용 전체 라벨:{' '}
-        <a href="/labels/cart-labels-MFC-SEED-01.html" target="_blank" rel="noreferrer">
-          카트 {BACKEND_FACTS.cartLocations.length}장
-        </a>{' '}
-        ·{' '}
-        <a href="/labels/locations/index.html" target="_blank" rel="noreferrer">
-          위치 {BACKEND_FACTS.labelLocationCount.toLocaleString()}곳 목록
-        </a>
-        (백엔드 deploy/lan/seed/labels)
-      </div>
-
-      {focus.shipmentId && (
-        <div className="scan-focus">
-          <b>
-            주문 <OrderNo shipmentId={focus.shipmentId} />
-          </b>
-          <SystemIds ids={[['출고', focus.shipmentId], ['주문', real?.shipmentInfo.get(focus.shipmentId)?.data.orderId]]} />
-          <button className="btn ghost" onClick={focus.clear}>
-            선택 취소
+      {/* 위: 보기 방식 + 인쇄 라벨 — 찍는 법은 "설명"(사용자 2026-11-20 "글 엄청 길고 작네") */}
+      <div className="scan-top">
+        <div className="scan-mode">
+          <button className={view.mode === 'qr' ? 'on' : undefined} onClick={() => scanView.setMode('qr')}>
+            QR
+          </button>
+          <button className={view.mode === 'bar' ? 'on' : undefined} onClick={() => scanView.setMode('bar')}>
+            바코드
           </button>
         </div>
-      )}
-      {real && focus.shipmentId && <OrderTimeline shipmentId={focus.shipmentId} />}
-      <h4>카트 (피킹 때 찍은 카트를 패킹 때 다시 찍음 · 온도 구분 없음)</h4>
-      <CartBarcodes />
+        <span className="scan-print">
+          인쇄{' '}
+          <a href="/labels/cart-labels-MFC-SEED-01.html" target="_blank" rel="noreferrer">
+            카트 {BACKEND_FACTS.cartLocations.length}장
+          </a>{' '}
+          ·{' '}
+          <a href="/labels/locations/index.html" target="_blank" rel="noreferrer">
+            위치 {BACKEND_FACTS.labelLocationCount.toLocaleString()}곳
+          </a>
+        </span>
+      </div>
+      <Why label="찍는 법">
+        PDA 앱 입력칸의 카메라로 이 화면을 찍거나, PC 브라우저면 입력칸에 바코드 밑 글자를 치고 Enter. QR·바코드는 값이 같습니다. 위치 코드를 누르면 3D 에서 그 칸, "크게"는 화면 가득.
+      </Why>
 
-      {!real && <div className="note">실서버 모드에서는 진행 중인 실제 주문의 지시 칸·상품 바코드가 여기에 나옵니다. 선반 칸을 클릭하면 그 칸의 위치 바코드가 카드에 나옵니다.</div>}
-      {real && !focus.shipmentId && <div className="note">실제 주문 탭에서 주문 줄을 누르면 그 주문의 바코드(지시 칸·상품·포장 위치)가 여기에 나옵니다.</div>}
-      {real && focus.shipmentId && !tasks.length && <div className="note">이 주문의 작업이 화면에서 빠졌습니다.</div>}
+      {/* ① 고른 주문 — 작업마다 칸 하나 */}
+      {real && !focus.shipmentId && <div className="scan-empty">실제 주문 탭에서 주문을 누르면 그 주문의 지시 칸·상품·포장 위치 바코드가 여기에 나옵니다.</div>}
+      {!real && <div className="scan-empty">실서버 모드에서 고른 주문의 바코드가 여기에 나옵니다. 선반 칸을 누르면 그 칸의 위치 바코드가 카드에 나옵니다.</div>}
+      {focus.shipmentId && (
+        <section className="scan-sec">
+          <div className="scan-sec-h">
+            <b>
+              주문 <OrderNo shipmentId={focus.shipmentId} />
+            </b>
+            <button className="link" onClick={focus.clear}>
+              선택 취소
+            </button>
+          </div>
+          {real && <OrderTimeline shipmentId={focus.shipmentId} />}
+          <SystemIds ids={[['출고', focus.shipmentId], ['주문', real?.shipmentInfo.get(focus.shipmentId)?.data.orderId]]} />
+        </section>
+      )}
+      {real && focus.shipmentId && !tasks.length && <div className="scan-empty">이 주문의 작업이 화면에서 빠졌습니다.</div>}
       {tasks.map((t) => (
-        <div className="scan-task" key={t.summary.taskId}>
-          <h4>
-            {t.summary.taskType} · {t.summary.shipmentId ? <OrderNo shipmentId={t.summary.shipmentId} /> : t.summary.fulfillmentId.slice(-8)} · {TASK_STATE_KO[t.closed ? t.closed.state : t.summary.state]} · {real!.workerName(t.summary.assignment?.workerId)}
-          </h4>
+        <section className="scan-sec scan-task" key={t.summary.taskId}>
+          <div className="scan-sec-h">
+            <b>{KIND_KO[t.summary.taskType] ?? t.summary.taskType} 바코드</b>
+            <span>
+              {TASK_STATE_KO[t.closed ? t.closed.state : t.summary.state]} · {real!.workerName(t.summary.assignment?.workerId)}
+            </span>
+          </div>
           <TaskBarcodes t={t} />
-        </div>
+        </section>
       ))}
+
+      {/* ② 카트 QR — 늘 같은 것이라 맨 아래 */}
+      <section className="scan-sec">
+        <div className="scan-sec-h">
+          <b>카트 QR · {BACKEND_FACTS.cartLocations.length}대</b>
+          <span>피킹 때 찍고, 패킹 때 같은 카트를 다시 찍음</span>
+        </div>
+        <CartBarcodes />
+      </section>
     </div>
   );
 }

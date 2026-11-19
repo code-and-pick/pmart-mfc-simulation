@@ -1,3 +1,4 @@
+// 현장 기록은 시스템 ID·원문 상태가 많아 기본은 접음(ADR-0070 — 바코드 탭 정리 2026-11-20)
 // 고른 주문의 현장 기록 — fulfillment 0.10.0 GET /work-orders?orderId=(백오피스 통합 조회 MFC 칸과 같은 원장, 개인정보 없음).
 // 작업 지시(원래·재발송) → 출고별 작업(담당·시작·끝)·결품 보고·포장·인계, 배차 요청·출하 대기 시각. 서버 값 그대로 보인다.
 import { useEffect } from 'react';
@@ -21,7 +22,7 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   if (!v.data) return <div className="note warn">현장 기록을 읽지 못했습니다: {v.error}</div>;
   const w = (id: string | null | undefined) => (id ? real.workerName(id) : '—');
   return (
-    <details className="order-timeline" open>
+    <details className="order-timeline">
       <summary>
         현장 기록 · 주문 <OrderNo shipmentId={shipmentId} /> <span className="sub">(fulfillment 0.10.0, {t(new Date(v.readMs).toISOString())} 읽음)</span>
       </summary>
