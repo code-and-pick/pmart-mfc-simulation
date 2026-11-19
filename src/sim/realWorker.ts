@@ -113,11 +113,6 @@ export class RealWorker extends Agent {
     this.home = home;
   }
 
-  override tick(dt: number) {
-    super.tick(dt);
-    if (this.state !== 'IDLE') this.busySeconds += dt;
-  }
-
   private key(op: string, id: string, extra = ''): string {
     return `${this.ctx.runId}:${this.account}:${op}:${id}${extra}`;
   }
@@ -609,13 +604,30 @@ export class RealWorker extends Agent {
    * 손으로 하는 일(스캔·집기·포장·검사·적치)에 드는 시간 — 서버 속도 배율로 나눈다(capacity: 작업 시간 = 추정 ÷ speedFactor).
    * 걷기도 같은 배율(speed). 재시도·대기·반영 확인 같은 기다림은 나누지 않는다(wait 그대로).
    */
-  private work(sec: number) {
-    return this.wait(sec / this.factor());
+  private async work(sec: number) {
+    // 남은 손일을 매 틱 지금 배율로 줄인다 — 하는 중에 속도 배수를 바꿔도 바로 반영(사용자 2026-11-19 "가상 작업자는 속도 배수가 안먹혀")
+    this.working = true;
+    try {
+      await this.wait(sec);
+    } finally {
+      this.working = false;
+    }
   }
+
+  /** 손일(work) 중인가 — 이때의 기다림은 배율로 빨라진다. 그 밖의 기다림(재시도·반영 확인)은 실제 시간 */
+  private working = false;
 
   override walkTo(target: P): Promise<void> {
     this.speed = this.ctx.params.walkSpeed * this.factor();
     return super.walkTo(target);
+  }
+
+  /** 걷기 속도·손일 시간을 매 틱 지금 배율로(서버 speedFactor × 화면 속도 배수) */
+  override tick(dt: number) {
+    const f = this.factor();
+    this.speed = this.ctx.params.walkSpeed * f;
+    super.tick(this.working ? dt * f : dt);
+    if (this.state !== 'IDLE') this.busySeconds += dt;
   }
 
   private factor(): number {

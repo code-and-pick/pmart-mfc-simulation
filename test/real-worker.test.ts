@@ -284,6 +284,38 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     w.stop();
   });
 
+  it('속도 배수는 하는 중에 바꿔도 바로 — 걷기·손일을 매 틱 지금 배율로(배수 1 → 중간에 10)', async () => {
+    const run = async (switchAt: number | null) => {
+      const { w, be, ctx } = setup();
+      let f = 1;
+      ctx.speedFactor = () => f;
+      be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
+      be.tasks.set('K1', task('K1', 'PACK', 'ASSIGNED', { packingLocations: ['CRT-A-01'] }));
+      be.queue = [
+        { assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' },
+        { assignmentId: 'AS2', mfcId: 'MFC-SEED-01', taskId: 'K1', taskType: 'PACK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' },
+      ];
+      void w.run();
+      let t = 0;
+      let switched = false;
+      for (; t < 900 && w.ordersDone < 1; t += 0.25) {
+        // 포장(손일 수 분)을 시작한 뒤에 배수를 올린다
+        if (switchAt !== null && !switched && w.activity.startsWith('패킹 PS-')) {
+          f = 10;
+          switched = true;
+        }
+        w.tick(0.25);
+        for (let i = 0; i < 20; i++) await Promise.resolve();
+      }
+      w.stop();
+      return t;
+    };
+    const slow = await run(null);
+    const fast = await run(0);
+    expect(slow).toBeGreaterThan(300);
+    expect(fast).toBeLessThan(slow - 120); // 포장 중에 올린 배수가 그 포장에 바로 먹는다
+  });
+
   it('이 출고가 이미 다른 장바구니를 쓰면(409 CART_MISMATCH) 그 장바구니로 다시 보낸다', async () => {
     const { w, be } = setup();
     be.cartInUse = 'CRT-A-17';
