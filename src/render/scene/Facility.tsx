@@ -40,6 +40,25 @@ export function Label({ text, position, opts }: { text: string; position: Vec3; 
   return <primitive object={sprite} position={position} />;
 }
 
+/**
+ * 외부 출하대기 이름표 — 라이더·작업자가 출하대기 구역(조금 넓게) 안에 있으면 희미하게(인계 장면을 가리지 않게,
+ * 사용자 2026-11-20 "외부출하대기 3평 글자가 라이더랑 인계 장면 다 가리니까 … 인계 때는 희미하게").
+ */
+function ShipLabel({ text, position, rect }: { text: string; position: Vec3; rect: { x0: number; z0: number; x1: number; z1: number } }) {
+  const { sim } = useApp();
+  const sprite = useMemo(() => makeLabel(text, { size: 40, bg: 'rgba(0,0,0,0.55)', screenPx: 17 }), [text]);
+  useFrame(() => {
+    const m = 2.5;
+    const inside = (p: { x: number; z: number }) => p.x > rect.x0 - m && p.x < rect.x1 + m && p.z > rect.z0 - m && p.z < rect.z1 + m;
+    const busy = sim.riders.some((r) => !r.done && inside(r.pos)) || sim.siteWorkers().some((w) => inside(w.pos));
+    const mat = sprite.material as THREE.SpriteMaterial;
+    const target = busy ? 0.12 : 1;
+    mat.opacity += (target - mat.opacity) * 0.15;
+    mat.transparent = true;
+  });
+  return <primitive object={sprite} position={position} />;
+}
+
 function Ground({ L }: { L: Layout }) {
   const flat: Vec3 = [-Math.PI / 2, 0, 0];
   return (
@@ -89,14 +108,16 @@ function Zones({ L }: { L: Layout }) {
               <planeGeometry args={[w, d]} />
               <meshStandardMaterial color={ZONE_COLOR[z.kind]} roughness={0.9} transparent opacity={0.85} />
             </mesh>
+            {z.kind === 'SHIPPING' ? (
+              // 랙 사이·앞(라이더가 서는 곳)이 아니라 구역 왼쪽 바깥 바닥에, 사람이 들어오면 희미하게
+              <ShipLabel text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label} position={[r.x0 - 1.6, 0.25, r.z0 + d / 2]} rect={r} />
+            ) : (
             <Label
               text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label}
-              // 외부 출하대기는 라이더가 랙 앞에 서는 곳 — 이름을 머리 높이에 띄우면 라이더 이름표·머리와 겹친다(사용자 2026-11-20 "라이더 왔을 때 … 겹치는 거") → 바닥 앞 왼쪽 모서리에
-              position={
-                z.kind === 'SHIPPING' ? [r.x0 + 1.3, 0.3, r.z1 - 0.35] : [r.x0 + w / 2, tall ? 2.4 : 3.6, r.z0 + Math.min(1.5, d / 2)]
-              }
+              position={[r.x0 + w / 2, tall ? 2.4 : 3.6, r.z0 + Math.min(1.5, d / 2)]}
               opts={{ size: 40, bg: 'rgba(0,0,0,0.55)', screenPx: 17 }}
             />
+            )}
           </group>
         );
       })}
