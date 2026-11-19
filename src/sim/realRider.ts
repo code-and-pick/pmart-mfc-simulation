@@ -130,7 +130,7 @@ export class RealRider extends Agent implements SiteRider {
   stowed = false;
   parkedAt: P | null = null;
   parkedHeading = 0;
-  readonly vehicle: VehicleType;
+  vehicle: VehicleType;
   leaving = false;
   private leave: ((n: number) => void) | null = null;
   private readonly left: Promise<number>;
@@ -147,6 +147,22 @@ export class RealRider extends Agent implements SiteRider {
     super(id, offLot(entry), nav, 1.4);
     this.vehicle = vehicleOf(vehicleType);
     this.left = new Promise((resolve) => (this.leave = resolve));
+  }
+
+  /**
+   * 배차 상세가 늦게 와 처음엔 수단을 몰랐거나(기본 오토바이), 서버 값이 바뀌었으면 그 수단으로 바꿔 그린다.
+   * 모르는 값(null)은 무시 — 지어내지 않는다
+   */
+  updateVehicle(vehicleType: string | null | undefined) {
+    if (!vehicleType) return;
+    const v = vehicleOf(vehicleType);
+    if (v === this.vehicle) return;
+    this.vehicle = v;
+    if (v === 'WALK') {
+      this.riding = false;
+      this.door = false;
+      this.trunk = false;
+    }
   }
 
   /** 서버가 인계·픽업을 확정했다 — 포장 n 개를 들고 떠난다(0 이면 빈손: 배정 해제 등) */

@@ -121,6 +121,18 @@ describe('라이더 수단(배차 배정 vehicleType)', () => {
     }
   });
 
+  it('배차 상세가 늦게 와 처음엔 기본 수단이어도, 서버 수단이 오면 그것으로(도보면 안 탐), 모르는 값은 무시', () => {
+    const L = buildLayout();
+    const P = L.points;
+    const r = new RealRider('RD-3', 'DLV-3', P.riderParking[1], P.riderEntry, P.riderPickup, new NavGrid(L), null);
+    expect(r.vehicle).toBe('MOTORCYCLE');
+    r.updateVehicle(null);
+    expect(r.vehicle).toBe('MOTORCYCLE');
+    r.updateVehicle('WALK');
+    expect(r.vehicle).toBe('WALK');
+    expect(r.riding).toBe(false);
+  });
+
   it('수단 이름 → 그릴 수단, 모르면 오토바이', () => {
     expect(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK'].map(vehicleOf)).toEqual(['MOTORCYCLE', 'BICYCLE', 'E_BIKE', 'KICKBOARD', 'CAR', 'WALK']);
     expect(vehicleOf(null)).toBe('MOTORCYCLE');

@@ -848,6 +848,7 @@ export class Simulation {
       const s = live.get(rr.deliveryId);
       if (!s) rr.depart(0);
       else if (s.gone) rr.depart(s.handed);
+      else rr.updateVehicle(s.vehicle); // 배차 상세가 늦게 오면 처음엔 기본 수단 — 오면 바꾼다
     }
     for (const [deliveryId, s] of live) {
       if (!s.arrived || s.gone || mine.some((x) => x.deliveryId === deliveryId)) continue;
