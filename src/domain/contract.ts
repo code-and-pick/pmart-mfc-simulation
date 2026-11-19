@@ -77,6 +77,8 @@ export interface TaskSummary {
   completedQty: number;
   remainingQty: number;
   promisedReadyAt: string | null;
+  /** (0.12.0) COMPLETED·CLOSED_PARTIAL 이 된 시각 */
+  completedAt?: string | null;
   createdAt: string;
   /** (0.4.8) 시작 뒤 예상 시간의 2배를 넘김 — 표시만 */
   late?: boolean;
@@ -591,6 +593,27 @@ export interface NextTaskDetail {
 }
 
 /** mfc-inbound InboundTask (0.9.0) — 품질검사(INSPECT)·적치(PUTAWAY). 담당(assigneeId)이 있으면 담당만 실행(409 NOT_ASSIGNEE) */
+/** mfc-fulfillment CenterShipment(0.15.0 F-9, GET /shipments?mfcId=) 중 시뮬레이터가 쓰는 것 — 피킹·패킹 시작 시각, 출하 대기 시각 */
+export interface CenterShipment {
+  shipmentId: string;
+  orderId: string;
+  orderNumber?: string | null;
+  state: string;
+  createdAt: string;
+  readyAt?: string | null;
+  dispatchRequestedAt?: string | null;
+  pick?: { state: TaskState; startedAt?: string | null } | null;
+  pack?: { state: TaskState; startedAt?: string | null } | null;
+}
+
+/** delivery-execution 배송 상세(GET /deliveries/{id}, 그 센터 운영자) 중 주문 요약 — 품목·수량·줄 금액·상품 합계·배송 요청사항(주소 없음) */
+export interface DeliveryOrderSummary {
+  orderNumber?: string | null;
+  items?: { orderLineId?: string; name: string; optionLabel?: string | null; qty: number; lineAmount: number }[];
+  itemAmount?: number;
+  deliveryNote?: string | null;
+}
+
 /** mfc-inbound InitialStockLoad(0.14.0 시험 입고도 같은 모양) — EXPECTED → 현장 수령 → PENDING → APPLIED(품질검사 작업 생성) */
 export interface InitialStockLoad {
   receiptId: string;

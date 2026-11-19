@@ -10,6 +10,8 @@ import {
   type CapacityAssignment,
   type OrderFulfillmentView,
   type CenterStock,
+  type CenterShipment,
+  type DeliveryOrderSummary,
   type DispatchRequest,
   type CommandResponse,
   type DeliveryDispatch,
@@ -176,6 +178,18 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   /** delivery-dispatch 배차 조회 — 배차 상태·배정 라이더·시도(반경) */
+  /** mfc-fulfillment listCenterShipments(0.15.0 F-9) — 끝나지 않은 출고(피킹·패킹 시작 시각, 출하 대기 시각). 개인정보 없음 */
+  async listCenterShipments(mfcId: string): Promise<CenterShipment[]> {
+    const r: { items?: CenterShipment[] } = await this.request('GET', `/shipments?mfcId=${enc(mfcId)}&size=100`);
+    return r.items ?? [];
+  }
+
+  /** delivery-execution 배송 상세(그 센터 운영자) 중 주문 요약만 — 품목·금액·배송 요청사항. 주소 없음 */
+  async getDeliveryOrderSummary(deliveryId: string): Promise<DeliveryOrderSummary | null> {
+    const r: { orderSummary?: DeliveryOrderSummary | null } = await this.request('GET', `/deliveries/${enc(deliveryId)}`);
+    return r.orderSummary ?? null;
+  }
+
   getDeliveryDispatch(deliveryId: string): Promise<DeliveryDispatch> {
     return this.request('GET', `/deliveries/${enc(deliveryId)}/dispatch`);
   }

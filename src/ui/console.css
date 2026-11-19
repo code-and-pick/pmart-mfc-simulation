@@ -684,3 +684,18 @@ details.sec > summary h4 > span { min-width: 0; flex: 1; text-align: right; }
 .ob-s.bad { color: var(--bad); font-weight: 800; }
 .ob-p { font-size: 12.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 300px; }
 .ot.big .ot-d td { border-radius: 0 0 10px 10px; }
+
+/* 주문 줄 — 걸린 시간·금액, 상세 품목 */
+.ob-f { display: flex; gap: 14px; margin-top: 6px; font-size: 13px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.ob-f em { font-style: normal; font-weight: 500; color: var(--muted); margin-right: 3px; }
+.ob-f .run { color: var(--accent); }
+.ob-f .amt { margin-left: auto; }
+.od-items { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-bottom: 8px; }
+.od-items td { padding: 3px 0; border-bottom: 1px solid var(--line); }
+.od-items td:nth-child(2) { text-align: right; width: 36px; color: var(--muted); }
+.od-items td:nth-child(3) { text-align: right; width: 76px; font-variant-numeric: tabular-nums; }
+.od-items tfoot td { font-weight: 800; border-bottom: 0; padding-top: 5px; }
+.od-items tfoot td:first-child { color: var(--muted); font-weight: 600; }
+.oc-d dl { grid-template-columns: 44px 1fr; }
+.ot .od-items td { background: none; border-left: 0; border-right: 0; border-top: 0; border-radius: 0; padding: 4px 0; cursor: default; }
+.ot .od-items tfoot td { border-bottom: 0; }

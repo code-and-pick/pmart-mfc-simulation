@@ -58,6 +58,36 @@ function mins(iso: string, now: number): string {
   return m < 60 ? `${m}분` : `${Math.floor(m / 60)}시간`;
 }
 
+const won = (n: number) => `${n.toLocaleString()}원`;
+
+/** 걸린 시간 "3분 12초" — 시작 전이면 null */
+function dur(fromIso: string | null | undefined, toMs: number | null): string | null {
+  if (!fromIso) return null;
+  const sec = Math.max(0, Math.round(((toMs ?? Date.now()) - Date.parse(fromIso)) / 1000));
+  if (sec < 60) return `${sec}초`;
+  const m = Math.floor(sec / 60);
+  return m < 60 ? `${m}분 ${sec % 60}초` : `${Math.floor(m / 60)}시간 ${m % 60}분`;
+}
+
+/** 피킹·패킹에 걸린 시간 — 시작(센터 출고 목록 startedAt, 진행 중이면 작업 activeStart) ~ 끝(작업 completedAt, 진행 중이면 지금). 서버 값만 */
+export function stageTimes(sim: Simulation, r: RealShipment): { pick: string | null; pack: string | null; pickRunning: boolean; packRunning: boolean } {
+  const c = sim.real?.centerShipments.get(r.shipmentId);
+  const readyAt = c?.readyAt ?? r.info?.readyAt ?? null;
+  const packStart = c?.pack?.startedAt ?? (r.pack ?? r.ret)?.detail?.activeStart?.startedAt ?? null;
+  // 끝 = 작업 completedAt, 없으면 다음 단계 시작(피킹 → 패킹 시작, 패킹 → 출하 대기 시각). 끝난 작업인데 끝 시각을 모르면 진행 중으로 세지 않는다
+  const one = (t: RealTask | undefined, started: string | null | undefined, next: string | null) => {
+    const s = started ?? t?.detail?.activeStart?.startedAt ?? null;
+    const st = t?.closed?.state ?? t?.summary.state;
+    const done = st === 'COMPLETED' || st === 'CLOSED_PARTIAL';
+    const end = t?.summary.completedAt ?? t?.detail?.completedAt ?? next ?? null;
+    if (done && !end) return { text: null, running: false };
+    return { text: dur(s, end ? Date.parse(end) : null), running: !!s && !end && !done };
+  };
+  const p = one(r.pick, c?.pick?.startedAt, packStart);
+  const k = one(r.pack ?? r.ret, packStart, readyAt);
+  return { pick: p.text, pack: k.text, pickRunning: p.running, packRunning: k.running };
+}
+
 function Detail({ r }: { r: RealShipment }) {
   const { sim } = useApp();
   const real = sim.real!;
@@ -68,9 +98,44 @@ function Detail({ r }: { r: RealShipment }) {
     const w = s.assignment?.workerId ? real.workerName(s.assignment.workerId) : s.pickedBy ? `${real.workerName(s.pickedBy)}(피킹한 사람, 다음 작업)` : '담당 전';
     return `${w} · ${s.completedQty}/${s.plannedQty}`;
   };
+  const os = real.orderSummaryOf(r);
+  // 품목: 배송 상세의 주문 요약(금액 포함), 배송 전이면 피킹 작업 줄(수량만)
+  const lines = os?.items?.length
+    ? os.items.map((i) => ({ k: i.orderLineId ?? i.name, name: `${i.name}${i.optionLabel ? ` (${i.optionLabel})` : ''}`, qty: i.qty, amt: i.lineAmount as number | null }))
+    : ((r.pick ?? r.pack)?.detail?.lines ?? []).map((l) => ({ k: l.orderLineId, name: l.productName ?? l.sku, qty: l.plannedQty, amt: null as number | null }));
+  const tm = stageTimes(sim, r);
   return (
     <div className="oc-d" onClick={(e) => e.stopPropagation()}>
+      <table className="od-items">
+        <tbody>
+          {lines.map((l) => (
+            <tr key={l.k}>
+              <td>{l.name}</td>
+              <td>×{l.qty}</td>
+              <td>{l.amt != null ? won(l.amt) : ''}</td>
+            </tr>
+          ))}
+        </tbody>
+        {os?.itemAmount != null && (
+          <tfoot>
+            <tr>
+              <td colSpan={2}>상품 합계</td>
+              <td>{won(os.itemAmount)}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
       <dl>
+        <dt>시간</dt>
+        <dd>
+          피킹 {tm.pick ?? '시작 전'}
+          {tm.pickRunning ? '째' : ''} · 패킹 {tm.pack ?? '시작 전'}
+          {tm.packRunning ? '째' : ''}
+        </dd>
+        <dt>전달</dt>
+        <dd>{os ? os.deliveryNote || '요청사항 없음' : '배송이 생기면 보임'}</dd>
+        <dt>배송지</dt>
+        <dd className="muted">MFC 계정엔 주소가 안 옴 — 백엔드 요청 R-27</dd>
         <dt>피킹</dt>
         <dd>{who(r.pick)}</dd>
         <dt>{r.ret && !r.pack ? '복귀' : '패킹'}</dt>
@@ -104,6 +169,28 @@ function Detail({ r }: { r: RealShipment }) {
 }
 
 /** 실제 주문 표 — 한 줄: 주문번호(+상품) · 지금 단계 · 진행 점 5개 · 경과. 줄을 누르면 바로 아래 상세(사용자 2026-11-20 "오른쪽 표에서 직관적으로") */
+/** 줄 겉에 바로: 피킹·패킹 걸린 시간, 상품 합계 */
+function OrderFacts({ r }: { r: RealShipment }) {
+  const { sim } = useApp();
+  const tm = stageTimes(sim, r);
+  const os = sim.real!.orderSummaryOf(r);
+  return (
+    <div className="ob-f">
+      <span className={tm.pickRunning ? 'run' : ''}>
+        <em>피킹</em> {tm.pick ?? '—'}
+      </span>
+      <span className={tm.packRunning ? 'run' : ''}>
+        <em>패킹</em> {tm.pack ?? '—'}
+      </span>
+      {os?.itemAmount != null && (
+        <span className="amt">
+          <em>금액</em> {won(os.itemAmount)}
+        </span>
+      )}
+    </div>
+  );
+}
+
 export function OrderCards() {
   const { sim } = useApp();
   const real = sim.real!;
@@ -147,6 +234,7 @@ export function OrderCards() {
                     {head?.productName ?? '—'}
                     {head && head.otherLineCount > 0 ? ` 외 ${head.otherLineCount}건` : ''}
                   </div>
+                  <OrderFacts r={r} />
                 </td>
               </tr>
               {on && (

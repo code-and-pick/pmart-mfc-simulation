@@ -12,6 +12,8 @@ import type {
   TaskPick,
   CapacityWorker,
   CenterStock,
+  CenterShipment,
+  DeliveryOrderSummary,
   DeliveryDispatch,
   DispatchState,
   ExecutionState,
@@ -40,6 +42,10 @@ export interface RealReader {
   listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
+  /** (fulfillment 0.15.0) 센터 출고 목록 — 피킹·패킹 시작 시각 */
+  listCenterShipments?(mfcId: string): Promise<CenterShipment[]>;
+  /** (delivery-execution) 배송 상세의 주문 요약 — 품목·금액·배송 요청사항 */
+  getDeliveryOrderSummary?(deliveryId: string): Promise<DeliveryOrderSummary | null>;
 }
 
 export interface RealBoardOptions {
@@ -336,6 +342,7 @@ export class RealBoard {
       const live = new Set([...this.tasks.values()].map((t) => t.summary.shipmentId));
       for (const sid of this.seenPicks.keys()) if (!live.has(sid)) this.seenPicks.delete(sid);
       await this.refreshShipments(now);
+      await this.refreshOrderFacts(now);
       await this.refreshReturnHandovers(now);
       await this.refreshStock(now);
       this.lastOkMs = now;
@@ -363,6 +370,43 @@ export class RealBoard {
       }
     }
     this.backfilled = true;
+  }
+
+  /** 출고 → 센터 출고 목록 한 줄(피킹·패킹 시작 시각) — 매 조회 한 번(목록 하나) */
+  readonly centerShipments = new Map<string, CenterShipment>();
+  /** 배송 → 주문 요약(품목·금액·배송 요청사항) — 배송마다 한 번, 실패하면 1분 뒤 다시 */
+  readonly orderSummaries = new Map<string, { data: DeliveryOrderSummary | null; readMs: number; failed?: boolean }>();
+
+  private async refreshOrderFacts(now: number) {
+    if (this.reader.listCenterShipments) {
+      try {
+        const list = await this.reader.listCenterShipments(this.mfcId);
+        this.centerShipments.clear();
+        for (const c of list) this.centerShipments.set(c.shipmentId, c);
+      } catch {
+        /* 시간 칸만 비고 화면은 그대로 */
+      }
+    }
+    if (!this.reader.getDeliveryOrderSummary) return;
+    let budget = 3;
+    for (const r of this.shipments()) {
+      const did = r.delivery?.deliveryId ?? r.info?.deliveryId;
+      if (!did || budget <= 0) continue;
+      const hit = this.orderSummaries.get(did);
+      if (hit && !(hit.failed && now - hit.readMs > 60_000)) continue;
+      budget--;
+      try {
+        this.orderSummaries.set(did, { data: await this.reader.getDeliveryOrderSummary(did), readMs: now });
+      } catch {
+        this.orderSummaries.set(did, { data: null, readMs: now, failed: true });
+      }
+    }
+  }
+
+  /** 그 출고의 주문 요약(배송 상세) — 배송이 아직 없거나 못 읽었으면 null */
+  orderSummaryOf(r: RealShipment): DeliveryOrderSummary | null {
+    const did = r.delivery?.deliveryId ?? r.info?.deliveryId;
+    return did ? (this.orderSummaries.get(did)?.data ?? null) : null;
   }
 
   /** 상품 바코드(스캔 판) — SKU → 서버 barcodes, 못 읽었으면 'ERR'. 화면이 볼 때만 한 번 읽는다(주기 조회 없음) */

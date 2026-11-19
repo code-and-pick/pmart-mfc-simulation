@@ -87,6 +87,12 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 - 같은 요청이 이미 있음: 클라이언트 `docs/backend-requests.md` **BR-52 R20**(11-10, "피킹한 사람에게 같은 주문 패킹 배정·출하대기 랙 위치", OPEN — 백엔드 회신 11-14 "다음 차례 후보"). 시뮬레이터도 같은 것이 필요하다는 기록 — 따로 만들 필요 없이 R20 에 같이 넣어 주면 된다.
 - 그동안 시뮬레이터: 출고가 READY 면 밀봉 포장 내용만큼의 PACKED 를 출하대기 랙 1(`DSP-A-01`)에 **추정**으로 그린다(이름표 "추정 — 서버 위치는 패킹대"). 아래 "시뮬레이터가 정한 값".
 
+### R-27 MFC 직원이 볼 배송지(가린 주소) — 중간 (2026-11-20 추가, delivery 영역 PC 5)
+- 사용자 2026-11-20: "피킹패킹 보는 mfc 시뮬레이션인데 뭘 시켰는지, 가격은 얼만지, 전달지, 배송지, 지금 피킹에 걸린 시간, 패킹에 걸린 시간이 안 뜨면 어떡해. 라이더 시뮬레이션 쪽에도 뜨는 건데."
+- 지금(읽음 11-20, 관찰 계정 `claude-mfc-wrk` — 값은 찍지 않고 칸 이름만): delivery-execution `GET /deliveries/{id}`(그 센터 운영자 200) `orderSummary` = 품목·수량·줄 금액·상품 합계·배송 요청사항 → **시뮬레이터가 이걸로 품목·금액·전달 요청을 보임(11-20)**. 주소는 없다(계약 설명 "고객 이름·연락처·주소는 drop-info(픽업 뒤)" — 배정 라이더 본인만). order `GET /orders/lookups/{orderId}`(가린 배송지 포함)는 OPERATOR_ADMIN·CS_AGENT·RIDER_OPS 만이라 MFC 계정 403. 라이더 시뮬레이터는 관제 계정(RIDER_OPS)으로 이 경로를 읽어 보인다.
+- 원하는 것: 그 센터 운영자가 자기 센터 출고의 **가린 배송지**(예 `부산 부산진구 전포동` 동 단위, 또는 order 상세와 같은 가림 규칙)를 읽을 수 있게 — 예 `orderSummary.shippingAddressMasked`(동 단위 문자열) 또는 `dropArea`. 원문·이름·연락처는 필요 없다. 화면 표기는 ADR-0070 처럼 겉은 동 단위.
+- 시뮬레이터: 생기면 주문 상세 "배송지" 칸에 그대로. 그때까지 "MFC 계정엔 주소가 안 옴 — R-27".
+
 ### R-26 라이더 번호 인계를 6자리 → 2~4자리로 — 중간 (2026-11-20 추가)
 - **회신(11-20, PC 3 "백엔드 MFC (New)" 세션 메시지 — PR #260 fulfillment 0.23.0, PC 1 병합·LAN 배포 전)**: 사용자 결정 "앞으로 발생하는 주문 인계 번호는 다 4자리로" → **4자리 고정**(2→3→4 늘림 없음, 앞자리 0 포함). 센터에서 쓰는(OPEN·SEALED) 포장끼리 겹치지 않고 인계·무효 뒤 다시 씀. 배포 전 포장은 6자리 그대로. `POST /packages/handover-code-authorizations` 경로·본문·응답 그대로, pattern `^([0-9]{4}|[0-9]{6})$`. 틀림 409 `HANDOVER_CODE_MISMATCH` + details `[{field: attemptsLeft, reason: 남은 횟수}]`, 같은 라이더·배송 5번 틀림 409 `HANDOVER_CODE_LOCKED`(맞는 번호도 거절, QR·점원 확인 `/packages/{id}/handover-checks` 만, 푸는 API 없음). 4자리끼리는 AMBIGUOUS 없음. 라이더 앱 번호 입력 실서버 연결은 PC 3 이 라이더 앱 세션에 요청. 회신 문서 백엔드 `docs/handoff/simulator/mfc/2026-11-20-simulator-reply-r26-handover-code.md`(PR #260 안 — 아직 main 아님).
 - **LAN 배포(11-20, PC 3 메시지)**: mfc-fulfillment 0.23.0(main 5b62603d, Flyway V19, PC 1 배포). 새 포장부터 4자리, 배포 전 LAN 포장 3개는 6자리 그대로(입력도 받음). 라이더 앱 번호 픽업 실서버 연결 pmart-clients #268 main.
