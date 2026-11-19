@@ -16,6 +16,7 @@ import {
   type HandoverAuthorization,
   type HandoverCommitResult,
   type InboundTask,
+  type InitialStockLoad,
   type InboundTaskExecution,
   type InspectionResult,
   type LotLabel,
@@ -239,6 +240,22 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-inventory getLotLabel(0.20.0) — LOT 인쇄 정보(소비기한·제조일·제조 LOT 표기). 가상 작업자 품질검사가 상품 표기 대신 읽는다 */
   getLotLabel(mfcId: string, lotId: string): Promise<LotLabel> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/lot-labels/${enc(lotId)}`);
+  }
+
+  /** search searchProducts(익명 가능) — 센터 취급 상품(시험 입고 후보). 판매 상태는 색인 사본 */
+  async searchProducts(mfcId: string): Promise<{ representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null }[]> {
+    const r: { items?: { representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null }[] } = await this.request('GET', `/search/products?mfcId=${enc(mfcId)}&size=200`);
+    return r.items ?? [];
+  }
+
+  /** mfc-inbound createDevInitialStockLoad(0.14.0, MI-3·R-23) — [LAN 시험 전용] 승인 없이 입고 예정(EXPECTED) 하나. 설정 꺼진 곳 404 */
+  createDevInitialStockLoad(mfcId: string, lines: { sku: string; qty: number }[], idempotencyKey: string): Promise<InitialStockLoad> {
+    return this.request('POST', '/dev-initial-stock-loads', { body: { mfcId, lines }, idempotencyKey });
+  }
+
+  /** mfc-inbound receiveInitialStock — 입고 예정의 현장 수령(상품·수량만, LOT·기한은 품질검사). 202 → 전기 뒤 품질검사 작업 */
+  receiveInitialStock(receiptId: string, toLocationCode: string, lines: { sku: string; receivedQty: number }[], idempotencyKey: string): Promise<CommandResponse> {
+    return this.request('POST', `/initial-stock-loads/${enc(receiptId)}/receipts`, { body: { toLocationCode, lines }, idempotencyKey });
   }
 
   /** mfc-inbound getInboundTask — 품질검사·적치 작업 한 건(배정 taskId) */

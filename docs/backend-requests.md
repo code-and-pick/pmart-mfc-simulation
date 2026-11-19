@@ -104,6 +104,8 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 
 ### R-23 [LAN 시험 전용] 시험 입고 차량 — 승인 없이 MFC 입고 예정 만들기(재고 채우기만) — 중간 (2026-11-19 추가)
 - **PC 3 에 넘어감(11-19)**: 백엔드 `docs/architecture/service-requests/mfc-inbound-service.md` **MI-3**. 경로·한도·호출 계정은 PC 3 이 정해 회신.
+- **백엔드 구현·main(11-19, #249 `518a2360`)**: mfc-inbound 0.14.0 `POST /dev-initial-stock-loads {mfcId, lines[{sku, qty}]}`(설정 `pmart.inbound.dev-arrivals.enabled` 켠 곳만, 꺼지면 404, 줄 1~40·SKU 당 1~500, 같은 SKU 두 번 400, 모르는 SKU 400 `UNKNOWN_SKU`) → InitialStockLoad EXPECTED(approvalId `DEV-…`). 수령은 지금 경로 `POST /initial-stock-loads/{receiptId}/receipts`(그 센터 운영자 — 가상 작업자 토큰 가능, 계약 설명). 2(서버가 SKU 고르기)는 없음. LAN 설정 `mfc-inbound-service-lan.yml` dev-arrivals 켜짐(읽음 11-20).
+- **시뮬레이터 반영(11-20)**: 실서버 모드 왼쪽 "재고 채우기" 두 버튼 — 입고 예정만(검사·적치는 PDA)·가상 작업자로. 둘 다 관찰 계정으로 입고 예정 → `RCV-A-01` 수령까지 하고(PDA 앱은 초기 보유 수령 화면이 없음 — `apps/mfc_app` 에 `initial-stock-loads` 호출 없음, 11-20 읽음), 줄은 화면이 고름(아래 "시뮬레이터가 정한 값" 시험 입고). 버튼으로 실제 입고는 아직 안 해 봄.
 - 왜: 실서버로 주문·가상 작업자를 계속 돌리면 재고가 줄어 품절이 난다. 지금 재고를 넣는 길은 백엔드 seed(`Seed.java --initial-stock`, PC 1 이 직접)뿐이라 시뮬레이터 화면에서 채울 수 없다. MOCK 의 "입고 차량 지금 부르기"처럼 **화면 버튼 하나로 MFC 재고를 채우고 싶다**(사용자 2026-11-19 "정식 구현은 아니고 mfc 재고를 채우는 기능만").
 - 정식 입고(CDC 출고 → 운송 → TRF → `/inbound-promises/*`, 아직 501)·SCM 발주·CDC WMS 는 **요청하지 않는다.** CDC·SCM 서비스를 흉내 내는 새 서비스도 필요 없다고 본다 — 이미 있는 **초기 보유 반입 경로**(INITIAL_STOCK 승인 → mfc-inbound 입고 예정 EXPECTED → 현장 수령 → mfc-inventory ConfirmReceipt → INSPECT → PUTAWAY, ADR-0040 결정 8, mfc-inbound `CLAUDE.md`)가 MFC 쪽 일을 다 한다. 빠진 것은 **승인 단계 없이 입고 예정을 만드는 입구** 하나뿐이다.
 - 원하는 것(이름·경로는 PC 3 이 정한다 — 시뮬레이터 예):
@@ -170,7 +172,7 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 
 | 항목 | 내용 | 상태 · 계기 |
 |---|---|---|
-| 시험 입고 차량(실서버) | 실서버 모드 버튼 → R-23 입구로 입고 예정 → 수령 → 서버 INSPECT·PUTAWAY 를 가상·PDA 작업자가 | **대기** · R-23. 사용자 11-19 "재고만 채우는 용도" |
+| 시험 입고(실서버) | 실서버 모드 "재고 채우기": 판매 가능이 적은 SKU(검색 취급 상품 중 품절 먼저, 최대 30개 재고 읽음) 8줄, 20개까지 채우기(줄당 5~40) → 입고 예정 → `RCV-A-01` 수령(관찰 계정) → INSPECT·PUTAWAY 는 PDA 또는 가상 작업자(가상 작업자로 = 0명이면 1명 켬). 누를 때 계획 보여 주고 한 번 더 확인 | **만듦(11-20)** · `TEST_INBOUND`(config [시뮬]) · `domain/testInbound.ts` · `Simulation.planTestInbound·runTestInbound`. 실제로 눌러 본 적 없음 |
 | 실제 주문 넣기 | 왼쪽 패널 버튼(이 PC 만): 고객 선택(시험 고객 / PC 1 지정 고객), 배송 방식 한집·알뜰·예약·랜덤, 출하 가능 상품으로 최소 주문 15,000원 넘게, 시험 결제 자동 승인 → 주문번호 **만듦(11-19)** · `server/realOrder.ts`(개발 서버 `/sim-order`, 루프백만 — 고객 토큰은 개발 서버 안에서만), `LeftPanel` "실제 주문 넣기". 화면으로 실제 주문을 넣어 본 적은 아직 없음. 시험 고객은 R-22 대기 |
 | 넓은 칸(layout-v3-wide) | 합친 칸 59(폭·세로 높이)·닫힌 칸 100 — `src/domain/wideCellsData.ts`(백엔드 `deploy/lan/seed/wide-cells-2026-11-18.json` 사본), 3D 칸막이·선반 판 뺌, 닫힌 칸 라벨·MOCK 상품 자리 뺌 | **11-18 완료** · 백엔드 알림 `2026-11-18-simulator-notice-wide-cells.md` 부탁 1·3. 부탁 2(위치 API `dimensions` 읽기)는 사본으로 대신 — 위치 API 를 읽지 않음. 알림 예 "C-B1-01-1-01 폭 322" 는 JSON 에 없음(JSON 은 C-B1-01-4-01 등이 322) |
 | 화면 번호(ADR-0070) | 목록·말풍선·3D 이름표에 시스템 ID(`ORD-…`·`DLV-…`·`RD-…`) 대신 화면 번호 — 주문 `orderNumber`(8자리, fulfillment 0.13.0 — 지금 있음), 배송 `deliveryNumber` "주문번호-순번" + 종류(execution 0.26.0·dispatch 0.10.0), 라이더 "가린 이름 · riderNumber 6자리"(rider 0.12.0, `GET /riders?riderIds=` 50개까지, 이메일 안 냄), 상세엔 접힌 "시스템 번호" + 복사, 번호 없으면 ID 끝 8자리 회색 + "번호 없음" | **11-18 일부 완료** — 주문번호(실제 주문 탭·바코드 탭·현장 기록·작업자 카드·랙 이름표, 바코드 탭에 접힌 "시스템 번호" + 복사), 회수 배송 표 `deliveryNumber`·`orderNumber`(라이더 ID 는 안 보이고 "라이더 배정됨"). **남음**: 라이더 번호(`GET /riders?riderIds=`), 배송 종류 표시. 백엔드 PR #184 는 11-18 15:15 main 병합(`84346104`), LAN 배포 기록은 아직 못 봄. LAN 조회 허용 목록(`lanAllow.ts`)에 `/riders` 를 넣을지는 개인정보(가린 이름만) 확인 뒤 |

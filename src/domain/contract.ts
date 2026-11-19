@@ -589,6 +589,16 @@ export interface NextTaskDetail {
 }
 
 /** mfc-inbound InboundTask (0.9.0) — 품질검사(INSPECT)·적치(PUTAWAY). 담당(assigneeId)이 있으면 담당만 실행(409 NOT_ASSIGNEE) */
+/** mfc-inbound InitialStockLoad(0.14.0 시험 입고도 같은 모양) — EXPECTED → 현장 수령 → PENDING → APPLIED(품질검사 작업 생성) */
+export interface InitialStockLoad {
+  receiptId: string;
+  approvalId: string;
+  mfcId: string | null;
+  state: 'EXPECTED' | 'PENDING' | 'APPLIED' | 'REJECTED';
+  rejectReason?: string | null;
+  lines: { sku: string; productName?: string | null; qty: number; receivedQty?: number | null }[];
+}
+
 export interface InboundTask {
   taskId: string;
   taskType: 'INSPECT' | 'PUTAWAY';

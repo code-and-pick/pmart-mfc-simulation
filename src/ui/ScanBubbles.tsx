@@ -12,6 +12,7 @@ import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
 import { Barcode } from './Barcode';
 import { LotLabel } from './ScanBoard';
+import { Why } from './Why';
 
 const HEAD_Y = 2.0;
 /** 위 막대(상단 바) 아래부터 띄운다(px) */
@@ -161,7 +162,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
           </div>
         ))}
       {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 실제 주문 탭에서 주문을 고르면 그 주문 것만</div>}
-      <div className="note">PDA 가 랙을 찍어 서버에 올린 포장은 서버 랙 그대로(F-12). 서버가 모르는 포장은 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1(추정).</div>
+      <Why>PDA 가 랙을 찍어 서버에 올린 포장은 서버 랙 그대로(F-12). 서버가 모르는 포장은 이 화면에서 "랙 N 찍음"으로 고른 랙, 모르면 랙 1(추정).</Why>
     </div>
   );
 }
@@ -192,8 +193,9 @@ function Bubble({ w }: { w: ObservedWorker }) {
           <Close />
         </div>
         <div className="note">
-          PDA 에서 <b>다음 작업 받기</b>를 누르면 서버가 이 주문 패킹을 먼저 줍니다(피킹한 사람 = 이 작업자). 배정되면 ① 패킹대 찍기로 넘어갑니다.
+          PDA <b>다음 작업 받기</b> → 이 주문 패킹
         </div>
+        <Why>서버가 피킹한 사람(이 작업자)에게 이 주문 패킹을 먼저 줍니다. 배정되면 ① 패킹대 찍기로 넘어갑니다.</Why>
         {c.cart && <CartAgain cart={c.cart} />}
       </>
     );
@@ -320,7 +322,8 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
         <>
           {head('③ 배차 요청')}
           <CartAgain cart={c.cart} />
-          <div className="note">찍을 바코드 없음 — PDA 에서 예상 포장 시간을 골라 배차를 요청하세요. 서버에 요청이 오면 다음 단계로 넘어갑니다.</div>
+          <div className="note">PDA 에서 예상 포장 시간 → 배차 요청</div>
+          <Why>찍을 바코드가 없는 단계입니다. 서버에 배차 요청이 오면 다음 단계로 넘어갑니다.</Why>
         </>
       );
     case 'BAG':
@@ -337,7 +340,8 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
               </div>
             ),
           )}
-          <div className="note">다 담았으면 PDA 에서 밀봉. 밀봉이 서버에 오면 남은 수가 줄고, 다 끝나면 출하대기 랙으로 갑니다.</div>
+          <div className="note">다 담았으면 PDA 에서 밀봉</div>
+          <Why>밀봉이 서버에 오면 남은 수가 줄고, 다 끝나면 출하대기 랙으로 갑니다.</Why>
         </>
       );
     case 'RACK':
@@ -356,9 +360,9 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
               랙 2 찍음
             </button>
           </div>
-          <div className="note">
+          <Why>
             PDA 가 랙을 찍어 서버에 올리면(fulfillment 0.20.0) 바로 넘어갑니다. 서버에 안 오면 작업자가 랙에 서고 {REAL_LINK.rackAutoSec}초 뒤 랙에 둔 것으로 넘깁니다(버튼을 안 누르면 랙 1, 추정). 그다음 피킹 대기 자리로 갑니다.
-          </div>
+          </Why>
         </>
       );
   }

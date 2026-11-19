@@ -224,12 +224,7 @@ export const REAL_ORDER = {
       accountId: 'CU-eae131fa-886a-4733-9eee-86a158be281a',
       warn: '실제 계정 — 고객 앱 주문 내역에 보이고 배송 알림이 휴대폰으로 갑니다(결제만 시험).',
     },
-    {
-      key: 'test',
-      label: '시험 고객',
-      accountId: 'CU-fdccbd6b-9817-4e95-b55a-2c4e71539116',
-      warn: '백엔드 허용 목록에 아직 없음(R-22 요청) — 넣기 전까지 403.',
-    },
+    // 시험 고객 CU-fdccbd6b… 는 R-22 보류(실제 Google 계정·동의 전) — 허용 목록에 들어가면 다시 넣는다(사용자 2026-11-20 "테스트 계정 없지 않나")
   ],
   /** 한 번에 넣는 최대 건수 [시뮬] */
   maxCount: 5,
@@ -247,6 +242,21 @@ export const REAL_ORDER = {
   /** 승인 뒤 주문번호를 기다리는 최대 시간(초) [시뮬] */
   orderNumberWaitSec: 15,
   pollMs: 1000,
+};
+
+/** 시험 입고(MI-3·R-23 — mfc-inbound 0.14.0 POST /dev-initial-stock-loads, LAN 설정 켠 곳만). 재고만 채우는 시험 입구 */
+export const TEST_INBOUND = {
+  /** 한 번에 넣는 SKU 줄 수(계약 1~40) [시뮬] */
+  lines: 8,
+  /** 판매 가능 수량을 이만큼까지 채운다 [시뮬] */
+  targetQty: 20,
+  /** 줄마다 최소·최대 수량(계약 SKU 당 1~500) [시뮬] */
+  minQty: 5,
+  maxQty: 40,
+  /** 재고를 읽어 볼 후보 SKU 수 — 품절(TEMPORARILY_SOLD_OUT) 먼저, 그다음 무작위 [시뮬] */
+  readMax: 30,
+  /** 수령 위치(입고·검수 구역, mfc-location) — locationCodes SIM_POINT.receiving [확정] */
+  receivingLocation: 'RCV-A-01',
 };
 
 /** "확인할 일" 띠(pmart-rider-simulation IssueBar 참고) 기준 — 업무 문서에 없는 화면 알림 기준 [시뮬] */

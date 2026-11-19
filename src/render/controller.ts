@@ -67,7 +67,7 @@ export type LabelMode = 'all' | 'rack' | 'off';
 /** 오른쪽 패널 화면(왼쪽 아이콘 메뉴로 고름) */
 export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
 /** 왼쪽 패널 화면 */
-export type LeftView = 'settings' | 'legend';
+export type LeftView = 'settings' | 'legend' | 'help';
 export type Theme = 'dark' | 'light';
 
 /** 이 브라우저에 기억하는 화면 편의 설정(테마) — 못 읽으면 기본(어둡게). 토큰·업무 값은 두지 않는다 */

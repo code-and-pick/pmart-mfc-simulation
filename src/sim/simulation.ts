@@ -8,9 +8,10 @@
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_WORKERS, type SimParams } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_WORKERS, TEST_INBOUND, type SimParams } from '../config';
+import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
-import type { ConfirmOrderRequest, Package, PackageContentLine, TemperatureZone } from '../domain/contract';
+import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
 import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
 import { buildLocationCodeMap, SIM_POINT, type LocationCodeMap } from '../domain/locationCodes';
 import { NavGrid } from '../domain/navgrid';
@@ -175,6 +176,7 @@ export class Simulation {
       h.onApi((r) => this.push(this.apiLog, r));
       this.mock = null;
       this.port = h;
+      this.realHttp = h;
       this.realTokens = tokens;
       this.real = new RealBoard(h, params.mfcId, {
         pollSec: REAL_LINK.pollSec,
@@ -275,6 +277,8 @@ export class Simulation {
   /** 가상 작업자 운영자 ID — 실제 작업 표시(PDA 기둥)에서 뺀다 */
   /** 화면에서 고른 가상 작업자 수 */
   private virtualTarget = 0;
+  /** 관찰 계정 어댑터(실서버 모드) — 시험 입고처럼 사용자가 누른 쓰기에만 쓴다 */
+  private realHttp: HttpBackend | null = null;
   /** PDA 가 쓰는 중이라 건너뛴 계정 → 그때(ms). REAL_LINK.pdaSkipSec 동안 다시 고르지 않는다 */
   private readonly pdaAccounts = new Map<string, number>();
   /** 가상 작업자로 마지막에 쓴 운영자 ID → 그때(ms) — 그 뒤 서버 활동만 PDA 것으로 본다 */
@@ -394,6 +398,52 @@ export class Simulation {
   setSpeedBoost(v: number) {
     this.speedBoost = Math.max(1, Math.min(REAL_WORKERS.speedBoostMax, v));
     for (const w of this.observedWorkers) w.setSpeed(this.params.walkSpeed * (this.real?.speedFactor(w.workerId) ?? 1) * this.speedBoost);
+  }
+
+  /** 시험 입고 계획(MI-3·R-23) — 취급 상품 중 판매 가능이 적은 SKU 를 관찰 계정으로 읽어서 고른다(읽기만) */
+  async planTestInbound(): Promise<InboundPlanLine[]> {
+    const h = this.realHttp;
+    if (!h || this.realTokens?.serverInjected) throw new Error('이 화면(실서버 모드)에서만');
+    const cands = inboundCandidates(await h.searchProducts(this.params.mfcId), TEST_INBOUND.readMax, Math.random);
+    const read: { sku: string; name: string; available: number | null }[] = [];
+    for (const c of cands) {
+      let available: number | null = null;
+      try {
+        available = (await h.getCenterStock(this.params.mfcId, c.sku)).lots.reduce((a, l) => a + l.available, 0);
+      } catch {
+        /* 못 읽은 SKU 는 뒤로 */
+      }
+      read.push({ ...c, available });
+    }
+    return inboundLines(read, TEST_INBOUND);
+  }
+
+  /**
+   * 시험 입고 넣기 — 입고 예정(EXPECTED) 만들기 → 수령 위치에 수령(관찰 계정, 계약상 그 센터 운영자). 그 뒤 품질검사·적치 작업은
+   * 다음 작업 받기로 PDA 나 가상 작업자가 받는다. withVirtual 이면 가상 작업자가 하나도 없을 때 하나 켠다.
+   * 응답이 없으면 같은 Idempotency-Key 로 다시(같은 키 = 같은 입고 예정).
+   */
+  async runTestInbound(lines: readonly InboundPlanLine[], withVirtual: boolean): Promise<{ receiptId: string; units: number }> {
+    const h = this.realHttp;
+    if (!h || this.realTokens?.serverInjected) throw new Error('이 화면(실서버 모드)에서만');
+    const again = async <T>(f: () => Promise<T>): Promise<T> => {
+      for (let i = 0; ; i++) {
+        try {
+          return await f();
+        } catch (e) {
+          if (!(e instanceof ResultUnknown) || i >= 2) throw e;
+        }
+      }
+    };
+    const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const load = await again(() => h.createDevInitialStockLoad(this.params.mfcId, lines.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}`));
+    await again(() =>
+      h.receiveInitialStock(load.receiptId, TEST_INBOUND.receivingLocation, lines.map((l) => ({ sku: l.sku, receivedQty: l.qty })), `sim-inb-rcv:${load.receiptId}`),
+    );
+    const units = lines.reduce((a, l) => a + l.qty, 0);
+    this.log(`시험 입고 ${load.receiptId} — ${lines.length}품목 ${units}개 수령(${TEST_INBOUND.receivingLocation}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
+    if (withVirtual && this.virtualTarget === 0) this.setVirtualWorkers(1);
+    return { receiptId: load.receiptId, units };
   }
 
   setVirtualWorkers(n: number) {

@@ -84,6 +84,80 @@ function Board() {
   );
 }
 
+/** 맨 위 요약 — 흐름 한 줄(주문 → 피킹 → 패킹 → 랙 → 인계) + 핵심 숫자 4개, 나머지는 "숫자 모두"(사용자 2026-11-20 시안) */
+function Summary() {
+  const { sim: s } = useApp();
+  let flow: [string, number, boolean?][];
+  let key: [string, string][];
+  if (s.real) {
+    const real = s.real;
+    const c = real.counts();
+    const n = (k: string) => c[k] ?? 0;
+    const sh = real.shipments();
+    const blocked = Object.entries(c).filter(([k]) => k.endsWith(':BLOCKED')).reduce((a, [, v]) => a + v, 0);
+    const packWait = n('PACK:WAITING') + n('PACK:READY');
+    flow = [
+      ['열린 출고', sh.filter((r) => [r.pick, r.pack, r.ret].some((t) => t && !t.closed)).length],
+      ['피킹', n('PICK:READY') + n('PICK:WAITING') + n('PICK:ASSIGNED') + n('PICK:IN_PROGRESS')],
+      ['패킹', packWait + n('PACK:ASSIGNED') + n('PACK:IN_PROGRESS'), packWait > 0],
+      ['랙', sh.filter((r) => r.info?.state === 'READY' && s.onRack(r.shipmentId)).length],
+      ['막힘', blocked, blocked > 0],
+    ];
+    key = [];
+  } else {
+    const m = s.metrics.summary();
+    const b = s.taskBoard();
+    const busy = s.workers.filter((w) => !w.idle).length;
+    const pickWait = b['PICK:READY'] ?? 0;
+    flow = [
+      ['주문', s.metrics.ordersCreated],
+      ['피킹', pickWait + (b['PICK:ASSIGNED'] ?? 0) + (b['PICK:IN_PROGRESS'] ?? 0), pickWait > 5],
+      ['패킹', (b['PACK:ASSIGNED'] ?? 0) + (b['PACK:IN_PROGRESS'] ?? 0) + (b['PACK:READY'] ?? 0)],
+      ['랙', s.shipRack.all().length],
+      ['인계', m.handedOver],
+    ];
+    key = [
+      ['접수→출하준비 평균', fmtDur(m.leadAvg)],
+      ['작업 중 / 전체', `${busy}/${s.workers.length}`],
+      ['최근 1시간 처리', `${s.metrics.readyLastHour(s.time)}건`],
+      ['재고 부족 차단', `${s.metrics.ordersBlockedStock}`],
+    ];
+  }
+  return (
+    <div className="summary">
+      <div className="flow">
+        {flow.map(([k, v, w]) => (
+          <div key={k} className={w ? 'w' : ''}>
+            <b>{v}</b>
+            <small>{k}</small>
+          </div>
+        ))}
+      </div>
+      {key.length > 0 && (
+        <div className="kpis four">
+          {key.map(([k, v]) => (
+            <div className="kpi" key={k}>
+              <div className="v">{v}</div>
+              <div className="k">{k}</div>
+            </div>
+          ))}
+        </div>
+      )}
+      <details className="more">
+        <summary>숫자 모두</summary>
+        {s.real ? (
+          <RealSummary />
+        ) : (
+          <>
+            <Kpis />
+            <Board />
+          </>
+        )}
+      </details>
+    </div>
+  );
+}
+
 function LogBody({ tab }: { tab: Tab }): ReactNode {
   const { sim: s, controller } = useApp();
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
@@ -215,9 +289,7 @@ function Log({ tab }: { tab: Tab }) {
 }
 
 export function RightPanel() {
-  const { sim } = useApp();
   useTick();
-  const real = !!sim.real;
   // 고른 출고는 ViewController 에 둔다 — 3D 스캔 말풍선(ScanBubbles)도 같은 값을 본다
   const view = useView();
   const tab = view.rightView;
@@ -235,8 +307,7 @@ export function RightPanel() {
   return (
     <ScanFocusContext.Provider value={focus}>
     <div className="panel right">
-      {real ? <RealSummary /> : <Kpis />}
-      {!real && <Board />}
+      <Summary />
       <Log tab={tab} />
     </div>
     </ScanFocusContext.Provider>

@@ -1,4 +1,5 @@
-// 머리줄(pmart-rider-simulation ConsoleHeader 참고) — 왼쪽: 이름·센터·데이터 출처·작업자 수, 오른쪽: 실시간 시각·속도와 3D 보기 조작 한 묶음.
+// 머리줄(pmart-rider-simulation ConsoleHeader 참고) — 왼쪽: 이름·센터·데이터 출처·작업자 수, 오른쪽: 시각·속도.
+// 3D 보기 조작(구역·번호판·벽)은 3D 위 떠 있는 칩 줄 ViewBar 로(2026-11-20 — 머리줄에서 두 줄로 깨지던 것).
 import { useApp, useTick, useView } from '../app/context';
 import { SPEEDS } from '../config';
 import type { LabelMode, RightView } from '../render/controller';
@@ -20,7 +21,6 @@ export function TopBar() {
   const view = useView();
   useTick();
   const mock = sim.mode === 'mock';
-  const wall = view.wallUser ?? 0.32;
   const people = mock ? sim.workers : [...sim.observedWorkers, ...sim.virtualWorkers.filter((w) => !w.left)];
   const busy = people.filter((w) => w.state !== 'IDLE').length;
   return (
@@ -57,27 +57,36 @@ export function TopBar() {
           </button>
         ))}
       </div>
-      <div className="seg" id="zones" aria-label="구역">
+    </header>
+  );
+}
+
+/** 3D 위 떠 있는 보기 조작 — 왼쪽: 구역, 오른쪽: 번호판·벽 */
+export function ViewBar() {
+  const view = useView();
+  const wall = view.wallUser ?? 0.32;
+  return (
+    <div className="viewbar">
+      <div className="seg float" id="zones" aria-label="구역">
         {view.views.map((v) => (
           <button key={v.key} className={view.focusedZone === v.key ? 'on' : undefined} onClick={() => view.focusZone(v.key)}>
             {v.label}
           </button>
         ))}
       </div>
-      <div className="seg" title="랙 번호판은 늘, 칸 번호는 가까이 확대했을 때 보입니다">
+      <div className="seg float" title="랙 번호판은 늘, 칸 번호는 가까이 확대했을 때 보입니다">
         {LABEL_MODES.map((l) => (
           <button key={l.mode} className={view.labelMode === l.mode ? 'on' : undefined} onClick={() => view.setLabelMode(l.mode)}>
             {l.text}
           </button>
         ))}
-      </div>
-      <div className="seg">
+        <span className="seg-sep" />
         {WALLS.map((w) => (
           <button key={w.o} className={wall === w.o ? 'on' : undefined} onClick={() => view.setWallOpacity(w.o)}>
             {w.text}
           </button>
         ))}
       </div>
-    </header>
+    </div>
   );
 }

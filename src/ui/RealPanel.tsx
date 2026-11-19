@@ -6,6 +6,7 @@ import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
 import type { TaskState } from '../domain/contract';
 import { useScanFocus } from './scanFocus';
+import { Why } from './Why';
 import { dispatchText, dispatchView, type DispatchStage, type RealShipment, type RealTask } from '../sim/realBoard';
 
 export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
@@ -271,9 +272,10 @@ export function RealStockTable() {
   for (const t of real.tasks.values()) for (const l of t.detail?.lines ?? []) if (l.productName) names.set(l.sku, l.productName);
   return (
     <>
-      <div className="note">
-        주문 상품 {real.stock.size}개의 재고 (GET /mfcs/{sim.params.mfcId}/stock) — 작업이 바뀌면 바로, 아니면 {REAL_LINK.stockRefreshSec}초마다 다시 읽습니다. 3D 의 다른 칸은 회색(수량 모름).
-      </div>
+      <div className="note">주문 상품 {real.stock.size}개 재고</div>
+      <Why>
+        GET /mfcs/{sim.params.mfcId}/stock — 작업이 바뀌면 바로, 아니면 {REAL_LINK.stockRefreshSec}초마다 다시 읽습니다. 3D 의 다른 칸은 회색(수량 모름).
+      </Why>
       <table className="inv real">
         <thead>
           <tr>

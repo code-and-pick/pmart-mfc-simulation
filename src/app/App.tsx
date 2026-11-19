@@ -7,7 +7,7 @@ import { IssueBar } from '../ui/IssueBar';
 import { Rail } from '../ui/Rail';
 import { RightPanel } from '../ui/RightPanel';
 import { ScanBubbles } from '../ui/ScanBubbles';
-import { TopBar } from '../ui/TopBar';
+import { TopBar, ViewBar } from '../ui/TopBar';
 import { AppContext, type AppCtx } from './context';
 
 export function App({ app }: { app: AppCtx }) {
@@ -38,7 +38,9 @@ export function App({ app }: { app: AppCtx }) {
           <IssueBar />
           <div className="stage">
             <LeftPanel />
-            <div className="stage-gap" />
+            <div className="stage-gap">
+              <ViewBar />
+            </div>
             <RightPanel />
           </div>
         </div>

@@ -1,38 +1,95 @@
-import { useRef, useState } from 'react';
+// 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
+// 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기) → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
+import { useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS } from '../config';
+import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, TEST_INBOUND } from '../config';
 import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
+import type { InboundPlanLine } from '../domain/testInbound';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import type { InboundState } from '../sim/inbound';
 import { fmtClock } from '../sim/metrics';
 import type { HttpSettings } from '../sim/simulation';
 import type { WorkerState } from '../sim/worker';
+import { Help } from './Help';
 import { INBOUND_KO, STATE_KO } from './text';
 
-function Slider(props: { name: string; initial: number; min: number; max: number; step: number; hint: string; apply: (v: number) => void }) {
+/** ⓘ — 마우스를 올리거나 누르면 한두 줄 설명 */
+export function Tip({ text }: { text: string }) {
+  return (
+    <span className="tip" tabIndex={0} aria-label={text}>
+      i<span className="tip-box">{text}</span>
+    </span>
+  );
+}
+
+/** 한 줄 슬라이더 — 이름 · 막대 · 값 · ⓘ */
+function Slider(props: { name: string; initial: number; min: number; max: number; step: number; hint: string; unit?: string; apply: (v: number) => void }) {
   const [v, setV] = useState(props.initial);
   return (
-    <div className="field">
-      <label>
-        {props.name}
-        <b>{v}</b>
-      </label>
+    <div className="srow">
+      <span className="srow-l">{props.name}</span>
       <input
         type="range"
         min={props.min}
         max={props.max}
         step={props.step}
         value={v}
+        aria-label={props.name}
         onChange={(e) => {
           const n = Number(e.target.value);
           setV(n);
           props.apply(n);
         }}
       />
-      <small>{props.hint}</small>
+      <b className="srow-v">
+        {v}
+        {props.unit ?? ''}
+      </b>
+      <Tip text={props.hint} />
     </div>
+  );
+}
+
+function Sec({ title, aside, children }: { title: string; aside?: ReactNode; children: ReactNode }) {
+  return (
+    <section className="sec">
+      <h4>
+        {title}
+        {aside && <span>{aside}</span>}
+      </h4>
+      {children}
+    </section>
+  );
+}
+
+/** 큰 할 일 버튼(아이콘 · 이름 · 한 줄 부제) */
+function Act({ icon, title, sub, onClick, primary, disabled }: { icon: string; title: string; sub: string; onClick: () => void; primary?: boolean; disabled?: boolean }) {
+  return (
+    <button className={`act ${primary ? 'pri' : ''}`} onClick={onClick} disabled={disabled}>
+      <span className="act-i" aria-hidden>
+        {icon}
+      </span>
+      <span>
+        <span className="act-t">{title}</span>
+        <span className="act-s">{sub}</span>
+      </span>
+    </button>
+  );
+}
+
+/** 두 번 묻는 창 — 왼쪽 패널 옆에 뜬다. 패널(backdrop-filter)이 fixed 를 가두므로 body 로 뺀다 */
+function Ask({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return createPortal(
+    <div className="ask-back" onClick={onClose}>
+      <div className="ask" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+        <h5>{title}</h5>
+        {children}
+      </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -64,45 +121,334 @@ function Legend() {
   );
 }
 
+// ───────── MOCK ─────────
+
+function OutboundControls() {
+  const { sim } = useApp();
+  const p = sim.params;
+  return (
+    <Sec title="출고">
+      <Slider name="시간당 주문" initial={p.ordersPerHour} min={5} max={120} step={1} hint="기준안 피크 약 40건/시간, 낙관안 88건 (MFC 7-1 가정)" apply={(v) => (sim.params.ordersPerHour = v)} />
+      <Slider name="작업자" initial={p.workers} min={1} max={24} step={1} hint="피킹·패킹 작업자. 기준안 약 10명, 낙관안 약 22명 (MFC 7-2 가정)" apply={(v) => sim.setWorkers(v)} />
+      <Slider name="패킹대" initial={p.packingStations} min={1} max={8} step={1} hint="가동 패킹대. 기본 4대 · 최대 8대 (MFC 11장)" apply={(v) => sim.setStations(v)} />
+      <Slider name="결품률" unit="%" initial={p.shortageRate * 100} min={0} max={10} step={0.5} hint="피킹 때 선반 실물 부족을 보고할 확률 (시뮬 값)" apply={(v) => (sim.params.shortageRate = v / 100)} />
+      <div className="srow">
+        <span className="srow-l">피킹 순서</span>
+        <select className="srow-sel" defaultValue={p.pickSequence} onChange={(e) => (sim.params.pickSequence = e.target.value as 'DOC_B_A_C' | 'AMBIENT_FIRST')}>
+          <option value="DOC_B_A_C">B→A→C~H</option>
+          <option value="AMBIENT_FIRST">상온→냉장→냉동</option>
+        </select>
+        <Tip text="B→A→C~H 는 원본 관찰 순서(MFC 8-3)" />
+      </div>
+    </Sec>
+  );
+}
+
 function InboundControls() {
   const { sim, controller } = useApp();
   useTick();
   const p = sim.params;
   const ibb = sim.inboundBoard();
   return (
-    <>
-      <h3>입고·적치·보충</h3>
+    <Sec title="입고·적치·보충" aside={`다음 ${fmtClock(ibb.nextTruckAt)}`}>
       <Slider name="입고 작업자" initial={p.inboundWorkers} min={0} max={8} step={1} hint="기준 3명 (검수 2 + 이송 1, MFC 10장 가정)" apply={(v) => sim.setInboundWorkers(v)} />
-      <Slider
-        name="입고 차량 주기 (시간)"
-        initial={p.inboundIntervalHours}
-        min={1}
-        max={8}
-        step={1}
-        hint="실제는 매일 오전 1회 [확정] — 적치 과정을 보려고 짧게 [시뮬]"
-        apply={(v) => (sim.params.inboundIntervalHours = v)}
-      />
-      <button
-        className="btn"
+      <Slider name="차량 주기" unit="h" initial={p.inboundIntervalHours} min={1} max={8} step={1} hint="실제는 매일 오전 1회 [확정] — 적치 과정을 보려고 짧게 [시뮬]" apply={(v) => (sim.params.inboundIntervalHours = v)} />
+      <Act
+        icon="🚚"
+        title="입고 차량 지금 부르기"
+        sub={`입고 작업자 ${sim.inboundWorkers.filter((w) => !w.idle).length}/${sim.inboundWorkers.length} 작업 중`}
         onClick={() => {
           if (sim.callTruck()) controller.focusZone('RCV');
         }}
-      >
-        입고 차량 지금 부르기
-      </button>
-      <div className="probe">
-        다음 정기 입고 {fmtClock(ibb.nextTruckAt)} · 입고 작업자 {sim.inboundWorkers.filter((w) => !w.idle).length}/{sim.inboundWorkers.length} 작업 중
-      </div>
-    </>
+      />
+    </Sec>
   );
 }
+
+// ───────── 실서버: 실제 주문 넣기(R-21) — 두 번 묻기 ─────────
+
+type OrderLog = { at: string; text: string; warn?: boolean; ask?: boolean };
+
+function RealOrderControls() {
+  const { sim } = useApp();
+  // 고객은 허용 목록의 한 계정뿐(R-22 보류) — 고르지 않는다
+  const cust = REAL_ORDER.customers[0];
+  const [step, setStep] = useState<0 | 1 | 2>(0);
+  const [mode, setMode] = useState<OrderModeChoice>('RANDOM');
+  const [count, setCount] = useState(1);
+  const [busy, setBusy] = useState('');
+  const [log, setLog] = useState<OrderLog[]>([]);
+  const push = (text: string, warn = false, ask = false) => setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn, ask }, ...l].slice(0, 12));
+
+  const run = async (m: OrderModeChoice, n: number) => {
+    setStep(0);
+    for (let i = 0; i < n; i++) {
+      setBusy(`${i + 1}/${n}건 넣는 중…`);
+      let r: RealOrderResult;
+      try {
+        const res = await fetch('/sim-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ customer: cust.key, mode: m, mfcId: sim.params.mfcId }),
+        });
+        r = (await res.json()) as RealOrderResult;
+      } catch {
+        r = { ok: false, step: 'NETWORK', code: 'NO_RESPONSE', detail: '개발 서버 응답 없음 — 결과 불명, 실제 주문 탭에서 확인' };
+      }
+      if (r.ok) {
+        const w = r.window ? ` ${r.window.date.slice(5)} ${r.window.start}–${r.window.end}` : '';
+        push(`${r.orderNumber ?? r.orderId.slice(-8)} · ${MODE_KO[r.mode]}${w} · ${r.amount.toLocaleString()}원`);
+      } else {
+        push(`${r.step} ${r.code} — ${r.detail}`, true, !!r.askScheduled);
+        break;
+      }
+    }
+    setBusy('');
+  };
+
+  return (
+    <Sec title="주문 넣기">
+      <Act icon="＋" title="실제 주문 넣기" sub={busy || '내 계정 · 시험 결제'} primary disabled={!!busy} onClick={() => setStep(1)} />
+      {step === 1 && (
+        <Ask title="어떤 주문을 넣을까요?" onClose={() => setStep(0)}>
+          <div className="ask-l">배송 방식</div>
+          <div className="chips">
+            {(['SINGLE', 'BUNDLED', 'SCHEDULED', 'RANDOM'] as const).map((m) => (
+              <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>
+                {MODE_KO[m]}
+              </button>
+            ))}
+          </div>
+          <div className="ask-l">건수</div>
+          <div className="stepper">
+            <button onClick={() => setCount((c) => Math.max(1, c - 1))}>−</button>
+            <b>{count}</b>
+            <button onClick={() => setCount((c) => Math.min(REAL_ORDER.maxCount, c + 1))}>＋</button>
+          </div>
+          <div className="ask-acts">
+            <button onClick={() => setStep(0)}>취소</button>
+            <button className="go" onClick={() => setStep(2)}>
+              다음
+            </button>
+          </div>
+        </Ask>
+      )}
+      {step === 2 && (
+        <Ask title={`실제 주문 ${count}건을 넣을까요?`} onClose={() => setStep(0)}>
+          <dl className="ask-sum">
+            <dt>고객</dt>
+            <dd>내 계정</dd>
+            <dt>방식</dt>
+            <dd>{MODE_KO[mode]}</dd>
+            <dt>결제</dt>
+            <dd>시험 결제</dd>
+            <dt>센터</dt>
+            <dd>{sim.params.mfcId}</dd>
+          </dl>
+          <div className="ask-warn">⚠ 실서버에 진짜 주문 — 배차까지 흘러가고, 주문 내역·배송 알림이 내 휴대폰으로 갑니다</div>
+          <div className="ask-acts">
+            <button onClick={() => setStep(1)}>뒤로</button>
+            <button className="red" onClick={() => run(mode, count)}>
+              {count}건 넣기
+            </button>
+          </div>
+        </Ask>
+      )}
+      <ResultLog rows={log}>
+        {(l) =>
+          l.ask && !busy ? (
+            <button className="link" onClick={() => run('SCHEDULED', 1)}>
+              예약으로 1건
+            </button>
+          ) : null
+        }
+      </ResultLog>
+    </Sec>
+  );
+}
+
+function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderLog) => ReactNode }) {
+  if (!rows.length) return null;
+  return (
+    <div className="results">
+      {rows.slice(0, 5).map((l, i) => (
+        <div key={i} className={l.warn ? 'bad' : 'ok'}>
+          {l.warn ? '✕' : '✓'} {l.text} {children?.(l)}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ───────── 실서버: 재고 채우기(시험 입고 MI-3·R-23) — 계획을 보여 주고 한 번 더 묻기 ─────────
+
+function TestInboundControls() {
+  const { sim, controller } = useApp();
+  const [plan, setPlan] = useState<{ lines: InboundPlanLine[]; withVirtual: boolean } | null>(null);
+  const [busy, setBusy] = useState('');
+  const [log, setLog] = useState<OrderLog[]>([]);
+  const push = (text: string, warn = false) => setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn }, ...l].slice(0, 12));
+  const why = (e: unknown) => ((e as Error).message ?? String(e)).slice(0, 90);
+
+  const start = async (withVirtual: boolean) => {
+    setBusy('재고 적은 상품 찾는 중…');
+    try {
+      const lines = await sim.planTestInbound();
+      if (!lines.length) push('채울 상품을 못 찾았습니다(센터 취급 상품 없음)', true);
+      else setPlan({ lines, withVirtual });
+    } catch (e) {
+      push(`상품 찾기 실패 — ${why(e)}`, true);
+    }
+    setBusy('');
+  };
+  const go = async () => {
+    if (!plan) return;
+    const p = plan;
+    setPlan(null);
+    setBusy('입고 예정 만들고 수령하는 중…');
+    try {
+      const r = await sim.runTestInbound(p.lines, p.withVirtual);
+      push(`${r.receiptId.slice(-10)} · ${p.lines.length}품목 ${r.units}개 수령 → ${p.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+      controller.focusZone('RCV');
+    } catch (e) {
+      push(`시험 입고 실패 — ${why(e)}`, true);
+    }
+    setBusy('');
+  };
+  const units = plan?.lines.reduce((a, l) => a + l.qty, 0) ?? 0;
+  return (
+    <Sec title="재고 채우기" aside="시험 입고">
+      <div className="act-split">
+        <Act icon="📦" title="입고 예정만" sub="검사·적치는 PDA" disabled={!!busy} onClick={() => start(false)} />
+        <Act icon="🤖" title="가상 작업자로" sub="수령→검사→적치" disabled={!!busy} onClick={() => start(true)} />
+      </div>
+      {busy && <div className="busy">{busy}</div>}
+      {plan && (
+        <Ask title={`${plan.lines.length}품목 ${units}개를 입고할까요?`} onClose={() => setPlan(null)}>
+          <table className="ask-tbl">
+            <thead>
+              <tr>
+                <th>상품</th>
+                <th>지금</th>
+                <th>입고</th>
+              </tr>
+            </thead>
+            <tbody>
+              {plan.lines.map((l) => (
+                <tr key={l.sku}>
+                  <td title={l.sku}>{l.name}</td>
+                  <td>{l.available ?? '?'}</td>
+                  <td>+{l.qty}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div className="ask-warn">
+            ⚠ 실서버 재고가 바뀝니다 — {TEST_INBOUND.receivingLocation} 에 수령까지 하고,{' '}
+            {plan.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
+          </div>
+          <div className="ask-acts">
+            <button onClick={() => setPlan(null)}>취소</button>
+            <button className="red" onClick={go}>
+              입고하기
+            </button>
+          </div>
+        </Ask>
+      )}
+      <ResultLog rows={log} />
+    </Sec>
+  );
+}
+
+// ───────── 실서버: 가상 작업자 ─────────
+
+function VirtualWorkers() {
+  const { sim } = useApp();
+  useTick();
+  const injected = !!sim.realTokens?.serverInjected;
+  const speed = (
+    <Slider
+      name="속도 배수"
+      unit="×"
+      initial={sim.speedBoost}
+      min={1}
+      max={REAL_WORKERS.speedBoostMax}
+      step={1}
+      hint={
+        injected
+          ? '이 화면의 아바타 걷기 속도만 — 가상 작업자는 켠 PC 의 배수를 따릅니다'
+          : '서버 속도 배율 위에 곱합니다. 가상 작업자의 걷기·집기·포장과 PDA 작업자 아바타 걷기만 — 서버 응답·조회 간격은 그대로'
+      }
+      apply={(v) => sim.setSpeedBoost(v)}
+    />
+  );
+  if (injected) return <Sec title="가상 작업자" aside="조회만">{speed}</Sec>;
+  const ws = sim.virtualWorkers.filter((w) => !w.left);
+  const skipped = sim.virtualWorkers.filter((w) => w.skipped);
+  const cut = sim.interruptedVirtual();
+  const tooMany = ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length;
+  return (
+    <Sec title="가상 작업자" aside={`${ws.filter((w) => !w.leaving).length}/${REAL_LINK.virtualAccounts.length}`}>
+      <Slider
+        name="인원"
+        initial={sim.virtualWorkerCount}
+        min={0}
+        max={REAL_LINK.virtualAccounts.length}
+        step={1}
+        hint="끊긴 작업이 남은 계정부터, 그다음 pp-01부터. PDA 가 쓰는 계정은 건너뜀. 실서버에 실제로 기록합니다 — 한 탭에서만"
+        apply={(v) => sim.setVirtualWorkers(v)}
+      />
+      {speed}
+      {(tooMany || skipped.length > 0) && (
+        <div className="chips static">
+          {tooMany && <span className="y">카트 {BACKEND_FACTS.cartLocations.length}대뿐</span>}
+          {skipped.map((w) => (
+            <span key={w.account} title="실제 PDA 가 쓰는 중이라 건너뜀">
+              {w.account.replace('mfcw-', '')} 건너뜀
+            </span>
+          ))}
+        </div>
+      )}
+      {cut.length > 0 && (
+        <div className="cut">
+          <div className="cut-h">
+            끊긴 작업 {cut.length} <Tip text="서버에 남은, 가상 작업자가 시작한 작업. 이어 하기 = 그 작업과 자기가 피킹한 주문 패킹까지 하고 퇴근" />
+          </div>
+          {cut.map((c) => (
+            <div key={c.account} className="cut-r">
+              <span>
+                {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? c.taskId.slice(-12)}
+              </span>
+              <button className="link" onClick={() => sim.resumeVirtual(c.account)}>
+                이어 하기
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {ws.length > 0 && (
+        <div className="vw">
+          {ws.map((w) => (
+            <div key={w.account} className={w.lastProblem ? 'bad' : ''}>
+              <b>{w.account.replace('mfcw-', '')}</b> {w.leaving ? '퇴근 예정 · ' : ''}
+              {w.activity}
+              {w.lastProblem && <span> · {w.lastProblem}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Sec>
+  );
+}
+
+// ───────── 고급: 실서버 연결(접힘) ─────────
 
 function BackendSettings() {
   const { sim, settings, restart } = useApp();
   useTick();
   const mock = sim.mode === 'mock';
   const baseUrl = useRef<HTMLInputElement>(null);
-  const [probe, setProbe] = useState('—');
+  const [probe, setProbe] = useState('');
   const readHttp = (): HttpSettings => ({ baseUrl: baseUrl.current?.value.trim() || '/api/v1' });
   const runProbe = async () => {
     setProbe('확인 중…');
@@ -113,277 +459,79 @@ function BackendSettings() {
     setProbe(tokens.lastError ? `${tokens.lastError}` : tokens.serverInjected ? `${r} (다른 기기 — 조회만)` : r);
   };
   const real = sim.real;
+  const status = real
+    ? real.lastError
+      ? `조회 오류 ${real.lastError}`
+      : real.lastOkMs
+        ? `${REAL_LINK.pollSec}초마다 · ${new Date(real.lastOkMs).toLocaleTimeString()}`
+        : '첫 조회 중…'
+    : '꺼짐';
   return (
-    <>
-      <h3>실서버 연결</h3>
-      <div className="field">
-        <label>게이트웨이 경로</label>
-        <input type="text" ref={baseUrl} defaultValue={settings.http.baseUrl} />
-        <small>개발 서버가 /api 를 PMART_GATEWAY(기본 http://D603-16:8080)로 넘깁니다.</small>
+    <details className="sec adv" open={mock ? false : undefined}>
+      <summary>
+        <h4>
+          {mock ? '실서버 연결' : '고급 · 실서버 연결'}
+          <span className={real?.lastError ? 'bad' : ''}>{status}</span>
+        </h4>
+      </summary>
+      <div className="srow">
+        <span className="srow-l">게이트웨이</span>
+        <input type="text" className="srow-in" ref={baseUrl} defaultValue={settings.http.baseUrl} />
+        <Tip text="개발 서버가 /api 를 PMART_GATEWAY(기본 http://D603-16:8080)로 넘깁니다" />
       </div>
-      <div className="probe">
-        계정 {REAL_LINK.observerAccount} · 센터 {sim.params.mfcId}
-        <br />
-        {sim.realTokens?.serverInjected
-          ? '다른 기기에서 보는 중 — 개발 서버가 관찰 계정으로 조회해 줍니다(조회만, 토큰은 이 기기로 오지 않음).'
-          : '토큰은 개발 서버가 LAN 시험 계정으로 받아 줍니다(비밀번호는 브라우저로 오지 않음).'}
+      <div className="kv">
+        <span>계정</span>
+        <b>{REAL_LINK.observerAccount}</b>
+        <span>센터</span>
+        <b>{sim.params.mfcId}</b>
       </div>
-      <button className="btn ghost" onClick={runProbe}>
-        연결 점검
-      </button>
-      <div className="probe">{probe}</div>
-      {real && (
-        <div className="probe">
-          {real.lastError
-            ? `조회 오류: ${real.lastError}${sim.realTokens?.lastError ? ` (${sim.realTokens.lastError})` : ''}`
-            : real.lastOkMs
-              ? `${REAL_LINK.pollSec}초마다 조회 · 마지막 ${new Date(real.lastOkMs).toLocaleTimeString()} · ${real.polls}회`
-              : '첫 조회 중…'}
-        </div>
-      )}
-      <button className="btn" onClick={() => restart({ mode: 'http', http: readHttp() })}>
-        {mock ? '실서버 모드로 재시작' : '실서버 설정 다시 적용'}
-      </button>
+      <div className="btn-row">
+        <button className="btn ghost" onClick={runProbe}>
+          연결 점검
+        </button>
+        <button className="btn" onClick={() => restart({ mode: 'http', http: readHttp() })}>
+          {mock ? '실서버로 재시작' : '다시 적용'}
+        </button>
+      </div>
+      {probe && <div className="busy">{probe}</div>}
       {!mock && (
         <button className="btn ghost" onClick={() => restart({ mode: 'mock', http: readHttp() })}>
-          MOCK 모드로 돌아가기
+          MOCK 으로 돌아가기
         </button>
       )}
-      {!mock && <VirtualWorkers />}
-      {!mock && !sim.realTokens?.serverInjected && <RealOrderControls />}
-      <p className="note">
-        실서버 모드는 고객 앱 주문으로 생긴 작업과 PDA 작업자의 진행을 {REAL_LINK.pollSec}초마다 읽어 그립니다. 가짜 주문은 없습니다. 가상 작업자를 켜지 않으면 실서버 재고·작업을 바꾸지 않습니다. 시계는 실제 시각(1×)입니다.
-      </p>
-    </>
+    </details>
   );
 }
 
-/** 실제 주문 넣기(R-21) — 개발 서버가 고객 토큰을 받아 고객 경로 그대로 주문하고 시험 결제로 승인한다. 이 PC 에서만 */
-function RealOrderControls() {
-  const { sim } = useApp();
-  const [customer, setCustomer] = useState(REAL_ORDER.customers[0].key);
-  const [mode, setMode] = useState<OrderModeChoice>('RANDOM');
-  const [count, setCount] = useState(1);
-  const [arm, setArm] = useState(false);
-  const [busy, setBusy] = useState('');
-  const [log, setLog] = useState<{ at: string; text: string; warn?: boolean; ask?: boolean }[]>([]);
-  const cust = REAL_ORDER.customers.find((c) => c.key === customer)!;
-  const push = (text: string, warn = false, ask = false) =>
-    setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn, ask }, ...l].slice(0, 12));
-
-  const run = async (m: OrderModeChoice, n: number) => {
-    setArm(false);
-    for (let i = 0; i < n; i++) {
-      setBusy(`${i + 1}/${n}건 넣는 중…`);
-      let r: RealOrderResult;
-      try {
-        const res = await fetch('/sim-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customer, mode: m, mfcId: sim.params.mfcId }),
-        });
-        r = (await res.json()) as RealOrderResult;
-      } catch {
-        r = { ok: false, step: 'NETWORK', code: 'NO_RESPONSE', detail: '개발 서버 응답 없음 — 결과 불명, 실제 주문 탭에서 확인하세요' };
-      }
-      if (r.ok) {
-        const w = r.window ? ` ${r.window.date.slice(5)} ${r.window.start}–${r.window.end}` : '';
-        push(`주문 ${r.orderNumber ?? `(번호 아직 없음 ${r.orderId.slice(-8)})`} · ${MODE_KO[r.mode]}${w} · ${r.amount.toLocaleString()}원 · ${r.items.length}품목`);
-      } else {
-        push(`${r.step} ${r.code} — ${r.detail}`, true, !!r.askScheduled);
-        break;
-      }
-    }
-    setBusy('');
-  };
-
-  return (
-    <>
-      <h3>실제 주문 넣기</h3>
-      <div className="field">
-        <label>고객</label>
-        <select value={customer} onChange={(e) => (setCustomer(e.target.value), setArm(false))}>
-          {REAL_ORDER.customers.map((c) => (
-            <option key={c.key} value={c.key}>
-              {c.label}
-            </option>
-          ))}
-        </select>
-        <small className="warn">{cust.warn}</small>
-      </div>
-      <div className="field">
-        <label>배송 방식</label>
-        <div className="btn-row">
-          {(['SINGLE', 'BUNDLED', 'SCHEDULED', 'RANDOM'] as const).map((m) => (
-            <button key={m} className={`btn ${mode === m ? '' : 'ghost'}`} onClick={() => (setMode(m), setArm(false))}>
-              {MODE_KO[m]}
-            </button>
-          ))}
-        </div>
-        <small>예약은 고를 수 있는 가장 빠른 시간대, 랜덤은 지금 되는 방식 중 하나(예약이면 빠른 {REAL_ORDER.randomSlotPool}개 중 하나).</small>
-      </div>
-      <Slider name="건수" initial={count} min={1} max={REAL_ORDER.maxCount} step={1} hint="한 건씩 차례로 넣고, 실패하면 멈춥니다." apply={(v) => (setCount(v), setArm(false))} />
-      {busy ? (
-        <div className="probe">{busy}</div>
-      ) : arm ? (
-        <div className="btn-row">
-          <button className="btn" onClick={() => run(mode, count)}>
-            정말 {count}건 넣기
-          </button>
-          <button className="btn ghost" onClick={() => setArm(false)}>
-            취소
-          </button>
-        </div>
-      ) : (
-        <button className="btn" onClick={() => setArm(true)}>
-          주문 넣기
-        </button>
-      )}
-      <small>
-        출하 가능한 상품으로 최소 주문 금액을 넘게 담아 주문하고 시험 결제(TEST_AUTO)로 승인합니다. 실제 주문이라 MFC 작업 지시·배송까지 그대로 흘러갑니다. 고객 토큰은 개발 서버 안에서만 씁니다.
-      </small>
-      {log.length > 0 && (
-        <div className="probe">
-          {log.map((l, i) => (
-            <div key={i} className={l.warn ? 'warn' : ''}>
-              {l.at} · {l.text}
-              {l.ask && !busy && (
-                <button className="btn ghost" onClick={() => run('SCHEDULED', 1)}>
-                  예약으로 1건 넣기
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
-/** 실서버 가상 작업자(mfcw-pp-01~10) — 켜면 실제 주문을 집고 포장한다(실서버 작업·재고가 바뀜) */
-function VirtualWorkers() {
-  const { sim } = useApp();
-  useTick();
-  // 속도 배수는 이 화면에서만 — 다른 기기(LAN, 조회만)도 아바타 걷기 속도는 바꿀 수 있다(사용자 2026-11-18 "왜 나한테만 뜨지")
-  const speed = (
-    <Slider
-      name="속도 배수"
-      initial={sim.speedBoost}
-      min={1}
-      max={REAL_WORKERS.speedBoostMax}
-      step={1}
-      hint={
-        sim.realTokens?.serverInjected
-          ? '이 화면의 작업자 아바타 걷기 속도만 — 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자는 켠 PC 의 배수를 따릅니다.'
-          : '작업자마다 서버 속도 배율(speedFactor) 위에 곱합니다. 가상 작업자의 걷기·집기·포장 시간과 실제 PDA 작업자 아바타의 걷기에만 — 서버 응답 기다림·조회 간격(3초)은 실제 시각 그대로라, 배수를 크게 해도 서버 반영보다 빨라지지는 않습니다. 이 화면에서만 적용됩니다.'
-      }
-      apply={(v) => sim.setSpeedBoost(v)}
-    />
-  );
-  if (sim.realTokens?.serverInjected)
-    return (
-      <>
-        <p className="note">다른 기기에서는 가상 작업자를 켤 수 없습니다(조회만).</p>
-        {speed}
-      </>
-    );
-  const ws = sim.virtualWorkers.filter((w) => !w.left);
-  const skipped = sim.virtualWorkers.filter((w) => w.skipped);
-  const cut = sim.interruptedVirtual();
-  return (
-    <>
-      <h3>가상 작업자 (실서버)</h3>
-      <Slider
-        name="가상 피킹·포장 작업자"
-        initial={sim.virtualWorkerCount}
-        min={0}
-        max={REAL_LINK.virtualAccounts.length}
-        step={1}
-        hint="끊긴 작업이 서버에 남은 계정부터, 그다음 mfcw-pp-01부터 켭니다(실제 PDA 가 쓰는 계정은 건너뜀). 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
-        apply={(v) => sim.setVirtualWorkers(v)}
-      />
-      {speed}
-      {ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length && (
-        <p className="note warn">
-          카트가 {BACKEND_FACTS.cartLocations.length}대뿐입니다(백엔드 라벨 README) — 현장에서는 {BACKEND_FACTS.cartLocations.length}명 넘게 동시에 피킹할 수 없습니다. 서버는 카트 수를 막지 않으므로 화면에서는 그대로 돕니다.
-        </p>
-      )}
-      {cut.length > 0 && (
-        <div className="probe">
-          <b>끊긴 가상 작업자 작업</b> — 서버에 남아 있습니다(시작한 기기가 가상 작업자). 위 슬라이더를 올리면 이 계정부터 켜집니다. 인원은 그대로 두고 이것만 하려면 이어 하기(그 작업·자기가 피킹한 주문 패킹까지 하고 퇴근).
-          {cut.map((c) => (
-            <div key={c.account}>
-              {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? c.taskId.slice(-12)}{' '}
-              <button className="btn ghost" onClick={() => sim.resumeVirtual(c.account)}>
-                이어 하기
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-      {skipped.length > 0 && (
-        <p className="note">
-          실제 PDA 가 쓰는 중이라 건너뛴 계정: {skipped.map((w) => w.account.replace('mfcw-', '')).join(', ')} — 다음 계정으로 채웁니다(최근 {Math.round(REAL_LINK.pdaSkipSec / 60)}분 안 서버 작업 기준).
-        </p>
-      )}
-      {ws.length > 0 && (
-        <div className="probe">
-          {ws.map((w) => (
-            <div key={w.account}>
-              {w.account.replace('mfcw-', '')} · {w.leaving ? '퇴근 예정 · ' : ''}
-              {w.activity}
-              {w.lastProblem && <span className="warn"> · {w.lastProblem}</span>}
-            </div>
-          ))}
-        </div>
-      )}
-    </>
-  );
-}
-
-/** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"색 구분"(접으면 그리지 않음) */
+/** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"색 구분"·"?"(접으면 그리지 않음) */
 export function LeftPanel() {
   const { sim } = useApp();
   const view = useView();
   if (!view.leftView) return null;
+  const mock = sim.mode === 'mock';
+  const injected = !!sim.realTokens?.serverInjected;
   return (
     <div className="panel left">
       {view.leftView === 'legend' ? (
-        <>
-          <h3>색 구분</h3>
+        <Sec title="색 구분">
           <Legend />
-          <p className="note">
-            구역 바닥을 클릭하면 그 구역으로 확대(랙 위 노란 판 = 랙 번호, 가까이 가면 선반 앞단에 칸 번호), 선반 상품을 클릭하면 로케이션 정보, 작업자를 클릭하면 PDA 화면을 봅니다. 드래그 회전 · 우클릭 이동 · 휠 확대.
-          </p>
+        </Sec>
+      ) : view.leftView === 'help' ? (
+        <Help />
+      ) : mock ? (
+        <>
+          <OutboundControls />
+          <InboundControls />
+          <BackendSettings />
         </>
       ) : (
         <>
-          {sim.mode === 'mock' && <OutboundControls />}
-          {sim.mode === 'mock' && <InboundControls />}
+          {!injected && <RealOrderControls />}
+          {!injected && <TestInboundControls />}
+          <VirtualWorkers />
           <BackendSettings />
         </>
       )}
     </div>
-  );
-}
-
-function OutboundControls() {
-  const { sim } = useApp();
-  const p = sim.params;
-  return (
-    <>
-      <h3>출고 (실행 중 변경)</h3>
-      <Slider name="시간당 주문" initial={p.ordersPerHour} min={5} max={120} step={1} hint="기준안 피크 약 40건/시간, 낙관안 88건 (MFC 7-1 가정)" apply={(v) => (sim.params.ordersPerHour = v)} />
-      <Slider name="피킹·패킹 작업자" initial={p.workers} min={1} max={24} step={1} hint="기준안 약 10명, 낙관안 약 22명 (MFC 7-2 가정)" apply={(v) => sim.setWorkers(v)} />
-      <Slider name="가동 패킹대" initial={p.packingStations} min={1} max={8} step={1} hint="기본 4대 · 최대 8대 (MFC 11장)" apply={(v) => sim.setStations(v)} />
-      <Slider name="결품률 (%)" initial={p.shortageRate * 100} min={0} max={10} step={0.5} hint="피킹 시 선반 실물 부족 보고 확률 (시뮬 값)" apply={(v) => (sim.params.shortageRate = v / 100)} />
-      <div className="field">
-        <label>피킹 순서</label>
-        <select defaultValue={p.pickSequence} onChange={(e) => (sim.params.pickSequence = e.target.value as 'DOC_B_A_C' | 'AMBIENT_FIRST')}>
-          <option value="DOC_B_A_C">B→A→C~H (원본 관찰, MFC 8-3)</option>
-          <option value="AMBIENT_FIRST">상온 → 냉장 → 냉동</option>
-        </select>
-      </div>
-    </>
   );
 }
