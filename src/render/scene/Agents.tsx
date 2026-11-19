@@ -78,7 +78,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     // 상태 색 = 발밑 고리(범례 색과 같음)
     ringMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as SiteWorker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
     const s = controller.selection;
-    const sel = !!s && (s.kind === 'worker' || s.kind === 'inbound') && s.id === id;
+    const sel = !!s && s.kind !== 'location' && s.id === id;
     const moved = last.current ? Math.hypot(a.pos.x - last.current.x, a.pos.z - last.current.z) : 0;
     last.current = { x: a.pos.x, z: a.pos.z };
     const pushing = a.hasCart || a.carrying.length > 0;

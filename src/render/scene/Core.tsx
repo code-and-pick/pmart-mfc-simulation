@@ -144,7 +144,7 @@ export function Picker() {
           ];
           const near = places.find((x) => x.p && Math.hypot(hit.x - x.p.x, hit.z - x.p.z) < x.r);
           if (near) {
-            controller.select({ kind: 'place', code: near.code }, false);
+            controller.showPlace(near.code);
             return;
           }
         }

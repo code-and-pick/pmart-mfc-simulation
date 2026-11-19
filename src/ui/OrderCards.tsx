@@ -1,6 +1,6 @@
 // 실제 주문 카드 — 관리자가 한눈에(ADR-0070, 라이더 관제 카드 참고). 아래 OrderCard 설명.
 import { Fragment } from 'react';
-import { useApp } from '../app/context';
+import { useApp, useView } from '../app/context';
 import type { Simulation } from '../sim/simulation';
 import { dispatchText, dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
 import { OrderNo, SystemIds } from './OrderNo';
@@ -228,11 +228,33 @@ export function OrderCard({ r }: { r: RealShipment }) {
   );
 }
 
+function placeName(code: string): string {
+  if (code.startsWith('PAK-A-')) return `패킹대 ${Number(code.slice(-2))}`;
+  if (code.startsWith('DSP-A-')) return `출하대기 랙 ${Number(code.slice(-2))}`;
+  return code;
+}
+
 export function OrderCards() {
   const { sim } = useApp();
+  const view = useView();
+  const place = view.placeFilter;
+  const all = sim.real!.shipments();
+  const at = place ? sim.shipmentsAt(place) : [];
+  const rows = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : all;
   return (
     <div className="ocds">
-      {sim.real!.shipments().map((r) => (
+      {place && (
+        <div className="ocd-place">
+          <b>{placeName(place)}</b>
+          <span>주문 {rows.length}건</span>
+          {at.some((a) => a.guess) && <span className="guess" title="서버가 이 자리를 알려 주지 않아 화면이 짐작">추정</span>}
+          <button className="link" onClick={() => view.showPlace(null)}>
+            전체 주문 ✕
+          </button>
+        </div>
+      )}
+      {place && !rows.length && <div className="scan-empty">{place.startsWith('PAK-') ? '지금 이 패킹대에서 포장 중인 주문이 없습니다.' : '이 랙에 올린 포장이 없습니다.'}</div>}
+      {rows.map((r) => (
         <OrderCard key={r.shipmentId} r={r} />
       ))}
     </div>

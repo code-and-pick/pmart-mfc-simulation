@@ -8,8 +8,6 @@ export type Selection =
   | { kind: 'worker'; id: string }
   | { kind: 'inbound'; id: string }
   | { kind: 'location'; sku: string }
-  /** 패킹대(PAK-A-0N)·출하대기 랙(DSP-A-0N) — 그 자리 주문 팝업(사용자 2026-11-20) */
-  | { kind: 'place'; code: string }
   | null;
 
 /** 화면에서 고를 수 있는 구역 (상단 버튼). rect 는 확대 범위. */
@@ -90,6 +88,18 @@ export class ViewController extends Emitter {
   follow: string | null = null;
   /** 실제 주문 탭에서 고른 출고(바코드 탭·스캔 말풍선이 같이 쓴다). 없으면 null */
   scanShipment: string | null = null;
+  /** 오른쪽 실제 주문을 이 자리(패킹대 PAK-·출하대기 랙 DSP-)의 주문만으로 — 3D 에서 그 자리를 누름(사용자 2026-11-20 "오른쪽 탭에 해당 주문이 뜨게") */
+  placeFilter: string | null = null;
+
+  showPlace(code: string | null) {
+    this.placeFilter = code;
+    if (code) {
+      this.rightView = 'orders';
+      const at = this.sim.shipmentsAt(code);
+      this.scanShipment = at.length === 1 ? at[0].shipmentId : this.scanShipment;
+    }
+    this.emit();
+  }
   focusedZone = 'ALL';
   /** 사용자가 벽 투명도를 고르지 않았으면(null) 구역 확대 때 벽을 옅게 한다 */
   wallUser: number | null = null;
@@ -211,7 +221,7 @@ export class ViewController extends Emitter {
     if (s?.kind === 'location') {
       const sku = this.sim.skuMap.get(s.sku);
       if (sku && fly) this.focusLocation(sku.location);
-    } else if (s && s.kind !== 'place' && fly) this.focusPerson(s.id);
+    } else if (s && fly) this.focusPerson(s.id);
     this.emit();
   }
 

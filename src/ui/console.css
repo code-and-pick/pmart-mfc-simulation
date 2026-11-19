@@ -849,14 +849,10 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .mode-sw button:not(.on):hover { color: #fff; }
 .mode-warn { position: absolute; top: 120%; left: 0; z-index: 60; white-space: nowrap; background: #b45309; color: #fff; font-size: 12px; padding: 5px 9px; border-radius: 7px; }
 
-/* 패킹대·출하대기 랙 주문 팝업 */
-.place-pop { position: absolute; top: 120px; left: calc(var(--rail-w) + 312px); width: 380px; max-height: calc(100vh - 150px); display: flex; flex-direction: column; background: var(--panel-solid); border: 1px solid var(--line-strong); border-radius: 14px; box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5); z-index: 40; pointer-events: auto; }
-#ui[data-left='closed'] .place-pop { left: calc(var(--rail-w) + 16px); }
-.place-h { display: flex; align-items: center; gap: 8px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
-.place-h b { font-size: 16px; }
-.place-h > span:not(.guess) { color: var(--muted); font-size: 12.5px; }
-.place-x { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 16px; cursor: pointer; padding: 2px 6px; }
-.place-x:hover { color: var(--text); }
-.place-body { overflow-y: auto; padding: 10px 12px 12px; display: flex; flex-direction: column; gap: 10px; }
 .scan-bubble .sb-head.clickable { cursor: pointer; }
 .scan-bubble .sb-more { color: #8ab4f8; font-size: 11.5px; font-weight: 600; margin-left: 6px; }
+/* 3D 에서 고른 자리(패킹대·랙)로 거른 주문 목록 머리 */
+.ocd-place { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 10px; background: rgba(91, 155, 255, 0.14); border: 1px solid var(--accent); }
+.ocd-place b { font-size: 15px; }
+.ocd-place > span:not(.guess) { color: var(--muted); font-size: 12.5px; }
+.ocd-place .link { margin-left: auto; }

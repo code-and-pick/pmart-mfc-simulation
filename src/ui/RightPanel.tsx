@@ -259,12 +259,13 @@ function LogBody({ tab }: { tab: Tab }): ReactNode {
 }
 
 function Log({ tab }: { tab: Tab }) {
-  const { sim: s } = useApp();
+  const { sim: s, controller } = useApp();
   useTick();
   const box = useRef<HTMLDivElement>(null);
   // 바닥에 붙어 있었으면 새 행이 와도 바닥을 따라간다
   const stick = useRef(true);
-  const key = `${tab}:${tab === 'orders' || tab === 'scan' ? (s.real?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.real?.skuVersion ?? 0}.${s.real?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
+  // 3D 에서 자리를 고르면(placeFilter) 주문 목록을 다시 그린다
+  const key = `${controller.placeFilter ?? ''}:${tab}:${tab === 'orders' || tab === 'scan' ? (s.real?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.real?.skuVersion ?? 0}.${s.real?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
   // 내용이 바뀔 때만 다시 만든다 (4Hz 갱신마다 150행을 새로 그리지 않게)
   const body = useMemo(() => <LogBody tab={tab} />, [key]);
   const lastTab = useRef(tab);

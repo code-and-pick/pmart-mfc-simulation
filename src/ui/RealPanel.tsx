@@ -128,7 +128,7 @@ function ReturnPickups() {
 
 /** 실제 주문(출고) 목록 */
 export function RealOrders() {
-  const { sim } = useApp();
+  const { sim, controller } = useApp();
   const real = sim.real!;
   const rows = real.shipments();
   if (!rows.length) {
@@ -146,7 +146,8 @@ export function RealOrders() {
   return (
     <>
       <OrderCards />
-    <ReturnPickups />
+    {/* 자리로 거른 동안은 그 자리 주문만 */}
+    {!controller.placeFilter && <ReturnPickups />}
     </>
   );
 }

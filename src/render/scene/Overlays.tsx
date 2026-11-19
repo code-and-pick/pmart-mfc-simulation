@@ -104,7 +104,7 @@ export function PathLine() {
   );
   useFrame(() => {
     const s = controller.selection;
-    const p = s && (s.kind === 'worker' || s.kind === 'inbound') ? [...sim.siteWorkers(), ...sim.inboundWorkers].find((x) => x.id === s.id) : undefined;
+    const p = s && s.kind !== 'location' ? [...sim.siteWorkers(), ...sim.inboundWorkers].find((x) => x.id === s.id) : undefined;
     if (!p || p.path.length === 0) {
       line.visible = false;
       return;
