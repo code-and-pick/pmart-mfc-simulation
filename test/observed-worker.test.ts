@@ -392,4 +392,22 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     (sim as unknown as { syncObservedWorkers(): void }).syncObservedWorkers();
     expect(sim.observedWorkers).toHaveLength(0);
   });
+
+  it('PDA 가 쓰는 계정: 최근 서버 작업의 담당·피킹한 사람이면 사용 중, 첫 조회 전은 모름, 오래된 끝난 작업은 아님', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    expect(sim.pdaInUse('OP-990d2c09')).toBeNull(); // 첫 조회 전
+    real.polls++;
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(false);
+    const d = { ...pick([1, 1]), lastActivityAt: new Date().toISOString() } as unknown as TaskDetail;
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(true); // 열린 작업 담당
+    expect(sim.pdaInUse('OP-other')).toBe(false);
+    const old = { ...d, lastActivityAt: new Date(Date.now() - (REAL_LINK.pdaSkipSec + 60) * 1000).toISOString() } as unknown as TaskDetail;
+    real.tasks.set(d.taskId, { summary: old, detail: old, firstSeenMs: 0, closed: { atMs: 0, state: 'COMPLETED' } });
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(false); // 오래전에 끝난 것
+    const pack = { ...d, taskId: 'P', taskType: 'PACK', state: 'READY', assignment: { workerId: null, assignmentVersion: 0 }, pickedBy: 'OP-990d2c09' } as unknown as TaskDetail;
+    real.tasks.set('P', { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(true); // 피킹한 사람
+  });
 });

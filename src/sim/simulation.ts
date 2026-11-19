@@ -255,6 +255,11 @@ export class Simulation {
         wire: (c) => this.codes.toBackend(c),
         carts: this.carts,
         speedFactor: (id) => (this.real?.speedFactor(id) ?? 1) * this.speedBoost,
+        pdaInUse: (id) => this.pdaInUse(id),
+        onSkipped: (account) => {
+          this.pdaAccounts.set(account, Date.now());
+          this.setVirtualWorkers(this.virtualTarget);
+        },
       };
     }
   }
@@ -266,6 +271,32 @@ export class Simulation {
   }
 
   /** 가상 작업자 운영자 ID — 실제 작업 표시(PDA 기둥)에서 뺀다 */
+  /** 화면에서 고른 가상 작업자 수 */
+  private virtualTarget = 0;
+  /** PDA 가 쓰는 중이라 건너뛴 계정 → 그때(ms). REAL_LINK.pdaSkipSec 동안 다시 고르지 않는다 */
+  private readonly pdaAccounts = new Map<string, number>();
+  /** 가상 작업자로 마지막에 쓴 운영자 ID → 그때(ms) — 그 뒤 서버 활동만 PDA 것으로 본다 */
+  private readonly virtualUsed = new Map<string, number>();
+
+  /**
+   * 이 운영자 계정을 실제 PDA 가 쓰는 중인가 — 서버가 로그인 여부를 알려 주지 않아(세션 조회는 본인만) 최근 작업으로 본다:
+   * 열린 작업의 담당·피킹한 사람이거나, 최근(pdaSkipSec 안) 활동한 작업. 이 화면의 가상 작업자가 그 계정으로 일한 시각 이전 활동은 뺀다.
+   * 첫 조회 전이면 null(모름).
+   */
+  pdaInUse(workerId: string): boolean | null {
+    const real = this.real;
+    if (!real || real.polls === 0) return null;
+    const since = Math.max(this.virtualUsed.get(workerId) ?? 0, Date.now() - REAL_LINK.pdaSkipSec * 1000);
+    for (const t of real.tasks.values()) {
+      const s = t.summary;
+      if (s.assignment?.workerId !== workerId && s.pickedBy !== workerId) continue;
+      const at = Date.parse(s.lastActivityAt ?? s.createdAt ?? '') || 0;
+      if (!t.closed && at > (this.virtualUsed.get(workerId) ?? 0)) return true;
+      if (at > since) return true;
+    }
+    return false;
+  }
+
   virtualWorkerIds(): Set<string> {
     return new Set(this.virtualWorkers.map((w) => w.workerId).filter((x): x is string => !!x));
   }
@@ -284,10 +315,14 @@ export class Simulation {
   setVirtualWorkers(n: number) {
     const ctx = this.realCtx;
     if (!ctx || this.realTokens?.serverInjected) return;
-    const target = Math.max(0, Math.min(REAL_LINK.virtualAccounts.length, this.layout.points.idle.length, n));
-    const active = this.virtualWorkers.filter((w) => !w.leaving);
+    this.virtualTarget = Math.max(0, Math.min(REAL_LINK.virtualAccounts.length, this.layout.points.idle.length, n));
+    const target = this.virtualTarget;
+    for (const w of this.virtualWorkers) if (w.workerId && !w.skipped) this.virtualUsed.set(w.workerId, Date.now());
+    const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left);
     for (let i = 0; i < REAL_LINK.virtualAccounts.length && active.length < target; i++) {
       const account = REAL_LINK.virtualAccounts[i];
+      const skippedAt = this.pdaAccounts.get(account);
+      if (skippedAt !== undefined && Date.now() - skippedAt < REAL_LINK.pdaSkipSec * 1000) continue; // PDA 가 쓰는 중이던 계정
       const existing = this.virtualWorkers.find((w) => w.account === account);
       if (existing && !existing.left) {
         if (existing.leaving) {

@@ -288,6 +288,7 @@ function VirtualWorkers() {
       </>
     );
   const ws = sim.virtualWorkers.filter((w) => !w.left);
+  const skipped = sim.virtualWorkers.filter((w) => w.skipped);
   return (
     <>
       <h3>가상 작업자 (실서버)</h3>
@@ -297,13 +298,18 @@ function VirtualWorkers() {
         min={0}
         max={REAL_LINK.virtualAccounts.length}
         step={1}
-        hint="mfcw-pp-01부터 켭니다. 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
+        hint="mfcw-pp-01부터 켭니다(실제 PDA 가 쓰는 계정은 건너뜀). 켜면 실제 주문을 받아 집품·배차 요청·포장까지 실서버에 기록합니다. 줄이면 들고 있는 작업을 마치고 멈춥니다. 한 탭에서만 켜세요."
         apply={(v) => sim.setVirtualWorkers(v)}
       />
       {speed}
       {ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length && (
         <p className="note warn">
           카트가 {BACKEND_FACTS.cartLocations.length}대뿐입니다(백엔드 라벨 README) — 현장에서는 {BACKEND_FACTS.cartLocations.length}명 넘게 동시에 피킹할 수 없습니다. 서버는 카트 수를 막지 않으므로 화면에서는 그대로 돕니다.
+        </p>
+      )}
+      {skipped.length > 0 && (
+        <p className="note">
+          실제 PDA 가 쓰는 중이라 건너뛴 계정: {skipped.map((w) => w.account.replace('mfcw-', '')).join(', ')} — 다음 계정으로 채웁니다(최근 {Math.round(REAL_LINK.pdaSkipSec / 60)}분 안 서버 작업 기준).
         </p>
       )}
       {ws.length > 0 && (

@@ -48,6 +48,10 @@ export interface RealSiteContext {
   carts: CartPool;
   /** 서버 작업자 속도 배율(capacity 0.11.0 `speedFactor`, 0.5~2.0). 모르면 1 */
   speedFactor?: (workerId: string) => number;
+  /** 이 운영자 계정을 실제 PDA 가 쓰는 중인가(최근 서버 작업의 담당·피킹한 사람). null = 아직 판단 못 함(첫 조회 전) */
+  pdaInUse?: (workerId: string) => boolean | null;
+  /** 가상 작업자가 PDA 로그인 중이라 건너뛰었다 — 시뮬레이션이 다음 계정으로 채운다 */
+  onSkipped?: (account: string) => void;
 }
 
 const TEMP_KO: Record<TemperatureZone, string> = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' };
@@ -81,6 +85,8 @@ export class RealWorker extends Agent {
   leaving = false;
   /** 멈춤(퇴근 끝) */
   left = false;
+  /** PDA 가 이 계정을 쓰는 중이라 시작하지 않음 */
+  skipped = false;
   /**
    * 계정 멈춤 — 토큰을 새로 받은 뒤에도 401(R-14 회신 조건: "다시 받은 뒤에도 401 이면 그 계정은 멈춘다").
    * 다시 켜지 않는다(새로 고침 전까지). 화면에는 남겨 둔다.
@@ -161,6 +167,23 @@ export class RealWorker extends Agent {
           this.activity = `로그인 실패 — ${this.lastProblem}`;
           await this.wait(REAL_WORKERS.errorBackoffSec);
           continue;
+        }
+        // 같은 계정을 실제 PDA 가 쓰는 중이면 시작하지 않는다(같은 사람으로 서버에 이중 작업 — 사용자 2026-11-19 "이미 로그인된 작업자는 제외")
+        let inUse = this.ctx.pdaInUse?.(this.workerId) ?? false;
+        for (let i = 0; inUse === null && i < 20 && !this.stopped; i++) {
+          this.activity = 'PDA 사용 여부 확인 중';
+          await this.wait(1);
+          inUse = this.ctx.pdaInUse?.(this.workerId) ?? false;
+        }
+        if (inUse) {
+          this.skipped = true;
+          this.activity = 'PDA 로그인 중 — 건너뜀';
+          this.ctx.log(`${this.account} 는 실제 PDA 가 쓰는 중 — 가상 작업자로 쓰지 않음`);
+          this.idle = true;
+          this.state = 'IDLE';
+          this.left = true;
+          this.ctx.onSkipped?.(this.account);
+          return;
         }
       }
       let a: CapacityAssignment | null;
