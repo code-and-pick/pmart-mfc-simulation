@@ -736,3 +736,8 @@ details.sec > summary h4 > span { min-width: 0; flex: 1; text-align: right; }
 .ocd-items .q { color: var(--muted); text-align: right; }
 .ocd-items .a { text-align: right; font-weight: 700; font-variant-numeric: tabular-nums; }
 .ocd .sys-ids { margin-top: 8px; font-size: 11px; color: var(--muted); }
+.ocd-route li:first-child::before { background: var(--text); }
+.ocd-route li:nth-child(2)::before { background: var(--accent); }
+.ocd-route li.note-li::before { background: transparent; }
+.ocd-route li.note-li { font-size: 12px; }
+.ocd-route span { width: 44px; }

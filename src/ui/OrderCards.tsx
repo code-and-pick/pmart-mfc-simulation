@@ -184,14 +184,21 @@ function OrderCard({ r }: { r: RealShipment }) {
           </>
         )}
       </dl>
+      {/* 라이더 카드처럼: 픽업(이 센터·랙) → 전달지(동 단위, R-27), 그 밑에 고객 요청사항 */}
       <ul className="ocd-route">
         <li>
-          <span>배송지</span>
-          {r.dispatch?.dropAreaLabel ? <b>{r.dispatch.dropAreaLabel}</b> : <i>아직 안 옴(R-27 배포 전)</i>}
+          <span>픽업</span>
+          <b>
+            {sim.params.mfcId} · {rack}
+          </b>
         </li>
         <li>
-          <span>전달</span>
-          {os ? <b>{os.deliveryNote || '요청사항 없음'}</b> : <i>배송이 생기면 보임</i>}
+          <span>전달지</span>
+          {r.dispatch?.dropAreaLabel ? <b>{r.dispatch.dropAreaLabel}</b> : <i>아직 안 옴 — R-27 배포 전</i>}
+        </li>
+        <li className="note-li">
+          <span>요청</span>
+          {os ? <b>{os.deliveryNote || '없음'}</b> : <i>배송이 생기면 보임</i>}
         </li>
       </ul>
       <div className="ocd-items">
