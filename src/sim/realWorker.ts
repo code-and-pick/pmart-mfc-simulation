@@ -226,7 +226,7 @@ export class RealWorker extends Agent {
           break;
         }
         this.state = 'ERROR';
-        this.lastProblem = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}` : (e as Error).message;
+        this.lastProblem = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}${e.problem.detail ? ` — ${e.problem.detail.slice(0, 80)}` : ''}` : (e as Error).message;
         this.activity = `오류: ${this.lastProblem}`;
         this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 중단 — ${this.lastProblem}`);
         await this.wait(REAL_WORKERS.errorBackoffSec);

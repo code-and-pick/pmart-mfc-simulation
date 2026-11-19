@@ -2,6 +2,7 @@
 // 2026-11-16: 작업 목록·상세·작업자 목록(읽기)은 LAN 실서버로 확인. 쓰기(시작·실적·밀봉·인계)는 아직 실서버 검증 전.
 // 토큰은 Vite 개발 서버가 LAN 시험 계정으로 받아 준다(TokenSource, SIM-11).
 
+import { fitIdempotencyKey } from './idemKey';
 import {
   ApiProblem,
   ResultUnknown,
@@ -69,7 +70,7 @@ export class HttpBackend implements FulfillmentPort {
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
       headers['X-Source-System'] = this.opt.sourceSystem;
-      if (init.idempotencyKey) headers['Idempotency-Key'] = init.idempotencyKey;
+      if (init.idempotencyKey) headers['Idempotency-Key'] = fitIdempotencyKey(init.idempotencyKey);
       if (init.expectedVersion !== undefined) headers['X-Expected-Version'] = String(init.expectedVersion);
     }
     const t0 = performance.now();
