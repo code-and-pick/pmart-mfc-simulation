@@ -125,7 +125,9 @@ export function Goods() {
           const c = sim.codes.toSim(u.locationCode);
           if (c) realSlots.current.add(c);
         }
-        catalog.forEach((s, ci) => update(ci, realSlots.current.has(s.location.code) ? 0 : Math.ceil(s.shelfCap / 2)));
+        // 센터 전체 재고를 읽었으면 모든 칸을 안다(빈 칸은 진짜 빈 칸) — 회색 "수량 모름" 상자를 모두 치운다
+        const all = (real?.fullStockVersion ?? 0) > 0;
+        catalog.forEach((s, ci) => update(ci, all || realSlots.current.has(s.location.code) ? 0 : Math.ceil(s.shelfCap / 2)));
       }
     } else if (force) {
       catalog.forEach((s, ci) => update(ci, inv.get(s.sku)?.shelf ?? 0));

@@ -402,6 +402,7 @@ export class RealBoard {
       this.fullStock = await this.reader.listAllStockUnits(this.mfcId, this.fullStockOpt.maxPages);
       this.fullStockError = null;
       this.fullStockVersion++;
+      this.stockVersion++; // 3D 재고가 다시 그린다
     } catch (e) {
       this.fullStockError = describe(e);
     }
@@ -694,13 +695,19 @@ export class RealBoard {
     for (const sku of this.staleSkus) if (!watched.has(sku)) this.staleSkus.delete(sku);
   }
 
-  /** 읽은 재고 단위 행 전부 (서버 응답 그대로) */
+  /**
+   * 읽은 재고 단위 행 전부(서버 응답 그대로) — 주문 상품은 자주 읽는 SKU 조회(최신), 나머지는 센터 전체 stock-units(fullStockSec 마다).
+   * 3D 선반이 센터 전체를 실제 수량으로 그린다(사용자 2026-11-20).
+   */
   stockUnits(): RealStockUnit[] {
     const out: RealStockUnit[] = [];
     for (const { data } of this.stock.values()) {
       for (const u of data.units) {
         if (u.qty > 0) out.push({ sku: data.sku, locationCode: u.locationCode, workState: u.workState, qualityState: u.qualityState, qty: u.qty });
       }
+    }
+    for (const u of this.fullStock) {
+      if (u.qty > 0 && !this.stock.has(u.sku)) out.push({ sku: u.sku, locationCode: u.locationCode, workState: u.workState, qualityState: u.qualityState, qty: u.qty });
     }
     return out;
   }

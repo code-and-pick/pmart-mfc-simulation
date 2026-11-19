@@ -144,7 +144,8 @@ export function RealShipLabels() {
 
 const BOX = 0.1;
 const GAP = 0.02;
-const MAX_BOXES = 4000;
+// 센터 전체 재고(약 1만 개)를 그리므로 넉넉히 — 칸마다 PER_SLOT_CAP 까지
+const MAX_BOXES = 16000;
 /** 선반 칸 하나에 그리는 최대 개수 — 넘으면 이 수까지만 보이고 라벨 없이 둔다 */
 const PER_SLOT_CAP = 40;
 /** 선반 밖 자리 한 곳에 그리는 최대 개수 */
