@@ -128,7 +128,7 @@ export function ScanBubbles() {
 }
 
 // 랙 위 이름표(바닥 구역 이름 2.4 m·재고 표시)보다 위에 띄워 겹치지 않게(사용자 2026-11-20 "팝업창 아래가 너무 겹치고 어수선")
-const RACK_Y = 3.6;
+const RACK_Y = 2.2;
 /** 한 번에 보이는 포장 수 — 넘으면 "외 N개" */
 const RACK_MAX = 6;
 

@@ -293,6 +293,8 @@ export function RealStock() {
       labels.remove(s);
     }
     for (const [code, g] of points) {
+      // 출하대기 랙은 랙 말풍선이 포장 수·주문을 보인다 — 같은 자리에 글을 또 띄우면 랙 번호판·구역 이름과 겹친다(사용자 2026-11-20 "겹쳐진 거 그대로")
+      if (code.startsWith('DSP-')) continue;
       const text =
         rackGuess.get(code)
           ? `${code} 포장 ${rackGuess.get(code)} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
