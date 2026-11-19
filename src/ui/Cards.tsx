@@ -6,7 +6,6 @@ import type { TemperatureZone } from '../domain/contract';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import { INBOUND_KO, STATE_KO, TEMP_KO } from './text';
 import { Barcode } from './Barcode';
-import { Why } from './Why';
 import { BACKEND_FACTS } from '../config';
 
 function Stat({ v, k }: { v: ReactNode; k: string }) {
@@ -90,9 +89,6 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
           <Stat v={res.length} k="바닥 팔레트 자리" />
           <Stat v={inv ? units.toLocaleString() : '—'} k="상온 보충재고" />
         </div>
-        <Why>
-          입고 수량 중 피킹 칸 한도를 넘는 상온 상품은 이 팔레트에 쌓였다가, 칸이 최소량 이하가 되면 보충(MOV)됩니다. 냉장·냉동 보충재고는 각 저온실 안쪽 팔레트(AR·BR)에 있습니다.
-        </Why>
       </>
     );
   }
@@ -121,7 +117,6 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
         ) : (
           <div className="note">입고 차량 없음 — 왼쪽 "입고 차량 지금 부르기"</div>
         )}
-        <Why label="색은?">옅은 색 롤테이너 = 검수 전, 진한 색 = 수령 등록(TIN) 완료·적치 대기. 냉동·냉장부터 적치합니다.</Why>
       </>
     );
   }
@@ -134,7 +129,6 @@ function ZoneBody({ zoneKey }: { zoneKey: string }) {
           <Stat v={`${busy}/${active}`} k="사용 중 패킹대" />
           <Stat v={s.stations.queueLength} k="대기열" />
         </div>
-        <Why label="규격">패킹대 1.6×0.8m, 모듈 2.0×2.2m, 4대씩 두 줄 (MFC 7-5).</Why>
       </>
     );
   }
@@ -245,7 +239,6 @@ function DetailBody() {
               <Row k="H / E / R / A" v={`${b.H} / ${b.E} / ${b.R} / ${b.E - b.R}`} cls="loc" />
               {b.D ? <Row k="차이 D (실사 전)" v={b.D} /> : null}
             </dl>
-            <Why label="H 는?">H = 선반 + 보충재고 + 미적치 + 피킹 + 포장{b.D ? ' + D' : ''}. 적치·보충·피킹은 H 를 바꾸지 않고 위치만 바꿉니다.</Why>
           </>
         ) : (
           <div className="note">실서버 모드에서는 재고 수량을 볼 수 없습니다 (R-05).</div>

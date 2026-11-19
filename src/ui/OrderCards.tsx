@@ -110,7 +110,7 @@ export function OrderCard({ r }: { r: RealShipment }) {
   // 배차를 기다린 시간(점원 배차 요청부터)
   const dispSince = c?.dispatchRequestedAt ?? r.info?.dispatchRequest?.requestedAt ?? null;
   const waitingRider = st.dots[3] === 'now' || st.dots[3] === 'bad';
-  const rack = sim.rackFor(r.shipmentId).replace('DSP-A-0', '랙 ');
+  const rack = sim.rackFor(r.shipmentId).replace('DSP-A-0', '인계 랙 ');
   return (
     <div className={`ocd tone-${st.tone} ${on ? 'on' : ''}`} onClick={() => (on ? focus.clear() : focus.show(r.shipmentId))} title={on ? '다시 누르면 선택 취소' : '누르면 3D 말풍선·바코드가 이 주문'}>
       <div className="ocd-h">
@@ -230,7 +230,7 @@ export function OrderCard({ r }: { r: RealShipment }) {
 
 function placeName(code: string): string {
   if (code.startsWith('PAK-A-')) return `패킹대 ${Number(code.slice(-2))}`;
-  if (code.startsWith('DSP-A-')) return `출하대기 랙 ${Number(code.slice(-2))}`;
+  if (code.startsWith('DSP-A-')) return `인계 랙 ${Number(code.slice(-2))}`;
   return code;
 }
 

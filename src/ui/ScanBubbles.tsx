@@ -153,7 +153,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
     <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
       {/* 제목을 누르면 이 랙의 주문 팝업(PlaceCard) — 말풍선이 랙을 덮어 3D 랙을 누르기 어렵다 */}
       <div className="sb-head clickable" onClick={() => controller.showPlace(rack)} title="이 랙의 주문을 오른쪽에">
-        출하대기 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sb-more">주문 ›</span>
+        인계 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sb-more">주문 ›</span>
         {guess && <span className="guess" title="PDA 가 랙을 서버에 안 올린 포장 — 화면에서 고른 랙, 모르면 랙 1">추정</span>}
         <button
           className="sb-x"
