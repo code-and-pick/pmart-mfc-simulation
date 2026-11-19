@@ -316,6 +316,25 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(fast).toBeLessThan(slow - 120); // 포장 중에 올린 배수가 그 포장에 바로 먹는다
   });
 
+  it('이어 하기(resumeOnly): 들고 있던 작업은 하고, 서버에 남은 자기 일이 없으면 새 작업을 받지 않고 퇴근', async () => {
+    const { w, be, ctx } = setup();
+    let mine = true;
+    ctx.ownWork = () => mine;
+    w.resumeOnly = true;
+    be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
+    be.queue = [{ assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
+    void w.run();
+    for (let t = 0; t < 600 && !be.calls.some((c) => c.startsWith('pick P1 B-1')); t += 0.25) {
+      w.tick(0.25);
+      for (let i = 0; i < 20; i++) await Promise.resolve();
+    }
+    mine = false; // 서버에 남은 일 없음
+    await runFor(w, 120);
+    expect(be.calls.filter((c) => c.startsWith('pull')).length).toBe(1);
+    expect(w.left).toBe(true);
+    w.stop();
+  });
+
   it('이 출고가 이미 다른 장바구니를 쓰면(409 CART_MISMATCH) 그 장바구니로 다시 보낸다', async () => {
     const { w, be } = setup();
     be.cartInUse = 'CRT-A-17';

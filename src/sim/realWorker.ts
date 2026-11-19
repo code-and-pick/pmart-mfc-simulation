@@ -52,6 +52,14 @@ export interface RealSiteContext {
   pdaInUse?: (workerId: string) => boolean | null;
   /** 가상 작업자가 PDA 로그인 중이라 건너뛰었다 — 시뮬레이션이 다음 계정으로 채운다 */
   onSkipped?: (account: string) => void;
+  /** 이 운영자에게 서버에 남은 자기 일이 있나(열린 작업의 담당, 또는 자기가 피킹한 배정 전 PACK) — 이어 하기 작업자가 언제 멈출지 */
+  ownWork?: (workerId: string) => boolean;
+}
+
+/** 가상 작업자가 작업 시작 때 보내는 기기 ID — 서버 작업 상세 activeStart.deviceId 로 돌아온다(끊긴 작업 찾기) */
+export const SIM_DEVICE_PREFIX = 'SIM-';
+export function simDeviceId(account: string): string {
+  return `${SIM_DEVICE_PREFIX}${account}`;
 }
 
 const TEMP_KO: Record<TemperatureZone, string> = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' };
@@ -87,6 +95,8 @@ export class RealWorker extends Agent {
   left = false;
   /** PDA 가 이 계정을 쓰는 중이라 시작하지 않음 */
   skipped = false;
+  /** 끊긴 작업 이어 하기 — 서버에 남은 자기 일(들고 있던 작업·자기가 피킹한 PACK)만 끝내고 퇴근 */
+  resumeOnly = false;
   /**
    * 계정 멈춤 — 토큰을 새로 받은 뒤에도 401(R-14 회신 조건: "다시 받은 뒤에도 401 이면 그 계정은 멈춘다").
    * 다시 켜지 않는다(새로 고침 전까지). 화면에는 남겨 둔다.
@@ -164,7 +174,7 @@ export class RealWorker extends Agent {
           continue;
         }
         // 같은 계정을 실제 PDA 가 쓰는 중이면 시작하지 않는다(같은 사람으로 서버에 이중 작업 — 사용자 2026-11-19 "이미 로그인된 작업자는 제외")
-        let inUse = this.ctx.pdaInUse?.(this.workerId) ?? false;
+        let inUse = this.resumeOnly ? false : (this.ctx.pdaInUse?.(this.workerId) ?? false);
         for (let i = 0; inUse === null && i < 20 && !this.stopped; i++) {
           this.activity = 'PDA 사용 여부 확인 중';
           await this.wait(1);
@@ -180,6 +190,12 @@ export class RealWorker extends Agent {
           this.ctx.onSkipped?.(this.account);
           return;
         }
+      }
+      // 이어 하기: 서버에 남은 자기 일이 없으면 새 작업을 받지 않고 퇴근
+      if (this.resumeOnly && this.ctx.ownWork && !this.ctx.ownWork(this.workerId)) {
+        this.activity = '이어 하기 끝 — 퇴근';
+        this.left = true;
+        return;
       }
       let a: CapacityAssignment | null;
       try {
@@ -303,7 +319,7 @@ export class RealWorker extends Agent {
     const shipmentId = task.shipmentId ?? '';
     this.pda = this.view(task, 'PICK', '작업 시작');
     if (!started) {
-      await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
+      await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: simDeviceId(this.account) }, this.key('start', task.taskId)));
     }
     // 장바구니 — 방문 순서의 출발점. 한 출고 = 한 장바구니(fulfillment 0.8.0): 출고마다 빈 카트 하나(온도 구분 없음), 집품 실적 도착지가 이 카트
     let cart = ctx.carts.take(shipmentId);
@@ -412,7 +428,7 @@ export class RealWorker extends Agent {
       await this.walkTo(station.stand);
       this.heading = Math.atan2(station.table.x - this.pos.x, station.table.z - this.pos.z);
       if (!started) {
-        await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
+        await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: simDeviceId(this.account) }, this.key('start', task.taskId)));
       }
       this.state = 'PACKING';
       const lines = task.lines.filter((l) => l.remainingQty > 0);
@@ -497,7 +513,7 @@ export class RealWorker extends Agent {
     const av = task.assignment?.assignmentVersion ?? a.assignmentVersion;
     this.pda = this.view(task, 'RETURN', '작업 시작');
     if (!started) {
-      await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: `SIM-${this.account}` }, this.key('start', task.taskId)));
+      await this.retry(() => be.startTask(task.taskId, { workerId: this.workerId!, assignmentVersion: av, deviceId: simDeviceId(this.account) }, this.key('start', task.taskId)));
     }
     const skipped = new Set<string>();
     const sent = new Set<string>();

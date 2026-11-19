@@ -289,6 +289,7 @@ function VirtualWorkers() {
     );
   const ws = sim.virtualWorkers.filter((w) => !w.left);
   const skipped = sim.virtualWorkers.filter((w) => w.skipped);
+  const cut = sim.interruptedVirtual();
   return (
     <>
       <h3>가상 작업자 (실서버)</h3>
@@ -306,6 +307,19 @@ function VirtualWorkers() {
         <p className="note warn">
           카트가 {BACKEND_FACTS.cartLocations.length}대뿐입니다(백엔드 라벨 README) — 현장에서는 {BACKEND_FACTS.cartLocations.length}명 넘게 동시에 피킹할 수 없습니다. 서버는 카트 수를 막지 않으므로 화면에서는 그대로 돕니다.
         </p>
+      )}
+      {cut.length > 0 && (
+        <div className="probe">
+          <b>끊긴 가상 작업자 작업</b> — 서버에 남아 있습니다(시작한 기기가 가상 작업자). 이어 하면 그 작업과 자기가 피킹한 주문 패킹까지 하고 퇴근합니다.
+          {cut.map((c) => (
+            <div key={c.account}>
+              {c.account.replace('mfcw-', '')} · {c.taskType} {c.orderNumber ?? c.taskId.slice(-12)}{' '}
+              <button className="btn ghost" onClick={() => sim.resumeVirtual(c.account)}>
+                이어 하기
+              </button>
+            </div>
+          ))}
+        </div>
       )}
       {skipped.length > 0 && (
         <p className="note">

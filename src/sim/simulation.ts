@@ -29,7 +29,7 @@ import { nextPickStop } from '../domain/pickStop';
 import { suggestCarts } from '../domain/cartSuggest';
 import { applyWideCells } from '../domain/wideCells';
 import { nextReturnPiece } from '../domain/returnPiece';
-import { RealWorker, tempOfCode, type RealSiteContext } from './realWorker';
+import { RealWorker, SIM_DEVICE_PREFIX, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
@@ -256,6 +256,7 @@ export class Simulation {
         carts: this.carts,
         speedFactor: (id) => (this.real?.speedFactor(id) ?? 1) * this.speedBoost,
         pdaInUse: (id) => this.pdaInUse(id),
+        ownWork: (id) => this.ownWork(id),
         onSkipped: (account) => {
           this.pdaAccounts.set(account, Date.now());
           this.setVirtualWorkers(this.virtualTarget);
@@ -279,6 +280,82 @@ export class Simulation {
   private readonly virtualUsed = new Map<string, number>();
 
   /**
+   * 이 탭의 가상 작업자가 쓴 운영자 ID → 계정. 새로고침해도 남게 sessionStorage(토큰 아님 — 운영자 ID 만, 이 탭에서만).
+   * 피킹만 하고 끊겨 서버에 남은 "자기가 피킹한 배정 전 PACK"(시작 기기 정보가 없음)도 이어 하기로 찾는다.
+   */
+  private readonly knownVirtual: Map<string, string> = loadKnownVirtual();
+
+  private rememberVirtual() {
+    let changed = false;
+    for (const w of this.virtualWorkers)
+      if (w.workerId && !w.skipped && this.knownVirtual.get(w.workerId) !== w.account) {
+        this.knownVirtual.set(w.workerId, w.account);
+        changed = true;
+      }
+    if (changed) saveKnownVirtual(this.knownVirtual);
+  }
+
+  /** 가상 작업자 하나를 만들어 일을 시작한다(resumeOnly = 끊긴 작업만 이어 하기) */
+  private spawnVirtual(account: string, slot: number, resumeOnly: boolean): RealWorker {
+    const old = this.virtualWorkers.find((w) => w.account === account);
+    if (old) this.virtualWorkers.splice(this.virtualWorkers.indexOf(old), 1);
+    const tokens = new TokenSource(account, REAL_LINK.tokenRefreshMarginSec);
+    const be = new HttpBackend({ baseUrl: this.realBaseUrl, token: () => tokens.get(), sourceSystem: 'mfc-simulator', now: () => this.time, timeoutMs: 8000 });
+    be.onApi((r) => this.push(this.apiLog, { ...r, note: account }));
+    const w = new RealWorker(account, this.layout.points.idle[slot % this.layout.points.idle.length], this.realCtx!, be, tokens);
+    w.resumeOnly = resumeOnly;
+    this.virtualWorkers.push(w);
+    void w.run();
+    return w;
+  }
+
+  /**
+   * 끊긴 가상 작업자 작업 — 서버에 열린 작업인데 시작한 기기가 이 시뮬레이터 가상 작업자(activeStart.deviceId `SIM-mfcw-pp-NN`)이고,
+   * 이 화면에 그 계정 가상 작업자가 돌고 있지 않은 것(새로고침·오류·탭 닫힘). 화면에서 "이어 하기"로 붙인다(사용자 2026-11-19).
+   */
+  interruptedVirtual(): { account: string; taskId: string; taskType: string; orderNumber: string | null }[] {
+    const real = this.real;
+    if (!real || this.realTokens?.serverInjected) return [];
+    this.rememberVirtual();
+    const running = new Set(this.virtualWorkers.filter((w) => !w.left).map((w) => w.account));
+    const out: { account: string; taskId: string; taskType: string; orderNumber: string | null }[] = [];
+    for (const t of real.tasks.values()) {
+      if (t.closed) continue;
+      const s = t.summary;
+      const dev = t.detail?.activeStart?.deviceId ?? '';
+      // 1) 시작 기기가 가상 작업자, 2) 이 탭 가상 작업자의 운영자에게 배정됨, 3) 그가 피킹한 배정 전 PACK
+      let account = dev.startsWith(SIM_DEVICE_PREFIX) ? dev.slice(SIM_DEVICE_PREFIX.length) : null;
+      if (!account && s.assignment?.workerId) account = this.knownVirtual.get(s.assignment.workerId) ?? null;
+      if (!account && s.taskType === 'PACK' && !s.assignment?.workerId && s.pickedBy && (s.state === 'READY' || s.state === 'WAITING'))
+        account = this.knownVirtual.get(s.pickedBy) ?? null;
+      if (!account || !REAL_LINK.virtualAccounts.includes(account) || running.has(account)) continue;
+      if (out.some((x) => x.account === account)) continue;
+      out.push({ account, taskId: s.taskId, taskType: s.taskType, orderNumber: s.orderNumber ?? null });
+    }
+    return out;
+  }
+
+  /** 끊긴 작업 이어 하기 — 그 계정 가상 작업자를 붙인다(들고 있던 작업·자기가 피킹한 PACK 까지 하고 퇴근) */
+  resumeVirtual(account: string) {
+    if (!this.realCtx || this.realTokens?.serverInjected) return;
+    if (this.virtualWorkers.some((w) => w.account === account && !w.left)) return;
+    this.spawnVirtual(account, Math.max(0, REAL_LINK.virtualAccounts.indexOf(account)), true);
+  }
+
+  /** 서버에 남은 이 운영자의 일 — 열린 작업의 담당, 또는 자기가 피킹한 배정 전 PACK(capacity 0.19.0: 피커에게 먼저) */
+  ownWork(workerId: string): boolean {
+    const real = this.real;
+    if (!real) return false;
+    for (const t of real.tasks.values()) {
+      if (t.closed) continue;
+      const s = t.summary;
+      if (s.assignment?.workerId === workerId) return true;
+      if (s.taskType === 'PACK' && !s.assignment?.workerId && s.pickedBy === workerId && (s.state === 'READY' || s.state === 'WAITING')) return true;
+    }
+    return false;
+  }
+
+  /**
    * 이 운영자 계정을 실제 PDA 가 쓰는 중인가 — 서버가 로그인 여부를 알려 주지 않아(세션 조회는 본인만) 최근 작업으로 본다:
    * 열린 작업의 담당·피킹한 사람이거나, 최근(pdaSkipSec 안) 활동한 작업. 이 화면의 가상 작업자가 그 계정으로 일한 시각 이전 활동은 뺀다.
    * 첫 조회 전이면 null(모름).
@@ -287,6 +364,12 @@ export class Simulation {
     const real = this.real;
     if (!real || real.polls === 0) return null;
     const since = Math.max(this.virtualUsed.get(workerId) ?? 0, Date.now() - REAL_LINK.pdaSkipSec * 1000);
+    // 시뮬레이터 가상 작업자가 시작한 흔적(activeStart.deviceId SIM-…)이 있거나 이 탭 가상 작업자의 운영자면 PDA 가 아니라 끊긴 가상 작업자 — 이어 하기 대상
+    if (this.knownVirtual.has(workerId)) return false;
+    for (const t of real.tasks.values()) {
+      const s = t.summary;
+      if ((s.assignment?.workerId === workerId || s.pickedBy === workerId) && (t.detail?.activeStart?.deviceId ?? '').startsWith(SIM_DEVICE_PREFIX)) return false;
+    }
     for (const t of real.tasks.values()) {
       const s = t.summary;
       if (s.assignment?.workerId !== workerId && s.pickedBy !== workerId) continue;
@@ -318,27 +401,24 @@ export class Simulation {
     this.virtualTarget = Math.max(0, Math.min(REAL_LINK.virtualAccounts.length, this.layout.points.idle.length, n));
     const target = this.virtualTarget;
     for (const w of this.virtualWorkers) if (w.workerId && !w.skipped) this.virtualUsed.set(w.workerId, Date.now());
-    const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left);
+    // 이어 하기 작업자(resumeOnly)는 인원 수에 넣지 않는다 — 슬라이더가 그 계정까지 닿으면 보통 작업자로 바꾼다
+    const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left && !w.resumeOnly);
     for (let i = 0; i < REAL_LINK.virtualAccounts.length && active.length < target; i++) {
       const account = REAL_LINK.virtualAccounts[i];
-      const skippedAt = this.pdaAccounts.get(account);
-      if (skippedAt !== undefined && Date.now() - skippedAt < REAL_LINK.pdaSkipSec * 1000) continue; // PDA 가 쓰는 중이던 계정
       const existing = this.virtualWorkers.find((w) => w.account === account);
       if (existing && !existing.left) {
-        if (existing.leaving) {
+        if (existing.resumeOnly) {
+          existing.resumeOnly = false;
+          active.push(existing);
+        } else if (existing.leaving) {
           existing.leaving = false;
           active.push(existing);
         }
         continue;
       }
-      if (existing) this.virtualWorkers.splice(this.virtualWorkers.indexOf(existing), 1);
-      const tokens = new TokenSource(account, REAL_LINK.tokenRefreshMarginSec);
-      const be = new HttpBackend({ baseUrl: this.realBaseUrl, token: () => tokens.get(), sourceSystem: 'mfc-simulator', now: () => this.time, timeoutMs: 8000 });
-      be.onApi((r) => this.push(this.apiLog, { ...r, note: account }));
-      const w = new RealWorker(account, this.layout.points.idle[i], ctx, be, tokens);
-      this.virtualWorkers.push(w);
-      active.push(w);
-      void w.run();
+      const skippedAt = this.pdaAccounts.get(account);
+      if (skippedAt !== undefined && Date.now() - skippedAt < REAL_LINK.pdaSkipSec * 1000) continue; // PDA 가 쓰는 중이던 계정
+      active.push(this.spawnVirtual(account, i, false));
     }
     // 뒤에서부터 퇴근 요청
     for (let i = active.length - 1; i >= target; i--) active[i].leaving = true;
@@ -352,6 +432,7 @@ export class Simulation {
     const real = this.real;
     if (!real || real.polls === this.observedPoll) return;
     this.observedPoll = real.polls;
+    this.rememberVirtual();
     const now = Date.now();
     const virtualIds = this.virtualWorkerIds();
     const rank: Record<string, number> = { IN_PROGRESS: 0, BLOCKED: 1, ASSIGNED: 2 };
@@ -1297,5 +1378,26 @@ export class Simulation {
 
   shipmentsWaitingRider(): number {
     return this.pendingRiders.length;
+  }
+}
+
+const KNOWN_VIRTUAL_KEY = 'pmart-sim-virtual-operators';
+
+/** sessionStorage 에서(없거나 막히면 빈 것) — 운영자 ID → 가상 작업자 계정 */
+function loadKnownVirtual(): Map<string, string> {
+  try {
+    const raw = typeof sessionStorage === 'undefined' ? null : sessionStorage.getItem(KNOWN_VIRTUAL_KEY);
+    const obj = raw ? (JSON.parse(raw) as Record<string, string>) : {};
+    return new Map(Object.entries(obj).filter(([, v]) => typeof v === 'string'));
+  } catch {
+    return new Map();
+  }
+}
+
+function saveKnownVirtual(m: Map<string, string>) {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(KNOWN_VIRTUAL_KEY, JSON.stringify(Object.fromEntries(m)));
+  } catch {
+    /* 저장 못 해도 이 화면에서는 그대로 */
   }
 }

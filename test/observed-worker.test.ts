@@ -410,4 +410,20 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     real.tasks.set('P', { summary: pack, detail: pack, firstSeenMs: 0, closed: null });
     expect(sim.pdaInUse('OP-990d2c09')).toBe(true); // 피킹한 사람
   });
+
+  it('끊긴 가상 작업자 작업: 시작 기기 SIM-mfcw-pp-NN 인 열린 작업 → 이어 하기 목록, PDA 사용 중으로 보지 않음', () => {
+    const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
+    const real = sim.real!;
+    real.polls++;
+    const d = { ...pick([1, 1]), orderNumber: '12345678', lastActivityAt: new Date().toISOString(), activeStart: { requestId: 'r', workerId: 'OP-990d2c09', deviceId: 'SIM-mfcw-pp-03', startedAt: '' } } as unknown as TaskDetail;
+    real.tasks.set(d.taskId, { summary: d, detail: d, firstSeenMs: 0, closed: null });
+    expect(sim.interruptedVirtual()).toEqual([{ account: 'mfcw-pp-03', taskId: d.taskId, taskType: 'PICK', orderNumber: '12345678' }]);
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(false);
+    expect(sim.ownWork('OP-990d2c09')).toBe(true);
+    // PDA 가 시작한 작업은 이어 하기 대상이 아니고 PDA 사용 중
+    const pda = { ...d, activeStart: { ...d.activeStart!, deviceId: 'PDA-abc' } } as unknown as TaskDetail;
+    real.tasks.set(d.taskId, { summary: pda, detail: pda, firstSeenMs: 0, closed: null });
+    expect(sim.interruptedVirtual()).toEqual([]);
+    expect(sim.pdaInUse('OP-990d2c09')).toBe(true);
+  });
 });
