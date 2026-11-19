@@ -7,13 +7,13 @@ export const ZONE_COLOR: Record<ZoneKind, number> = {
   // 냉동·냉장 바닥 — 칙칙한 남색·청록 대신 맑은 파랑·청록(사용자 2026-11-20 "파랑색 청록색 그게 칙칙하다고")
   FROZEN: 0x3d84cc,
   CHILLED: 0x2fae9f,
-  AMBIENT: 0xc9a24a, // 상온 — 탁한 갈색 → 맑은 호박색(2026-11-20)
+  AMBIENT: 0xe3be3c, // 상온 — 맑은 노랑(2026-11-20 "노란끼 돌게, 칙칙하다")
   INBOUND_STORE: 0xd07a45, // 입고창고 — 주황(입고·검수와 구분, 사용자 2026-11-20)
   RECEIVING: 0x2f3f8f, // 입고·검수 — 남색(사용자 2026-11-20)
   OFFICE: 0x3d3d44,
   PACKING: 0x9a6cc4, // 패킹 — 탁한 보라 → 맑은 보라(2026-11-20)
   QUARANTINE: 0x7a3434,
-  SHIPPING: 0x7a6a2a,
+  SHIPPING: 0xd4b43a, // 외부 출하대기 — 칙칙한 올리브 → 노랑(2026-11-20)
   PARKING: 0x2e2e2e,
 };
 
