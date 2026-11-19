@@ -527,8 +527,11 @@ export class Simulation {
       w.cue = null;
       w.hasCart = false;
       w.carrying = [];
-      w.activity = '열린 작업 없음(서버)';
-      if (now - w.lastSeenMs > 120_000) this.observedWorkers.splice(i, 1);
+      w.activity = '열린 작업 없음(서버) · 피킹 대기 자리';
+      // 출하대기 랙까지 끝나면 피킹 대기 자리(카트 보관 앞)로 돌아가 다음 작업을 기다린다(사용자 2026-11-19 "출하대기 끝나면 다시 피킹대로")
+      const spots = this.layout.points.idle;
+      w.aim(spots[i % spots.length], 'home');
+      if (now - w.lastSeenMs > REAL_LINK.observedIdleKeepSec * 1000) this.observedWorkers.splice(i, 1);
     }
   }
 

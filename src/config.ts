@@ -183,6 +183,8 @@ export const REAL_LINK = {
   workerRefreshSec: 60,
   /** 토큰 만료 이만큼 전이면 새로 받는다(초). 직원 토큰 15분 [시뮬] */
   tokenRefreshMarginSec: 60,
+  /** 실제 PDA 작업자가 열린 작업이 없어진 뒤(출하대기 랙까지 끝) 피킹 대기 자리에 서 있다가 화면에서 빠지기까지(초) [시뮬] */
+  observedIdleKeepSec: 600,
   /** 끝난(목록에서 빠진) 작업을 화면에 남겨 두는 시간(초) [시뮬] */
   recentKeepSec: 600,
   /** 주문에 나온 SKU 재고를 작업이 바뀌지 않아도 다시 읽는 간격(초) — PDA 밖 변화(이동·정정) 반영용 [시뮬] */

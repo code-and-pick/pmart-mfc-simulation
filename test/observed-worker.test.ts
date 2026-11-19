@@ -26,7 +26,7 @@ async function walk(sim: Simulation, sec: number) {
 }
 
 describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
-  it('스캔 안내: 카트 → (카트 찍음) → 첫 칸 → 집품 확정되면 다음 칸, 작업이 끝나면 2분 뒤 빠진다', async () => {
+  it('스캔 안내: 카트 → (카트 찍음) → 첫 칸 → 집품 확정되면 다음 칸, 작업이 끝나면 피킹 대기 자리로 돌아가 기다린다', async () => {
     const sim = new Simulation({ ...DEFAULT_PARAMS }, 'http');
     const real = sim.real!;
     const sync = () => {
@@ -72,12 +72,15 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.pda?.location).toBe('A-C1-05-1-04');
     expect(w.pda?.nextLocation).toBe('A-C1-04-6-02');
 
-    // 열린 작업이 없어지면 바로 빼지 않고(2분) 쉬는 상태로, 말풍선 없음
+    // 열린 작업이 없어지면 바로 빼지 않고 쉬는 상태로, 말풍선 없음 — 피킹 대기 자리로 걸어간다
     real.tasks.get(d2.taskId)!.closed = { atMs: 0, state: 'COMPLETED' };
     sync();
     expect(sim.observedWorkers).toHaveLength(1);
     expect(w.state).toBe('IDLE');
     expect(w.cue).toBeNull();
+    await walk(sim, 120);
+    const home = sim.layout.points.idle[0];
+    expect(Math.hypot(w.pos.x - home.x, w.pos.z - home.z)).toBeLessThan(0.3);
   });
 
   it('카트 안내: 카트가 아직 없는 두 주문은 서로 다른 빈 카트, 다른 주문이 쓰는 카트(서버)는 빼고', () => {
