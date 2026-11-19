@@ -2,7 +2,7 @@
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
 // - 카트 40대(Code128, 값 = 위치 코드 CRT-A-01~40, 온도 구분 없음 — 백엔드 0cbfecaa)
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
-import { OrderNo, SystemIds } from './OrderNo';
+import { OrderNo } from './OrderNo';
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
 import { lotGs1 } from '../domain/barcode';
@@ -287,8 +287,8 @@ export function ScanBoard() {
               선택 취소
             </button>
           </div>
+          {/* 시스템 번호는 현장 기록 맨 아래 한 곳에 */}
           {real && <OrderTimeline shipmentId={focus.shipmentId} />}
-          <SystemIds ids={[['출고', focus.shipmentId], ['주문', real?.shipmentInfo.get(focus.shipmentId)?.data.orderId]]} />
         </section>
       )}
       {real && focus.shipmentId && !tasks.length && <div className="scan-empty">이 주문의 작업이 화면에서 빠졌습니다.</div>}

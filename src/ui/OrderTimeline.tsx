@@ -1,12 +1,24 @@
-// 현장 기록은 시스템 ID·원문 상태가 많아 기본은 접음(ADR-0070 — 바코드 탭 정리 2026-11-20)
 // 고른 주문의 현장 기록 — fulfillment 0.10.0 GET /work-orders?orderId=(백오피스 통합 조회 MFC 칸과 같은 원장, 개인정보 없음).
-// 작업 지시(원래·재발송) → 출고별 작업(담당·시작·끝)·결품 보고·포장·인계, 배차 요청·출하 대기 시각. 서버 값 그대로 보인다.
+// 화면 번호 규칙(ADR-0070, 사용자 2026-11-20 "식별값 긴 것들 … 다 줄여서"): 긴 ID(FUL-·SHP-·PKG-)·영어 상태값은 겉에 내지 않는다.
+// 시각 순서 한 줄씩(시각 · 일 · 담당), 포장은 온도·라벨 번호로. 시스템 ID 는 맨 아래 접힌 "시스템 번호"에만.
 import { useEffect } from 'react';
 import { useApp } from '../app/context';
-import { OrderNo } from './OrderNo';
+import { SystemIds } from './OrderNo';
 import { TASK_STATE_KO } from './RealPanel';
+import { TEMP_KO } from './text';
 
-const t = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleTimeString() : '—');
+const hm = (iso: string | null | undefined) => (iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit' }) : '');
+const KIND_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '취소품 복귀', DISPATCH: '배차' };
+const SHIP_KO: Record<string, string> = {
+  PREPARING: '준비 중',
+  READY: '출하 대기',
+  PARTIALLY_HANDED_OVER: '일부 인계',
+  HANDED_OVER: '인계 끝',
+  CANCELLED: '취소',
+};
+const PKG_KO: Record<string, string> = { OPEN: '포장 중', SEALED: '밀봉', HANDED_OVER: '인계됨', INVALIDATED: '무효' };
+
+type Row = { at: string; what: string; who?: string; tone?: 'warn' | 'ok' };
 
 export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   const { sim } = useApp();
@@ -15,77 +27,76 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   useEffect(() => {
     if (orderId) real.requestOrderView(orderId);
   });
-  if (!orderId) return <div className="note">현장 기록: 출고 조회 전이라 주문 번호를 아직 모릅니다.</div>;
+  if (!orderId) return <div className="note">현장 기록: 출고를 읽는 중</div>;
   const v = real.orderViews.get(orderId);
-  if (v?.notYet) return <div className="note">현장 기록: 이 주문의 작업 지시가 아직 MFC 에 오지 않았습니다(404 WORK_ORDER_NOT_FOUND).</div>;
-  if (!v || (!v.data && v.loading)) return <div className="note">현장 기록 읽는 중… (GET /work-orders?orderId=)</div>;
-  if (!v.data) return <div className="note warn">현장 기록을 읽지 못했습니다: {v.error}</div>;
-  const w = (id: string | null | undefined) => (id ? real.workerName(id) : '—');
+  if (v?.notYet) return <div className="note">현장 기록: 작업 지시가 아직 MFC 에 오지 않음</div>;
+  if (!v || (!v.data && v.loading)) return <div className="note">현장 기록 읽는 중…</div>;
+  if (!v.data) return <div className="note warn">현장 기록을 읽지 못함</div>;
+  const w = (id: string | null | undefined) => (id ? real.workerName(id) : undefined);
+  const ids: [string, string][] = [];
   return (
-    <details className="order-timeline">
+    <details className="otl">
       <summary>
-        현장 기록 · 주문 <OrderNo shipmentId={shipmentId} /> <span className="sub">(fulfillment 0.10.0, {t(new Date(v.readMs).toISOString())} 읽음)</span>
+        현장 기록 <span>{hm(new Date(v.readMs).toISOString())} 읽음</span>
       </summary>
-      {v.data.workOrders.map((wo) => (
-        <div key={wo.fulfillmentId}>
-          <div className="sub">
-            {wo.kind === 'RESHIPMENT' ? '재발송' : '원래'} 작업 지시 {wo.fulfillmentId} · {wo.acceptance === 'ACCEPTED' ? '수락' : `거절 ${wo.rejectReason ?? ''}`} · 준비 시작 {t(wo.preparationStartedAt)}
+      {v.data.workOrders.map((wo) => {
+        ids.push([wo.kind === 'RESHIPMENT' ? '재발송 지시' : '작업 지시', wo.fulfillmentId]);
+        return (
+          <div key={wo.fulfillmentId} className="otl-wo">
+            <div className="otl-wo-h">
+              <b>{wo.kind === 'RESHIPMENT' ? '재발송' : '원래 주문'}</b>
+              <span className={wo.acceptance === 'ACCEPTED' ? 'ok' : 'bad'}>{wo.acceptance === 'ACCEPTED' ? '수락' : `거절${wo.rejectReason ? ` · ${wo.rejectReason}` : ''}`}</span>
+            </div>
+            {wo.shipments.map((s, si) => {
+              ids.push([`출고 ${si + 1}`, s.shipmentId]);
+              const info = real.shipmentInfo.get(s.shipmentId)?.data;
+              const rows: Row[] = [];
+              for (const k of s.tasks) {
+                const kind = KIND_KO[k.taskType] ?? k.taskType;
+                if (k.startedAt) rows.push({ at: k.startedAt, what: `${kind} 시작`, who: w(k.workerId ?? k.startedBy) });
+                if (k.endedAt)
+                  rows.push({
+                    at: k.endedAt,
+                    what: `${kind} ${TASK_STATE_KO[k.state] ?? k.state} ${k.completedQty}/${k.plannedQty}${k.cancelledQty ? ` · 취소 ${k.cancelledQty}` : ''}`,
+                    tone: k.state === 'COMPLETED' ? 'ok' : undefined,
+                  });
+                if (k.blockReason) rows.push({ at: k.startedAt ?? wo.createdAt, what: `${kind} 막힘 — ${k.blockReason}`, tone: 'warn' });
+              }
+              for (const x of s.shortages) rows.push({ at: x.reportedAt, what: `결품 보고 ${x.qty}개${x.reason ? ` · ${x.reason}` : ''}`, tone: 'warn' });
+              if (s.dispatchRequestedAt) rows.push({ at: s.dispatchRequestedAt, what: '배차 요청' });
+              s.packages.forEach((p, pi) => {
+                ids.push([`포장 ${pi + 1}`, p.packageId]);
+                const pk = info?.packages?.find((x) => x.packageId === p.packageId);
+                const name = `포장 ${pk?.temperatureZone ? TEMP_KO[pk.temperatureZone as keyof typeof TEMP_KO] : pi + 1}${pk?.handoverCode ? ` ${pk.handoverCode}` : ''}`;
+                if (p.sealedAt) rows.push({ at: p.sealedAt, what: `${name} ${PKG_KO[p.state] ?? p.state}` });
+                if (p.handoverAuthorizedAt) rows.push({ at: p.handoverAuthorizedAt, what: `${name} 라이더 스캔`, tone: 'ok' });
+              });
+              if (s.readyAt) rows.push({ at: s.readyAt, what: '출하 대기(랙)', tone: 'ok' });
+              rows.sort((a, b) => a.at.localeCompare(b.at));
+              return (
+                <div key={s.shipmentId} className={`otl-sh ${s.shipmentId === shipmentId ? 'me' : ''}`}>
+                  <div className="otl-sh-h">
+                    {s.shipmentId === shipmentId ? '이 출고' : `다른 출고 ${si + 1}`} <span>{SHIP_KO[s.state] ?? s.state}</span>
+                  </div>
+                  <ol>
+                    {rows.map((r, i) => (
+                      <li key={i} className={r.tone ?? ''}>
+                        <time>{hm(r.at)}</time>
+                        <span>
+                          {r.what}
+                          {r.who && <em> · {r.who}</em>}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                </div>
+              );
+            })}
           </div>
-          {wo.shipments.map((s) => (
-            <table className="inv real" key={s.shipmentId}>
-              <thead>
-                <tr>
-                  <th>
-                    <span title={s.shipmentId}>{s.shipmentId === shipmentId ? <b>이 출고</b> : `다른 출고 …${s.shipmentId.slice(-8)}`}</span> · {s.state}
-                  </th>
-                  <th>
-                    배차 요청 {t(s.dispatchRequestedAt)} · 출하 대기 {t(s.readyAt)}
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {s.tasks.map((k) => (
-                  <tr key={k.taskId}>
-                    <td>
-                      {k.taskType} · {TASK_STATE_KO[k.state] ?? k.state} {k.completedQty}/{k.plannedQty}
-                      {k.cancelledQty ? <span className="warn"> · 취소 {k.cancelledQty}</span> : null}
-                      {k.blockReason ? <div className="sub warn">{k.blockReason}</div> : null}
-                    </td>
-                    <td>
-                      {w(k.workerId)}
-                      <div className="sub">
-                        시작 {t(k.startedAt)} · 끝 {t(k.endedAt)}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-                {s.shortages.map((x, i) => (
-                  <tr key={`sh${i}`}>
-                    <td className="warn">
-                      결품 보고 {x.sku} × {x.qty} {x.reason ?? ''}
-                    </td>
-                    <td>
-                      {t(x.reportedAt)} · {x.executionState}
-                    </td>
-                  </tr>
-                ))}
-                {s.packages.map((p) => (
-                  <tr key={p.packageId}>
-                    <td>
-                      포장 {p.packageId} · {p.state}
-                    </td>
-                    <td>
-                      밀봉 {t(p.sealedAt)} · 인계 {p.fenceState}
-                      {p.handoverStatus ? ` ${p.handoverStatus}` : ''}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          ))}
-        </div>
-      ))}
+        );
+      })}
       {v.data.stopRequests.length > 0 && <div className="note warn">중지 요청 {v.data.stopRequests.length}건</div>}
+      <SystemIds ids={ids} />
     </details>
   );
 }

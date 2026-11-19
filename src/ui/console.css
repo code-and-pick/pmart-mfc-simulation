@@ -806,3 +806,25 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .scan-sec-h b { white-space: nowrap; }
 .scan-sec-h span { flex-basis: 100%; margin-left: 0; text-align: left; order: 3; }
 .scan-sec-h .link { order: 2; }
+
+/* 현장 기록 — 시각 순서 한 줄씩, 긴 ID 없음(ADR-0070) */
+.otl { margin-top: 4px; }
+.otl > summary { cursor: pointer; font-size: 13px; font-weight: 700; color: var(--text); list-style: none; display: flex; gap: 8px; align-items: baseline; }
+.otl > summary::-webkit-details-marker { display: none; }
+.otl > summary::before { content: '›'; transition: transform 0.15s; display: inline-block; }
+.otl[open] > summary::before { transform: rotate(90deg); }
+.otl > summary span { margin-left: auto; font-weight: 400; font-size: 11.5px; color: var(--muted); }
+.otl-wo { margin-top: 10px; }
+.otl-wo-h { display: flex; gap: 8px; align-items: center; font-size: 13px; margin-bottom: 6px; }
+.otl-wo-h .ok { color: var(--ok); font-size: 12px; }
+.otl-wo-h .bad { color: var(--bad); font-size: 12px; }
+.otl-sh { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; background: var(--card); margin-bottom: 8px; }
+.otl-sh.me { border-color: var(--accent); }
+.otl-sh-h { font-size: 12.5px; font-weight: 700; margin-bottom: 6px; }
+.otl-sh-h span { margin-left: 6px; font-weight: 600; color: var(--accent); }
+.otl ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.otl li { display: grid; grid-template-columns: 92px 1fr; gap: 8px; font-size: 13px; line-height: 1.4; }
+.otl li time { color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+.otl li em { font-style: normal; color: var(--muted); }
+.otl li.ok span { color: var(--ok); }
+.otl li.warn span { color: var(--warn-ink); }

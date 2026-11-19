@@ -306,8 +306,9 @@ function DetailBody() {
       </div>
       {d ? (
         <dl>
-          <Row k="작업" v={`${TASK_KO[d.taskType] ?? d.taskType} ${d.taskId}`} />
-          <Row k="주문" v={d.shipmentId && sim.real ? orderText(sim.real.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId} />
+          {/* 작업 ID(긴 시스템 ID)는 겉에 내지 않는다 — ADR-0070 */}
+          <Row k="작업" v={TASK_KO[d.taskType] ?? d.taskType} />
+          <Row k="주문" v={d.shipmentId && sim.real ? orderText(sim.real.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId && d.orderId.length > 12 ? orderText(null, d.orderId) : d.orderId} />
           <Row k="진행" v={d.progress} />
           <Row
             k="현재 로케이션"
