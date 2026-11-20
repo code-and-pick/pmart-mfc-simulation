@@ -251,7 +251,8 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
 
 // ───────── 실서버: 재고 채우기(시험 입고 MI-3·R-23) — 계획을 보여 주고 한 번 더 묻기 ─────────
 
-function TestInboundControls() {
+/** 입고·검수 구역 카드(Cards)에서도 쓴다 — 사용자 2026-11-20 "왼쪽에 있다는 문구 없애고 버튼 만들어" */
+export function TestInboundControls() {
   const { sim, controller } = useApp();
   const [plan, setPlan] = useState<{ lines: InboundPlanLine[]; withVirtual: boolean } | null>(null);
   const [busy, setBusy] = useState('');

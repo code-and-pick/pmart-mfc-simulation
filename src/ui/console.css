@@ -1014,3 +1014,6 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .adm-act.done { color: var(--ok); }
 .adm-act.error { color: var(--bad); }
 .adm-act.unknown { color: var(--warn-ink); }
+/* 입고·검수 구역 카드의 입고 차량 부르기(MOCK) */
+.rcv-call { display: block; width: 100%; margin-top: 8px; padding: 9px 10px; border-radius: 9px; border: 1px solid var(--line-strong); background: var(--soft); color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+.rcv-call:hover { border-color: var(--accent, #5b8cff); }
