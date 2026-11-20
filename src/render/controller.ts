@@ -143,6 +143,13 @@ export class ViewController extends Emitter {
   /** 오른쪽 실제 주문을 이 점원의 주문만으로 — 3D 에서 점원을 누름(사용자 2026-11-20 "옆에 오른쪽 탭에 해당 주문내역이 뜨게") */
   workerFilter: { id: string; shipmentId: string | null } | null = null;
 
+  /** 오른쪽 실제 주문 검색어(주문번호·점원·라이더) — 탭을 바꿔도 남고, 검색칸 ✕ 로만 지운다(사용자 2026-11-20) */
+  orderSearch = '';
+  setOrderSearch(q: string) {
+    this.orderSearch = q;
+    this.emit();
+  }
+
   showPlace(code: string | null) {
     this.placeFilter = code;
     if (code) {

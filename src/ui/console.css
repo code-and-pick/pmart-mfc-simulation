@@ -915,3 +915,11 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .ocd-place .follow + .link { margin-left: 8px; }
 .ocd-place { flex-wrap: wrap; row-gap: 4px; }
 .ocd-place b, .ocd-place > span, .ocd-place .follow, .ocd-place .link { white-space: nowrap; }
+
+/* 실제 주문 검색 — 주문번호·점원·라이더 */
+.ocd-search { display: flex; align-items: center; gap: 8px; position: sticky; top: 0; z-index: 2; background: var(--panel-solid); padding: 2px 0 6px; }
+.ocd-search input { flex: 1; min-width: 0; font: inherit; font-size: 14px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--soft); color: var(--text); }
+.ocd-search input:focus { outline: none; border-color: var(--accent); }
+.ocd-search .cnt { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ocd-hit { display: flex; gap: 6px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
+.ocd-hit b { color: var(--accent); font-weight: 600; }

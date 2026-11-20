@@ -147,7 +147,7 @@ export function RealOrders() {
     <>
       <OrderCards />
     {/* 자리로 거른 동안은 그 자리 주문만 */}
-    {!controller.placeFilter && !controller.workerFilter && <ReturnPickups />}
+    {!controller.placeFilter && !controller.workerFilter && !controller.orderSearch.trim() && <ReturnPickups />}
     </>
   );
 }

@@ -5,6 +5,7 @@ import type { Simulation } from '../sim/simulation';
 import { dispatchText, dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
 import { OrderNo, SystemIds } from './OrderNo';
 import { useScanFocus } from './scanFocus';
+import { matchFields, searchFields, type SearchField } from './orderSearch';
 
 type Dot = 'done' | 'now' | 'wait' | 'bad';
 type Tone = 'run' | 'wait' | 'ok' | 'bad' | 'done';
@@ -92,7 +93,7 @@ export function stageTimes(sim: Simulation, r: RealShipment): { pick: Stage; pac
  * 펼치지 않아도 보이는 것: 주문번호·합계 금액 / 단계 칩 / 단계마다 시각·걸린 시간·담당 / 배송지·전달 요청 / 상품 전부(수량·금액).
  * 카드를 누르면 그 주문을 고른다(3D 말풍선·바코드 탭). "시스템 번호"만 접어 둔다.
  */
-export function OrderCard({ r }: { r: RealShipment }) {
+export function OrderCard({ r, hit }: { r: RealShipment; hit?: SearchField | null }) {
   const { sim } = useApp();
   const real = sim.board!;
   const focus = useScanFocus();
@@ -122,6 +123,12 @@ export function OrderCard({ r }: { r: RealShipment }) {
         {flag && <span className="oc-flag">{flag}</span>}
         <span className="ocd-amt">{os?.itemAmount != null ? won(os.itemAmount) : ''}</span>
       </div>
+      {hit && hit.kind !== '주문번호' && (
+        <div className="ocd-hit">
+          <span>{hit.kind}</span>
+          {hit.kind === '시스템 ID' ? <b>일치</b> : <b>{hit.text}</b>}
+        </div>
+      )}
       <div className="ocd-chips">
         {st.dots.map((d, i) => (
           <Fragment key={STEPS[i]}>
@@ -245,9 +252,38 @@ export function OrderCards() {
   const wf = wf0 ? { id: wf0.id, shipmentId: sim.siteWorkers().find((x) => x.id === wf0.id)?.pda?.shipmentId ?? wf0.shipmentId } : null;
   const all = sim.board!.shipments();
   const at = place ? sim.shipmentsAt(place) : [];
-  const rows = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : wf ? all.filter((r) => r.shipmentId === wf.shipmentId) : all;
+  const base = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : wf ? all.filter((r) => r.shipmentId === wf.shipmentId) : all;
+  // 검색은 자리·점원 거르기 위에 한 번 더(검색어가 있으면 맞은 주문만, 무엇이 맞았는지 카드에)
+  const q = view.orderSearch;
+  const hits = new Map<string, SearchField | null | undefined>();
+  for (const r of base) hits.set(r.shipmentId, matchFields(searchFields(sim, r), q));
+  const rows = q.trim() ? base.filter((r) => hits.get(r.shipmentId)) : base;
   return (
     <div className="ocds">
+      <div className="ocd-search">
+        <input
+          type="text"
+          value={q}
+          placeholder="주문번호 · 점원 이름/사번 · 라이더 ID"
+          onChange={(e) => view.setOrderSearch(e.target.value)}
+          onKeyDown={(e) => {
+            // Esc 는 3D 나가기로 가지 않고 검색만 지운다
+            e.stopPropagation();
+            if (e.key === 'Escape') view.setOrderSearch('');
+          }}
+        />
+        {q.trim() && (
+          <>
+            <span className="cnt">
+              {rows.length}/{base.length}건
+            </span>
+            <button className="link" onClick={() => view.setOrderSearch('')}>
+              ✕
+            </button>
+          </>
+        )}
+      </div>
+      {q.trim() && !rows.length && <div className="scan-empty">“{q.trim()}” 와 맞는 주문이 없습니다. 주문번호 일부, 점원 이름·사번, 라이더 ID 로 찾을 수 있어요.</div>}
       {wf && (
         <div className="ocd-place">
           <b>{wf.id}</b>
@@ -274,7 +310,7 @@ export function OrderCards() {
       )}
       {place && !rows.length && <div className="scan-empty">{place.startsWith('PAK-') ? '지금 이 패킹대에서 포장 중인 주문이 없습니다.' : '이 랙에 올린 포장이 없습니다.'}</div>}
       {rows.map((r) => (
-        <OrderCard key={r.shipmentId} r={r} />
+        <OrderCard key={r.shipmentId} r={r} hit={hits.get(r.shipmentId)} />
       ))}
     </div>
   );
