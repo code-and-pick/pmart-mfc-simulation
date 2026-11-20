@@ -273,3 +273,65 @@ export function WorkingCells() {
     </>
   );
 }
+
+/** 지게차(장식, 사용자 2026-11-20 참고 그림 "입고구역 UI도 똑같이") — 노란 몸통·검정 마스트·포크. 통행·작업과 무관 */
+function Forklift({ x, z, rot }: { x: number; z: number; rot: number }) {
+  const Y = 0xf5c518;
+  const K = 0x2b2f3a;
+  return (
+    <group position={[x, 0, z]} rotation={[0, rot, 0]}>
+      <mesh position={[0, 0.45, 0]} castShadow>
+        <boxGeometry args={[0.9, 0.55, 1.3]} />
+        <meshStandardMaterial color={Y} roughness={0.45} />
+      </mesh>
+      <mesh position={[0, 0.5, -0.55]} castShadow>
+        <boxGeometry args={[0.92, 0.6, 0.35]} />
+        <meshStandardMaterial color={K} roughness={0.6} />
+      </mesh>
+      {/* 지붕 틀 */}
+      {[-0.38, 0.38].flatMap((sx) =>
+        [-0.35, 0.3].map((sz) => (
+          <mesh key={`${sx}${sz}`} position={[sx, 1.2, sz]} castShadow>
+            <boxGeometry args={[0.05, 0.95, 0.05]} />
+            <meshStandardMaterial color={K} />
+          </mesh>
+        )),
+      )}
+      <mesh position={[0, 1.68, -0.02]} castShadow>
+        <boxGeometry args={[0.85, 0.05, 0.8]} />
+        <meshStandardMaterial color={K} />
+      </mesh>
+      {/* 마스트 + 포크 */}
+      {[-0.25, 0.25].map((sx) => (
+        <mesh key={sx} position={[sx, 1.0, 0.72]} castShadow>
+          <boxGeometry args={[0.07, 1.9, 0.07]} />
+          <meshStandardMaterial color={K} />
+        </mesh>
+      ))}
+      {[-0.2, 0.2].map((sx) => (
+        <mesh key={`f${sx}`} position={[sx, 0.08, 1.15]} castShadow>
+          <boxGeometry args={[0.1, 0.04, 0.8]} />
+          <meshStandardMaterial color={0x6b7280} metalness={0.4} />
+        </mesh>
+      ))}
+      {[-0.4, 0.4].flatMap((sx) =>
+        [-0.4, 0.45].map((sz) => (
+          <mesh key={`w${sx}${sz}`} position={[sx * 1.05, 0.18, sz]} rotation={[0, 0, Math.PI / 2]} castShadow>
+            <cylinderGeometry args={[0.18, 0.18, 0.14, 16]} />
+            <meshStandardMaterial color={0x1f2229} roughness={0.8} />
+          </mesh>
+        )),
+      )}
+    </group>
+  );
+}
+
+/** 입고창고·입고/검수 지게차 자리(빈 구석) */
+export function InboundDecor() {
+  return (
+    <>
+      <Forklift x={38.6} z={15.4} rot={Math.PI / 2} />
+      <Forklift x={38.4} z={22.1} rot={Math.PI / 2} />
+    </>
+  );
+}

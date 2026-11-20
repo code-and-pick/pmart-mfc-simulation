@@ -9,7 +9,7 @@ import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/lay
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { boxTexture, makeLabel, makePillSprite } from '../sprites';
 import { ZoneNames } from './ZoneNames';
-import { ParkingDecor, Walkways, WorkingCells } from './Decor';
+import { InboundDecor, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
 
@@ -68,41 +68,26 @@ function Ground({ L }: { L: Layout }) {
   );
 }
 
-/** 바닥 점선 사각형(그림의 구역 테두리) — 얇은 점 띠는 선(line)보다 화면에서 굵기가 일정하게 보이도록 짧은 판을 늘어놓는다 */
-function DashedRect({ x0, z0, x1, z1, color }: { x0: number; z0: number; x1: number; z1: number; color: number }) {
-  const mesh = useRef<THREE.InstancedMesh>(null!);
-  const dash = 0.35;
-  const gap = 0.25;
-  const thick = 0.07;
-  const segs = useMemo(() => {
-    const out: { x: number; z: number; len: number; alongX: boolean }[] = [];
-    const run = (a0: number, a1: number, fixed: number, alongX: boolean) => {
-      for (let a = a0; a < a1; a += dash + gap) {
-        const len = Math.min(dash, a1 - a);
-        out.push(alongX ? { x: a + len / 2, z: fixed, len, alongX } : { x: fixed, z: a + len / 2, len, alongX });
-      }
-    };
-    run(x0, x1, z0, true);
-    run(x0, x1, z1, true);
-    run(z0, z1, x0, false);
-    run(z0, z1, x1, false);
-    return out;
-  }, [x0, z0, x1, z1]);
-  useLayoutEffect(() => {
-    const m = new THREE.Matrix4();
-    const q = new THREE.Quaternion();
-    segs.forEach((s, i) => {
-      m.compose(new THREE.Vector3(s.x, 0.012, s.z), q, s.alongX ? new THREE.Vector3(s.len, 0.004, thick) : new THREE.Vector3(thick, 0.004, s.len));
-      mesh.current.setMatrixAt(i, m);
-    });
-    mesh.current.instanceMatrix.needsUpdate = true;
-    mesh.current.computeBoundingSphere();
-  }, [segs]);
+/** 바닥 흰 실선 사각형(구역 경계) — 빛을 받지 않는 흰색이라 옅은 바닥 위에서 또렷하다 */
+function SolidRect({ x0, z0, x1, z1, width }: { x0: number; z0: number; x1: number; z1: number; width: number }) {
+  const w = x1 - x0;
+  const d = z1 - z0;
+  const y = 0.013;
+  const sides: [number, number, number, number][] = [
+    [x0 + w / 2, z0, w + width, width],
+    [x0 + w / 2, z1, w + width, width],
+    [x0, z0 + d / 2, width, d],
+    [x1, z0 + d / 2, width, d],
+  ];
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, segs.length]} raycast={() => null}>
-      <boxGeometry args={[1, 1, 1]} />
-      <meshBasicMaterial color={color} />
-    </instancedMesh>
+    <>
+      {sides.map(([x, z, sx, sz], i) => (
+        <mesh key={i} position={[x, y, z]} raycast={() => null}>
+          <boxGeometry args={[sx, 0.004, sz]} />
+          <meshBasicMaterial color={0xffffff} />
+        </mesh>
+      ))}
+    </>
   );
 }
 
@@ -130,7 +115,8 @@ function Zones({ L }: { L: Layout }) {
               {/* 구역 바닥(사용자 2026-11-20 참고 그림 "그림처럼") — 냉동 옅은 하늘·냉장 옅은 연두, 나머지 거의 흰색. 경계는 옅은 점선. 이름은 떠 있는 둥근 이름표(ZoneNames) */}
               <meshStandardMaterial color={ZONE_FLOOR[z.kind]} roughness={0.95} />
             </mesh>
-            {z.kind !== 'PARKING' && <DashedRect x0={r.x0 + 0.15} z0={r.z0 + 0.15} x1={r.x1 - 0.15} z1={r.z1 - 0.15} color={z.kind === 'QUARANTINE' ? 0x8c95a3 : 0xc3cbd6} />}
+            {/* 구역 경계 — 바닥 흰 실선(사용자 2026-11-20 "구역 나눠놓은게 잘 안보여. 하얀 실선으로 바닥에 확실하게") */}
+            {z.kind !== 'PARKING' && <SolidRect x0={r.x0 + 0.12} z0={r.z0 + 0.12} x1={r.x1 - 0.12} z1={r.z1 - 0.12} width={z.kind === 'QUARANTINE' ? 0.1 : 0.16} />}
           </group>
         );
       })}
@@ -475,6 +461,7 @@ export function Facility() {
       <ReturnIntake />
       <Walkways />
       <ParkingDecor />
+      <InboundDecor />
       <WorkingCells />
       <Obstacles L={L} />
       <Stations L={L} />

@@ -6,7 +6,7 @@ import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE } from '../colors';
 import { Label } from './Facility';
-import { boxTexture } from '../sprites';
+import { boxTexture, palletTexture } from '../sprites';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -175,7 +175,7 @@ export function Reserves() {
       mtx.makeTranslation((r.rect.x0 + r.rect.x1) / 2, 0.07, (r.rect.z0 + r.rect.z1) / 2);
       base.current.setMatrixAt(i, mtx);
       for (let j = 0; j < CARTONS_PER_RESERVE; j++) {
-        cartons.current.setColorAt(i * CARTONS_PER_RESERVE + j, col.setHex(r.temp === 'AMBIENT' ? 0xb98c5a : 0xe3e8ee).offsetHSL(0, 0, ((j * 7) % 5) / 60));
+        cartons.current.setColorAt(i * CARTONS_PER_RESERVE + j, col.setHex(r.temp === 'AMBIENT' ? SCENE.box : 0xeef2f7).offsetHSL(0, 0, ((j * 7) % 5) / 60));
         cartons.current.setMatrixAt(i * CARTONS_PER_RESERVE + j, zero);
       }
     });
@@ -219,10 +219,11 @@ export function Reserves() {
     <>
       <instancedMesh ref={base} args={[undefined, undefined, L.reserves.length]} receiveShadow>
         <boxGeometry args={[1.1, 0.14, 1.1]} />
-        <meshStandardMaterial color={0x8d6e4a} roughness={0.9} />
+        {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
+        <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
       </instancedMesh>
       {L.reserves.map((r) => (
-        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 26, bg: 'rgba(0,0,0,0.55)', screenPx: 12 }} />
+        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 26, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 12 }} />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
         <boxGeometry args={[0.255, 0.22, 0.255]} />

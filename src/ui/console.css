@@ -555,7 +555,11 @@ button.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--acce
 
 /* 출하대기 랙 말풍선 — 한 줄에 온도·주문번호·라벨 번호, 누르면 QR·시스템 번호(ADR-0070) */
 .scan-bubble.rack { min-width: 250px; }
-.rk { display: flex; flex-direction: column; gap: 3px; }
+.rk { display: flex; flex-direction: column; gap: 3px; max-height: min(240px, 28vh); overflow-y: auto; }
+/* 멀리서는 한 줄 머리만(사용자 2026-11-20 "인계팝업창 너무 길게 잡혀 있어서 MFC 다 가리는데") */
+.scan-bubble.rack.far .rk, .scan-bubble.rack.far .rk-more { display: none; }
+.rk-qr { margin-left: auto; display: inline-flex; background: #fff; padding: 2px; border-radius: 4px; }
+.rk-more { display: block; margin: 4px auto 0; font-size: 12px; }
 .rk-line { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #eee; font: inherit; cursor: pointer; text-align: left; }
 .rk-line:hover, .rk-row.on .rk-line { border-color: #8ab4f8; }
 .rk-t { font-size: 11px; font-weight: 700; padding: 1px 6px; border-radius: 4px; color: #0f172a; }

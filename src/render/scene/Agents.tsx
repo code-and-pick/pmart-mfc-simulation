@@ -195,25 +195,50 @@ type Hinge = React.RefObject<THREE.Group | null>;
 function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hinge }) {
   switch (v) {
     case 'MOTORCYCLE':
+      // 배달 스쿠터(사용자 2026-11-20 "오토바이, 자동차 UI도 별로" — 참고 그림 스쿠터): 흰 몸통·발판, 검정 안장, 보라 배달통, 앞 방풍·핸들·전조등
       return (
         <>
-          <mesh position-y={0.55} castShadow>
-            <boxGeometry args={[0.35, 0.5, 1.6]} />
-            <meshStandardMaterial color={0xd32f2f} metalness={0.3} />
+          <mesh position={[0, 0.36, 0.05]} castShadow>
+            <boxGeometry args={[0.34, 0.16, 0.95]} />
+            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
           </mesh>
-          <mesh position={[0, 0.93, -0.55]} castShadow>
-            <boxGeometry args={[0.5, 0.41, 0.5]} />
-            <meshStandardMaterial color={0xeeeeee} />
+          <mesh position={[0, 0.58, -0.22]} castShadow>
+            <boxGeometry args={[0.36, 0.34, 0.6]} />
+            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
+          </mesh>
+          <mesh position={[0, 0.79, -0.12]} castShadow>
+            <boxGeometry args={[0.3, 0.08, 0.5]} />
+            <meshStandardMaterial color={0x23262f} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, 0.72, 0.5]} rotation-x={-0.25} castShadow>
+            <boxGeometry args={[0.34, 0.62, 0.1]} />
+            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
+          </mesh>
+          <mesh position={[0, 1.05, 0.46]} castShadow>
+            <boxGeometry args={[0.6, 0.05, 0.05]} />
+            <meshStandardMaterial color={0x23262f} />
+          </mesh>
+          <mesh position={[0, 0.92, 0.56]}>
+            <boxGeometry args={[0.14, 0.08, 0.04]} />
+            <meshStandardMaterial color={0xfff5c2} emissive={0xfff1a8} emissiveIntensity={0.6} />
+          </mesh>
+          <mesh position={[0, 0.98, -0.55]} castShadow>
+            <boxGeometry args={[0.48, 0.38, 0.44]} />
+            <meshStandardMaterial color={0x7c5cf0} roughness={0.45} />
           </mesh>
           {/* 배달통 뚜껑 — 앞쪽 윗모서리가 축 */}
-          <group ref={lid} position={[0, 1.15, -0.3]}>
-            <mesh position={[0, 0, -0.25]} castShadow>
-              <boxGeometry args={[0.52, 0.04, 0.5]} />
-              <meshStandardMaterial color={0xdddddd} />
+          <group ref={lid} position={[0, 1.18, -0.33]}>
+            <mesh position={[0, 0, -0.22]} castShadow>
+              <boxGeometry args={[0.5, 0.04, 0.46]} />
+              <meshStandardMaterial color={0x6a4ad8} roughness={0.45} />
             </mesh>
           </group>
-          <Wheel z={-0.6} />
-          <Wheel z={0.6} />
+          {[-0.5, 0.52].map((z) => (
+            <mesh key={z} position={[0, 0.2, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
+              <cylinderGeometry args={[0.2, 0.2, 0.11, 18]} />
+              <meshStandardMaterial color={0x1c1f26} roughness={0.8} />
+            </mesh>
+          ))}
         </>
       );
     case 'BICYCLE':
@@ -236,12 +261,12 @@ function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hing
           )}
           <mesh position={[0, 0.78, -0.45]} castShadow>
             <boxGeometry args={[0.42, 0.28, 0.36]} />
-            <meshStandardMaterial color={0xeeeeee} />
+            <meshStandardMaterial color={0x7c5cf0} roughness={0.45} />
           </mesh>
           <group ref={lid} position={[0, 0.94, -0.27]}>
             <mesh position={[0, 0, -0.18]} castShadow>
               <boxGeometry args={[0.44, 0.04, 0.36]} />
-              <meshStandardMaterial color={0xdddddd} />
+              <meshStandardMaterial color={0x6a4ad8} roughness={0.45} />
             </mesh>
           </group>
           <Wheel z={-0.48} r={0.3} t={0.03} />
@@ -268,36 +293,65 @@ function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hing
         </>
       );
     case 'CAR':
+      // 소형 승용(참고 그림 톤): 흰 차체 + 파란 옆줄, 짙은 유리 실내, 흰 지붕, 회색 범퍼, 전조등. 문·트렁크 축은 그대로
       return (
         <>
-          <mesh position-y={0.5} castShadow>
-            <boxGeometry args={[1.1, 0.55, 2.6]} />
-            <meshStandardMaterial color={0x546e7a} metalness={0.4} />
+          <mesh position-y={0.48} castShadow>
+            <boxGeometry args={[1.12, 0.5, 2.6]} />
+            <meshStandardMaterial color={0xf5f7fb} roughness={0.3} metalness={0.1} />
           </mesh>
-          <mesh position={[0, 0.98, 0.15]} castShadow>
-            <boxGeometry args={[1.0, 0.45, 1.4]} />
-            <meshStandardMaterial color={0x90a4ae} metalness={0.2} transparent opacity={0.75} />
+          <mesh position={[0, 0.5, 0]}>
+            <boxGeometry args={[1.14, 0.08, 2.4]} />
+            <meshStandardMaterial color={0x2f6fe8} roughness={0.4} />
           </mesh>
+          <mesh position={[0, 0.96, -0.05]} castShadow>
+            <boxGeometry args={[1.0, 0.46, 1.45]} />
+            <meshStandardMaterial color={0x23324f} roughness={0.15} metalness={0.3} transparent opacity={0.85} />
+          </mesh>
+          <mesh position={[0, 1.2, -0.08]} castShadow>
+            <boxGeometry args={[0.98, 0.05, 1.25]} />
+            <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
+          </mesh>
+          {[-1.31, 1.31].map((z) => (
+            <mesh key={z} position={[0, 0.3, z]}>
+              <boxGeometry args={[1.1, 0.16, 0.06]} />
+              <meshStandardMaterial color={0x9aa3b0} roughness={0.6} />
+            </mesh>
+          ))}
+          {[-0.38, 0.38].map((x) => (
+            <mesh key={x} position={[x, 0.56, 1.31]}>
+              <boxGeometry args={[0.22, 0.08, 0.03]} />
+              <meshStandardMaterial color={0xfff5c2} emissive={0xfff1a8} emissiveIntensity={0.5} />
+            </mesh>
+          ))}
           {/* 운전석 문(+x 쪽) — 앞쪽 모서리가 축, 바깥으로(-각) 열린다 */}
           <group ref={door} position={[0.57, 0.62, 0.65]}>
             <mesh position={[0, 0, -0.5]} castShadow>
               <boxGeometry args={[0.05, 0.62, 1.0]} />
-              <meshStandardMaterial color={0x607d8b} metalness={0.4} />
+              <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
             </mesh>
           </group>
           {/* 트렁크 뚜껑(뒤 -z) — 앞쪽 윗모서리가 축, 위로 열린다 */}
-          <group ref={lid} position={[0, 0.79, -0.6]}>
+          <group ref={lid} position={[0, 0.76, -0.6]}>
             <mesh position={[0, 0, -0.35]} castShadow>
               <boxGeometry args={[1.08, 0.05, 0.7]} />
-              <meshStandardMaterial color={0x607d8b} metalness={0.4} />
+              <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
             </mesh>
           </group>
-          {[-0.85, 0.85].map((z) => [-0.55, 0.55].map((x) => (
-            <mesh key={`${x}${z}`} rotation-z={Math.PI / 2} position={[x, 0.24, z]} castShadow>
-              <cylinderGeometry args={[0.22, 0.22, 0.14, 12]} />
-              <meshStandardMaterial color={0x111111} />
-            </mesh>
-          )))}
+          {[-0.85, 0.85].map((z) =>
+            [-0.56, 0.56].map((x) => (
+              <group key={`${x}${z}`} position={[x, 0.26, z]}>
+                <mesh rotation-z={Math.PI / 2} castShadow>
+                  <cylinderGeometry args={[0.24, 0.24, 0.16, 18]} />
+                  <meshStandardMaterial color={0x1c1f26} roughness={0.8} />
+                </mesh>
+                <mesh rotation-z={Math.PI / 2} position={[x > 0 ? 0.085 : -0.085, 0, 0]}>
+                  <cylinderGeometry args={[0.12, 0.12, 0.01, 14]} />
+                  <meshStandardMaterial color={0xc8ced8} metalness={0.5} roughness={0.3} />
+                </mesh>
+              </group>
+            )),
+          )}
         </>
       );
     case 'WALK':
@@ -399,16 +453,30 @@ function Truck({ trfId }: { trfId: string }) {
   });
   return (
     <group ref={group}>
-      <Box size={[5.0, 2.5, 2.3]} color={0xe8eaed} position={[-0.7, 1.55, 0]} />
-      <Box size={[5.02, 0.35, 2.32]} color={0x1e88e5} position={[-0.7, 1.0, 0]} />
-      <Box size={[1.7, 2.0, 2.2]} color={0x37474f} position={[2.75, 1.3, 0]} />
-      <Box size={[0.05, 0.7, 1.9]} color={0x90caf9} position={[3.61, 1.75, 0]} material={{ metalness: 0.6, roughness: 0.1 }} />
+      {/* 참고 그림 트럭: 흰 탑 + 파란 띠 두 줄, 파란 운전칸·짙은 앞유리, 회색 차대·범퍼 */}
+      <Box size={[5.0, 2.5, 2.3]} color={0xf7f8fb} position={[-0.7, 1.55, 0]} />
+      <Box size={[5.02, 0.22, 2.32]} color={0x1f5fd6} position={[-0.7, 1.05, 0]} />
+      <Box size={[5.02, 0.08, 2.32]} color={0x5b9bff} position={[-0.7, 1.28, 0]} />
+      <Box size={[6.4, 0.25, 2.0]} color={0x5b6472} position={[0, 0.42, 0]} />
+      <Box size={[1.8, 1.9, 2.25]} color={0x1f5fd6} position={[2.75, 1.4, 0]} />
+      <Box size={[1.2, 0.5, 2.27]} color={0x1849ad} position={[2.95, 2.25, 0]} />
+      <Box size={[0.05, 0.75, 1.95]} color={0x1c2a44} position={[3.66, 1.75, 0]} material={{ metalness: 0.5, roughness: 0.1 }} />
+      <Box size={[0.12, 0.25, 2.2]} color={0xb8c0cc} position={[3.7, 0.6, 0]} />
+      {[-0.75, 0.75].map((z) => (
+        <Box key={z} size={[0.04, 0.14, 0.32]} color={0xfff5c2} position={[3.71, 0.95, z]} />
+      ))}
       {[-2.4, -1.2, 2.6].flatMap((x) =>
         [-1.0, 1.0].map((z) => (
-          <mesh key={`${x}:${z}`} rotation-x={Math.PI / 2} position={[x, 0.42, z]}>
-            <cylinderGeometry args={[0.42, 0.42, 0.3, 18]} />
-            <meshStandardMaterial color={0x111111} />
-          </mesh>
+          <group key={`${x}:${z}`} position={[x, 0.42, z]}>
+            <mesh rotation-x={Math.PI / 2}>
+              <cylinderGeometry args={[0.42, 0.42, 0.3, 18]} />
+              <meshStandardMaterial color={0x1c1f26} roughness={0.8} />
+            </mesh>
+            <mesh rotation-x={Math.PI / 2} position={[0, 0, z > 0 ? 0.16 : -0.16]}>
+              <cylinderGeometry args={[0.2, 0.2, 0.02, 14]} />
+              <meshStandardMaterial color={0xc8ced8} metalness={0.5} roughness={0.3} />
+            </mesh>
+          </group>
         )),
       )}
       <primitive object={tag} position={[-0.7, 3.4, 0]} />

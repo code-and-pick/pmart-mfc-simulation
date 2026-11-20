@@ -10,7 +10,7 @@ import { useApp, useTick, useView } from '../app/context';
 import { REAL_LINK } from '../config';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
-import { Barcode } from './Barcode';
+import { Barcode, CodeImage } from './Barcode';
 import { LotLabel } from './ScanBoard';
 import { Why } from './Why';
 import { orderStatus } from './OrderCards';
@@ -81,15 +81,22 @@ export function ScanBubbles() {
         const p = sim.backendPoint(rack);
         if (!cam || !p) continue;
         v.set(p.x, RACK_Y, p.z).project(cam);
-        const show = v.z < 1 && Math.abs(v.x) < 1.1 && Math.abs(v.y) < 1.1;
+        // 랙이 화면 안(가장자리 여유 없이)일 때만 — 다른 구역을 보러 가면 사라진다(사용자 2026-11-20 "어딜 가든 인계팝업창이 중앙에 뜨는데 … 곤란해")
+        const inView = v.z < 1 && Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95;
+        // 멀리서(전체 보기) 보면 한 줄 머리만, 가까이 가면 펼친 목록
+        const dist = cam.position.distanceTo(new THREE.Vector3(p.x, 0, p.z));
+        const far = dist > RACK_NEAR;
+        // 사용자가 ▸ 로 직접 펼친 말풍선은 멀리서도 펼친 채로(사용자 2026-11-20 "지금은 아예 펼쳐서 볼 수가 없는데?")
+        el.classList.toggle('far', far && el.dataset.userOpen !== '1');
         const x = ((v.x + 1) / 2) * cameraTap.width;
         const y = ((1 - v.y) / 2) * cameraTap.height;
         const bw = el.offsetWidth || 300;
-        const bh = el.offsetHeight || 200;
-        const top = Math.min(y - bh - 10 < EDGE_TOP ? y + 24 : y - bh - 10, cameraTap.height - bh - 8);
+        const bh = el.offsetHeight || 120;
+        // 랙 바로 위(안 되면 바로 아래)에 붙인다 — 화면 안으로 끌어당겨 가운데로 올리지 않는다
+        const top = y - bh - 10 < EDGE_TOP ? y + 24 : y - bh - 10;
         const left = Math.max(8, Math.min(x - bw / 2, cameraTap.width - bw - 8));
-        el.style.transform = `translate(${left}px, ${Math.max(EDGE_TOP, top)}px)`;
-        el.style.display = show ? 'block' : 'none';
+        el.style.transform = `translate(${left}px, ${top}px)`;
+        el.style.display = inView ? 'block' : 'none';
       }
       raf = requestAnimationFrame(loop);
     };
@@ -130,8 +137,10 @@ export function ScanBubbles() {
 
 // 랙 위 이름표(바닥 구역 이름 2.4 m·재고 표시)보다 위에 띄워 겹치지 않게(사용자 2026-11-20 "팝업창 아래가 너무 겹치고 어수선")
 const RACK_Y = 2.2;
-/** 한 번에 보이는 포장 수 — 넘으면 "외 N개" */
+/** 한 번에 보이는 포장 수 — 넘으면 "외 N개 더 보기" */
 const RACK_MAX = 6;
+/** 이 거리(m) 안으로 카메라가 오면 목록을 펼친다 — 멀면 한 줄 머리만 [시뮬] */
+const RACK_NEAR = 30;
 
 /**
  * 출하대기 랙 말풍선(사용자 2026-11-18 "배차 대기 랙에 있는 패킹 완료 상품들의 qr 코드도 말풍선 넣어줘"):
@@ -140,9 +149,12 @@ const RACK_MAX = 6;
  */
 function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (el: HTMLDivElement | null) => void; shipmentId: string | null }) {
   const { sim, controller } = useApp();
-  const [open, setOpen] = useState(true);
+  // 처음엔 접힘이 아니라 '자동'(가까우면 펼침, 멀면 한 줄) — ▸ 를 누르면 펼침 고정, ▾ 를 누르면 접힘
+  const [open, setOpen] = useState<boolean | null>(null);
   // 한눈에는 화면 번호(주문번호·라벨 번호)만, 줄을 누르면 그 포장의 QR·시스템 번호(ADR-0070 — 사용자 2026-11-20 "버튼을 누르면 세부적으로, 관리자가 바로 볼 때는 직관적으로")
   const [pick, setPick] = useState<string | null>(null);
+  // "외 N개"를 누르면 이 랙의 포장을 다 펼친다(사용자 2026-11-20 "4개가 더 쌓여있다는 거야? 그럼 그 4개는 어떻게 확인해?")
+  const [all, setAll] = useState(false);
   const real = sim.board;
   const list = (real?.shipments() ?? [])
     .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId) && sim.rackFor(r.shipmentId) === rack)
@@ -151,7 +163,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   if (!list.length) return null;
   const guess = list.some(({ r }) => !sim.serverRack(r.shipmentId));
   return (
-    <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }}>
+    <div className="scan-bubble rack" ref={innerRef} style={{ display: 'none' }} data-user-open={open === true ? '1' : '0'}>
       {/* 제목을 누르면 이 랙의 주문 팝업(PlaceCard) — 말풍선이 랙을 덮어 3D 랙을 누르기 어렵다 */}
       <div className="sb-head clickable" onClick={() => controller.showPlace(rack)} title="이 랙의 주문을 오른쪽에">
         인계 랙 {rack === 'DSP-A-02' ? 2 : 1} · 포장 {list.length}개 <span className="sb-more">주문 ›</span>
@@ -160,16 +172,16 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
           className="sb-x"
           onClick={(e) => {
             e.stopPropagation();
-            setOpen(!open);
+            setOpen(open === true ? false : true);
           }}
-          title={open ? '접기' : '펼치기'}
+          title={open === true ? '접기' : '펼쳐서 고정'}
         >
-          {open ? '▾' : '▸'}
+          {open === true ? '▾' : '▸'}
         </button>
       </div>
-      {open && (
+      {open !== false && (
         <div className="rk">
-          {list.slice(0, RACK_MAX).map(({ r, p }, i) => {
+          {list.slice(0, all ? list.length : RACK_MAX).map(({ r, p }, i) => {
             const t = p.temperatureZone ?? 'AMBIENT';
             const on = pick === p.packageId;
             // 주문마다 머리 한 줄(주문번호 · 지금 단계), 그 밑에 포장 줄(온도 · 인계 번호)
@@ -187,11 +199,14 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
                   <span className={`rk-t t-${t}`}>{TEMP_KO[t]}</span>
                   <span className="rk-o muted">인계 번호</span>
                   {p.handoverCode && <span className="rk-c">{p.handoverCode}</span>}
-                  <span className="rk-m">{on ? '⌄' : 'QR ›'}</span>
+                  {/* 인계 QR 을 줄에 바로(사용자 2026-11-20 "조그만 삼각형을 눌러야 인계 QR코드를 볼 수 있는 게 불편") — 누르면 크게 */}
+                  <span className="rk-qr">
+                    <CodeImage value={p.qrCode} kind="code128" mode="qr" size={38} />
+                  </span>
                 </button>
                 {on && (
                   <div className="rk-d">
-                    <Barcode value={p.qrCode} height={32} showValue={false} />
+                    <CodeImage value={p.qrCode} kind="code128" mode="qr" size={150} />
                     <div className="rk-kv">
                       <span>봉투</span>
                       <b>{p.bagCount}</b>
@@ -216,7 +231,11 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
           })}
         </div>
       )}
-      {open && list.length > RACK_MAX && <div className="note">외 {list.length - RACK_MAX}개 — 주문을 고르면 그 주문 것만</div>}
+      {open !== false && list.length > RACK_MAX && (
+        <button className="link rk-more" onClick={() => setAll(!all)}>
+          {all ? '접기 ▴' : `외 ${list.length - RACK_MAX}개 더 보기 ▾`}
+        </button>
+      )}
     </div>
   );
 }

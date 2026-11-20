@@ -117,3 +117,24 @@ export function makePillSprite(text: string, bg: string, top: string, screenPx: 
   s.renderOrder = 11;
   return s;
 }
+
+let palletTex: THREE.CanvasTexture | null = null;
+/** 나무 팔레트 무늬 — 판자 사이 틈(어두운 줄). 회색조라 팔레트 색과 곱해진다 */
+export function palletTexture(): THREE.CanvasTexture {
+  if (palletTex) return palletTex;
+  const n = 128;
+  const c = document.createElement('canvas');
+  c.width = n;
+  c.height = n;
+  const g = c.getContext('2d')!;
+  g.fillStyle = '#f2f2f2';
+  g.fillRect(0, 0, n, n);
+  g.fillStyle = '#9a9a9a';
+  for (let i = 1; i < 5; i++) g.fillRect((i * n) / 5 - 2, 0, 4, n);
+  g.strokeStyle = '#8a8a8a';
+  g.lineWidth = 3;
+  g.strokeRect(1.5, 1.5, n - 3, n - 3);
+  palletTex = new THREE.CanvasTexture(c);
+  palletTex.colorSpace = THREE.SRGBColorSpace;
+  return palletTex;
+}

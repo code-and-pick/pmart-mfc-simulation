@@ -4,7 +4,12 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
-import { STATE_COLOR, TEMP_COLOR } from '../colors';
+import { SCENE, STATE_COLOR } from '../colors';
+import { boxTexture } from '../sprites';
+import type { TemperatureZone } from '../../domain/contract';
+
+/** 상자 빛깔(사용자 2026-11-20 "입고구역 UI도 똑같이") — 골판지 무늬(boxTexture)와 곱해진다 */
+const BOX_TINT: Record<TemperatureZone, number> = { AMBIENT: SCENE.box, CHILLED: 0xe3f1dc, FROZEN: 0xdce9fb };
 import { LocationLabels } from '../locationLabels';
 
 /** 하차 롤테이너 (검수 전은 옅게). */
@@ -21,7 +26,8 @@ export function Dock() {
       const p = it.slot?.pos ?? it.floorPos;
       mtx.makeTranslation(p.x, 0.53, p.z);
       m.setMatrixAt(n, mtx);
-      col.setHex(it.temp === 'AMBIENT' ? 0xb98c5a : TEMP_COLOR[it.temp]);
+      // 그림처럼 불투명 골판지 상자 — 온도대는 옅은 빛깔로만(상온 갈색·냉장 연두빛 흰색·냉동 하늘빛 흰색)
+      col.setHex(BOX_TINT[it.temp]);
       if (it.state === 'ON_DOCK') col.offsetHSL(0, -0.3, 0.1);
       m.setColorAt(n, col);
       n++;
@@ -33,7 +39,7 @@ export function Dock() {
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, 96]} count={0} castShadow frustumCulled={false}>
       <boxGeometry args={[0.62, 1.05, 0.6]} />
-      <meshStandardMaterial roughness={0.6} transparent opacity={0.88} />
+      <meshStandardMaterial roughness={0.7} map={boxTexture()} />
     </instancedMesh>
   );
 }
@@ -51,7 +57,7 @@ export function Staged() {
       if (n >= 96) break;
       mtx.makeTranslation(s.slot.pos.x, s.slot.pos.y + 0.16, s.slot.pos.z);
       m.setMatrixAt(n, mtx);
-      m.setColorAt(n, col.setHex(TEMP_COLOR[s.pkg.temperatureZone]));
+      m.setColorAt(n, col.setHex(BOX_TINT[s.pkg.temperatureZone]));
       n++;
     }
     m.count = n;
@@ -61,7 +67,7 @@ export function Staged() {
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, 96]} count={0} frustumCulled={false}>
       <boxGeometry args={[0.26, 0.32, 0.26]} />
-      <meshStandardMaterial roughness={0.5} />
+      <meshStandardMaterial roughness={0.6} map={boxTexture()} />
     </instancedMesh>
   );
 }
