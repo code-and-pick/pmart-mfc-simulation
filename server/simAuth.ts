@@ -7,6 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { fromThisPc } from './thisPc';
 import type { Plugin } from 'vite';
 import { keycloakUsername, passwordFileFor, type SimToken } from '../src/backend/http/accounts';
 import { lanReadAllowed } from '../src/backend/http/lanAllow';
@@ -82,9 +83,9 @@ async function issue(account: string): Promise<SimToken> {
   return t;
 }
 
+/** 이 PC(PC 1) 화면인가 — localhost 와 이 PC 자기 IP 모두(thisPc.ts) */
 function isLoopback(req: IncomingMessage): boolean {
-  const a = req.socket.remoteAddress ?? '';
-  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+  return fromThisPc(req);
 }
 
 function send(res: ServerResponse, status: number, body: unknown) {

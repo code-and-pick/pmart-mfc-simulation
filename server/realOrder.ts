@@ -6,6 +6,7 @@
 
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { fromThisPc } from './thisPc';
 import type { Plugin } from 'vite';
 import { REAL_ORDER } from '../src/config';
 import {
@@ -338,9 +339,9 @@ async function placeOrder(gateway: string, accountId: string, mfcId: string, cho
   }
 }
 
+/** 이 PC(PC 1) 화면인가 — localhost 와 이 PC 자기 IP 모두(thisPc.ts) */
 function isLoopback(req: IncomingMessage): boolean {
-  const a = req.socket.remoteAddress ?? '';
-  return a === '127.0.0.1' || a === '::1' || a === '::ffff:127.0.0.1';
+  return fromThisPc(req);
 }
 
 function send(res: ServerResponse, status: number, body: unknown) {

@@ -7,7 +7,8 @@ import { realOrderPlugin } from './server/realOrder';
 
 // 실서버 모드(HTTP 어댑터)는 브라우저에서 게이트웨이를 직접 부르면 CORS 에 막힐 수 있어
 // 개발 서버가 /api 를 게이트웨이로 넘긴다. 주소는 PMART_GATEWAY 로 바꾼다(기본: LAN 게이트웨이).
-const gateway = process.env.PMART_GATEWAY ?? 'http://D603-16:8080';
+// 이름(D603-16)은 로컬망 이름 알림(mDNS·LLMNR)으로만 풀려 가끔 ENOTFOUND — 주문 넣기 "응답 없음" 원인(2026-11-20). 같은 PC 의 IP 로(인증 서버와 같은 192.168.0.40)
+const gateway = process.env.PMART_GATEWAY ?? 'http://192.168.0.40:8080';
 
 export default defineConfig({
   // simAuthPlugin: 개발 서버가 LAN 시험 계정으로 로그인해 토큰만 브라우저에 준다(SIM-11). 비밀번호 파일은 PMART_SECRETS_DIR
