@@ -729,7 +729,12 @@ export class RealWorker extends Agent {
       throw e;
     });
     await this.work(REAL_WORKERS.inspectBaseSec + REAL_WORKERS.inspectSecPerUnit * qty);
-    const v = inspectVerdict(t, label, qty, seoulToday(Date.now()));
+    // 라벨 값이 없으면 시뮬레이터가 지어 넣는다(사용자 2026-11-20 "소비기한이랑 로트정보 없어서 품질 검사 못한다고 뜨는데 그냥 알아서 값 넣어").
+    // 가상 작업자가 상자에서 읽은 값으로 보내는 것 — 정상 판정이 나게 넉넉히. 지은 값은 기록에 남긴다
+    const today = seoulToday(Date.now());
+    const filled = fillInspectInputs(t, label, today);
+    if (filled.made.length) ctx.log(`${this.account} INSPECT ${t.taskId} ${t.sku} — 라벨 값 없음, 시뮬레이터가 넣음: ${filled.made.join(', ')}`);
+    const v = inspectVerdict(filled.task, filled.label, qty, today);
     if (!v.ok) {
       this.lastProblem = `${t.sku} 품질검사 못 함 — ${v.why}`;
       ctx.log(`${this.account} INSPECT ${t.taskId} ${t.sku} — ${v.why}, 손대지 않음`);
@@ -751,7 +756,13 @@ export class RealWorker extends Agent {
     this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
     // 놓을 선반 = 적치 후보(mfc-location, rank 순) 첫 칸. 온도대는 서버가 SKU 로 정하게 보내지 않는다
     const cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty));
-    const to = cands.find((c) => c.locationCode && c.locationCode !== t.locationCode && !c.locationCode.startsWith('CRT-'))?.locationCode;
+    let to = cands.find((c) => c.locationCode && c.locationCode !== t.locationCode && !c.locationCode.startsWith('CRT-'))?.locationCode;
+    if (!to) {
+      // 후보가 없으면 그 상품이 이미 놓인 선반으로(사용자 2026-11-20 "그냥 알아서 값 넣어" — 멈추지 않게). 입고·카트·포장·출하 자리는 뺀다
+      const st = await be.getCenterStock(ctx.mfcId, t.sku).catch(() => null);
+      to = st?.units.find((u) => u.locationCode && !/^(RCV|CRT|PAK|DSP|RTN)-/.test(u.locationCode) && u.locationCode !== t.locationCode)?.locationCode;
+      if (to) ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 적치 후보 없음, 이미 놓인 선반 ${to} 로`);
+    }
     if (!to) {
       this.lastProblem = `${t.sku} 적치 후보 없음`;
       ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 적치 후보 없음, 손대지 않음`);
@@ -958,4 +969,41 @@ export function nextReturnPiece(t: TaskDetail, skip: ReadonlySet<string> = new S
     return { id, line: l, lotId: lot, from: at.locationCode, to: p.suggestedToLocations?.[0] ?? null, left, qty: Math.min(left, p.remainingQty, at.qty) };
   }
   return null;
+}
+
+/**
+ * 품질검사에 필요한데 서버 LOT 정보에 없는 값을 지어 넣는다(가상 작업자 전용 — 사용자 2026-11-20 "그냥 알아서 값 넣어").
+ * 기준(minRemainingDays) 없음 → REAL_WORKERS.inspectAssume.minRemainingDays, 소비기한 없음 → 오늘 + max(기준 + 여유, 최소 일수),
+ * 제조일 없음(제조 후 기준이 있을 때) → 오늘 − 1일, 제조사 LOT 없음 → SIM-<날짜>-<SKU>. 정상 판정이 나게 넉넉히 [시뮬]
+ */
+export function fillInspectInputs(
+  t: { sku: string; minRemainingDays?: number | null; maxDaysSinceManufacture?: number | null },
+  label: { expiryDate?: string | null; manufactureDate?: string | null; sourceLotRef?: string | null } | null,
+  today: string,
+): { task: { minRemainingDays: number; maxDaysSinceManufacture: number | null }; label: { expiryDate: string; manufactureDate: string | null; sourceLotRef: string }; made: string[] } {
+  const A = REAL_WORKERS.inspectAssume;
+  const made: string[] = [];
+  const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86_400_000).toISOString().slice(0, 10);
+  let min = t.minRemainingDays ?? null;
+  if (min == null) {
+    min = A.minRemainingDays;
+    made.push(`판정 기준 ${min}일`);
+  }
+  const max = t.maxDaysSinceManufacture ?? null;
+  let exp = label?.expiryDate ?? null;
+  if (!exp) {
+    exp = addDays(today, Math.max(min + A.expiryMarginDays, A.expiryMinDays));
+    made.push(`소비기한 ${exp}`);
+  }
+  let mfg = label?.manufactureDate ?? null;
+  if (!mfg && max != null) {
+    mfg = addDays(today, -A.manufactureDaysAgo);
+    made.push(`제조일 ${mfg}`);
+  }
+  let ref = label?.sourceLotRef ?? null;
+  if (!ref) {
+    ref = `SIM-${today.replace(/-/g, '')}-${t.sku}`;
+    made.push(`LOT ${ref}`);
+  }
+  return { task: { minRemainingDays: min, maxDaysSinceManufacture: max }, label: { expiryDate: exp, manufactureDate: mfg, sourceLotRef: ref }, made };
 }

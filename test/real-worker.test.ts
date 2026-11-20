@@ -508,15 +508,17 @@ describe('RealWorker — 재고 이동·품질검사 업무', () => {
     w.stop();
   });
 
-  it('품질검사: 판정 기준이 없거나 기한을 모르면 보내지 않고 사유를 남긴다(PDA 도 막음), 잔여일이 모자라면 격리', async () => {
+  it('품질검사: 판정 기준·소비기한·LOT 이 없으면 시뮬레이터가 지어 넣고 보낸다(사용자 2026-11-20 "그냥 알아서 값 넣어"), 잔여일이 모자라면 격리', async () => {
     const { w, be, logs } = setup();
     be.inbound.set('IN1', inboundTask('IN1', 'INSPECT', 4)); // minRemainingDays 없음
-    be.lotLabels.set('LOT-R', { lotId: 'LOT-R', lotNo: 'L1', sku: 'B-1', tracking: 'TRACKED', onHand: 0, expiryDate: '2099-01-01' });
+    // LOT 정보 없음(404) — 소비기한·제조사 LOT 도 없음
     be.areaQueue.INSPECTION = [assign('IN1', 'INSPECT')];
     void w.run();
     await runFor(w, 120);
-    expect(be.calls.filter((x) => x.startsWith('inspect'))).toEqual([]);
-    expect(logs.some((m) => /INSPECT IN1 B-1 — 판정 기준 미설정/.test(m))).toBe(true);
+    const sent = be.calls.filter((x) => x.startsWith('inspect'));
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatch(/^inspect IN1 NORMAL×4 exp=\d{4}-\d{2}-\d{2} ref=SIM-\d{8}-B-1$/);
+    expect(logs.some((m) => /INSPECT IN1 B-1 — 라벨 값 없음, 시뮬레이터가 넣음: 판정 기준 7일, 소비기한/.test(m))).toBe(true);
     w.stop();
 
     const b = setup();
@@ -525,7 +527,7 @@ describe('RealWorker — 재고 이동·품질검사 업무', () => {
     b.be.areaQueue.INSPECTION = [assign('IN2', 'INSPECT')];
     void b.w.run();
     await runFor(b.w, 120);
-    expect(b.be.calls.filter((x) => x.startsWith('inspect'))).toEqual(['inspect IN2 QUARANTINED×4 exp=2000-01-02']);
+    expect(b.be.calls.filter((x) => x.startsWith('inspect'))).toEqual([expect.stringMatching(/^inspect IN2 QUARANTINED×4 exp=2000-01-02 ref=SIM-\d{8}-B-1$/)]);
     b.w.stop();
   });
 

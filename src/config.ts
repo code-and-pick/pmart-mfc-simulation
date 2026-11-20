@@ -134,6 +134,11 @@ export const REAL_WORKERS = {
   assignWaitSec: 30,
   /** 다음 작업 받기에서 묻는 업무 순서 — 피패킹 먼저, 없으면 재고 이동(적치·보충·이동·취소품 복귀), 품질검사 [시뮬] */
   workAreas: ['PICK_PACK', 'STOCK_MOVE', 'INSPECTION'] as const,
+  /**
+   * 품질검사에 필요한데 LOT 정보에 없는 값 — 가상 작업자가 지어 넣는다(사용자 2026-11-20 "그냥 알아서 값 넣어") [시뮬].
+   * 기준 없음 → minRemainingDays, 소비기한 = 오늘 + max(기준 + expiryMarginDays, expiryMinDays), 제조일 = 오늘 − manufactureDaysAgo
+   */
+  inspectAssume: { minRemainingDays: 7, expiryMarginDays: 30, expiryMinDays: 60, manufactureDaysAgo: 1 },
   /** 카트·출발 칸에서 싣거나 선반에 놓는 기본 시간(초, 스캔 포함) [시뮬] */
   shelveBaseSec: 6,
   /** 한 개 싣거나 놓는 데(초) [시뮬] */
