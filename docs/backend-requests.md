@@ -68,6 +68,7 @@
 - 이 주문: 실물은 라이더가 가져갔고 재고 인계(H·E·R −q)도 반영됨 — 다시 피킹·재인계 하지 말 것. 백엔드 수정 전까지 지원센터 케이스(422 안내 경로).
 - **전달(11-20 13:50)**: 사용자 "백엔드 세션에 바로 보내" → "라이더백엔드"(배송 쪽 수정)·"PC1 백엔드"(fulfillment 사건 발행 포함, mfc 백엔드 세션 offline) 세션에 메시지. 읽음 확인 없음, 회신 대기.
 - **회신(11-20, "PC1 백엔드" 세션)**: 받음, 사용자에게 올렸고 결정 전. execution 쪽은 PC 5 가 PR #293(execution `PackageInvalidated` 구독, V25)으로 고치는 중, 멈춘 DLV-eb09780b 복구(사건 재발행)는 사용자 결정 대기. dispatch `containsAll` 쪽과 fulfillment 사건 발행(원하는 것 1)은 #293 범위 밖 — 따로 정함.
+- **회신(11-20, "라이더백엔드" PC 5)**: 추정 맞음. PR #293 — execution(V25)·dispatch(V16) 둘 다 `PackageInvalidated` 구독, 무효 포장을 새 포장으로 바꾸고 픽업 다시 판정(연쇄 재포장·순서 뒤바뀜 포함). fulfillment 새 목록 사건 불필요(무효 사건에 `newPackageId(s)` 있음). 배송 `packageIds`·배차 `packages` 에서 무효 포장 빠짐. 멈춘 DLV-eb09780b 는 배포 뒤 PC 1 이 무효 사건 3건을 새 eventId 로 재발행(사용자 승인). 운영자 재판정 API·백필은 안 만듦. 회신 문서 백엔드 `docs/handoff/simulator/mfc/2026-11-20-reply-r28-repack-pickup.md`(PR 브랜치). 사용자가 이 세션에서 "재판정 API 추가"를 골랐으나 위 복구가 이미 진행 중이라 겹치지 않게 만들지 않음.
 - 시뮬레이터: 실서버 라이더는 fulfillment 출고 HANDED_OVER 를 보고 떠난 것으로 그림 — 배송 쪽이 PICKED_UP 이 아니면 "배송 쪽 픽업 미확인" 으로 표시할지 후속(아래 R-29 관리 탭과 같이).
 
 ### R-29 관리자 제어·지난 주문 조회에 필요한 것 — 중간 (2026-11-20 추가)
