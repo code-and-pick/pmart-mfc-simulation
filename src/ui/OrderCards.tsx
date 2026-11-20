@@ -1,4 +1,5 @@
 // 실제 주문 카드 — 관리자가 한눈에(ADR-0070, 라이더 관제 카드 참고). 아래 OrderCard 설명.
+import { isInboundAccount, workerShortName } from '../domain/workerName';
 import { Fragment } from 'react';
 import { useApp, useView } from '../app/context';
 import type { Simulation } from '../sim/simulation';
@@ -261,6 +262,7 @@ export function OrderCards() {
   const place = view.placeFilter;
   // 점원이 다음 주문으로 넘어가면 따라 바뀐다(누른 때 주문이 아니라 지금 주문)
   const wf0 = view.workerFilter;
+  const inbW = wf0 && isInboundAccount(wf0.id) ? (sim.siteWorkers().find((x) => x.id === wf0.id) ?? null) : null;
   const wf = wf0 ? { id: wf0.id, shipmentId: sim.siteWorkers().find((x) => x.id === wf0.id)?.pda?.shipmentId ?? wf0.shipmentId } : null;
   const all = sim.board!.shipments();
   const at = place ? sim.shipmentsAt(place) : [];
@@ -309,8 +311,8 @@ export function OrderCards() {
       )}
       {wf && (
         <div className="ocd-place">
-          <b>{wf.id}</b>
-          <span>{wf.shipmentId ? '작업 중 주문' : '맡은 주문 없음'}</span>
+          <b title={wf.id}>{workerShortName(wf.id)}</b>
+          <span>{inbW ? '입고 작업' : wf.shipmentId ? '작업 중 주문' : '맡은 주문 없음'}</span>
           {/* 떠 있는 점원 카드 대신 여기서 따라가기 */}
           <button className={`follow ${view.follow === wf.id ? 'on' : ''}`} onClick={() => view.setFollow(view.follow !== wf.id)} title="카메라가 이 점원을 따라갑니다(왼쪽 끌기로 화면을 옮기면 꺼짐)">
             {view.follow === wf.id ? '따라가는 중' : '따라가기'}
@@ -320,7 +322,9 @@ export function OrderCards() {
           </button>
         </div>
       )}
-      {wf && !rows.length && <div className="scan-empty">이 점원은 지금 맡은 주문이 없습니다.</div>}
+      {/* 입고 점원(검사·적치)은 주문이 없다 — 하고 있는 작업을 여기 오른쪽 탭에(사용자 2026-11-20 "팝업창이 아니라 오른쪽 탭에 뜨게 하라고") */}
+      {inbW && <InboundWorkCard w={inbW} />}
+      {wf && !inbW && !rows.length && <div className="scan-empty">이 점원은 지금 맡은 주문이 없습니다.</div>}
       {place && (
         <div className="ocd-place">
           <b>{placeName(place)}</b>
@@ -335,6 +339,53 @@ export function OrderCards() {
       {rows.map((r) => (
         <OrderCard key={r.shipmentId} r={r} hit={hits.get(r.shipmentId)} />
       ))}
+    </div>
+  );
+}
+
+const INB_KO: Record<string, string> = { INSPECT: '품질검사', PUTAWAY: '적치' };
+
+/** 입고 점원 작업 — 무슨 작업, 어떤 상품을 어디서 어디로, 몇 개, 지금 하는 일 */
+function InboundWorkCard({ w }: { w: { activity: string; pda: { taskType: string; productName: string | null; barcode: string | null; location: string | null; nextLocation: string | null; temp: string | null; plannedQty: number | null; pickedQty: number | null; step: string } | null } }) {
+  const d = w.pda;
+  if (!d) return <div className="scan-empty">지금 하는 입고 작업이 없습니다 — {w.activity}</div>;
+  const put = d.taskType === 'PUTAWAY';
+  return (
+    <div className="ocd inb-work">
+      <div className="ocd-h">
+        <b>{INB_KO[d.taskType] ?? d.taskType}</b>
+        {d.temp && <span>{d.temp}</span>}
+      </div>
+      <dl className="inb-dl">
+        <dt>상품</dt>
+        <dd>{d.productName ?? '—'}</dd>
+        {d.barcode && (
+          <>
+            <dt>바코드</dt>
+            <dd>{d.barcode}</dd>
+          </>
+        )}
+        <dt>수량</dt>
+        <dd>{d.plannedQty ?? '—'}개</dd>
+        {put ? (
+          <>
+            <dt>어디로</dt>
+            <dd>
+              <b>{d.nextLocation ?? d.location ?? '—'}</b>
+            </dd>
+          </>
+        ) : (
+          <>
+            <dt>검사 자리</dt>
+            <dd>{d.location ?? '—'}</dd>
+          </>
+        )}
+        <dt>지금</dt>
+        <dd>
+          {w.activity}
+          {d.step ? ` — ${d.step}` : ''}
+        </dd>
+      </dl>
     </div>
   );
 }

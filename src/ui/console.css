@@ -1037,3 +1037,12 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .sb-toggle:hover { background: rgba(255, 212, 0, 0.26); }
 
 .rk-qr { margin-left: auto; display: inline-flex; background: #fff; padding: 2px; border-radius: 4px; }
+
+/* 입고 점원 작업(오른쪽 탭) */
+.inb-work { padding: 10px 12px; }
+.inb-work .ocd-h { display: flex; gap: 8px; align-items: baseline; margin-bottom: 6px; }
+.inb-work .ocd-h b { font-size: 15px; color: #ffb35c; }
+.inb-work .ocd-h span { font-size: 12px; opacity: 0.75; }
+.inb-dl { display: grid; grid-template-columns: 64px 1fr; gap: 4px 8px; margin: 0; font-size: 13px; }
+.inb-dl dt { opacity: 0.65; }
+.inb-dl dd { margin: 0; }

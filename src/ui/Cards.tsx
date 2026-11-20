@@ -438,8 +438,7 @@ export function DetailCard() {
   // 실서버에서 점원을 누르면 오른쪽 실제 주문이 그 점원 주문을 보인다 — 떠 있는 점원 카드는 띄우지 않는다(사용자 2026-11-20 "팝업창이 왜 계속 남아있어")
   const exists =
     !!sel &&
-    // 입고 점원(검사·적치)은 주문이 없다 — 실서버에서도 작업 카드를 띄운다(사용자 2026-11-20 "그 점원 클릭하면 오른쪽 탭화면에 하고 있는 작업이 적치이며 어떤 상품을 어디로")
-    !(sel.kind === 'worker' && sim.board && !isInboundAccount(sel.id)) &&
+    !(sel.kind === 'worker' && sim.board) &&
     (sel.kind === 'location' ||
       (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;
