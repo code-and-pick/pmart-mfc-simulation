@@ -1,4 +1,5 @@
 // 확대한 구역 요약 카드, 선택한 작업자 PDA / 로케이션 카드.
+import { isInboundAccount, workerShortName } from '../domain/workerName';
 import { orderText } from './OrderNo';
 import { useEffect, type ReactNode } from 'react';
 import { useApp, useTick, useView } from '../app/context';
@@ -386,13 +387,12 @@ function DetailBody() {
   const w = sim.siteWorkers().find((x) => x.id === sel.id);
   if (!w) return null;
   const d = w.pda;
+  const inb = isInboundAccount(w.id);
   const locSku = w.currentTarget ? sim.catalog.find((k) => k.location === w.currentTarget)?.sku : undefined;
   return (
     <>
       <div className="hd">
-        <b>
-          {w.id} · PDA-{w.id}
-        </b>
+        <b title={w.id}>{workerShortName(w.id)}</b>
         <span>
           <StateBadge color={STATE_COLOR[w.state]} text={STATE_KO[w.state]} /> {follow} {close}
         </span>
@@ -401,19 +401,19 @@ function DetailBody() {
         <dl>
           {/* 작업 ID(긴 시스템 ID)는 겉에 내지 않는다 — ADR-0070 */}
           <Row k="작업" v={TASK_KO[d.taskType] ?? d.taskType} />
-          <Row k="주문" v={d.shipmentId && sim.board ? orderText(sim.board.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId && d.orderId.length > 12 ? orderText(null, d.orderId) : d.orderId} />
-          <Row k="진행" v={d.progress} />
+          {inb ? null : <Row k="주문" v={d.shipmentId && sim.board ? orderText(sim.board.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId && d.orderId.length > 12 ? orderText(null, d.orderId) : d.orderId} />}
+          {inb ? null : <Row k="진행" v={d.progress} />}
           <Row
-            k="현재 로케이션"
+            k={inb ? '지금 위치' : '현재 로케이션'}
             v={d.location ? locSku ? <a onClick={() => goto(locSku)}>{d.location}</a> : d.location : null}
             cls="loc"
           />
-          <Row k="예정 로케이션" v={d.nextLocation} />
+          <Row k={inb ? '보낼 곳' : '예정 로케이션'} v={inb && d.location ? (d.nextLocation ?? d.location) : d.nextLocation} />
           <Row k="보관방법" v={d.temp} />
           <Row k="상품" v={d.productName} />
           <Row k="바코드" v={d.barcode} />
           <Row k="지시수량" v={d.plannedQty} />
-          <Row k="피킹수량" v={d.pickedQty} />
+          <Row k={inb ? '끝낸 수량' : '피킹수량'} v={d.pickedQty} />
         </dl>
       ) : (
         <div className="note">배정된 작업 없음</div>
@@ -438,7 +438,8 @@ export function DetailCard() {
   // 실서버에서 점원을 누르면 오른쪽 실제 주문이 그 점원 주문을 보인다 — 떠 있는 점원 카드는 띄우지 않는다(사용자 2026-11-20 "팝업창이 왜 계속 남아있어")
   const exists =
     !!sel &&
-    !(sel.kind === 'worker' && sim.board) &&
+    // 입고 점원(검사·적치)은 주문이 없다 — 실서버에서도 작업 카드를 띄운다(사용자 2026-11-20 "그 점원 클릭하면 오른쪽 탭화면에 하고 있는 작업이 적치이며 어떤 상품을 어디로")
+    !(sel.kind === 'worker' && sim.board && !isInboundAccount(sel.id)) &&
     (sel.kind === 'location' ||
       (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;

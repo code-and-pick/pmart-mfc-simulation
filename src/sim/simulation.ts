@@ -8,6 +8,7 @@
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
+import { assignInboundNumbers } from '../domain/workerName';
 import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, TEST_INBOUND, type SimParams } from '../config';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -415,6 +416,8 @@ export class Simulation {
     const qcs = REAL_LINK.inboundAccounts.filter((a) => a.includes('-qc-'));
     const rcvs = REAL_LINK.inboundAccounts.filter((a) => a.includes('-rcv-'));
     const want = new Set([...qcs.slice(0, qc), ...rcvs.slice(0, rcv)]);
+    // 이름표 "입고N" — 계속 도는 계정은 번호 그대로, 새로 켠 계정만 빈 번호
+    assignInboundNumbers([...this.inboundVirtual().filter((w) => want.has(w.account)).map((w) => w.account), ...want]);
     let slot = 0;
     for (const account of want) {
       const w = this.virtualWorkers.find((x) => x.account === account && !x.left);
