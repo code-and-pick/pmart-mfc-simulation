@@ -273,19 +273,15 @@ function Racks({ L }: { L: Layout }) {
   );
 }
 
-/** 장애물: 포장재·출하 랙 (보충재고 팔레트는 Reserves). 출하대기(인계) 랙 위에는 노란 번호판 "인계 랙 N"(사용자 2026-11-20 "인계랙도 구별이 가능하게 번호라도") */
+/** 장애물: 포장재·출하 랙 (보충재고 팔레트는 Reserves). 출하대기(인계) 랙 앞에는 파란 번호판 "인계 랙 N"(사용자 2026-11-20 "인계랙도 구별이 가능하게 번호라도") */
 function Obstacles({ L }: { L: Layout }) {
   const ship = L.obstacles.filter((o) => o.kind === 'SHIP_RACK').sort((a, b) => a.rect.x0 - b.rect.x0);
+  const shipTags = useMemo(() => ship.map((_, i) => makePillSprite(`인계 랙 ${i + 1}`, '#1f63d8', '#3d8bff', 18)), [ship.length]);
   return (
     <>
       {ship.map((o, i) => (
-        <Label
-          key={`sr${i}`}
-          text={`인계 랙 ${i + 1}`}
-          // 랙 앞면 아래(라이더 쪽) — 위에 뜨는 랙 말풍선에 가리지 않게
-          position={[(o.rect.x0 + o.rect.x1) / 2, 0.55, o.rect.z1 + 0.15]}
-          opts={{ size: 44, bg: 'rgba(253,216,53,0.95)', color: '#1a1a1a', screenPx: 18 }}
-        />
+        // 랙 앞면 아래(라이더 쪽) — 위에 뜨는 랙 말풍선에 가리지 않게. 다른 랙 번호판과 같은 파란 판·흰 글자(사용자 2026-11-20 "인계랙 식별값 … 왜 지혼자 노란배경에 검정 글씨")
+        <primitive key={`sr${i}`} object={shipTags[i]} position={[(o.rect.x0 + o.rect.x1) / 2, 0.55, o.rect.z1 + 0.15]} />
       ))}
       {L.obstacles.map((o, i) => {
         if (o.kind === 'TABLE' || o.kind === 'RESERVE') return null;
