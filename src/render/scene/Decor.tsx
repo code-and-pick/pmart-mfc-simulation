@@ -401,34 +401,69 @@ export function CartDepot({ x, z, count = 6 }: { x: number; z: number; count?: n
 
 let startTex: THREE.CanvasTexture | null = null;
 /**
- * 바닥 "시작점" 표시 — 장바구니 거치대 앞(작업자가 카트를 받아 출발하는 자리, 서버 CRT-A-01 위치) 가운데에 흰 테두리 칸 + 글자를 바닥에 칠한다
- * (사용자 2026-11-20 "장바구니 상자 있던 곳 위 중앙에 시작점이라고 적어"). 바닥 칠이라 다른 이름표와 겹치지 않는다.
+ * "시작점" 표지판 — 장바구니 거치대 앞면에 세워 붙인 판(작업자가 카트를 받아 출발하는 자리, 서버 CRT-A-01)
+ * (사용자 2026-11-20 "시작점을 바닥에다가 붙이라는 게 아니라 장바구니대 앞에 붙여"). x, z = 거치대 가운데, 앞 = +z.
  */
 export function StartMark({ x, z }: { x: number; z: number }) {
   if (!startTex) {
     const c = document.createElement('canvas');
     c.width = 512;
-    c.height = 256;
+    c.height = 192;
     const g = c.getContext('2d')!;
-    g.strokeStyle = '#ffffff';
-    g.lineWidth = 14;
-    g.setLineDash([36, 18]);
-    g.strokeRect(10, 10, 492, 236);
-    g.setLineDash([]);
-    g.fillStyle = '#5b4fd6';
-    g.font = '900 120px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    const grd = g.createLinearGradient(0, 0, 0, 192);
+    grd.addColorStop(0, '#7a62ee');
+    grd.addColorStop(1, '#5b4fd6');
+    g.fillStyle = grd;
+    g.beginPath();
+    g.roundRect(4, 4, 504, 184, 40);
+    g.fill();
+    g.fillStyle = '#ffffff';
+    g.font = '900 112px "Noto Sans KR", "Malgun Gothic", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText('시작점', 256, 134);
+    g.fillText('시작점', 256, 102);
     startTex = new THREE.CanvasTexture(c);
     startTex.colorSpace = THREE.SRGBColorSpace;
     startTex.anisotropy = 4;
   }
   return (
-    <mesh position={[x, 0.012, z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null} userData={{ declutterBlock: true }}>
-      <planeGeometry args={[1.6, 0.8]} />
-      <meshBasicMaterial map={startTex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-3} />
-    </mesh>
+    <group position={[x, 0, z + 0.4]}>
+      {[-0.55, 0.55].map((dx) => (
+        <mesh key={dx} position={[dx, 0.6, -0.02]}>
+          <boxGeometry args={[0.03, 1.2, 0.03]} />
+          <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.18, 0]} raycast={() => null} userData={{ declutterBlock: true }}>
+        <planeGeometry args={[1.2, 0.45]} />
+        <meshBasicMaterial map={startTex} transparent toneMapped={false} side={THREE.DoubleSide} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * 되돌릴 상품 탁자 — 취소 주문에서 이미 집은 상품(서버 위치 CRT-A-01, 상태 CANCEL_RETURN_PENDING)을 장바구니 안이 아니라 거치대 옆 탁자 위에 그린다
+ * (사용자 2026-11-20 "장바구니에 그걸 왜 놔둬. 장바구니 옆에 테이블 두고 거기에 올리게"). 그림 자리만 — 서버 위치는 그대로 CRT-A-01.
+ * 윗면 높이 0.88 m(RealStock 탁자 자리 baseY 0.9 와 맞춤).
+ */
+export const RETURN_TABLE = { dx: 1.7, dz: -0.6 };
+export function ReturnTable({ x, z }: { x: number; z: number }) {
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, 0.86, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.1, 0.04, 0.7]} />
+        <meshStandardMaterial color={0xffffff} roughness={0.5} />
+      </mesh>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`${sx}${sz}`} position={[sx * 0.5, 0.42, sz * 0.3]}>
+            <boxGeometry args={[0.04, 0.84, 0.04]} />
+            <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
+          </mesh>
+        )),
+      )}
+    </group>
   );
 }
 
@@ -457,31 +492,6 @@ function BoxStack({ x, z, layers = 6 }: { x: number; z: number; layers?: number 
           <meshStandardMaterial color={b.c} map={boxTexture()} roughness={0.7} />
         </mesh>
       ))}
-    </group>
-  );
-}
-
-/**
- * 되돌릴 상품 탁자 — 취소 주문에서 이미 집은 상품(서버 위치 CRT-A-01, 상태 CANCEL_RETURN_PENDING)을 장바구니 안이 아니라 거치대 옆 탁자 위에 그린다
- * (사용자 2026-11-20 "장바구니에 그걸 왜 놔둬. 장바구니 옆에 테이블 두고 거기에 올리게"). 그림 자리만 — 서버 위치는 그대로 CRT-A-01.
- * 윗면 높이 0.88 m(RealStock 탁자 자리 baseY 0.9 와 맞춤).
- */
-export const RETURN_TABLE = { dx: 1.7, dz: -0.6 };
-export function ReturnTable({ x, z }: { x: number; z: number }) {
-  return (
-    <group position={[x, 0, z]}>
-      <mesh position={[0, 0.86, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.1, 0.04, 0.7]} />
-        <meshStandardMaterial color={0xffffff} roughness={0.5} />
-      </mesh>
-      {[-1, 1].flatMap((sx) =>
-        [-1, 1].map((sz) => (
-          <mesh key={`${sx}${sz}`} position={[sx * 0.5, 0.42, sz * 0.3]}>
-            <boxGeometry args={[0.04, 0.84, 0.04]} />
-            <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
-          </mesh>
-        )),
-      )}
     </group>
   );
 }

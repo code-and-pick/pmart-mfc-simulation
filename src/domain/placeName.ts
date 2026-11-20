@@ -19,11 +19,11 @@ export function placeShortName(code: string): string {
   return `${TEMP[m[2]]}${PLACE[m[1]]}${m[3] ?? ''}`;
 }
 
-/** 재고 작업 상태 짧은 말 — 복귀 대기(취소 주문 상품, 선반으로 되돌릴 것) → 되돌릴 것, 미적치 → 적치 전 */
+/** 재고 작업 상태 짧은 말 — 복귀 대기(취소된 주문에서 이미 집은 상품 → 선반에 다시 진열할 것) → 재진열 대기(사용자 2026-11-20 "되돌릴 것 이름 바꿔"), 미적치 → 적치 전 */
 export const WORK_SHORT: Record<string, string> = {
   STORED: '보관',
   PICKED: '집품',
   PACKED: '포장',
-  CANCEL_RETURN_PENDING: '되돌릴 것',
+  CANCEL_RETURN_PENDING: '재진열 대기',
   UNSTOWED: '적치 전',
 };

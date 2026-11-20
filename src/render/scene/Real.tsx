@@ -351,7 +351,10 @@ export function RealStock() {
       const text =
         rackGuess.get(code)
           ? `${code} 포장 ${rackGuess.get(code)} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
-          : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
+          : code.startsWith('CRT-')
+            ? // 장바구니 옆 탁자 — 자리 이름(장바구니1) 대신 무엇인지(사용자 2026-11-20 "장바구니1은 테이블에 왜 있는데")
+              `취소 주문 상품 · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}개`).join(' · ')}`
+            : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       // 쌓인 상자 더미 위에(전엔 0.9 m — 더미에 묻혔다, 사용자 2026-11-20 "여기도 겹치는데")
       let cartons = 0;

@@ -554,7 +554,7 @@ export function Facility() {
       <Obstacles L={L} />
       <Stations L={L} />
       <CartDepot x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
-      <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z + 0.2} />
+      <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       <Label text="장바구니 거치대" position={[L.points.cartDepot.x, 1.4, L.points.cartDepot.z - 0.6]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
