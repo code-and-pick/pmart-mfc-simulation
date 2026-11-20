@@ -10,7 +10,7 @@ import { useApp, useTick, useView } from '../app/context';
 import { REAL_LINK } from '../config';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
-import { Barcode, CodeImage } from './Barcode';
+import { Barcode } from './Barcode';
 import { LotLabel } from './ScanBoard';
 import { Why } from './Why';
 import { orderStatus } from './OrderCards';
@@ -199,14 +199,11 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
                   <span className={`rk-t t-${t}`}>{TEMP_KO[t]}</span>
                   <span className="rk-o muted">인계 번호</span>
                   {p.handoverCode && <span className="rk-c">{p.handoverCode}</span>}
-                  {/* 인계 QR 을 줄에 바로(사용자 2026-11-20 "조그만 삼각형을 눌러야 인계 QR코드를 볼 수 있는 게 불편") — 누르면 크게 */}
-                  <span className="rk-qr">
-                    <CodeImage value={p.qrCode} kind="code128" mode="qr" size={38} />
-                  </span>
+                  <span className="rk-m">{on ? '⌄' : 'QR ›'}</span>
                 </button>
                 {on && (
                   <div className="rk-d">
-                    <CodeImage value={p.qrCode} kind="code128" mode="qr" size={150} />
+                    <Barcode value={p.qrCode} height={32} showValue={false} />
                     <div className="rk-kv">
                       <span>봉투</span>
                       <b>{p.bagCount}</b>
