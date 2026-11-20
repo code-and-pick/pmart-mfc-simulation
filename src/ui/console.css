@@ -1059,3 +1059,16 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-steps li.done::before { background: #2e9a5c; }
 .inb-steps li.now { color: #fff; font-weight: 700; }
 .inb-steps li.now i { background: #ff9d2e; border-color: #ffc27a; color: #1a1205; box-shadow: 0 0 0 4px rgba(255,157,46,0.25); }
+
+/* 오른쪽 탭 주문 흐름(피킹 → 패킹 → 랙 → 배차 → 인계) */
+.flow { display: flex; align-items: stretch; gap: 2px; margin: 8px 0 10px; }
+.flow-arrow { align-self: center; color: rgba(255,255,255,0.35); font-size: 14px; }
+.flow-st { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); background: rgba(255,255,255,0.04); color: inherit; font: inherit; cursor: pointer; text-align: center; }
+.flow-st:hover { background: rgba(255,255,255,0.09); }
+.flow-st.on { border-color: #ffb35c; background: rgba(255,157,46,0.16); }
+.flow-st.empty { opacity: 0.5; }
+.flow-h { font-size: 12px; white-space: nowrap; }
+.flow-h b { font-size: 15px; margin-left: 2px; color: #fff; }
+.flow-no { font-size: 10.5px; font-variant-numeric: tabular-nums; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.flow-more { font-size: 10px; opacity: 0.6; }
+.flow-st.cancel { flex: 0 0 auto; margin-left: 6px; padding: 6px 8px; border-style: dashed; opacity: 0.7; }

@@ -1,7 +1,7 @@
 // 실제 주문 카드 — 관리자가 한눈에(ADR-0070, 라이더 관제 카드 참고). 아래 OrderCard 설명.
 import { isInboundAccount, workerShortName } from '../domain/workerName';
 import { placeShortName } from '../domain/placeName';
-import { Fragment } from 'react';
+import { Fragment, useState } from 'react';
 import { useApp, useView } from '../app/context';
 import type { Simulation } from '../sim/simulation';
 import { dispatchText, dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
@@ -272,7 +272,15 @@ export function OrderCards() {
   const q = view.orderSearch;
   const hits = new Map<string, SearchField | null | undefined>();
   for (const r of base) hits.set(r.shipmentId, matchFields(searchFields(sim, r), q));
-  const rows = q.trim() ? base.filter((r) => hits.get(r.shipmentId)) : base;
+  const searched = q.trim() ? base.filter((r) => hits.get(r.shipmentId)) : base;
+  // 흐름 칸을 누르면 그 단계 주문만
+  const [stage, setStage] = useState<number | null>(null);
+  const stageOf = (r: RealShipment) => {
+    if (r.info?.state === 'CANCELLED') return -1; // 출고 취소 — 흐름에 넣지 않는다
+    const i = orderStatus(sim, r).dots.findIndex((d) => d !== 'done');
+    return i < 0 ? STEPS.length : i;
+  };
+  const rows = stage === null ? searched : searched.filter((r) => stageOf(r) === stage);
   return (
     <div className="ocds">
       <div className="ocd-search">
@@ -298,6 +306,7 @@ export function OrderCards() {
           </>
         )}
       </div>
+      <FlowStrip all={searched} stageOf={stageOf} sel={stage} onSel={setStage} />
       {q.trim() && !rows.length && (
         <div className="scan-empty">
           “{q.trim()}” 와 맞는 진행 중 주문이 없습니다. 주문번호 일부, 점원 이름·사번, 라이더 번호로 찾을 수 있어요.
@@ -408,5 +417,47 @@ function InboundSteps({ put, step, from, to }: { put: boolean; step: string; fro
         </li>
       ))}
     </ol>
+  );
+}
+
+/**
+ * 피킹 → 패킹 → 랙 → 배차 → 인계 흐름 — 단계마다 지금 그 단계에 있는 주문 수와 주문번호(4개까지 + 외 N). 칸을 누르면 그 단계 주문만 아래에
+ * (사용자 2026-11-20 "오른쪽화면탭에서 피킹-패킹 흐름에 따라 주문번호를 볼 수 있는 기능도 검색창 아래에")
+ */
+function FlowStrip({ all, stageOf, sel, onSel }: { all: RealShipment[]; stageOf: (r: RealShipment) => number; sel: number | null; onSel: (i: number | null) => void }) {
+  const { sim } = useApp();
+  const by: RealShipment[][] = STEPS.map(() => []);
+  for (const r of all) {
+    const i = stageOf(r);
+    if (i >= 0 && i < STEPS.length) by[i].push(r);
+  }
+  const cancelled = all.filter((r) => stageOf(r) < 0).length;
+  const no = (r: RealShipment) => sim.board!.orderNumberOf(r.shipmentId) ?? r.shipmentId.slice(-6);
+  return (
+    <div className="flow">
+      {STEPS.map((name, i) => (
+        <Fragment key={name}>
+          {i > 0 && <span className="flow-arrow">›</span>}
+          <button className={`flow-st ${sel === i ? 'on' : ''} ${by[i].length ? '' : 'empty'}`} onClick={() => onSel(sel === i ? null : i)} title={sel === i ? '다시 누르면 전체' : `${name} 단계 주문만 보기`}>
+            <span className="flow-h">
+              {name} <b>{by[i].length}</b>
+            </span>
+            {by[i].slice(0, 4).map((r) => (
+              <span key={r.shipmentId} className="flow-no">
+                {no(r)}
+              </span>
+            ))}
+            {by[i].length > 4 && <span className="flow-more">외 {by[i].length - 4}</span>}
+          </button>
+        </Fragment>
+      ))}
+      {cancelled > 0 && (
+        <button className={`flow-st cancel ${sel === -1 ? 'on' : ''}`} onClick={() => onSel(sel === -1 ? null : -1)} title="출고 취소된 주문">
+          <span className="flow-h">
+            취소 <b>{cancelled}</b>
+          </span>
+        </button>
+      )}
+    </div>
   );
 }
