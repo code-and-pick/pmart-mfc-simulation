@@ -105,8 +105,11 @@ export const BACKEND_FACTS = {
   slotFillRate: 0.8,
   /** E2E 시험용 고회전 칸 5개 [확정] (2026-11-09-simulator-notice-layout-bins.md, docs/simulator/mfc/layout/high-turnover.json). 그 밖의 선반은 일반 선반(임시) */
   highTurnoverBins: ['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'],
-  /** 회수 반입 자리 RTN-A-01, 입고·검수 구역 안 x 38.6 · z 22.0 m [확정] (2026-11-09-simulator-notice-return-location.md, backend-points.json) */
-  returnIntake: { code: 'RTN-A-01', x: 38.6, z: 22.0 },
+  /**
+   * 회수 반입 자리 RTN-A-01 — 입고·검수 구역 안. 백엔드 알림 좌표는 x 38.6 · z 22.0 m [확정](2026-11-09-simulator-notice-return-location.md, backend-points.json)이나
+   * 그 자리에 입고 지게차(장식)가 있어 이름표가 가려 화면 자리만 x 44.0 · z 22.0 으로 옮김 [시뮬](사용자 2026-11-20 "지게차는 그대로 놔두고, 회수 반입을 다른데서"). 서버 코드는 그대로
+   */
+  returnIntake: { code: 'RTN-A-01', x: 44.0, z: 22.0 },
   /**
    * 이동 카트(장바구니) 40대 `CRT-A-01~40` — **온도 구분 없음**(상온·냉장·냉동 상품을 한 카트에, 한 출고 = 한 카트), 구역 CART, 모두 카트 보관소 한 자리.
    * 코드의 A 는 위치 코드 규칙(ADR-0042)상 남긴 글자일 뿐. 옛 냉장·냉동 카트는 닫힘(CRT-C-01 만 재고가 있어 열림).

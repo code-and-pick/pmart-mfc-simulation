@@ -233,7 +233,7 @@ export function WorkingCells() {
   const glow = useRef<THREE.InstancedMesh>(null!);
   const cards = useRef(new Map<string, { sprite: THREE.Sprite; key: string }>());
   const group = useRef<THREE.Group>(null!);
-  useFrame(({ clock }) => {
+  useFrame(({ clock, camera }) => {
     const m = glow.current;
     const mtx = new THREE.Matrix4();
     const q = new THREE.Quaternion();
@@ -263,6 +263,10 @@ export function WorkingCells() {
         group.current.add(c.sprite);
       }
       c.sprite.position.set(loc.shelf.x, loc.shelf.y + loc.levelH + 0.15, loc.shelf.z);
+      // 멀어지면 작게(화면 고정 크기라 축소하면 혼자 커 보였다 — 사용자 2026-11-20 "화면 축소하니까 혼자 커져있네"). 25 m 안은 그대로, 멀수록 줄여 최소 40%
+      const base = (c.sprite.userData.baseScale as THREE.Vector2 | undefined) ?? (c.sprite.userData.baseScale = new THREE.Vector2(c.sprite.scale.x, c.sprite.scale.y));
+      const k = Math.max(0.4, Math.min(1, 25 / Math.max(1, camera.position.distanceTo(c.sprite.position))));
+      c.sprite.scale.set(base.x * k, base.y * k, 1);
     }
     for (const [id, c] of cards.current) {
       if (live.has(id)) continue;
