@@ -1,5 +1,5 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
-// 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 · 입고 차량 부르기) → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
+// 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
@@ -292,9 +292,6 @@ export function TestInboundControls() {
         <Act icon="📦" title="입고 예정만" sub="검사·적치는 PDA" disabled={!!busy} onClick={() => start(false)} />
         <Act icon="🤖" title="가상 작업자로" sub="수령→검사→적치" disabled={!!busy} onClick={() => start(true)} />
       </div>
-      {/* 아래 공간에 따로(사용자 2026-11-20 "둘러 나뉜 거 다시 롤백하고 아래 공간에 버튼 생성해") — MOCK 과 같은 이름.
-          실서버엔 차량이 없어 하는 일은 "가상 작업자로"와 같다(재고 적은 상품 입고 예정 → 수령 → 가상 작업자가 검사·적치) */}
-      <Act icon="🚚" title="입고 차량 부르기" sub="수령→검사→적치까지 한 번에(가상 작업자)" primary disabled={!!busy} onClick={() => start(true)} />
       {busy && <div className="busy">{busy}</div>}
       {plan && (
         <Ask title={`${plan.lines.length}품목 ${units}개를 입고할까요?`} onClose={() => setPlan(null)}>
@@ -322,8 +319,9 @@ export function TestInboundControls() {
           </div>
           <div className="ask-acts">
             <button onClick={() => setPlan(null)}>취소</button>
+            {/* 확인 버튼 이름 = 입고 차량 부르기(사용자 2026-11-20 "입고하기 버튼을 없애고 거기에 입고차량 부르기 버튼을 넣어") */}
             <button className="red" onClick={go}>
-              입고하기
+              🚚 입고 차량 부르기
             </button>
           </div>
         </Ask>
