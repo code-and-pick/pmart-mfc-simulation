@@ -278,11 +278,11 @@ export function Lights() {
   return (
     <>
       {/* 밝은 바닥·벽(SCENE) — 땅 쪽 반사를 밝게, 해는 조금 약하게(흰 바닥이 하얗게 날지 않게) */}
-      <hemisphereLight args={[0xf2f6ff, 0xb9b4ab, 1.0]} />
+      <hemisphereLight args={[0xffffff, 0xe6e8ed, 1.45]} />
       <directionalLight
         ref={sun}
         color={0xffffff}
-        intensity={1.25}
+        intensity={1.35}
         position={[40, 60, 30]}
         castShadow
         shadow-mapSize={[2048, 2048]}

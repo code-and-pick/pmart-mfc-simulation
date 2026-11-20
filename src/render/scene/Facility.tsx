@@ -6,9 +6,10 @@ import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
-import { SCENE, ZONE_COLOR } from '../colors';
+import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel } from '../sprites';
-import { hasWallName, ZoneNames } from './ZoneNames';
+import { ZoneNames } from './ZoneNames';
+import { ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
 
@@ -113,7 +114,6 @@ function Zones({ L }: { L: Layout }) {
         const r = z.rect;
         const w = r.x1 - r.x0;
         const d = r.z1 - r.z0;
-        const tall = z.kind === 'QUARANTINE' || z.kind === 'SHIPPING' || z.kind === 'PARKING';
         return (
           <group key={z.id}>
             <mesh
@@ -127,18 +127,10 @@ function Zones({ L }: { L: Layout }) {
               userData={{ zoneId: z.id }}
             >
               <planeGeometry args={[w, d]} />
-              {/* 흰 바닥 위 구역색 아주 옅게 + 구역색 점선 테두리(사용자 2026-11-20 "흰 바닥 + 구역색 점선") — 격리는 회색 물빛·검정 점선 */}
-              <meshStandardMaterial color={ZONE_COLOR[z.kind]} roughness={0.9} transparent opacity={z.kind === 'QUARANTINE' ? 0.1 : SCENE.zoneTint} depthWrite={false} />
+              {/* 구역 바닥(사용자 2026-11-20 참고 그림 "그림처럼") — 냉동 옅은 하늘·냉장 옅은 연두, 나머지 거의 흰색. 경계는 옅은 점선. 이름은 떠 있는 둥근 이름표(ZoneNames) */}
+              <meshStandardMaterial color={ZONE_FLOOR[z.kind]} roughness={0.95} />
             </mesh>
-            <DashedRect x0={r.x0 + 0.15} z0={r.z0 + 0.15} x1={r.x1 - 0.15} z1={r.z1 - 0.15} color={ZONE_COLOR[z.kind]} />
-            {/* 외부 출하대기·라이더 대기는 같은 곳 — 떠 있는 이름표 없이 바닥 흰 글씨 "라이더 대기" 하나(ZoneNames, 사용자 2026-11-20) */}
-            {z.kind === 'SHIPPING' || z.kind === 'PARKING' || hasWallName(L, z) ? null : (
-            <Label
-              text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label}
-              position={[r.x0 + w / 2, tall ? 2.4 : 3.6, r.z0 + Math.min(1.5, d / 2)]}
-              opts={{ size: 40, bg: 'rgba(0,0,0,0.55)', screenPx: 17 }}
-            />
-            )}
+            {z.kind !== 'PARKING' && <DashedRect x0={r.x0 + 0.15} z0={r.z0 + 0.15} x1={r.x1 - 0.15} z1={r.z1 - 0.15} color={z.kind === 'QUARANTINE' ? 0x8c95a3 : 0xc3cbd6} />}
           </group>
         );
       })}
@@ -146,7 +138,7 @@ function Zones({ L }: { L: Layout }) {
   );
 }
 
-/** 벽: 투명도는 화면 상태(구역 확대·사용자 선택)를 따른다. */
+/** 벽: 높은 투명벽(사용자 2026-11-20 "벽은 아까처럼 높은 투명벽으로") — 투명도는 화면 상태(구역 확대·사용자 선택)를 따른다. 구역 이름판은 뒷벽에 붙음(ZoneNames). */
 function Walls({ L }: { L: Layout }) {
   const { controller } = useApp();
   const mats = useRef<THREE.MeshStandardMaterial[]>([]);
@@ -424,6 +416,9 @@ export function Facility() {
       <Racks L={L} />
       <HighTurnover L={L} />
       <ReturnIntake />
+      <Walkways />
+      <ParkingDecor />
+      <WorkingCells />
       <Obstacles L={L} />
       <Stations L={L} />
       <Box size={[1.6, 0.9, 0.7]} color={SCENE.rackPost} position={[L.points.cartDepot.x, 0.45, L.points.cartDepot.z - 0.6]} />

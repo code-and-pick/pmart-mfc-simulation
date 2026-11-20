@@ -1,67 +1,80 @@
-// 구역 이름을 벽·바닥에 크게(사용자 2026-11-20 "MFC 안에 나타나는 글자가 너무 작은데 … 벽에 적히는 건?", "하양에 가까운 바닥색으로").
-// 모두 구역 안쪽 뒷벽(북쪽, 처음 시야의 반대편)에 칠한 글씨 — 문을 피해 가장 긴 벽 조각에(사용자 2026-11-20 "그냥 다 벽에 붙여 내 시야 안 가리게 다 반대편 쪽에").
-// 글자색 = 구역 색을 조금 섞은 흰색, 노란 바닥에서도 보이게 얇은 어두운 테두리. 벽 숨김·랙 번호 끔과 상관없이 늘 보인다.
+// 구역 이름판 — 둥근 보라 판 + 아이콘 + 작은 둘째 말(랙 수·평)(사용자 2026-11-20 참고 그림 "좀 세련되게").
+// 공중에 띄우면 작업자를 가려(사용자 "구역 카드가 공중에 떠있으니까 작업자 다 가리잖아. 아까처럼 투명 벽에다가 … 붙여줘")
+// 구역 안쪽 뒷벽(북쪽, 문을 피한 가장 긴 조각)에 붙인다. 뒷벽이 없는 구역(격리·라이더 대기 등)은 바닥에 눕힌다.
+// 빛을 받지 않는 재질(meshBasic)이라 색이 탁해지지 않는다. 벽 숨김·랙 번호 끔과 상관없이 늘 보인다.
 import { useMemo } from 'react';
 import * as THREE from 'three';
-import type { Layout, Zone } from '../../domain/layout';
-import { ZONE_COLOR } from '../colors';
+import type { Layout, Zone, ZoneKind } from '../../domain/layout';
+import { SCENE } from '../colors';
 
-/** 글씨를 쓸 구역 — 격리·출하대기·라이더 대기는 작아서 기존 이름표 */
-const BIG_NAME_KINDS = new Set(['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE', 'RECEIVING', 'OFFICE', 'PACKING']);
+const ICON: Partial<Record<ZoneKind, string>> = {
+  FROZEN: '❄',
+  CHILLED: '🌡',
+  AMBIENT: '📦',
+  INBOUND_STORE: '🚚',
+  RECEIVING: '🔍',
+  OFFICE: '🖥',
+  PACKING: '🎁',
+  PARKING: '🛵',
+};
 
-const WALL_TEXT_H = 2.4; // 글씨 판 높이
-/** 글씨 아래 끝 — 랙(2.1 m) 바로 밑. 처음 시야에서 앞 랙이 벽 아래쪽을 가려, 벽(3 m) 위로 1.2 m 솟게 둔다 */
-const WALL_TEXT_BOTTOM = 1.8;
-
-// 밝은 벽·바닥(SCENE) 위라 구역색을 조금 어둡게 + 흰 테두리(전엔 어두운 장면이라 흰빛에 가깝게)
-function tint(hex: number): string {
-  const c = new THREE.Color(hex).lerp(new THREE.Color(0x1a1d22), 0.28);
-  return `#${c.getHexString()}`;
-}
-
-/** 큰 이름(+ 작은 둘째 줄) 캔버스 */
-function makeTexture(name: string, sub: string | null, color: string): { tex: THREE.CanvasTexture; aspect: number } {
-  const big = 220;
-  const small = 84;
+/** 둥근 판 캔버스 → 텍스처(+ 가로세로 비) */
+function makePill(title: string, sub: string | null, icon: string | null, bg: string): { tex: THREE.CanvasTexture; aspect: number } {
+  const S = 64; // 글자 기준 크기(캔버스 px)
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
-  const fBig = `800 ${big}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  const fSmall = `700 ${small}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  ctx.font = fBig;
-  const wBig = ctx.measureText(name).width;
-  ctx.font = fSmall;
-  const wSmall = sub ? ctx.measureText(sub).width : 0;
-  c.width = Math.ceil(Math.max(wBig, wSmall) + big * 0.4);
-  c.height = Math.ceil(big * 1.2 + (sub ? small * 1.3 : 0));
-  ctx.textAlign = 'center';
+  const fT = `800 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  const fS = `600 ${Math.round(S * 0.62)}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  const fI = `${Math.round(S * 0.8)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+  ctx.font = fT;
+  const wT = ctx.measureText(title).width;
+  ctx.font = fS;
+  const wS = sub ? ctx.measureText(sub).width : 0;
+  const iconW = icon ? S * 1.25 : 0;
+  const padX = S * 0.55;
+  const gap = sub ? S * 0.35 : 0;
+  c.width = Math.ceil(padX * 2 + iconW + wT + gap + wS);
+  c.height = Math.ceil(S * 1.7);
+  const h = c.height;
+  // 그림자 + 판
+  ctx.fillStyle = 'rgba(30,27,75,0.18)';
+  ctx.beginPath();
+  ctx.roundRect(2, 6, c.width - 4, h - 8, (h - 8) / 2);
+  ctx.fill();
+  ctx.fillStyle = bg;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, c.width, h - 6, (h - 6) / 2);
+  ctx.fill();
   ctx.textBaseline = 'middle';
-  ctx.lineJoin = 'round';
-  const draw = (t: string, font: string, y: number, lw: number) => {
-    ctx.font = font;
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = lw;
-    ctx.strokeText(t, c.width / 2, y);
-    ctx.fillStyle = color;
-    ctx.fillText(t, c.width / 2, y);
-  };
-  draw(name, fBig, big * 0.62, big * 0.07);
-  if (sub) draw(sub, fSmall, big * 1.2 + small * 0.55, small * 0.08);
+  const cy = (h - 6) / 2 + 2;
+  let x = padX;
+  if (icon) {
+    ctx.font = fI;
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(icon, x, cy);
+    x += iconW;
+  }
+  ctx.font = fT;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(title, x, cy);
+  x += wT + gap;
+  if (sub) {
+    ctx.font = fS;
+    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    ctx.fillText(sub, x, cy + 2);
+  }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = 8;
   return { tex, aspect: c.width / c.height };
 }
 
-interface Placement {
-  zone: Zone;
-  /** 판 가운데 */
-  pos: [number, number, number];
-  rotX: number;
-  w: number;
-  h: number;
+function rackCount(L: Layout, z: Zone): number {
+  const r = z.rect;
+  return L.racks.filter((k) => k.cx >= r.x0 && k.cx <= r.x1 && k.cz >= r.z0 && k.cz <= r.z1).length;
 }
 
-/** 구역 뒤(z0) 벽 조각 중 문을 뺀 가장 긴 것 — 높이 2.5 m 이상(울타리 제외), 구역 폭 안. 글씨는 그 벽의 남쪽(구역 안쪽) 면 */
+/** 구역 뒤(z0) 벽 조각 중 문을 뺀 가장 긴 것 — 높이 2.5 m 이상(울타리 제외), 구역 폭 안. 판은 그 벽의 남쪽(구역 안쪽) 면 */
 function backWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } | null {
   const r = z.rect;
   let best: { x0: number; x1: number; face: number } | null = null;
@@ -73,62 +86,67 @@ function backWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } 
     const x0 = Math.max(wr.x0, r.x0);
     const x1 = Math.min(wr.x1, r.x1);
     if (x1 - x0 < 2.5) continue;
-    if (!best || x1 - x0 > best.x1 - best.x0) best = { x0, x1, face: wr.z1 + 0.02 };
+    if (!best || x1 - x0 > best.x1 - best.x0) best = { x0, x1, face: wr.z1 + 0.03 };
   }
   return best;
 }
 
-/** 벽에 큰 이름을 쓰는 구역인가 — 아니면(뒷벽이 없으면) 예전 떠 있는 이름표 */
-export function hasWallName(L: Layout, z: Zone): boolean {
-  return BIG_NAME_KINDS.has(z.kind) && !!backWall(L, z);
+/** 벽 판 높이(m)·가운데 높이 — 랙(2.1 m) 위로 보이게, 벽(3 m) 위로 조금 솟게(전체 보기에서도 읽히게) */
+const WALL_CARD_H = 1.7;
+const WALL_CARD_Y = 2.95;
+
+interface Tag {
+  id: string;
+  tex: THREE.CanvasTexture;
+  pos: [number, number, number];
+  rotX: number;
+  w: number;
+  h: number;
 }
 
-export function placeZoneNames(L: Layout, aspectOf: (z: Zone) => number): Placement[] {
-  const out: Placement[] = [];
+export function zoneTags(L: Layout): Tag[] {
+  const out: Tag[] = [];
   for (const z of L.zones) {
-    if (!BIG_NAME_KINDS.has(z.kind) && z.kind !== 'PARKING') continue;
-    const a = aspectOf(z);
-    const wall = backWall(L, z);
-    if (z.kind === 'PARKING') {
-      // 라이더 대기(= 외부 출하대기) — 바닥에 흰 글씨(사용자 2026-11-20 "바닥에 하얀글자로 라이더 대기라고 써")
-      const r = z.rect;
-      let h = Math.min(2.2, (r.z1 - r.z0) * 0.75);
-      let w = h * a;
-      const room = (r.x1 - r.x0) * 0.8;
-      if (w > room) {
-        w = room;
-        h = w / a;
-      }
-      out.push({ zone: z, pos: [(r.x0 + r.x1) / 2, 0.02, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
-    } else if (wall) {
-      let h = WALL_TEXT_H;
-      let w = h * a;
+    if (z.kind === 'SHIPPING') continue; // 라이더 대기와 같은 곳 — 인계 랙 번호판으로 충분
+    const r = z.rect;
+    const cx = (r.x0 + r.x1) / 2;
+    const dim = z.kind === 'QUARANTINE';
+    const racks = rackCount(L, z);
+    const sub = dim ? (z.docPyeong ? `${z.docPyeong}평` : null) : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
+    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : SCENE.pill);
+    const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
+    if (wall) {
+      let h = WALL_CARD_H;
+      let w = h * aspect;
       const room = (wall.x1 - wall.x0) * 0.9;
       if (w > room) {
         w = room;
-        h = w / a;
+        h = w / aspect;
       }
-      out.push({ zone: z, pos: [(wall.x0 + wall.x1) / 2, WALL_TEXT_BOTTOM + h / 2, wall.face], rotX: 0, w, h });
+      out.push({ id: z.id, tex, pos: [(wall.x0 + wall.x1) / 2, WALL_CARD_Y, wall.face], rotX: 0, w, h });
+    } else {
+      // 바닥에 눕힘 — 격리는 작게
+      let h = dim ? 0.55 : 0.9;
+      let w = h * aspect;
+      const room = (r.x1 - r.x0) * 0.85;
+      if (w > room) {
+        w = room;
+        h = w / aspect;
+      }
+      out.push({ id: z.id, tex, pos: [cx, 0.03, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
     }
   }
   return out;
 }
 
 export function ZoneNames({ L }: { L: Layout }) {
-  const items = useMemo(() => {
-    const tex = new Map<string, { tex: THREE.CanvasTexture; aspect: number }>();
-    for (const z of L.zones) {
-      if (z.kind === 'PARKING') tex.set(z.id, makeTexture('라이더 대기', null, '#5b616b'));
-      else if (BIG_NAME_KINDS.has(z.kind)) tex.set(z.id, makeTexture(z.label, null, tint(ZONE_COLOR[z.kind])));
-    } // 평수는 작아 안 읽혀 뺌(왼쪽 구역 패널에 있음)
-    return placeZoneNames(L, (z) => tex.get(z.id)!.aspect).map((p) => ({ ...p, tex: tex.get(p.zone.id)!.tex }));
-  }, [L]);
+  const tags = useMemo(() => zoneTags(L), [L]);
   return (
     <>
-      {items.map((p) => (
-        <mesh key={p.zone.id} position={p.pos} rotation={[p.rotX, 0, 0]} renderOrder={5}>
-          <planeGeometry args={[p.w, p.h]} />
-          <meshBasicMaterial map={p.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+      {tags.map((t) => (
+        <mesh key={t.id} position={t.pos} rotation={[t.rotX, 0, 0]} renderOrder={5} raycast={() => null}>
+          <planeGeometry args={[t.w, t.h]} />
+          <meshBasicMaterial map={t.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
         </mesh>
       ))}
     </>
