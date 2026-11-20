@@ -249,9 +249,13 @@ export function OrderCards() {
       {wf && (
         <div className="ocd-place">
           <b>{wf.id}</b>
-          <span>{wf.shipmentId ? '지금 작업 중인 주문' : '작업 중인 주문 없음'}</span>
+          <span>{wf.shipmentId ? '작업 중 주문' : '맡은 주문 없음'}</span>
+          {/* 떠 있는 점원 카드 대신 여기서 따라가기 */}
+          <button className={`follow ${view.follow === wf.id ? 'on' : ''}`} onClick={() => view.setFollow(view.follow !== wf.id)} title="카메라가 이 점원을 따라갑니다(왼쪽 끌기로 화면을 옮기면 꺼짐)">
+            {view.follow === wf.id ? '따라가는 중' : '따라가기'}
+          </button>
           <button className="link" onClick={() => view.select(null, false)}>
-            전체 주문 ✕
+            전체 ✕
           </button>
         </div>
       )}

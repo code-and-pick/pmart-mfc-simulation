@@ -348,8 +348,10 @@ export function DetailCard() {
   useTick();
   const sel = view.selection;
   // 선택한 사람이 사라졌으면(인원 축소) 카드를 닫는다
+  // 실서버에서 점원을 누르면 오른쪽 실제 주문이 그 점원 주문을 보인다 — 떠 있는 점원 카드는 띄우지 않는다(사용자 2026-11-20 "팝업창이 왜 계속 남아있어")
   const exists =
     !!sel &&
+    !(sel.kind === 'worker' && sim.real) &&
     (sel.kind === 'location' ||
       (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;
