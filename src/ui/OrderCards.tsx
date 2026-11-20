@@ -1,5 +1,6 @@
 // 실제 주문 카드 — 관리자가 한눈에(ADR-0070, 라이더 관제 카드 참고). 아래 OrderCard 설명.
 import { isInboundAccount, workerShortName } from '../domain/workerName';
+import { placeShortName } from '../domain/placeName';
 import { Fragment } from 'react';
 import { useApp, useView } from '../app/context';
 import type { Simulation } from '../sim/simulation';
@@ -380,12 +381,32 @@ function InboundWorkCard({ w }: { w: { activity: string; pda: { taskType: string
             <dd>{d.location ?? '—'}</dd>
           </>
         )}
-        <dt>지금</dt>
-        <dd>
-          {w.activity}
-          {d.step ? ` — ${d.step}` : ''}
-        </dd>
       </dl>
+      <InboundSteps put={put} step={d.step} from={d.location?.startsWith('RCV') ? d.location : null} to={d.nextLocation ?? d.location} />
     </div>
+  );
+}
+
+/**
+ * 입고 작업 흐름 — 세로 단계(끝난 단계 ✓, 지금 단계 강조). PDA 단계 문구(realWorker)로 지금 위치를 정한다
+ * (사용자 2026-11-20 "적치 → RCV-A-01 — RCV-A-01 스캔 → 상품 싣기 이거 *-*-*-*-* 이런식으로 흐름 직관적으로 … 세로로")
+ */
+function InboundSteps({ put, step, from, to }: { put: boolean; step: string; from: string | null; to: string | null }) {
+  const name = (c: string | null) => (c ? placeShortName(c) : '');
+  const steps = put
+    ? ['보낼 선반 찾기', `${name(from) || '입고칸'}에서 상자 싣기`, `${to && !to.startsWith('RCV') ? to : '선반'}에 내려놓기`, '적치 끝(서버 반영)']
+    : [`${name(from) || '입고칸'}으로 가기`, '라벨·소비기한 확인', '정상/격리 판정 보내기', '검사 끝(서버 반영)'];
+  const cur = put
+    ? step.includes('반영됨') ? 4 : step.includes('내려놓기') ? 2 : step.includes('싣기') ? 1 : 0
+    : step.includes('반영됨') ? 4 : step.startsWith('판정') ? 2 : step.includes('확인') ? 1 : 0;
+  return (
+    <ol className="inb-steps">
+      {steps.map((t, i) => (
+        <li key={i} className={i < cur ? 'done' : i === cur ? 'now' : ''}>
+          <i>{i < cur ? '✓' : i + 1}</i>
+          <span>{t}</span>
+        </li>
+      ))}
+    </ol>
   );
 }

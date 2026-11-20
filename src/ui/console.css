@@ -1046,3 +1046,16 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-dl { display: grid; grid-template-columns: 64px 1fr; gap: 4px 8px; margin: 0; font-size: 13px; }
 .inb-dl dt { opacity: 0.65; }
 .inb-dl dd { margin: 0; }
+
+/* 입고 작업 흐름 — 세로 단계 */
+.inb-steps { list-style: none; margin: 12px 0 2px; padding: 0; }
+.inb-steps li { position: relative; display: flex; align-items: center; gap: 10px; padding: 0 0 16px; font-size: 13px; color: rgba(255,255,255,0.45); }
+.inb-steps li:last-child { padding-bottom: 0; }
+.inb-steps li::before { content: ''; position: absolute; left: 11px; top: 24px; bottom: 0; width: 2px; background: rgba(255,255,255,0.15); }
+.inb-steps li:last-child::before { display: none; }
+.inb-steps li i { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 12px; background: rgba(255,255,255,0.08); border: 2px solid rgba(255,255,255,0.2); }
+.inb-steps li.done { color: rgba(255,255,255,0.75); }
+.inb-steps li.done i { background: #2e9a5c; border-color: #2e9a5c; color: #fff; }
+.inb-steps li.done::before { background: #2e9a5c; }
+.inb-steps li.now { color: #fff; font-weight: 700; }
+.inb-steps li.now i { background: #ff9d2e; border-color: #ffc27a; color: #1a1205; box-shadow: 0 0 0 4px rgba(255,157,46,0.25); }

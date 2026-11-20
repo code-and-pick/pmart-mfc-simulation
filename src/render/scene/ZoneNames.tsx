@@ -150,8 +150,8 @@ function backWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } 
 const WALL_CARD_H = 1.7;
 const WALL_CARD_Y = 2.95;
 /** 냉동·냉장·상온·입고창고만 더 크게·더 위에(사용자 2026-11-20 "냉동, 냉장. 상온, 입고창고 구역카드들만 조금 더 위쪽으로 위치 올리고 사이즈 키워서") */
-const WALL_CARD_H_BIG = 2.6;
-const WALL_CARD_Y_BIG = 3.9;
+const WALL_CARD_H_BIG = 2.35;
+const WALL_CARD_Y_BIG = 4.3;
 const BIG_KINDS: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE'];
 
 interface Tag {
@@ -177,7 +177,8 @@ export function zoneTags(L: Layout): Tag[] {
     const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
     if (wall) {
       const big = BIG_KINDS.includes(z.kind);
-      let h = big ? WALL_CARD_H_BIG : WALL_CARD_H;
+      // 휴게·사무는 작게(사용자 2026-11-20 "휴게사무는 구역카드 사이즈 줄여")
+      let h = big ? WALL_CARD_H_BIG : z.kind === 'OFFICE' ? WALL_CARD_H * 0.65 : WALL_CARD_H;
       let w = h * aspect;
       const room = (wall.x1 - wall.x0) * 0.9;
       if (w > room) {
