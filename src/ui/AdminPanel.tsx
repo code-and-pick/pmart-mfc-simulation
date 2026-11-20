@@ -3,12 +3,13 @@
 // 세 칸: 지난 주문(끝난 주문의 흐름·집품 실적) · 진행 중 작업(담당 바꾸기·내려놓기) · 인계 확인(허가 만료 포장).
 // 쓰기는 누를 때마다 한 번 더 확인(사유 입력). 주문 취소 = claim 0.8.0 관리자 판단 취소(R-29 1단계). 작업 중지·막힘 해제·부분 종료·후속 작업은 백엔드 R-29 2단계 배포 뒤.
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { useApp, useView } from '../app/context';
+import { useApp, useTick, useView } from '../app/context';
 import type { AdminDesk, HistoryOrder } from '../sim/admin';
 import type { RealTask } from '../sim/realBoard';
 import type { TaskSummary } from '../domain/contract';
 import { TASK_STATE_KO } from './RealPanel';
 import { normalize } from './orderSearch';
+import { RETURN_HANDOVER } from '../config';
 
 const TYPE_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '복귀', DISPATCH: '배차' };
 const PKG_KO: Record<string, string> = { OPEN: '포장 중', SEALED: '밀봉', HANDED_OVER: '인계됨', INVALIDATED: '무효(재포장)', VOIDED: '취소' };
@@ -24,7 +25,7 @@ function useDesk(desk: AdminDesk) {
   return desk;
 }
 
-type Sub = 'history' | 'live' | 'checks';
+type Sub = 'history' | 'live' | 'checks' | 'returns';
 
 export function AdminPanel() {
   const { sim } = useApp();
@@ -43,6 +44,7 @@ export function AdminPanel() {
             ['history', '지난 주문'],
             ['live', '진행 중 작업'],
             ['checks', '인계 확인'],
+            ['returns', '반납 번호'],
           ] as [Sub, string][]
         ).map(([k, l]) => (
           <button
@@ -57,7 +59,8 @@ export function AdminPanel() {
           </button>
         ))}
       </div>
-      {remote && s !== 'history' && <div className="note warn">다른 기기에서 연 화면은 조회만 됩니다 — 관리자 조치는 시뮬레이터를 띄운 PC 화면에서.</div>}
+      {remote && s !== 'history' && s !== 'returns' && <div className="note warn">다른 기기에서 연 화면은 조회만 됩니다 — 관리자 조치는 시뮬레이터를 띄운 PC 화면에서.</div>}
+      {s === 'returns' && <Returns />}
       {s === 'history' && <History desk={desk} />}
       {s === 'live' && <Live desk={desk} readOnly={remote} />}
       {s === 'checks' && <Checks desk={desk} readOnly={remote} />}
@@ -379,6 +382,46 @@ function LiveTask({ desk, t, workers, readOnly }: { desk: AdminDesk; t: TaskSumm
       <ActionNote desk={desk} k={`pclose:${t.taskId}`} />
       {logOpen && <TaskLog desk={desk} taskId={t.taskId} />}
     </div>
+  );
+}
+
+const PURPOSE_KO: Record<string, string> = { CLAIM_RETURN: '반품 회수', MISDELIVERY_RECOVERY: '오배송 회수', FAILED_DELIVERY_RETURN: '전달 실패 반납' };
+
+/**
+ * 반납 인증번호(delivery-execution 0.28.0, PC 5 라이더 백엔드 요청 — 사용자 "시뮬에도 붙여"). 보기만(새로 내기 버튼 없음).
+ * 라이더가 회수·반납 배송을 MFC 에 반납할 때 넣는 4자리. 번호는 화면에만 — 로그·기록에 남기지 않는다.
+ * 값은 RealBoard 가 이미 읽는 것(관찰 계정, REAL_LINK.returnPickupRefreshSec 마다) — 따로 부르지 않는다. 이 PC 화면만(다른 기기 조회 경로에 없음).
+ */
+function Returns() {
+  useTick();
+  const { sim } = useApp();
+  const real = sim.board!;
+  const items = [...real.returnHandovers].sort((a, b) => b.issuedAt.localeCompare(a.issuedAt));
+  return (
+    <>
+      <div className="note">라이더가 회수·반납 물건을 센터에 반납할 때 넣는 4자리 번호입니다. 보기만 — 잠김을 풀려면(새 번호) 센터 관리자 웹·PDA 에서.</div>
+      {real.returnHandoverError && <div className="note warn">읽지 못함: {real.returnHandoverError}</div>}
+      {!items.length && !real.returnHandoverError && <div className="scan-empty">반납을 기다리는 회수·반납 배송이 없습니다.</div>}
+      {items.map((x) => {
+        const left = Math.max(0, RETURN_HANDOVER.failLimit - x.failedAttempts);
+        const rider = x.riderId ? (real.riderLabel(x.riderId) ?? '라이더') : '라이더 없음';
+        return (
+          <div key={x.deliveryId} className="adm-ship">
+            <div className="adm-h">
+              <b>
+                {x.deliveryNumber ?? x.deliveryId.slice(-8)} · {PURPOSE_KO[x.purpose ?? ''] ?? x.purpose ?? '반납'}
+              </b>
+              <span className="muted">{rider}</span>
+            </div>
+            <div className="adm-ret">
+              <span className={`adm-code ${x.locked ? 'locked' : ''}`}>{x.code}</span>
+              <span>{x.locked ? <b className="oc-flag">잠김 — 새 번호 필요</b> : `남은 시도 ${left}번`}</span>
+              <span className="muted">발급 {hm(x.issuedAt)}</span>
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }
 

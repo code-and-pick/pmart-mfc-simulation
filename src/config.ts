@@ -177,6 +177,12 @@ export const HANDOVER_CODE = {
   qrFailRate: 0.2,
 };
 
+/** 반납 인증번호(delivery-execution 0.28.0 — PC 5 요청 "시뮬에도 붙여"). 관리 탭 "반납 번호"는 보기만 */
+export const RETURN_HANDOVER = {
+  /** 틀리면 잠기는 횟수(계약 "5번 틀려 잠김") [확정] */
+  failLimit: 5,
+};
+
 export const RIDER_VEHICLE = {
   /** 타고 움직이는 속도(m/s) — 앞마당 안이라 느리게 [시뮬] */
   rideSpeed: { MOTORCYCLE: 3, CAR: 2.5, E_BIKE: 2.6, BICYCLE: 2.2, KICKBOARD: 2.0, WALK: 1.4 } as Record<string, number>,

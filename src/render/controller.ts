@@ -150,10 +150,10 @@ export class ViewController extends Emitter {
     this.emit();
   }
   /** 관리 탭 안 칸(지난 주문·진행 중 작업·인계 확인)을 밖에서 정할 때 — 화면이 한 번 읽고 지운다 */
-  adminSub: 'history' | 'live' | 'checks' | null = null;
+  adminSub: 'history' | 'live' | 'checks' | 'returns' | null = null;
   /** 관리 탭 지난 주문 검색어를 밖에서 넣을 때(실제 주문 검색에서 "지난 주문에서 찾기") */
   adminQuery: string | null = null;
-  setAdminSub(s: 'history' | 'live' | 'checks' | null) {
+  setAdminSub(s: 'history' | 'live' | 'checks' | 'returns' | null) {
     this.adminSub = s;
     this.emit();
   }
