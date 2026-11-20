@@ -91,7 +91,43 @@ export class ViewController extends Emitter {
   /** 3D 에서 누른 선반 칸(실서버, 백엔드 위치 코드) — 왼쪽 "구역" 화면에 그 칸 상품 정보(사용자 2026-11-20 "랙에 적치된 재고도 클릭하면 … 무슨 상품인지") */
   cellFocus: string | null = null;
 
+  /**
+   * 확대하기 전 시야 — 구역·점원·칸·자리로 들어가기 직전 카메라. MFC 바깥(구역 아닌 곳)을 누르면 여기로 돌아가고 고른 것을 모두 푼다
+   * (사용자 2026-11-20 "구역 아닌 쪽 클릭하면 … 클릭하기 전 시야로", "점원 … 다른 곳 클릭하면 … 전 시야로").
+   */
+  private homeView: { pos: THREE.Vector3; target: THREE.Vector3 } | null = null;
+  /** 카메라 담당(CameraRig)이 지금 시야를 알려 준다 */
+  cameraNow: (() => { pos: THREE.Vector3; target: THREE.Vector3 }) | null = null;
+  private rememberHome() {
+    if (!this.homeView && this.cameraNow) this.homeView = this.cameraNow();
+  }
+
+  /** 바깥을 누름 — 고른 것 모두 풀고, 확대하기 전 시야로(없으면 전체) */
+  backOut() {
+    this.selection = null;
+    this.follow = null;
+    this.workerFilter = null;
+    this.placeFilter = null;
+    this.cellFocus = null;
+    this.scanShipment = null;
+    this.nearCut = 0;
+    const home = this.homeView;
+    this.homeView = null;
+    if (home) {
+      this.focusedZone = 'ALL';
+      this.cameraRequest = { pos: home.pos, target: home.target, animate: true };
+      this.emit();
+    } else this.focusZone('ALL');
+  }
+
   focusCell(code: string | null) {
+    if (code) {
+      this.rememberHome();
+      // 칸을 누르면 점원 고름·따라가기는 푼다(다른 것을 고른 것)
+      if (this.selection?.kind === 'worker') this.selection = null;
+      this.follow = null;
+      this.workerFilter = null;
+    }
     this.cellFocus = code;
     if (code) {
       const loc = this.sim.backendLocation(code);
@@ -109,7 +145,13 @@ export class ViewController extends Emitter {
 
   showPlace(code: string | null) {
     this.placeFilter = code;
-    if (code) this.workerFilter = null;
+    if (code) {
+      // 자리를 누르면 점원 고름·따라가기·칸 고름은 푼다
+      this.workerFilter = null;
+      if (this.selection?.kind === 'worker') this.selection = null;
+      this.follow = null;
+      this.cellFocus = null;
+    }
     if (code) {
       this.rightView = 'orders';
       const at = this.sim.shipmentsAt(code);
@@ -157,6 +199,8 @@ export class ViewController extends Emitter {
 
   /** 구역에 맞춰 확대. 패널이 화면 좌우를 가리므로 조금 넉넉하게 잡는다. */
   focusZone(key: string, animate = true) {
+    if (key === 'ALL') this.homeView = null;
+    else this.rememberHome();
     const v = this.views.find((x) => x.key === key);
     if (!v) return;
     this.follow = null;
@@ -196,6 +240,7 @@ export class ViewController extends Emitter {
 
   /** 백엔드 위치 코드로: 선반 칸이면 정면, 카트·포장대·출하대기 같은 바닥 자리면 위에서. 모르는 코드면 false */
   focusBackendCode(code: string): boolean {
+    this.rememberHome();
     const loc = this.sim.backendLocation(code);
     if (loc) {
       this.focusLocation(loc);
@@ -238,6 +283,7 @@ export class ViewController extends Emitter {
   }
 
   select(s: Selection, fly = true) {
+    if (s && fly) this.rememberHome();
     this.selection = s;
     // 실서버: 점원을 누르면 오른쪽에 그 점원 주문만(실제 주문·바코드 탭이 그 주문). 다른 걸 고르면 풂
     if (s?.kind === 'worker' && this.sim.board) {

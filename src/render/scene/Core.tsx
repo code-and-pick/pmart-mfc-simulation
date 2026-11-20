@@ -57,11 +57,12 @@ export function CameraRig() {
   }, [camera, gl]);
   useEffect(() => {
     registry.controls = controls;
+    controller.cameraNow = () => ({ pos: camera.position.clone(), target: controls.target.clone() });
     return () => {
       controls.dispose();
       registry.controls = null;
     };
-  }, [controls, registry]);
+  }, [controls, registry, controller, camera]);
 
   // 왼쪽 끌기(이동)로 시점을 옮기면 따라가기를 끈다 — 돌리기·확대는 따라가면서 된다. 클릭(6px 안)은 그대로
   useEffect(() => {
@@ -229,7 +230,10 @@ export function Picker() {
       const hz = raycaster.intersectObjects([...registry.zoneFloors.values()], false)[0];
       const zid = hz?.object.userData.zoneId as string | undefined;
       const v = controller.views.find((x) => x.zoneId === zid);
-      if (v && v.key !== controller.focusedZone) controller.focusZone(v.key);
+      // 다른 구역 바닥 → 그 구역으로. 이미 들어온 구역의 빈 바닥·구역 밖(MFC 바깥·통로) → 고른 것 풀고 확대하기 전 시야로
+      // (구역 안에 들어오면 화면이 그 구역 바닥으로 꽉 차 바깥이 안 보인다 — 같은 구역 빈 곳도 "나가기")
+      if (v && v.key !== controller.focusedZone && !controller.selection && !controller.cellFocus) controller.focusZone(v.key);
+      else controller.backOut();
     };
     const onDown = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY });
     const onUp = (e: PointerEvent) => {
@@ -238,9 +242,16 @@ export function Picker() {
       down = null;
       if (moved < 6) pick(e);
     };
+    // Esc = 나가기(확대하기 전 시야로)
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (e.key === 'Escape' && !(t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA'))) controller.backOut();
+    };
     el.addEventListener('pointerdown', onDown);
     el.addEventListener('pointerup', onUp);
+    window.addEventListener('keydown', onKey);
     return () => {
+      window.removeEventListener('keydown', onKey);
       el.removeEventListener('pointerdown', onDown);
       el.removeEventListener('pointerup', onUp);
     };
