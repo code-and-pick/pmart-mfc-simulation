@@ -245,6 +245,18 @@ export class RealWorker extends Agent {
         }
         // 하던 작업이 그사이 취소됨(주문 취소 — 예: 배차 불가 자동 취소 DISPATCH_UNAVAILABLE, 관리자 판단 취소)이면 오류가 아니다.
         // 서버 작업 상태를 다시 읽어 끝난 작업이면 멈추고 다음 작업으로(남은 물건은 서버가 만든 복귀 작업 RETURN 이 처리). 사용자 2026-11-20 "409 INVALID_STATE — 포장 작업은 CANCELLED" 화면 오류
+        if (e instanceof ApiProblem && e.problem.status === 409 && (a.taskType === 'INSPECT' || a.taskType === 'PUTAWAY')) {
+          // 입고 작업이 그사이 끝남(다른 화면의 같은 계정·다른 작업자가 먼저) — 오류가 아니라 다음 작업으로(사용자 2026-11-20)
+          const it = await this.be.getInboundTask(a.taskId).catch(() => null);
+          if (it && (it.state === 'COMPLETED' || it.plannedQty - it.doneQty <= 0)) {
+            this.lastProblem = null;
+            this.carrying = [];
+            this.hasCart = false;
+            this.activity = `${a.taskType === 'INSPECT' ? '품질검사' : '적치'} 이미 끝남 — 다음 작업`;
+            this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 이미 끝남(409) — 다음 작업으로`);
+            continue;
+          }
+        }
         if (e instanceof ApiProblem && e.problem.status === 409) {
           const now = await this.be.getTask(a.taskId).catch(() => null);
           if (now && (now.state === 'CANCELLED' || now.state === 'CLOSED_PARTIAL')) {
@@ -786,7 +798,9 @@ export class RealWorker extends Agent {
     this.pda.step = `${t.locationCode} 스캔 → 상품 싣기`;
     await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
     await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
-    for (let i = 0; i < qty && this.carrying.length < 12; i++) this.carrying.push(temp ?? 'AMBIENT');
+    // 상자를 카트에 싣고 민다(전엔 손에 작은 것 — "스마트폰 든 것 마냥", 사용자 2026-11-20)
+    this.hasCart = true;
+    for (let i = 0; i < Math.min(4, Math.ceil(qty / 6)); i++) this.carrying.push(temp ?? 'AMBIENT');
     const loc = ctx.location(to);
     this.currentTarget = loc;
     this.activity = `적치 ${t.sku} → ${to}`;
@@ -800,6 +814,7 @@ export class RealWorker extends Agent {
     await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
     await this.applied('적치', this.key('putaway', t.taskId, `:${to}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: to, qty }, k));
     this.carrying = [];
+    this.hasCart = false;
     this.currentTarget = null;
     this.pda.pickedQty = qty;
     this.pda.step = '적치 반영됨';

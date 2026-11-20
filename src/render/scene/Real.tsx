@@ -143,8 +143,6 @@ export function RealShipLabels() {
   return <primitive object={labels} />;
 }
 
-const BOX = 0.1;
-const GAP = 0.02;
 // 센터 전체 재고를 그리므로 넉넉히 — 선반 칸은 상자 수(CARTON_UNITS 낱개당 1개)
 const MAX_BOXES = 16000;
 /** 선반 칸 하나에 그리는 최대 개수 — 넘으면 이 수까지만 보이고 라벨 없이 둔다 */
@@ -286,18 +284,21 @@ export function RealStock() {
       }
     }
 
-    // 선반 밖 자리: 상태별로 차례로 쌓는다
+    // 선반 밖 자리(입고·검수 칸·카트·포장대 등): 골판지 상자로 쌓는다 — CARTON_UNITS 낱개당 1개, 3×3 한 층(MOCK 하차 칸처럼, 사용자 2026-11-20 "목업은 박스채로 옆 공간에 쌓아두던데")
     for (const g of points.values()) {
       const baseY = g.table ? 0.9 : 0.02;
+      const S = g.table ? 0.2 : 0.34;
       let i = 0;
       for (const [ws, qty] of g.by) {
-        for (let q = 0; q < qty && i < PER_POINT_CAP && n < MAX_BOXES; q++, i++) {
-          const c = i % 4;
-          const r = Math.floor(i / 4) % 4;
-          const l = Math.floor(i / 16);
-          mtx.compose(new THREE.Vector3(g.x + (c - 1.5) * (BOX + GAP), baseY + BOX / 2 + l * (BOX + 0.01), g.z + (r - 1.5) * (BOX + GAP)), quat, sc.set(BOX, BOX, BOX));
+        const cartons = Math.max(1, Math.ceil(qty / CARTON_UNITS));
+        for (let q = 0; q < cartons && i < PER_POINT_CAP && n < MAX_BOXES; q++, i++) {
+          const c = i % 3;
+          const r = Math.floor(i / 3) % 3;
+          const l = Math.floor(i / 9);
+          mtx.compose(new THREE.Vector3(g.x + (c - 1) * (S + 0.03), baseY + S / 2 + l * (S + 0.01), g.z + (r - 1) * (S + 0.03)), quat, sc.set(S, S, S));
           m.setMatrixAt(n, mtx);
-          m.setColorAt(n, col.setHex(WORK_COLOR[ws]));
+          // 골판지 빛에 작업 상태 색을 조금 섞는다(무늬 텍스처와 곱해짐)
+          m.setColorAt(n, col.setHex(SCENE.box).lerp(new THREE.Color(WORK_COLOR[ws]), 0.35));
           n++;
         }
       }
