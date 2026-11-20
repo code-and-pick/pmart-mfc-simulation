@@ -332,6 +332,49 @@ export function TestInboundControls() {
   );
 }
 
+// ───────── 실서버: 입고·적치·보충 — MOCK 과 같은 이름·모양(사용자 2026-11-20 "입고 작업자 켜짐 버튼이 저기 있으면 어떡하냐", "입고 작업자는 왜 1명밖에 안 되냐?") ─────────
+
+function RealInboundWorkers() {
+  const { sim, controller } = useApp();
+  useTick();
+  const ws = sim.inboundVirtual();
+  const on = ws.filter((w) => !w.leaving);
+  const busy = on.filter((w) => !w.idle).length;
+  const qc = on.filter((w) => w.account.includes('-qc-')).length;
+  const rcv = on.length - qc;
+  return (
+    <Sec title="입고·적치·보충" aside={`입고 작업자 ${busy}/${on.length} 작업 중`}>
+      <Slider
+        name="입고 작업자"
+        initial={sim.inboundTarget}
+        min={0}
+        max={REAL_LINK.inboundMax}
+        step={1}
+        hint="품질검사(mfcw-qc)·적치(mfcw-rcv) 계정. 기준 3명(검사 2 + 적치 1, MFC 10장 가정) — 실서버에 실제로 기록합니다"
+        apply={(v) => sim.setInboundVirtual(v)}
+      />
+      <div className="chips static">
+        <span>품질검사 {qc}</span>
+        <span>적치 {rcv}</span>
+        <button className="link" onClick={() => controller.focusZone('RCV')}>
+          입고·검수 보기 ›
+        </button>
+      </div>
+      {ws.length > 0 && (
+        <div className="vw">
+          {ws.map((w) => (
+            <div key={w.account} className={w.lastProblem ? 'bad' : ''}>
+              <b>{w.account.includes('-qc-') ? '검사' : '적치'} {w.account.replace('mfcw-', '')}</b> {w.leaving ? '퇴근 예정 · ' : ''}
+              {w.activity}
+              {w.lastProblem && <span> · {w.lastProblem}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Sec>
+  );
+}
+
 // ───────── 실서버: 가상 작업자 ─────────
 
 function VirtualWorkers() {
@@ -355,7 +398,7 @@ function VirtualWorkers() {
     />
   );
   if (injected) return <Sec title="가상 작업자" aside="조회만">{speed}</Sec>;
-  const ws = sim.virtualWorkers.filter((w) => !w.left);
+  const ws = sim.virtualWorkers.filter((w) => !w.left && REAL_LINK.virtualAccounts.includes(w.account));
   const skipped = sim.virtualWorkers.filter((w) => w.skipped);
   const cut = sim.interruptedVirtual();
   const tooMany = ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length;
@@ -371,17 +414,6 @@ function VirtualWorkers() {
         apply={(v) => sim.setVirtualWorkers(v)}
       />
       {speed}
-      {/* 입고 작업자(품질검사 mfcw-qc-01 · 적치 mfcw-rcv-01) — 늘 보이게 켜기/끄기(사용자 2026-11-20 "그 버튼 어딨는데").
-          피킹포장 인원과 따로. 시험 입고 "가상 작업자로"를 누르면 저절로도 켜진다 */}
-      <div className="srow">
-        <span className="srow-l">입고 작업자</span>
-        <span className="muted" style={{ flex: 1 }}>
-          {sim.inboundVirtual().length ? `켜짐 — ${sim.inboundVirtual().map((w) => (w.account.includes('-qc-') ? '품질검사' : '적치')).join(' · ')}` : '꺼짐 (품질검사 1 · 적치 1)'}
-        </span>
-        <button className="link" onClick={() => (sim.inboundVirtual().length ? sim.stopInboundVirtual() : sim.ensureInboundVirtual())}>
-          {sim.inboundVirtual().length ? '끄기' : '켜기'}
-        </button>
-      </div>
       {(tooMany || skipped.length > 0) && (
         <div className="chips static">
           {tooMany && <span className="y">카트 {BACKEND_FACTS.cartLocations.length}대뿐</span>}
@@ -512,6 +544,7 @@ export function LeftPanel() {
         <>
           {!injected && <RealOrderControls />}
           {!injected && <TestInboundControls />}
+          {!injected && <RealInboundWorkers />}
           <VirtualWorkers />
           <BackendSettings />
         </>

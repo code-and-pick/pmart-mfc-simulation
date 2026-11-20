@@ -376,22 +376,44 @@ export class Simulation {
   }
 
   /** 가상 작업자 하나를 만들어 일을 시작한다(resumeOnly = 끊긴 작업만 이어 하기) */
-  /** 입고 가상 작업자(품질검사·적치 계정)를 켠다 — 이미 돌면 그대로. 입고·검수 칸 대기 자리에서 시작 */
-  ensureInboundVirtual() {
+  /** 입고 작업자 목표 인원(사용자 2026-11-20 "입고 작업자는 왜 1명밖에 안 되냐?") */
+  inboundTarget = 0;
+
+  /**
+   * 입고 가상 작업자 n명 — 품질검사(mfcw-qc)·적치(mfcw-rcv) 계정을 나눠 켠다(검사 ≈ 2/3, 적치 나머지, 2명 이상이면 적치 최소 1).
+   * 줄이면 뒤에서부터 하던 일을 마치고 퇴근. 입고·검수 칸 대기 자리에서 시작.
+   */
+  setInboundVirtual(n: number) {
     if (!this.realCtx || this.realTokens?.serverInjected) return;
-    REAL_LINK.inboundAccounts.forEach((account, i) => {
+    const total = Math.max(0, Math.min(REAL_LINK.inboundMax, n));
+    this.inboundTarget = total;
+    let qc = total === 0 ? 0 : Math.max(1, Math.round((total * 2) / 3));
+    let rcv = total - qc;
+    if (total >= 2 && rcv === 0) {
+      rcv = 1;
+      qc = total - 1;
+    }
+    const qcs = REAL_LINK.inboundAccounts.filter((a) => a.includes('-qc-'));
+    const rcvs = REAL_LINK.inboundAccounts.filter((a) => a.includes('-rcv-'));
+    const want = new Set([...qcs.slice(0, qc), ...rcvs.slice(0, rcv)]);
+    let slot = 0;
+    for (const account of want) {
       const w = this.virtualWorkers.find((x) => x.account === account && !x.left);
-      if (w) {
-        w.leaving = false;
-        return;
-      }
-      this.spawnVirtual(account, i, false, this.layout.points.inboundIdle[i % this.layout.points.inboundIdle.length]);
-    });
+      if (w) w.leaving = false;
+      else this.spawnVirtual(account, slot, false, this.layout.points.inboundIdle[slot % this.layout.points.inboundIdle.length]);
+      slot++;
+    }
+    for (const w of this.virtualWorkers) if (REAL_LINK.inboundAccounts.includes(w.account) && !w.left && !want.has(w.account)) w.leaving = true;
+  }
+
+  /** 시험 입고 "가상 작업자로" — 입고 작업자가 없으면 기본 인원으로 켠다 */
+  ensureInboundVirtual() {
+    if (this.inboundVirtual().filter((w) => !w.leaving).length === 0) this.setInboundVirtual(REAL_LINK.inboundDefault);
   }
 
   /** 입고 가상 작업자 끄기(하던 일은 마치고 퇴근) */
   stopInboundVirtual() {
-    for (const w of this.virtualWorkers) if (REAL_LINK.inboundAccounts.includes(w.account) && !w.left) w.leaving = true;
+    this.setInboundVirtual(0);
   }
 
   /** 지금 도는 입고 가상 작업자 */

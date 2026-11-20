@@ -217,7 +217,13 @@ export const REAL_LINK = {
    * 입고 가상 작업자 — 시험 입고 "가상 작업자로" 때 켠다. 품질검사(INSPECT) mfcw-qc, 적치(PUTAWAY) mfcw-rcv
    * [확정 백엔드 docs/operations/lan-test-accounts.md — qc = INSPECT, rcv = RECEIVE·PUTAWAY] (피킹포장 mfcw-pp 는 입고 업무 권한이 없다)
    */
-  inboundAccounts: ['mfcw-qc-01', 'mfcw-rcv-01'] as readonly string[],
+  inboundAccounts: [
+    ...Array.from({ length: 10 }, (_, i) => `mfcw-qc-${String(i + 1).padStart(2, '0')}`),
+    ...Array.from({ length: 10 }, (_, i) => `mfcw-rcv-${String(i + 1).padStart(2, '0')}`),
+  ] as readonly string[],
+  /** 입고 작업자 수 상한(입고·검수 대기 자리 8) · 처음 켤 때 기본(MOCK 과 같은 기준 3명 = 검사 2 + 적치 1, MFC 10장 가정) [시뮬] */
+  inboundMax: 8,
+  inboundDefault: 3,
   /** 작업 목록 주기 조회 간격(초). SIM-5 "시작 3초" [확정] */
   pollSec: 3,
   /** 작업자 목록(표시 이름) 다시 읽기 간격(초) [시뮬] */
