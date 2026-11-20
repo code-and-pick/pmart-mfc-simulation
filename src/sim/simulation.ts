@@ -1150,7 +1150,11 @@ export class Simulation {
     for (const [deliveryId, s] of live) {
       if (!s.arrived || s.gone || mine.some((x) => x.deliveryId === deliveryId)) continue;
       const used = new Set(mine.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
-      const parking = this.layout.points.riderParking.find((p) => !used.has(`${p.x},${p.z}`)) ?? this.layout.points.riderParking[0];
+      // 같은 라이더가 묶음 배송 여러 건이면 같은 칸(수단 하나) — 다른 라이더는 한 칸씩 띄워 빈 칸부터(겹침 방지, 사용자 2026-11-20)
+      const same = s.riderId ? mine.find((x) => !x.done && x.id.split(' (')[0] === s.riderId) : undefined;
+      const bays = this.layout.points.riderParking;
+      const parking =
+        same?.parking ?? bays.find((p, k) => k % 2 === 0 && !used.has(`${p.x},${p.z}`)) ?? bays.find((p) => !used.has(`${p.x},${p.z}`)) ?? bays[0];
       let id = s.riderId ?? deliveryId.slice(0, 12);
       if (this.riders.some((x) => x.id === id)) id = `${id} (${deliveryId.slice(4, 8)})`;
       const rr = new RealRider(id, deliveryId, parking, this.layout.points.riderEntry, this.layout.points.riderPickup, this.nav, s.vehicle);
@@ -1445,7 +1449,10 @@ export class Simulation {
       const riderId = `R${String(this.riderSeq).padStart(3, '0')}`;
       const deliveryId = this.mock!.deliveryAssign(p.shipmentId, riderId);
       const orderId = this.shipmentOrder.get(p.shipmentId) ?? '';
-      const parking = this.layout.points.riderParking[this.riderSeq % this.layout.points.riderParking.length];
+      // 빈 주차 칸부터(전엔 순번 나머지 — 아직 안 떠난 라이더와 같은 칸에 겹쳤다, 사용자 2026-11-20 "자동차랑 오토바이 지들끼리 겹치고")
+      const usedBays = new Set(this.riders.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
+      const bays = this.layout.points.riderParking;
+      const parking = bays.find((b, k) => k % 2 === 0 && !usedBays.has(`${b.x},${b.z}`)) ?? bays.find((b) => !usedBays.has(`${b.x},${b.z}`)) ?? bays[this.riderSeq % bays.length];
       const rider = new Rider(riderId, p.shipmentId, deliveryId, orderId, parking, this.ctx, () => {
         this.handedShipments.add(p.shipmentId);
         const all = this.orderShipments.get(orderId);

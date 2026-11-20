@@ -430,14 +430,17 @@ function RiderMesh({ id, label, parking }: { id: string; label: string; parking:
     last.current = { x: r.pos.x, z: r.pos.z };
     // 킥보드는 서서 손잡이를 잡고(push 자세), 두 바퀴 수단은 앉아서(ride)
     const riding0 = r.riding && r.vehicle !== 'WALK';
-    fig.current?.animate(moved > 0.5 ? 0 : moved, dt, !riding0 ? 'walk' : r.vehicle === 'KICKBOARD' ? 'push' : 'ride');
+    // 킥보드는 발판 위에 서서 미끄러져 간다 — 다리는 걷지 않는다(사용자 2026-11-20 "킥보드 끌고 걸어감")
+    fig.current?.animate(moved > 0.5 || (riding0 && r.vehicle === 'KICKBOARD') ? 0 : moved, dt, !riding0 ? 'walk' : r.vehicle === 'KICKBOARD' ? 'push' : 'ride');
     // 문·뚜껑은 목표 각도로 천천히(약 RIDER_VEHICLE.hatchSec) — 문 70°, 트렁크·배달통 63°
     const k = Math.min(1, dt * 6);
     ang.current.door += ((r.door ? -1.2 : 0) - ang.current.door) * k;
     ang.current.lid += ((r.trunk ? 1.1 : 0) - ang.current.lid) * k;
     if (door.current) door.current.rotation.y = ang.current.door;
     if (lid.current) lid.current.rotation.x = ang.current.lid;
-    box.current.visible = r.carrying > 0 && !r.stowed;
+    // 배달통이 없는 수단(킥보드·도보)은 상품을 등에 멘 배달 가방에 — 실은 뒤에도 보인다(사용자 2026-11-20 "킥보드 라이더 가방도 없어지고")
+    const noTrunk = r.vehicle === 'KICKBOARD' || r.vehicle === 'WALK';
+    box.current.visible = r.carrying > 0 && (!r.stowed || noTrunk);
     // 타는 중이면 수단이 라이더와 같이 움직이고(라이더는 올라탄 높이, 승용차면 안에 앉아 보이지 않게), 아니면 주차 자리에 서 있다
     const riding = r.riding && r.vehicle !== 'WALK';
     // 올라탄 높이 = 좌석(또는 발판) 높이 − 사람 엉덩이 높이(Humanoid 0.86 m). 오토바이 좌석 0.82·자전거 0.9·킥보드 발판 0.15
@@ -459,9 +462,8 @@ function RiderMesh({ id, label, parking }: { id: string; label: string; parking:
       <group ref={group}>
         <group ref={body}>
           <Humanoid ref={fig} look={RIDER_LOOK} />
-          <mesh ref={box} position={[0, 1.15, -0.32]} visible={false}>
-            <boxGeometry args={[0.42, 0.36, 0.3]} />
-            <meshStandardMaterial color={0x00897b} />
+          <mesh ref={box} geometry={rbGeo(0.42, 0.4, 0.3, 0.06)} position={[0, 1.15, -0.32]} visible={false}>
+            <meshStandardMaterial color={0x7c5cf0} roughness={0.4} />
           </mesh>
         </group>
         <primitive object={tag} position-y={1.95} />
