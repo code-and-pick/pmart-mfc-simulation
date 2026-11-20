@@ -210,6 +210,7 @@ function makeCard(code: string, line: string): THREE.Sprite {
   sp.scale.set((sh * c.width) / c.height, sh, 1);
   sp.center.set(0.5, 0);
   sp.renderOrder = 14;
+  sp.userData.prio = 4;
   return sp;
 }
 

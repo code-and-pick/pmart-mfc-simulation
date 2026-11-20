@@ -149,23 +149,23 @@ export class LocationLabels {
       for (const p of this.pool) p.mesh.visible = false;
       return;
     }
-    const radius = Math.max(3.5, camDist * 0.55);
+    // 화면에 보이는 칸 중 카메라에 가까운 칸부터(전엔 화면 가운데 지점 둘레만 — 앞 랙엔 안 뜨고 뒤 랙에만 뜨는 일이 있었다,
+    // 사용자 2026-11-20 "왜 앞엔 식별값 안 뜨고 또 뒤에는 식별값이 뜨는 거임?")
     const cam = camera.position;
+    camera.updateMatrixWorld();
+    const frustum = new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse));
+    const pt = new THREE.Vector3();
     const cand: { loc: Location; d: number }[] = [];
     for (const loc of this.layout.locations) {
       if (loc.closed) continue; // 닫힌 칸(넓은 칸으로 합쳐짐) — 라벨 없음
-      const dx = loc.shelf.x - target.x;
-      const dz = loc.shelf.z - target.z;
-      if (dx * dx + dz * dz > radius * radius) continue;
+      if (!frustum.containsPoint(pt.set(loc.shelf.x, loc.shelf.y, loc.shelf.z))) continue;
       // 카메라가 칸의 앞(통로) 쪽에 있을 때만
       const n = faceNormal(loc.along, loc.face);
       if ((cam.x - loc.shelf.x) * n.x + (cam.z - loc.shelf.z) * n.z <= 0) continue;
       // 근접 클리핑으로 잘린 칸(맞은편 랙)은 건너뛴다
       const dc = Math.sqrt((cam.x - loc.shelf.x) ** 2 + (cam.y - loc.shelf.y) ** 2 + (cam.z - loc.shelf.z) ** 2);
       if (dc < camera.near + 0.1) continue;
-      // 보고 있는 지점에 가까운 칸부터
-      const d = dx * dx + dz * dz + (loc.shelf.y - target.y) ** 2 * 0.5;
-      cand.push({ loc, d });
+      cand.push({ loc, d: dc });
     }
     cand.sort((a, b) => a.d - b.d);
     const chosen = cand.slice(0, this.pool.length).map((c) => c.loc);

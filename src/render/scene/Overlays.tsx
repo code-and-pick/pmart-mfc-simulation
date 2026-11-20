@@ -167,3 +167,56 @@ export function LocationLabelsLayer() {
   });
   return <primitive object={labels.root} />;
 }
+
+/**
+ * 이름표 정리(사용자 2026-11-20 "팝업창 겹치고 난리났다" → "123 다해"):
+ * 화면 크기 고정 이름표(sprite, sizeAttenuation=false)를 0.25초마다 화면 위 사각형으로 보고, 우선순위(userData.prio — 높을수록 먼저)·가까운 순으로
+ * 자리를 잡는다. 이미 잡힌 것과 겹치면 숨긴다(투명). 멀리서는 낮은 것부터 숨긴다 — 40 m 넘으면 1(참고), 65 m 넘으면 2(패킹대·랙·차량).
+ * 보이고 숨기는 것만 바꾸고(투명도), 다른 코드가 정한 visible 은 건드리지 않는다.
+ */
+export function Declutter() {
+  const { camera, scene, size } = useThree();
+  const t = useRef(0);
+  useFrame((_, dt) => {
+    t.current -= dt;
+    if (t.current > 0) return;
+    t.current = 0.25;
+    const H = size.height;
+    const W = size.width;
+    const v = new THREE.Vector3();
+    const items: { s: THREE.Sprite; prio: number; d: number; r: [number, number, number, number] }[] = [];
+    const shown = (o: THREE.Object3D | null): boolean => {
+      for (let x = o; x; x = x.parent) if (!x.visible) return false;
+      return true;
+    };
+    scene.traverse((o) => {
+      const s = o as THREE.Sprite;
+      if (!s.isSprite || !(s.material instanceof THREE.SpriteMaterial) || s.material.sizeAttenuation) return;
+      if (!shown(s)) return;
+      s.getWorldPosition(v);
+      const d = camera.position.distanceTo(v);
+      v.project(camera);
+      if (v.z > 1 || Math.abs(v.x) > 1.2 || Math.abs(v.y) > 1.2) return;
+      const hp = s.scale.y * 2.414 * (H / 2);
+      const wp = s.scale.x * 2.414 * (H / 2);
+      const cx = ((v.x + 1) / 2) * W;
+      const cy = ((1 - v.y) / 2) * H;
+      const x0 = cx - wp * s.center.x;
+      const y0 = cy - hp * (1 - s.center.y);
+      items.push({ s, prio: (s.userData.prio as number | undefined) ?? 1, d, r: [x0, y0, x0 + wp, y0 + hp] });
+    });
+    items.sort((a, b) => b.prio - a.prio || a.d - b.d);
+    const placed: [number, number, number, number][] = [];
+    const M = 3;
+    for (const it of items) {
+      const mat = it.s.material as THREE.SpriteMaterial;
+      if (it.s.userData.baseOpacity === undefined) it.s.userData.baseOpacity = mat.opacity;
+      const far = (it.prio <= 1 && it.d > 40) || (it.prio <= 2 && it.d > 65);
+      const hit = placed.some((p) => it.r[0] < p[2] + M && it.r[2] > p[0] - M && it.r[1] < p[3] + M && it.r[3] > p[1] - M);
+      const hide = far || hit;
+      mat.opacity = hide ? 0 : (it.s.userData.baseOpacity as number);
+      if (!hide) placed.push(it.r);
+    }
+  });
+  return null;
+}

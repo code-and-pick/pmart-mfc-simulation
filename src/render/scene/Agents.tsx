@@ -59,7 +59,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   const look = useMemo(() => workerLook(id, kind), [id, kind]);
   const cart = useRef<THREE.Mesh>(null!);
   const bags = useRef<THREE.Mesh[]>([]);
-  const tag = useMemo(() => makeLabel(id, { size: 30, bg: kind === 'worker' ? 'rgba(0,0,0,0.65)' : 'rgba(120,60,0,0.75)', screenPx: 15 }), [id, kind]);
+  const tag = useMemo(() => makeLabel(id, { size: 30, bg: kind === 'worker' ? 'rgba(0,0,0,0.65)' : 'rgba(120,60,0,0.75)', screenPx: 15, prio: 3 }), [id, kind]);
   const ud = useMemo(() => ({ personId: id, personKind: kind }), [id, kind]);
 
   useEffect(() => {
@@ -373,7 +373,7 @@ function RiderMesh({ id, label, parking }: { id: string; label: string; parking:
   const ang = useRef({ door: 0, lid: 0 });
   const fig = useRef<HumanoidHandle>(null);
   const last = useRef<{ x: number; z: number } | null>(null);
-  const tag = useMemo(() => makeLabel(label, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [label]);
+  const tag = useMemo(() => makeLabel(label, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15, prio: 4 }), [label]);
   const vehicle = sim.riders.find((x) => x.id === id)?.vehicle ?? 'MOTORCYCLE';
   useFrame((_, dt) => {
     const r = sim.riders.find((x) => x.id === id);
@@ -448,7 +448,7 @@ export function Riders() {
 function Truck({ trfId }: { trfId: string }) {
   const { sim } = useApp();
   const group = useRef<THREE.Group>(null!);
-  const tag = useMemo(() => makeLabel(trfId, { size: 30, bg: 'rgba(30,60,120,0.85)', screenPx: 15 }), [trfId]);
+  const tag = useMemo(() => makeLabel(trfId, { size: 30, bg: 'rgba(30,60,120,0.85)', screenPx: 15, prio: 2 }), [trfId]);
   useFrame(() => {
     const t = sim.trucks.find((x) => x.trfId === trfId);
     // 뒷문(로컬 x=-3.2)이 truck.x - 3.2 에 오도록

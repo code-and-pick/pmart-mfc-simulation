@@ -2,7 +2,10 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** screenPx 를 주면 화면 고정 크기(px) 라벨, 아니면 월드 크기 라벨. */
-export function makeLabel(text: string, opts: { size?: number; color?: string; bg?: string; screenPx?: number } = {}): THREE.Sprite {
+/** 이름표 우선순위(겹치면 높은 것만 — Declutter): 5 지금 할 일·출하 상태, 4 라이더·피킹 카드, 3 작업자·PDA, 2 패킹대·인계 랙·차량, 1 참고(기본) */
+export type LabelPrio = 1 | 2 | 3 | 4 | 5;
+
+export function makeLabel(text: string, opts: { size?: number; color?: string; bg?: string; screenPx?: number; prio?: LabelPrio } = {}): THREE.Sprite {
   const size = opts.size ?? 48;
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
@@ -35,6 +38,7 @@ export function makeLabel(text: string, opts: { size?: number; color?: string; b
     s.scale.set(c.width * scale, c.height * scale, 1);
   }
   s.renderOrder = 10;
+  s.userData.prio = opts.prio ?? 1;
   return s;
 }
 
@@ -78,7 +82,7 @@ export function boxTexture(): THREE.CanvasTexture {
 }
 
 /** 작은 둥근 판 이름표(화면 크기 고정) — 위 밝은 그라데이션 + 아래 그림자. 패킹대 PS-n 등 */
-export function makePillSprite(text: string, bg: string, top: string, screenPx: number): THREE.Sprite {
+export function makePillSprite(text: string, bg: string, top: string, screenPx: number, prio: LabelPrio = 2): THREE.Sprite {
   const S = 48;
   const c = document.createElement('canvas');
   const g = c.getContext('2d')!;
@@ -116,6 +120,7 @@ export function makePillSprite(text: string, bg: string, top: string, screenPx: 
   const sh = screenPx / (2.414 * 475);
   s.scale.set((sh * c.width) / c.height, sh, 1);
   s.renderOrder = 11;
+  s.userData.prio = prio;
   return s;
 }
 

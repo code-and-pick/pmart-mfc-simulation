@@ -8,7 +8,7 @@ import { People, Riders, Trucks } from './Agents';
 import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
 import { SCENE } from '../colors';
-import { Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
+import { Declutter, Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
 import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { ScanMarker } from './Marker';
 import { Goods, Reserves } from './Stock';
@@ -39,6 +39,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <CameraRig />
         <CameraTap />
         <LocationLabelsLayer />
+        <Declutter />
         <Picker />
       </AppContext.Provider>
     </Canvas>

@@ -71,7 +71,7 @@ export function RealMarkers() {
         labels.remove(s);
       }
       for (const p of firstByTask.values()) {
-        const s = makeLabel(`PDA ${p.name}`, { size: 40, bg: 'rgba(20,22,26,0.85)', screenPx: 20 });
+        const s = makeLabel(`PDA ${p.name}`, { size: 40, bg: 'rgba(20,22,26,0.85)', screenPx: 20, prio: 3 });
         s.position.set(p.x, 2.05, p.z);
         labels.add(s);
       }
@@ -134,7 +134,7 @@ export function RealShipLabels() {
       const p = sim.backendPoint(rk);
       if (!p) continue;
       texts.forEach((t, i) => {
-        const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18 });
+        const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18, prio: 5 });
         s.position.set(p.x, 2.4 + i * 0.45, p.z);
         labels.add(s);
       });

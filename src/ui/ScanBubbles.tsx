@@ -10,7 +10,7 @@ import { useApp, useTick, useView } from '../app/context';
 import { REAL_LINK } from '../config';
 import { cameraTap } from '../render/cameraTap';
 import type { ObservedWorker, ScanCue } from '../sim/observedWorker';
-import { Barcode } from './Barcode';
+import { Barcode, CodeImage } from './Barcode';
 import { LotLabel } from './ScanBoard';
 import { Why } from './Why';
 import { orderStatus } from './OrderCards';
@@ -74,26 +74,21 @@ export function ScanBubbles() {
   const rackRefs = useRef(new Map<string, HTMLDivElement>());
   useEffect(() => {
     let raf = 0;
-    const v = new THREE.Vector3();
     const loop = () => {
-      const cam = cameraTap.camera;
-      for (const [rack, el] of rackRefs.current) {
-        const p = sim.backendPoint(rack);
-        if (!cam || !p) continue;
-        v.set(p.x, RACK_Y, p.z).project(cam);
-        // 랙이 화면 안(가장자리 여유 없이)일 때만 — 다른 구역을 보러 가면 사라진다(사용자 2026-11-20 "어딜 가든 인계팝업창이 중앙에 뜨는데 … 곤란해")
-        const inView = v.z < 1 && Math.abs(v.x) < 0.95 && Math.abs(v.y) < 0.95;
-        const x = ((v.x + 1) / 2) * cameraTap.width;
-        const y = ((1 - v.y) / 2) * cameraTap.height;
+      // 인계 랙 카드는 3D 위에 띄우지 않고 고정 자리 — 왼쪽·오른쪽 패널 사이 빈 칸(.stage-gap)의 왼쪽 아래에 랙 1·2 를 나란히.
+      // 패널·장면 이름표와 겹치지 않는다(사용자 2026-11-20 "인계 팝업이 다 가린다고", "팝업창 겹치고 난리났다").
+      const gap = document.querySelector('.stage-gap')?.getBoundingClientRect();
+      let x0 = (gap?.left ?? 0) + 10;
+      const bottom = (gap?.bottom ?? cameraTap.height) - 10;
+      const maxW = Math.max(220, ((gap?.width ?? cameraTap.width) - 30) / 2);
+      for (const rack of [...rackRefs.current.keys()].sort()) {
+        const el = rackRefs.current.get(rack)!;
+        el.style.maxWidth = `${maxW}px`;
         const bw = el.offsetWidth || 300;
         const bh = el.offsetHeight || 120;
-        // 랙 옆에 붙인다 — 랙 1 은 왼쪽, 랙 2 는 오른쪽. 랙 위의 "포장 중 · 라이더 오는 중" 이름표를 가리지 않게
-        // (사용자 2026-11-20 "인계 팝업이 포장중 라이더 오는중 팝업을 가리는데"). 위아래는 랙 높이 가운데에서 화면 안으로만
-        const right = rack === 'DSP-A-02';
-        const left = Math.max(8, Math.min(right ? x + 60 : x - bw - 60, cameraTap.width - bw - 8));
-        const top = Math.max(EDGE_TOP, Math.min(y - bh / 2, cameraTap.height - bh - 8));
-        el.style.transform = `translate(${left}px, ${top}px)`;
-        el.style.display = inView ? 'block' : 'none';
+        el.style.transform = `translate(${x0}px, ${Math.max(EDGE_TOP, bottom - bh)}px)`;
+        el.style.display = 'block';
+        x0 += bw + 8;
       }
       raf = requestAnimationFrame(loop);
     };
@@ -132,8 +127,6 @@ export function ScanBubbles() {
   );
 }
 
-// 랙 위 이름표(바닥 구역 이름 2.4 m·재고 표시)보다 위에 띄워 겹치지 않게(사용자 2026-11-20 "팝업창 아래가 너무 겹치고 어수선")
-const RACK_Y = 2.2;
 /** 한 번에 보이는 포장 수 — 넘으면 "외 N개 더 보기" */
 const RACK_MAX = 6;
 
@@ -194,7 +187,10 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
                   <span className={`rk-t t-${t}`}>{TEMP_KO[t]}</span>
                   <span className="rk-o muted">인계 번호</span>
                   {p.handoverCode && <span className="rk-c">{p.handoverCode}</span>}
-                  <span className="rk-m">{on ? '⌄' : 'QR ›'}</span>
+                  {/* QR·4자리 번호는 처음부터(사용자 2026-11-20 "123 다해" — 고정 카드안 1) — 줄을 누르면 크게·시스템 번호 */}
+                  <span className="rk-qr">
+                    <CodeImage value={p.qrCode} kind="code128" mode="qr" size={40} />
+                  </span>
                 </button>
                 {on && (
                   <div className="rk-d">
