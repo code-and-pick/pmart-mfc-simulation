@@ -4,14 +4,14 @@ import type { InboundState } from '../sim/inbound';
 import type { WorkerState } from '../sim/worker';
 
 export const ZONE_COLOR: Record<ZoneKind, number> = {
-  // 냉동·냉장 바닥 — 칙칙한 남색·청록 대신 맑은 파랑·청록(사용자 2026-11-20 "파랑색 청록색 그게 칙칙하다고")
-  FROZEN: 0x3d84cc,
-  CHILLED: 0x2fae9f,
-  AMBIENT: 0xe3be3c, // 상온 — 맑은 노랑(2026-11-20 "노란끼 돌게, 칙칙하다")
-  INBOUND_STORE: 0xd07a45, // 입고창고 — 주황(입고·검수와 구분, 사용자 2026-11-20)
-  RECEIVING: 0x2f3f8f, // 입고·검수 — 남색(사용자 2026-11-20)
+  // 바닥 — 진하고 탁한 색 대신 너무 밝지 않은 부드러운 색(사용자 2026-11-20 "부드러운 하늘색, 연두색, 노란색, 분홍색, 주황색, 남색", 첫 안보다 "좀 더 진하게")
+  FROZEN: 0x67a6d6, // 냉동 — 하늘색
+  CHILLED: 0x84bd63, // 냉장 — 연두색
+  AMBIENT: 0xdcbd52, // 상온 — 노란색
+  INBOUND_STORE: 0xd88b52, // 입고창고 — 주황색
+  RECEIVING: 0x48589a, // 입고·검수 — 남색
   OFFICE: 0x3d3d44,
-  PACKING: 0x9a6cc4, // 패킹 — 탁한 보라 → 맑은 보라(2026-11-20)
+  PACKING: 0xd686a3, // 패킹 — 분홍색
   QUARANTINE: 0x7a3434,
   SHIPPING: 0xd4b43a, // 외부 출하대기 — 칙칙한 올리브 → 노랑(2026-11-20)
   PARKING: 0x2e2e2e,
