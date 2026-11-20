@@ -434,7 +434,7 @@ function ReturnIntake() {
   const rp = sim.real?.returnPickups ?? [];
   const arrived = rp.filter((d) => d.state === 'RETURNED_TO_STORE' || d.state === 'COMPLETED').length;
   const coming = rp.length - arrived;
-  const text = `회수 반입 ${p.code}${coming ? ` · 오는 중 ${coming}` : ''}${arrived ? ` · 반납 ${arrived}` : ''}`;
+  const text = `회수 반입${coming ? ` · 오는 중 ${coming}` : ''}${arrived ? ` · 반납 ${arrived}` : ''}`;
   return (
     <>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[p.x, 0.012, p.z]} receiveShadow>

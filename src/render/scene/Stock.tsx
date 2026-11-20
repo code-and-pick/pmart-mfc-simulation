@@ -222,7 +222,7 @@ export function Reserves() {
         <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
       </instancedMesh>
       {L.reserves.map((r) => (
-        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 26, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 12 }} />
+        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
         <boxGeometry args={[0.255, 0.22, 0.255]} />

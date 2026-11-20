@@ -3,6 +3,7 @@ import type { VehicleType } from '../../domain/contract';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { useApp } from '../../app/context';
 import type { P as Point } from '../../domain/navgrid';
 import type { InboundWorker } from '../../sim/inbound';
@@ -194,90 +195,164 @@ function Wheel({ z, r = 0.25, t = 0.08 }: { z: number; r?: number; t?: number })
   );
 }
 
+/** 둥근 모서리 상자(RoundedBoxGeometry) — 크기·둥글기가 같으면 모양을 나눠 쓴다 */
+const rbCache = new Map<string, THREE.BufferGeometry>();
+function rbGeo(w: number, h: number, d: number, r: number): THREE.BufferGeometry {
+  const k = `${w}|${h}|${d}|${r}`;
+  let g = rbCache.get(k);
+  if (!g) rbCache.set(k, (g = new RoundedBoxGeometry(w, h, d, 3, Math.min(r, w / 2, h / 2, d / 2))));
+  return g;
+}
+function RB({ s, r, color, p, rot, rough = 0.35, metal = 0.05, emissive }: { s: [number, number, number]; r: number; color: number; p: [number, number, number]; rot?: [number, number, number]; rough?: number; metal?: number; emissive?: number }) {
+  return (
+    <mesh geometry={rbGeo(s[0], s[1], s[2], r)} position={p} rotation={rot} castShadow>
+      <meshStandardMaterial color={color} roughness={rough} metalness={metal} emissive={emissive ?? 0x000000} emissiveIntensity={emissive ? 0.6 : 0} />
+    </mesh>
+  );
+}
+/** 바퀴 — 타이어(검정) + 은색 휠, 축은 x */
+function Tire({ p, r, w }: { p: [number, number, number]; r: number; w: number }) {
+  return (
+    <group position={p}>
+      <mesh rotation-z={Math.PI / 2} castShadow>
+        <cylinderGeometry args={[r, r, w, 22]} />
+        <meshStandardMaterial color={0x16181d} roughness={0.85} />
+      </mesh>
+      {[-1, 1].map((sd) => (
+        <mesh key={sd} rotation-z={Math.PI / 2} position={[(sd * w) / 2 + sd * 0.003, 0, 0]}>
+          <cylinderGeometry args={[r * 0.55, r * 0.55, 0.01, 18]} />
+          <meshStandardMaterial color={0xd3d8e0} metalness={0.6} roughness={0.25} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+/** 두 점을 잇는 가는 관(자전거 틀) */
+function Tube({ a, b, r = 0.022, color }: { a: [number, number, number]; b: [number, number, number]; r?: number; color: number }) {
+  const { pos, quat, len } = useMemo(() => {
+    const va = new THREE.Vector3(...a);
+    const vb = new THREE.Vector3(...b);
+    const dir = vb.clone().sub(va);
+    return { pos: va.clone().add(vb).multiplyScalar(0.5), quat: new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir.clone().normalize()), len: dir.length() };
+  }, [a, b]);
+  return (
+    <mesh position={pos} quaternion={quat} castShadow>
+      <cylinderGeometry args={[r, r, len, 10]} />
+      <meshStandardMaterial color={color} roughness={0.35} metalness={0.35} />
+    </mesh>
+  );
+}
+/** 자전거 바퀴 — 얇은 타이어 + 은색 테 + 바큇살 판(반투명) */
+function BikeWheel({ z, r = 0.32 }: { z: number; r?: number }) {
+  return (
+    <group position={[0, r + 0.02, z]} rotation-y={Math.PI / 2}>
+      <mesh castShadow>
+        <torusGeometry args={[r, 0.035, 10, 28]} />
+        <meshStandardMaterial color={0x16181d} roughness={0.85} />
+      </mesh>
+      <mesh>
+        <torusGeometry args={[r - 0.04, 0.012, 6, 28]} />
+        <meshStandardMaterial color={0xd3d8e0} metalness={0.6} roughness={0.25} />
+      </mesh>
+      <mesh>
+        <circleGeometry args={[r - 0.05, 24]} />
+        <meshStandardMaterial color={0xc8ced8} transparent opacity={0.18} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh rotation-x={Math.PI / 2}>
+        <cylinderGeometry args={[0.04, 0.04, 0.1, 12]} />
+        <meshStandardMaterial color={0x9aa3b0} metalness={0.5} />
+      </mesh>
+    </group>
+  );
+}
+
 /** 문(승용차 운전석)·뚜껑(트렁크·배달통) 회전축 — RiderMesh 가 각도를 천천히 바꾼다 */
 type Hinge = React.RefObject<THREE.Group | null>;
 
-function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hinge }) {
+export function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hinge }) {
   switch (v) {
     case 'MOTORCYCLE':
-      // 배달 스쿠터(사용자 2026-11-20 "오토바이, 자동차 UI도 별로" — 참고 그림 스쿠터): 흰 몸통·발판, 검정 안장, 보라 배달통, 앞 방풍·핸들·전조등
+      // 배달 스쿠터 — 둥근 흰 몸통·앞 가림판, 짙은 발판·안장, 둥근 전조등, 은색 휠, 보라 배달통(사용자 2026-11-20 "오토바이 자동차가 못생겼어")
       return (
         <>
-          <mesh position={[0, 0.36, 0.05]} castShadow>
-            <boxGeometry args={[0.34, 0.16, 0.95]} />
-            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
+          <RB s={[0.4, 0.38, 0.72]} r={0.14} color={0xf6f7fb} p={[0, 0.5, -0.16]} />
+          <RB s={[0.3, 0.06, 0.5]} r={0.03} color={0x2a2e38} p={[0, 0.3, 0.24]} rough={0.7} />
+          <RB s={[0.42, 0.66, 0.12]} r={0.06} color={0xf6f7fb} p={[0, 0.62, 0.52]} rot={[-0.22, 0, 0]} />
+          <RB s={[0.18, 0.1, 0.34]} r={0.05} color={0xf6f7fb} p={[0, 0.44, 0.66]} />
+          <RB s={[0.34, 0.11, 0.56]} r={0.05} color={0x23262f} p={[0, 0.74, -0.12]} rough={0.75} />
+          <RB s={[0.36, 0.15, 0.18]} r={0.07} color={0xf6f7fb} p={[0, 1.0, 0.6]} />
+          <mesh position={[0, 1.0, 0.7]} rotation-x={Math.PI / 2}>
+            <cylinderGeometry args={[0.07, 0.07, 0.03, 18]} />
+            <meshStandardMaterial color={0xfff6cc} emissive={0xfff1a8} emissiveIntensity={0.7} />
           </mesh>
-          <mesh position={[0, 0.58, -0.22]} castShadow>
-            <boxGeometry args={[0.36, 0.34, 0.6]} />
-            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
+          <mesh position={[0, 1.07, 0.56]} rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[0.016, 0.016, 0.66, 8]} />
+            <meshStandardMaterial color={0x2a2e38} metalness={0.4} />
           </mesh>
-          <mesh position={[0, 0.79, -0.12]} castShadow>
-            <boxGeometry args={[0.3, 0.08, 0.5]} />
-            <meshStandardMaterial color={0x23262f} roughness={0.7} />
-          </mesh>
-          <mesh position={[0, 0.72, 0.5]} rotation-x={-0.25} castShadow>
-            <boxGeometry args={[0.34, 0.62, 0.1]} />
-            <meshStandardMaterial color={0xf3f4f8} roughness={0.35} />
-          </mesh>
-          <mesh position={[0, 1.05, 0.46]} castShadow>
-            <boxGeometry args={[0.6, 0.05, 0.05]} />
-            <meshStandardMaterial color={0x23262f} />
-          </mesh>
-          <mesh position={[0, 0.92, 0.56]}>
-            <boxGeometry args={[0.14, 0.08, 0.04]} />
-            <meshStandardMaterial color={0xfff5c2} emissive={0xfff1a8} emissiveIntensity={0.6} />
-          </mesh>
-          <mesh position={[0, 0.98, -0.55]} castShadow>
-            <boxGeometry args={[0.48, 0.38, 0.44]} />
-            <meshStandardMaterial color={0x7c5cf0} roughness={0.45} />
-          </mesh>
-          {/* 배달통 뚜껑 — 앞쪽 윗모서리가 축 */}
-          <group ref={lid} position={[0, 1.18, -0.33]}>
-            <mesh position={[0, 0, -0.22]} castShadow>
-              <boxGeometry args={[0.5, 0.04, 0.46]} />
-              <meshStandardMaterial color={0x6a4ad8} roughness={0.45} />
-            </mesh>
-          </group>
-          {[-0.5, 0.52].map((z) => (
-            <mesh key={z} position={[0, 0.2, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-              <cylinderGeometry args={[0.2, 0.2, 0.11, 18]} />
-              <meshStandardMaterial color={0x1c1f26} roughness={0.8} />
-            </mesh>
+          {[-0.3, 0.3].map((x) => (
+            <group key={x}>
+              <mesh position={[x, 1.07, 0.56]} rotation-z={Math.PI / 2}>
+                <cylinderGeometry args={[0.025, 0.025, 0.1, 8]} />
+                <meshStandardMaterial color={0x16181d} />
+              </mesh>
+              <mesh position={[x * 0.75, 1.24, 0.54]}>
+                <boxGeometry args={[0.07, 0.05, 0.02]} />
+                <meshStandardMaterial color={0x2a2e38} metalness={0.5} roughness={0.2} />
+              </mesh>
+            </group>
           ))}
+          <RB s={[0.52, 0.42, 0.46]} r={0.06} color={0x7c5cf0} p={[0, 1.0, -0.56]} rough={0.4} />
+          {/* 배달통 뚜껑 — 앞쪽 윗모서리가 축 */}
+          <group ref={lid} position={[0, 1.22, -0.33]}>
+            <RB s={[0.54, 0.05, 0.48]} r={0.02} color={0x6a4ad8} p={[0, 0, -0.23]} rough={0.4} />
+          </group>
+          <Tire p={[0, 0.2, -0.46]} r={0.2} w={0.13} />
+          <Tire p={[0, 0.2, 0.62]} r={0.2} w={0.11} />
         </>
       );
     case 'BICYCLE':
-    case 'E_BIKE':
+    case 'E_BIKE': {
+      // 배달 자전거 — 가는 틀(자전거 파랑·전기 초록), 얇은 바퀴, 짙은 안장·핸들, 뒤 짐받이 위 보라 배달통(사용자 2026-11-20 "자전거도 못생겼어")
+      const fc = v === 'E_BIKE' ? 0x2e9a5c : 0x2f6fe8;
+      const seat: [number, number, number] = [0, 0.88, -0.16];
+      const bb: [number, number, number] = [0, 0.36, 0.02];
+      const head: [number, number, number] = [0, 0.9, 0.36];
+      const rear: [number, number, number] = [0, 0.34, -0.5];
+      const front: [number, number, number] = [0, 0.34, 0.5];
       return (
         <>
-          <mesh position-y={0.62} rotation-x={Math.PI / 2} castShadow>
-            <cylinderGeometry args={[0.03, 0.03, 1.0, 6]} />
-            <meshStandardMaterial color={v === 'E_BIKE' ? 0x43a047 : 0x1e88e5} metalness={0.4} />
+          <Tube a={seat} b={bb} color={fc} r={0.026} />
+          <Tube a={bb} b={head} color={fc} r={0.03} />
+          <Tube a={seat} b={head} color={fc} r={0.024} />
+          <Tube a={bb} b={rear} color={fc} />
+          <Tube a={seat} b={rear} color={fc} r={0.018} />
+          <Tube a={head} b={front} color={0x2a2e38} r={0.022} />
+          <Tube a={head} b={[0, 1.04, 0.32]} color={0x2a2e38} r={0.02} />
+          <mesh position={[0, 1.04, 0.32]} rotation-z={Math.PI / 2}>
+            <cylinderGeometry args={[0.016, 0.016, 0.56, 8]} />
+            <meshStandardMaterial color={0x2a2e38} metalness={0.4} />
           </mesh>
-          <mesh position={[0, 0.85, 0.42]} castShadow>
-            <boxGeometry args={[0.5, 0.04, 0.04]} />
-            <meshStandardMaterial color={0x333333} />
-          </mesh>
-          {v === 'E_BIKE' && (
-            <mesh position={[0, 0.5, 0.05]} castShadow>
-              <boxGeometry args={[0.12, 0.18, 0.35]} />
-              <meshStandardMaterial color={0x222222} />
+          {[-0.26, 0.26].map((x) => (
+            <mesh key={x} position={[x, 1.04, 0.32]} rotation-z={Math.PI / 2}>
+              <cylinderGeometry args={[0.024, 0.024, 0.09, 8]} />
+              <meshStandardMaterial color={0x16181d} />
             </mesh>
-          )}
-          <mesh position={[0, 0.78, -0.45]} castShadow>
-            <boxGeometry args={[0.42, 0.28, 0.36]} />
-            <meshStandardMaterial color={0x7c5cf0} roughness={0.45} />
-          </mesh>
-          <group ref={lid} position={[0, 0.94, -0.27]}>
-            <mesh position={[0, 0, -0.18]} castShadow>
-              <boxGeometry args={[0.44, 0.04, 0.36]} />
-              <meshStandardMaterial color={0x6a4ad8} roughness={0.45} />
-            </mesh>
+          ))}
+          <Tube a={seat} b={[0, 0.98, -0.2]} color={0x9aa3b0} r={0.016} />
+          <RB s={[0.14, 0.06, 0.26]} r={0.03} color={0x23262f} p={[0, 1.0, -0.2]} rough={0.75} />
+          {v === 'E_BIKE' && <RB s={[0.1, 0.1, 0.34]} r={0.03} color={0x2a2e38} p={[0, 0.62, 0.2]} rot={[-0.75, 0, 0]} />}
+          {/* 짐받이 */}
+          <RB s={[0.3, 0.025, 0.36]} r={0.01} color={0x9aa3b0} p={[0, 0.7, -0.5]} metal={0.4} />
+          <RB s={[0.44, 0.32, 0.38]} r={0.05} color={0x7c5cf0} p={[0, 0.88, -0.5]} rough={0.4} />
+          <group ref={lid} position={[0, 1.05, -0.31]}>
+            <RB s={[0.46, 0.04, 0.4]} r={0.015} color={0x6a4ad8} p={[0, 0, -0.19]} rough={0.4} />
           </group>
-          <Wheel z={-0.48} r={0.3} t={0.03} />
-          <Wheel z={0.48} r={0.3} t={0.03} />
+          <BikeWheel z={-0.5} />
+          <BikeWheel z={0.5} />
         </>
       );
+    }
     case 'KICKBOARD':
       return (
         <>
@@ -298,65 +373,34 @@ function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hing
         </>
       );
     case 'CAR':
-      // 소형 승용(참고 그림 톤): 흰 차체 + 파란 옆줄, 짙은 유리 실내, 흰 지붕, 회색 범퍼, 전조등. 문·트렁크 축은 그대로
+      // 소형 해치백 — 둥근 흰 차체, 짙은 유리 실내, 파란 옆줄, 전조등·후미등, 은색 휠(사용자 2026-11-20 "오토바이 자동차가 못생겼어"). 문·트렁크 축은 그대로
       return (
         <>
-          <mesh position-y={0.48} castShadow>
-            <boxGeometry args={[1.12, 0.5, 2.6]} />
-            <meshStandardMaterial color={0xf5f7fb} roughness={0.3} metalness={0.1} />
+          <RB s={[1.22, 0.56, 2.7]} r={0.2} color={0xf6f7fb} p={[0, 0.56, 0]} rough={0.25} metal={0.15} />
+          <RB s={[1.04, 0.52, 1.55]} r={0.18} color={0x1f2b44} p={[0, 1.02, -0.12]} rough={0.1} metal={0.4} />
+          <RB s={[1.0, 0.07, 1.2]} r={0.03} color={0xf6f7fb} p={[0, 1.28, -0.2]} rough={0.25} />
+          <mesh position={[0, 0.6, 0]}>
+            <boxGeometry args={[1.235, 0.07, 2.2]} />
+            <meshStandardMaterial color={0x2f6fe8} roughness={0.35} />
           </mesh>
-          <mesh position={[0, 0.5, 0]}>
-            <boxGeometry args={[1.14, 0.08, 2.4]} />
-            <meshStandardMaterial color={0x2f6fe8} roughness={0.4} />
-          </mesh>
-          <mesh position={[0, 0.96, -0.05]} castShadow>
-            <boxGeometry args={[1.0, 0.46, 1.45]} />
-            <meshStandardMaterial color={0x23324f} roughness={0.15} metalness={0.3} transparent opacity={0.85} />
-          </mesh>
-          <mesh position={[0, 1.2, -0.08]} castShadow>
-            <boxGeometry args={[0.98, 0.05, 1.25]} />
-            <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
-          </mesh>
-          {[-1.31, 1.31].map((z) => (
-            <mesh key={z} position={[0, 0.3, z]}>
-              <boxGeometry args={[1.1, 0.16, 0.06]} />
-              <meshStandardMaterial color={0x9aa3b0} roughness={0.6} />
-            </mesh>
+          {[-1, 1].map((sz) => (
+            <RB key={sz} s={[1.18, 0.16, 0.12]} r={0.05} color={0xa7b0bd} p={[0, 0.34, sz * 1.33]} rough={0.6} />
           ))}
-          {[-0.38, 0.38].map((x) => (
-            <mesh key={x} position={[x, 0.56, 1.31]}>
-              <boxGeometry args={[0.22, 0.08, 0.03]} />
-              <meshStandardMaterial color={0xfff5c2} emissive={0xfff1a8} emissiveIntensity={0.5} />
-            </mesh>
+          {[-0.4, 0.4].map((x) => (
+            <group key={x}>
+              <RB s={[0.26, 0.1, 0.05]} r={0.03} color={0xfff6cc} p={[x, 0.66, 1.34]} emissive={0xfff1a8} />
+              <RB s={[0.24, 0.09, 0.05]} r={0.03} color={0xe5484d} p={[x, 0.68, -1.34]} emissive={0x9a1f22} />
+            </group>
           ))}
           {/* 운전석 문(+x 쪽) — 앞쪽 모서리가 축, 바깥으로(-각) 열린다 */}
-          <group ref={door} position={[0.57, 0.62, 0.65]}>
-            <mesh position={[0, 0, -0.5]} castShadow>
-              <boxGeometry args={[0.05, 0.62, 1.0]} />
-              <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
-            </mesh>
+          <group ref={door} position={[0.6, 0.66, 0.6]}>
+            <RB s={[0.05, 0.6, 1.0]} r={0.02} color={0xf6f7fb} p={[0, 0, -0.5]} rough={0.25} />
           </group>
           {/* 트렁크 뚜껑(뒤 -z) — 앞쪽 윗모서리가 축, 위로 열린다 */}
-          <group ref={lid} position={[0, 0.76, -0.6]}>
-            <mesh position={[0, 0, -0.35]} castShadow>
-              <boxGeometry args={[1.08, 0.05, 0.7]} />
-              <meshStandardMaterial color={0xf5f7fb} roughness={0.3} />
-            </mesh>
+          <group ref={lid} position={[0, 0.86, -0.62]}>
+            <RB s={[1.1, 0.06, 0.7]} r={0.03} color={0xf6f7fb} p={[0, 0, -0.35]} rough={0.25} />
           </group>
-          {[-0.85, 0.85].map((z) =>
-            [-0.56, 0.56].map((x) => (
-              <group key={`${x}${z}`} position={[x, 0.26, z]}>
-                <mesh rotation-z={Math.PI / 2} castShadow>
-                  <cylinderGeometry args={[0.24, 0.24, 0.16, 18]} />
-                  <meshStandardMaterial color={0x1c1f26} roughness={0.8} />
-                </mesh>
-                <mesh rotation-z={Math.PI / 2} position={[x > 0 ? 0.085 : -0.085, 0, 0]}>
-                  <cylinderGeometry args={[0.12, 0.12, 0.01, 14]} />
-                  <meshStandardMaterial color={0xc8ced8} metalness={0.5} roughness={0.3} />
-                </mesh>
-              </group>
-            )),
-          )}
+          {[-0.86, 0.86].map((z) => [-0.58, 0.58].map((x) => <Tire key={`${x}${z}`} p={[x, 0.3, z]} r={0.3} w={0.2} />))}
         </>
       );
     case 'WALK':

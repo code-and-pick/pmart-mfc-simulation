@@ -1,5 +1,6 @@
 // 밝은 도면풍 장식(사용자 2026-11-20 참고 그림 — "바닥 통로 화살표·점선", "라이더 대기 주차 칸·볼라드·스쿠터", "작업 중 칸 보라 빛 + 작은 카드").
 // 업무 규칙·통행(navgrid)에는 관여하지 않는다 — 그림만. 통로 선은 배치(layout.ts) 의 빈 띠를 따라 손으로 둔 것.
+import { VehicleModel } from './Agents';
 import { workerShortName, workerTagColor } from '../../domain/workerName';
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
@@ -76,34 +77,10 @@ export function Walkways() {
   );
 }
 
-/** 대기 중 스쿠터(장식) — 흰 몸통·보라 배달통 */
+/** 대기 중 스쿠터(장식) — 라이더 스쿠터와 같은 모델(사용자 2026-11-20 "오토바이 자동차가 못생겼어") */
+const noHinge = { current: null };
 function Scooter() {
-  return (
-    <group>
-      <mesh position={[0, 0.42, 0]} castShadow>
-        <boxGeometry args={[0.32, 0.22, 1.05]} />
-        <meshStandardMaterial color={0xf3f4f8} roughness={0.4} />
-      </mesh>
-      <mesh position={[0, 0.62, 0.12]} castShadow>
-        <boxGeometry args={[0.28, 0.08, 0.45]} />
-        <meshStandardMaterial color={0x2b2f3a} roughness={0.7} />
-      </mesh>
-      <mesh position={[0, 0.82, 0.38]} castShadow>
-        <boxGeometry args={[0.42, 0.38, 0.4]} />
-        <meshStandardMaterial color={0x7c5cf0} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 0.85, -0.45]} castShadow>
-        <boxGeometry args={[0.5, 0.05, 0.05]} />
-        <meshStandardMaterial color={0x2b2f3a} />
-      </mesh>
-      {[-0.42, 0.42].map((z) => (
-        <mesh key={z} position={[0, 0.2, z]} rotation={[0, 0, Math.PI / 2]} castShadow>
-          <cylinderGeometry args={[0.2, 0.2, 0.1, 16]} />
-          <meshStandardMaterial color={0x1f2229} roughness={0.8} />
-        </mesh>
-      ))}
-    </group>
-  );
+  return <VehicleModel v="MOTORCYCLE" door={noHinge} lid={noHinge} />;
 }
 
 /** 볼라드(노랑·검정 띠) */

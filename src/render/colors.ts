@@ -34,7 +34,7 @@ export const SCENE = {
   rackPost: 0x1f73f0,
   rackBeam: 0xff9d2e,
   /** 선반 판 — 그림의 나무 팔레트 빛 */
-  rackDeck: 0xe7cfa6,
+  rackDeck: 0xf3e6cc, // 더 밝은 나무빛(사용자 2026-11-20 "단 색깔이 너무 진해")
   rackDivider: 0x9aa6b8,
   /** 상자(갈색 골판지) — 상품마다 조금씩 다르게 */
   box: 0xe2b27a,
