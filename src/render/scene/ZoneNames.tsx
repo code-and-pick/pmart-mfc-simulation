@@ -18,34 +18,51 @@ const ICON: Partial<Record<ZoneKind, string>> = {
   PARKING: '🛵',
 };
 
-/** 둥근 판 캔버스 → 텍스처(+ 가로세로 비). 그림처럼 아래로 번지는 그림자 + 위가 밝은 보라 그라데이션 + 위쪽 얇은 빛 */
+/** 구역별 알약 색(아래 진하게 → 위 밝게) — 바닥 구역색과 같은 계열(사용자 2026-11-20 "알약 카드 다듬기만") */
+const PILL: Partial<Record<ZoneKind, [string, string]>> = {
+  FROZEN: ['#2f6fd8', '#5b9bf2'],
+  CHILLED: ['#2e9a5c', '#56c286'],
+  AMBIENT: ['#d9861c', '#f2a94a'],
+  INBOUND_STORE: ['#1f8f9c', '#3fb6c2'],
+  RECEIVING: ['#3d5bd1', '#6a84ec'],
+  OFFICE: ['#56627a', '#7b879f'],
+  PACKING: ['#6d4fd6', '#8f74ee'],
+  PARKING: ['#6d4fd6', '#8f74ee'],
+};
+
+/**
+ * 둥근 판 캔버스 → 텍스처(+ 가로세로 비). 다듬은 모양: 아이콘은 흰 원 안(구역색), 이름 굵게 흰 글자, 둘째 말(랙 수·평)은
+ * 반투명 흰 작은 알약 안. 그림자는 짧고 부드럽게, 위쪽 반에 얇은 광택.
+ */
 function makePill(title: string, sub: string | null, icon: string | null, bg: string, top: string): { tex: THREE.CanvasTexture; aspect: number } {
   const S = 64; // 글자 기준 크기(캔버스 px)
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
-  const fT = `800 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  const fS = `600 ${Math.round(S * 0.62)}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  const fI = `${Math.round(S * 0.8)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
+  const fT = `900 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  const fS = `700 ${Math.round(S * 0.5)}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  const fI = `${Math.round(S * 0.62)}px "Segoe UI Emoji", "Apple Color Emoji", sans-serif`;
   ctx.font = fT;
   const wT = ctx.measureText(title).width;
   ctx.font = fS;
   const wS = sub ? ctx.measureText(sub).width : 0;
-  const iconW = icon ? S * 1.25 : 0;
-  const padX = S * 0.6;
-  const gap = sub ? S * 0.35 : 0;
-  const M = S * 0.45; // 그림자 여백
-  const pw = Math.ceil(padX * 2 + iconW + wT + gap + wS);
-  const ph = Math.ceil(S * 1.55);
+  const ph = Math.ceil(S * 1.6);
+  const iconD = ph - S * 0.36; // 아이콘 원 지름
+  const padL = icon ? S * 0.18 : S * 0.6;
+  const padR = S * 0.5;
+  const badgeW = sub ? wS + S * 0.6 : 0;
+  const gap = S * 0.3;
+  const M = S * 0.4; // 그림자 여백
+  const pw = Math.ceil(padL + (icon ? iconD + gap : 0) + wT + (sub ? gap + badgeW : 0) + padR);
   c.width = Math.ceil(pw + M * 2);
   c.height = Math.ceil(ph + M * 2);
   const x0 = M;
-  const y0 = M * 0.6;
+  const y0 = M * 0.5;
   const r = ph / 2;
-  // 그림자(아래로)
+  // 그림자(짧고 부드럽게)
   ctx.save();
-  ctx.shadowColor = 'rgba(40,32,120,0.38)';
-  ctx.shadowBlur = S * 0.45;
-  ctx.shadowOffsetY = S * 0.18;
+  ctx.shadowColor = 'rgba(20,24,60,0.32)';
+  ctx.shadowBlur = S * 0.35;
+  ctx.shadowOffsetY = S * 0.12;
   ctx.fillStyle = bg;
   ctx.beginPath();
   ctx.roundRect(x0, y0, pw, ph, r);
@@ -59,29 +76,47 @@ function makePill(title: string, sub: string | null, icon: string | null, bg: st
   ctx.beginPath();
   ctx.roundRect(x0, y0, pw, ph, r);
   ctx.fill();
-  // 위쪽 얇은 빛
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = S * 0.05;
+  // 위쪽 반 광택
+  const gl = ctx.createLinearGradient(0, y0, 0, y0 + ph * 0.55);
+  gl.addColorStop(0, 'rgba(255,255,255,0.28)');
+  gl.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = gl;
   ctx.beginPath();
-  ctx.roundRect(x0 + S * 0.05, y0 + S * 0.05, pw - S * 0.1, ph - S * 0.1, r);
+  ctx.roundRect(x0 + 3, y0 + 3, pw - 6, ph * 0.55, [r - 3, r - 3, 0, 0]);
+  ctx.fill();
+  // 테두리(얇은 흰 선)
+  ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.roundRect(x0 + 1.5, y0 + 1.5, pw - 3, ph - 3, r);
   ctx.stroke();
   ctx.textBaseline = 'middle';
-  const cy = y0 + ph / 2 + 2;
-  let x = x0 + padX;
+  const cy = y0 + ph / 2;
+  let x = x0 + padL;
   if (icon) {
-    ctx.font = fI;
     ctx.fillStyle = '#ffffff';
-    ctx.fillText(icon, x, cy);
-    x += iconW;
+    ctx.beginPath();
+    ctx.arc(x + iconD / 2, cy, iconD / 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = fI;
+    ctx.textAlign = 'center';
+    ctx.fillText(icon, x + iconD / 2, cy + 3);
+    ctx.textAlign = 'left';
+    x += iconD + gap;
   }
   ctx.font = fT;
   ctx.fillStyle = '#ffffff';
-  ctx.fillText(title, x, cy);
+  ctx.fillText(title, x, cy + 3);
   x += wT + gap;
   if (sub) {
+    const bh = S * 0.78;
+    ctx.fillStyle = 'rgba(255,255,255,0.22)';
+    ctx.beginPath();
+    ctx.roundRect(x, cy - bh / 2, badgeW, bh, bh / 2);
+    ctx.fill();
     ctx.font = fS;
-    ctx.fillStyle = 'rgba(255,255,255,0.8)';
-    ctx.fillText(sub, x, cy + 2);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText(sub, x + S * 0.3, cy + 2);
   }
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -133,7 +168,8 @@ export function zoneTags(L: Layout): Tag[] {
     const dim = z.kind === 'QUARANTINE';
     const racks = rackCount(L, z);
     const sub = dim ? (z.docPyeong ? `${z.docPyeong}평` : null) : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
-    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : SCENE.pill, dim ? '#44528a' : SCENE.pillTop);
+    const [pbg, ptop] = PILL[z.kind] ?? [SCENE.pill, SCENE.pillTop];
+    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
     const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
     if (wall) {
       let h = WALL_CARD_H;

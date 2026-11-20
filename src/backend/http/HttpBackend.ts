@@ -415,6 +415,18 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('POST', `/inbound-tasks/${enc(taskId)}/putaways`, { body, idempotencyKey });
   }
 
+  /**
+   * mfc-inbound reportInboundTaskException(0.15.0·0.17.0) — 적치 예외. BLOCKED = 도착 칸 가득·막힘(그 양은 분실 조사 보류로 빠지고 작업 잔량에서 뺀다,
+   * 0 이면 COMPLETED). qty 생략 = 남은 양 전부
+   */
+  reportInboundTaskException(
+    taskId: string,
+    body: { reason: 'SHORT' | 'DAMAGED' | 'SPOILED' | 'BLOCKED'; qty?: number | null; locationCode?: string | null; note?: string | null },
+    idempotencyKey: string,
+  ): Promise<{ exceptionId: string; applyStatus?: string; rejectReason?: string | null }> {
+    return this.request('POST', `/inbound-tasks/${enc(taskId)}/exceptions`, { body, idempotencyKey });
+  }
+
   /** mfc-inbound listInboundTasks — 센터 입고 작업(품질검사·적치) 목록. 상품 이름 포함(withLabels 기본 true) */
   async listInboundTasks(mfcId: string, state?: 'READY' | 'COMPLETED', taskType?: 'INSPECT' | 'PUTAWAY'): Promise<InboundTask[]> {
     const q = new URLSearchParams({ mfcId });

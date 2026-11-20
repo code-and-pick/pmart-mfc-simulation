@@ -830,6 +830,31 @@ export class RealWorker extends Agent {
         break;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
+        // 도착 칸 가득(LOCATION_CAPACITY_EXCEEDED "…N개까지 들어갑니다(지금·예정 M개)") — 한 상품 한 자리라 다른 칸도 안 된다.
+        // 들어가는 만큼(N−M)만 적치하고, 남은 양은 PDA 처럼 적치 예외 BLOCKED(도착 칸 가득)로 보고(계약 inbound 0.17.0 — 작업 잔량에서 빠짐)
+        // (사용자 2026-11-20 "적치 거절 또 뜨잖아")
+        const cap = /LOCATION_CAPACITY_EXCEEDED.*?(\d+)개까지 들어갑니다\(지금·예정 (\d+)개\)/.exec(msg);
+        if (cap) {
+          const room = Math.max(0, Number(cap[1]) - Number(cap[2]));
+          const dest = to;
+          if (room > 0 && room < qty) {
+            await this.applied(`적치(${dest})`, this.key('putaway', t.taskId, `:${dest}:${room}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: dest, qty: room }, k));
+            ctx.log(`${this.account} 적치 ${t.taskId} ${t.sku} ${room} → ${dest} (칸에 들어가는 만큼)`);
+          }
+          const rest = room > 0 && room < qty ? qty - room : qty;
+          this.activity = `${dest} 가득 — 남은 ${rest}개 예외 보고`;
+          await this.retry(() =>
+            unknownAsResend(() =>
+              be.reportInboundTaskException(
+                t.taskId,
+                { reason: 'BLOCKED', qty: rest, locationCode: dest, note: `도착 칸 가득(${cap[1]}개까지, 지금·예정 ${cap[2]}개) — 시뮬레이터 가상 작업자` },
+                this.key('putaway-blocked', t.taskId, `:${dest}:${rest}`),
+              ),
+            ),
+          );
+          ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — ${dest} 가득, 남은 ${rest}개 적치 예외(BLOCKED) 보고`);
+          break;
+        }
         const next = targets[i + 1];
         if (!/^적치\(.*\) 거절/.test(msg) || !next || i + 1 >= REAL_WORKERS.putawayTries) throw e;
         ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} ${to} ${msg} — 다음 칸 ${next}`);
