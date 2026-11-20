@@ -557,7 +557,6 @@ button.link { background: none; border: 0; padding: 0 0 0 6px; color: var(--acce
 .scan-bubble.rack { min-width: 250px; }
 .rk { display: flex; flex-direction: column; gap: 3px; max-height: min(240px, 28vh); overflow-y: auto; }
 /* 멀리서는 한 줄 머리만(사용자 2026-11-20 "인계팝업창 너무 길게 잡혀 있어서 MFC 다 가리는데") */
-.scan-bubble.rack.far .rk, .scan-bubble.rack.far .rk-more { display: none; }
 .rk-more { display: block; margin: 4px auto 0; font-size: 12px; }
 .rk-line { display: flex; align-items: center; gap: 8px; width: 100%; padding: 5px 6px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(255, 255, 255, 0.04); color: #eee; font: inherit; cursor: pointer; text-align: left; }
 .rk-line:hover, .rk-row.on .rk-line { border-color: #8ab4f8; }
@@ -1031,3 +1030,8 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .rin-n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .rin-q { font-variant-numeric: tabular-nums; color: var(--muted); }
 .rin-w { text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* 인계 랙 말풍선 접기·펼치기 — 눈에 띄는 버튼(사용자 2026-11-20 "먼지만한 크기") */
+.scan-bubble .sb-head:has(.sb-toggle) { display: flex; align-items: center; gap: 6px; padding-right: 0; }
+.sb-toggle { margin-left: auto; padding: 3px 10px; border-radius: 7px; border: 1px solid rgba(255, 212, 0, 0.6); background: rgba(255, 212, 0, 0.14); color: #ffd400; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; }
+.sb-toggle:hover { background: rgba(255, 212, 0, 0.26); }
