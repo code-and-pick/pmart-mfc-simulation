@@ -149,6 +149,9 @@ function backWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } 
 /** 벽 판 높이(m)·가운데 높이 — 랙(2.1 m) 위로 보이게, 벽(3 m) 위로 조금 솟게(전체 보기에서도 읽히게) */
 const WALL_CARD_H = 1.7;
 const WALL_CARD_Y = 2.95;
+/** 패킹 밖 구역은 더 크게·더 위에(사용자 2026-11-20 "패킹구역 빼고 나머지 구역들 구역카드 조금더 위쪽으로 사이즈 키워서") */
+const WALL_CARD_H_BIG = 2.2;
+const WALL_CARD_Y_BIG = 3.45;
 
 interface Tag {
   id: string;
@@ -172,14 +175,15 @@ export function zoneTags(L: Layout): Tag[] {
     const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
     const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
     if (wall) {
-      let h = WALL_CARD_H;
+      const big = z.kind !== 'PACKING';
+      let h = big ? WALL_CARD_H_BIG : WALL_CARD_H;
       let w = h * aspect;
       const room = (wall.x1 - wall.x0) * 0.9;
       if (w > room) {
         w = room;
         h = w / aspect;
       }
-      out.push({ id: z.id, tex, pos: [(wall.x0 + wall.x1) / 2, WALL_CARD_Y, wall.face], rotX: 0, w, h });
+      out.push({ id: z.id, tex, pos: [(wall.x0 + wall.x1) / 2, big ? WALL_CARD_Y_BIG + (h - WALL_CARD_H_BIG) / 2 : WALL_CARD_Y, wall.face], rotX: 0, w, h });
     } else {
       // 바닥에 눕힘 — 격리는 작게
       let h = dim ? 0.55 : 0.9;
