@@ -3,6 +3,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RACK_DEPTH } from '../../domain/layout';
 import { useApp } from '../../app/context';
 import { cameraTap } from '../cameraTap';
 
@@ -162,13 +163,41 @@ export function Picker() {
         controller.select({ kind, id: hp.object.userData.personId as string });
         return;
       }
-      // 2a) 실서버 선반 상자 → 그 칸 상품 정보(왼쪽 "구역")
-      if (registry.realCells) {
-        // 칸 정면 보기는 앞쪽(맞은편 랙)을 근접 클리핑으로 잘라 낸다 — 안 보이는 상자는 건너뛴다
-        const hc = raycaster.intersectObject(registry.realCells.mesh, false).find((h) => h.distance >= camera.near);
-        const code = hc?.instanceId !== undefined ? registry.realCells.codeAt(hc.instanceId) : null;
-        if (code) {
-          controller.focusCell(code);
+      // 2) 실서버 선반 칸 — 상자(재고 있는 칸)와 칸 상자(빈 칸 포함) 중 더 가까운 것 → 왼쪽 "구역" 칸 카드
+      //    (빈 칸을 지나 뒤 랙 상자를 집지 않게 둘을 거리로 비교)
+      if (sim.real) {
+        let best: { code: string; d: number } | null = null;
+        if (registry.realCells) {
+          // 칸 정면 보기는 앞쪽(맞은편 랙)을 근접 클리핑으로 잘라 낸다 — 안 보이는 상자는 건너뛴다
+          const hc = raycaster.intersectObject(registry.realCells.mesh, false).find((h) => h.distance >= camera.near);
+          const code = hc?.instanceId !== undefined ? registry.realCells.codeAt(hc.instanceId) : null;
+          if (hc && code) best = { code, d: hc.distance };
+        }
+        const box = new THREE.Box3();
+        const hitP = new THREE.Vector3();
+        const dir = raycaster.ray.direction;
+        for (const loc of sim.layout.locations) {
+          // 칸 앞면(통로 쪽)이 카메라를 볼 때만
+          const facing = loc.along === 'z' ? loc.face * dir.x : loc.face * dir.z;
+          if (facing > 0) continue;
+          const half = loc.slotW / 2;
+          const y0 = loc.shelf.y - 0.035;
+          const cross = loc.along === 'z' ? loc.shelf.x : loc.shelf.z;
+          const c0 = cross - loc.face * RACK_DEPTH * 0.5;
+          const c1 = cross + loc.face * 0.05;
+          const a = loc.along === 'z' ? loc.shelf.z : loc.shelf.x;
+          const lo = Math.min(c0, c1);
+          const hi = Math.max(c0, c1);
+          if (loc.along === 'z') box.set(new THREE.Vector3(lo, y0, a - half), new THREE.Vector3(hi, y0 + loc.levelH, a + half));
+          else box.set(new THREE.Vector3(a - half, y0, lo), new THREE.Vector3(a + half, y0 + loc.levelH, hi));
+          if (!raycaster.ray.intersectBox(box, hitP)) continue;
+          const d = hitP.distanceTo(raycaster.ray.origin);
+          if (d < camera.near || (best && d >= best.d)) continue;
+          const code = sim.codes.toBackend(loc.code);
+          if (code) best = { code, d };
+        }
+        if (best) {
+          controller.focusCell(best.code);
           return;
         }
       }
