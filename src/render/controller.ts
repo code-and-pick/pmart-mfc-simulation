@@ -149,6 +149,14 @@ export class ViewController extends Emitter {
     this.orderSearch = q;
     this.emit();
   }
+  /** 현장 흐름판에서 주문을 누름 — 실제 주문 탭을 그 주문 검색으로(자리·점원 거르기는 풂) */
+  openOrder(orderNo: string) {
+    this.orderSearch = orderNo;
+    this.placeFilter = null;
+    this.workerFilter = null;
+    this.rightView = 'orders';
+    this.emit();
+  }
 
   showPlace(code: string | null) {
     this.placeFilter = code;

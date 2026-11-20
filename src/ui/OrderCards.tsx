@@ -24,8 +24,8 @@ function taskDot(t?: RealTask): Dot {
 /** 단계 막대와 머리 상태 — 서버 값에서만 */
 export function orderStatus(sim: Simulation, r: RealShipment): { dots: Dot[]; text: string; tone: Tone } {
   const v = dispatchView(r);
-  const pick = taskDot(r.pick);
-  const pack = taskDot(r.pack ?? r.ret);
+  let pick = taskDot(r.pick);
+  let pack = taskDot(r.pack ?? r.ret);
   const racked = sim.onRack(r.shipmentId) || ['ASSIGNED', 'AT_STORE', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(v.stage);
   const rack: Dot = racked ? 'done' : pack === 'done' ? 'now' : 'wait';
   const disp: Dot = ['ASSIGNED', 'AT_STORE', 'OUT_FOR_DELIVERY', 'DELIVERED'].includes(v.stage)
@@ -37,6 +37,9 @@ export function orderStatus(sim: Simulation, r: RealShipment): { dots: Dot[]; te
         : 'wait';
   const hand: Dot = v.stage === 'OUT_FOR_DELIVERY' || v.stage === 'DELIVERED' ? 'done' : v.stage === 'AT_STORE' ? 'now' : 'wait';
   const dots: Dot[] = [pick, pack, rack, disp, hand];
+  // 뒤 단계가 시작됐으면 앞 단계는 끝난 것 — 끝난 작업이 목록에서 빠져(작업 없음 = 'wait') 피킹 기다림으로 보이던 것(사용자 2026-11-20 흐름판)
+  for (let i = dots.length - 2; i >= 0; i--) if (dots[i] === 'wait' && dots[i + 1] !== 'wait') dots[i] = 'done';
+  [pick, pack] = [dots[0], dots[1]];
   const qty = (t?: RealTask) => (t ? ` ${t.summary.completedQty}/${t.summary.plannedQty}` : '');
   if (v.stage === 'SHIPMENT_CANCELLED') return { dots, text: '주문 취소', tone: 'done' };
   if (pick === 'bad' || pack === 'bad') return { dots, text: pick === 'bad' ? '피킹 막힘(결품 등)' : '패킹 막힘', tone: 'bad' };

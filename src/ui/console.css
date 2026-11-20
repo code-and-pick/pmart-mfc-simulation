@@ -923,3 +923,41 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .ocd-search .cnt { color: var(--muted); font-size: 12.5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ocd-hit { display: flex; gap: 6px; align-items: baseline; font-size: 12.5px; color: var(--muted); }
 .ocd-hit b { color: var(--accent); font-weight: 600; }
+
+/* 현장 흐름판 — 단계별 주문 수 + 주문마다 단계 막대 */
+.sfl { display: flex; flex-direction: column; gap: 10px; }
+.sfl-pipe { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; position: sticky; top: 0; z-index: 2; background: var(--panel-solid); padding-bottom: 4px; }
+.sfl-p { display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 8px 2px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; cursor: pointer; }
+.sfl-p b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.sfl-p span { font-size: 12px; color: var(--muted); }
+.sfl-p.zero b { color: var(--muted); font-weight: 500; }
+.sfl-p.on { border-color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, var(--panel-solid)); }
+.sfl-g h4 { margin: 4px 2px 6px; font-size: 13.5px; }
+.sfl-g h4 span { color: var(--muted); font-weight: 500; font-size: 12.5px; margin-left: 4px; }
+.sfl-r { display: block; width: 100%; text-align: left; padding: 10px 12px 8px; margin-bottom: 6px; border-radius: 10px; border: 1px solid var(--line); border-left: 4px solid var(--line-strong); background: var(--soft); color: var(--text); font: inherit; cursor: pointer; }
+.sfl-r:hover { border-color: var(--accent); }
+.sfl-r.tone-run { border-left-color: var(--accent); }
+.sfl-r.tone-ok { border-left-color: var(--ok); }
+.sfl-r.tone-bad { border-left-color: var(--bad); }
+.sfl-r.tone-wait { border-left-color: var(--warn-ink); }
+.sfl-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.sfl-h b { font-size: 15px; }
+.sfl-h .st { font-size: 12.5px; color: var(--muted); text-align: right; }
+.sfl-r.tone-bad .sfl-h .st { color: var(--bad); }
+.sfl-steps { list-style: none; display: grid; grid-template-columns: repeat(5, 1fr); margin: 10px 0 2px; padding: 0; }
+.sfl-steps li { position: relative; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.sfl-steps li::before { content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 2px; background: var(--line-strong); }
+.sfl-steps li:first-child::before { display: none; }
+.sfl-steps li.done::before, .sfl-steps li.now::before, .sfl-steps li.bad::before { background: var(--accent); }
+.sfl-steps i { position: relative; z-index: 1; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--line-strong); background: var(--panel-solid); }
+.sfl-steps li.done i { background: var(--accent); border-color: var(--accent); }
+.sfl-steps li.now i { border-color: var(--accent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 25%, transparent); animation: sfl-pulse 1.4s ease-in-out infinite; }
+.sfl-steps li.bad i { background: var(--bad); border-color: var(--bad); }
+.sfl-steps .n { font-size: 12px; color: var(--muted); }
+.sfl-steps li.now .n { color: var(--accent); font-weight: 700; }
+.sfl-steps li.done .n { color: var(--text); }
+.sfl-steps .u { font-size: 11.5px; min-height: 15px; color: var(--text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sfl-w { margin-top: 4px; font-size: 12px; color: var(--muted); }
+.sfl-log summary { cursor: pointer; font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
+@keyframes sfl-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 8%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .sfl-steps li.now i { animation: none; } }

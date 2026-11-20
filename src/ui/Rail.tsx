@@ -5,14 +5,15 @@ import { collectIssues } from '../sim/issues';
 
 const REAL_RIGHT: [RightView, string, string][] = [
   ['orders', '📋', '실제 주문'],
+  ['logs', '☰', '현장'],
   ['inventory', '▦', '재고'],
   ['scan', '▥', '바코드'],
   ['api', '⧉', 'API'],
 ];
 const MOCK_RIGHT: [RightView, string, string][] = [
+  ['logs', '☰', '현장'],
   ['api', '⧉', 'API'],
   ['events', '⇄', '이벤트'],
-  ['logs', '☰', '현장'],
   ['inventory', '▦', '재고'],
   ['scan', '▥', '바코드'],
 ];

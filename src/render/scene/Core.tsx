@@ -44,7 +44,8 @@ export function CameraRig() {
     c.dampingFactor = 0.15;
     c.rotateSpeed = 0.35;
     c.panSpeed = 1.1;
-    c.zoomSpeed = 0.9;
+    // 휠 한 칸 = 0.95^zoomSpeed 배 — 0.9 는 한 칸에 약 4.5% 로 뻑뻑했다(사용자 2026-11-20). 2.6 ≈ 한 칸 12.5%
+    c.zoomSpeed = 2.6;
     c.zoomToCursor = true;
     c.minPolarAngle = Math.PI * 0.12; // 바로 위에서 뒤집히지 않게
     c.maxPolarAngle = Math.PI * 0.47;
