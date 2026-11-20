@@ -29,7 +29,7 @@ export function App({ app }: { app: AppCtx }) {
       <div id="viewport">
         <SiteScene app={app} />
       </div>
-      {app.sim.real && <ScanBubbles />}
+      {app.sim.board && <ScanBubbles />}
       {/* 뼈대(pmart-rider-simulation 참고): [왼쪽 아이콘 메뉴 | 머리줄 → 확인할 일 → [왼쪽 패널 · 3D · 오른쪽 패널]] */}
       <div id="ui" data-left={view.leftView ? 'open' : 'closed'} data-right={view.rightView ? 'open' : 'closed'}>
         <Rail />

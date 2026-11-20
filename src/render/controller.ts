@@ -133,7 +133,7 @@ export class ViewController extends Emitter {
 
   constructor(private readonly sim: Simulation) {
     super();
-    this.rightView = sim.real ? 'orders' : 'api';
+    this.rightView = 'orders';
     this.views = zoneViews(sim.layout);
     this.focusZone('ALL', false);
   }
@@ -240,7 +240,7 @@ export class ViewController extends Emitter {
   select(s: Selection, fly = true) {
     this.selection = s;
     // 실서버: 점원을 누르면 오른쪽에 그 점원 주문만(실제 주문·바코드 탭이 그 주문). 다른 걸 고르면 풂
-    if (s?.kind === 'worker' && this.sim.real) {
+    if (s?.kind === 'worker' && this.sim.board) {
       const w = this.sim.siteWorkers().find((x) => x.id === s.id);
       const sid = w?.pda?.shipmentId ?? null;
       this.workerFilter = { id: s.id, shipmentId: sid };

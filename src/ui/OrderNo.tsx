@@ -5,7 +5,7 @@ import { useApp } from '../app/context';
 /** 출고의 주문번호 — 없으면 null */
 export function useOrderNumber(shipmentId: string | null | undefined): string | null {
   const { sim } = useApp();
-  return shipmentId && sim.real ? sim.real.orderNumberOf(shipmentId) : null;
+  return shipmentId && sim.board ? sim.board.orderNumberOf(shipmentId) : null;
 }
 
 /** 이름표처럼 글자만 필요할 때: 주문번호, 없으면 "끝8자리(번호 없음)" */

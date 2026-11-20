@@ -359,6 +359,20 @@ export class MockBackend implements FulfillmentPort {
   allShipments(): Shipment[] {
     return [...this.shipments.values()].map((s) => s.shipment);
   }
+  /** 화면용 조용한 읽기(API 기록에 남기지 않음) — MOCK 화면이 실서버 화면처럼 주문을 그리려고 3초마다 읽는다(MockReader) */
+  peekTasks(states: TaskState[]): TaskSummary[] {
+    return [...this.tasks.values()]
+      .map((t) => t.detail)
+      .filter((d) => states.includes(d.state))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map(({ lines: _l, activeStart: _a, blockReason: _b, routeMethod: _r, packingLocations: _p, pendingExecutions: _e, asOf: _o, ...summary }) => structuredClone(summary));
+  }
+  peekTask(taskId: string): TaskDetail {
+    return structuredClone(this.mustTask(taskId).detail);
+  }
+  peekShipment(shipmentId: string): Shipment {
+    return structuredClone(this.mustShipment(shipmentId).shipment);
+  }
   riderOf(shipmentId: string): string | null {
     return this.shipments.get(shipmentId)?.riderId ?? null;
   }

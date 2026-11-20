@@ -21,7 +21,7 @@ const kindOf = (v: string) => (/^\d{13}$/.test(v) ? 'ean13' : 'code128');
 
 export function useSkuBarcodes(tasks: (RealTask | undefined)[]) {
   const { sim } = useApp();
-  const real = sim.real;
+  const real = sim.board;
   const skus = tasks.filter((t): t is RealTask => !!t && t.summary.taskType === 'PICK' && !!t.detail).flatMap((t) => t.detail!.lines.map((l) => l.sku));
   const skuKey = [...new Set(skus)].sort().join(',');
   useEffect(() => {
@@ -70,7 +70,7 @@ export function LotLabel({ l, p, height }: { l: TaskLine; p: TaskPick; height: n
 /** 작업 하나의 찍을 바코드 — PICK: 방문 순서별 지시 칸 + 상품, PACK: 포장 위치 + 출하대기 랙 */
 export function TaskBarcodes({ t }: { t: RealTask }) {
   const { sim } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const s = t.summary;
   const d = t.detail;
   if (!d) return <div className="note">작업 상세를 읽는 중…</div>;
@@ -189,7 +189,7 @@ export function TaskBarcodes({ t }: { t: RealTask }) {
 /** 상품 바코드 — 작업 지시 줄 값(PDA 가 비교하는 값) 먼저, 없으면 상품 정보(참고) */
 function ProductBarcodes({ l }: { l: TaskLine }) {
   const { sim } = useApp();
-  const bc = sim.real!.skuBarcodes.get(l.sku);
+  const bc = sim.board!.skuBarcodes.get(l.sku);
   // 작업 지시 바코드 중 첫 값 말고 나머지(0.7.0 barcodes) — 계약은 "barcodes 중 하나면 같은 상품"
   const more = (l.barcodes ?? []).filter((v) => v !== l.barcode);
   // PDA 앱은 찍은 값이 작업 지시 줄의 barcode 또는 barcodes 중 하나면 받는다(mfc_app task_list.dart matchesBarcode, 클라이언트 c6f4930 — C-1 해소)
@@ -216,7 +216,7 @@ function ProductBarcodes({ l }: { l: TaskLine }) {
 
 function ProductBarcodeNotes({ l }: { l: TaskLine }) {
   const { sim } = useApp();
-  const bc = sim.real!.skuBarcodes.get(l.sku);
+  const bc = sim.board!.skuBarcodes.get(l.sku);
   return (
     <>
       {!l.barcode && (
@@ -235,7 +235,7 @@ export function ScanBoard() {
   const { sim } = useApp();
   const focus = useScanFocus();
   const view = useScanView();
-  const real = sim.real;
+  const real = sim.board;
   // 실제 주문 줄에서 고른 출고의 PICK·PACK(끝난 것도)만 — 고르기 전에는 주문 바코드를 보이지 않는다(3D 말풍선과 같은 기준, 사용자 2026-11-17)
   const tasks =
     real && focus.shipmentId

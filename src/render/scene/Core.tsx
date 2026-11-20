@@ -165,7 +165,7 @@ export function Picker() {
       }
       // 2) 실서버 선반 칸 — 상자(재고 있는 칸)와 칸 상자(빈 칸 포함) 중 더 가까운 것 → 왼쪽 "구역" 칸 카드
       //    (빈 칸을 지나 뒤 랙 상자를 집지 않게 둘을 거리로 비교)
-      if (sim.real) {
+      if (sim.board) {
         let best: { code: string; d: number } | null = null;
         if (registry.realCells) {
           // 칸 정면 보기는 앞쪽(맞은편 랙)을 근접 클리핑으로 잘라 낸다 — 안 보이는 상자는 건너뛴다
@@ -210,7 +210,7 @@ export function Picker() {
         }
       }
       // 3) 패킹대·출하대기 랙(실서버) → 그 자리 주문 팝업
-      if (sim.real) {
+      if (sim.board) {
         const hit = new THREE.Vector3();
         for (const y of [0.9, 1.2]) {
           if (!raycaster.ray.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -y), hit)) continue;

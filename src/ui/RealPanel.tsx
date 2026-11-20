@@ -20,7 +20,7 @@ export const TASK_STATE_KO: Record<TaskState | 'CHECKING', string> = {
 
 export function RealSummary() {
   const { sim } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const c = real.counts();
   const n = (k: string) => c[k] ?? 0;
   const kpis: [string, string][] = [
@@ -64,7 +64,7 @@ const PURPOSE_KO: Record<string, string> = { CLAIM_RETURN: '반품 회수', MISD
  */
 function ReturnHandovers() {
   const { sim } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const hs = real.returnHandovers;
   // 다른 기기(조회만)는 이 경로를 허용 목록에 넣지 않았다(403) — 오류로 보이지 않는다
   if (!hs.length) return real.returnHandoverError && !sim.realTokens?.serverInjected ? <div className="note warn">반납 인증번호를 읽지 못했습니다: {real.returnHandoverError}</div> : null;
@@ -101,7 +101,7 @@ function ReturnHandovers() {
 
 function ReturnPickups() {
   const { sim } = useApp();
-  const rp = sim.real!.returnPickups;
+  const rp = sim.board!.returnPickups;
   if (!rp.length) return <ReturnHandovers />;
   return (
     <>
@@ -129,7 +129,7 @@ function ReturnPickups() {
 /** 실제 주문(출고) 목록 */
 export function RealOrders() {
   const { sim, controller } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const rows = real.shipments();
   if (!rows.length) {
     return (
@@ -161,7 +161,7 @@ const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PA
  */
 export function RealStockTable() {
   const { sim, controller } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const units = real.stockUnits();
   if (!units.length) {
     return <div className="note">열린 주문에 나온 상품이 없어 읽은 재고가 없습니다(센터 전체 재고를 칸 단위로 읽는 API 는 없음).</div>;

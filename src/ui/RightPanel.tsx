@@ -162,7 +162,7 @@ function Summary() {
 function LogBody({ tab }: { tab: Tab }): ReactNode {
   const { sim: s, controller } = useApp();
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
-  if (tab === 'orders') return s.real ? <RealOrders /> : null;
+  if (tab === 'orders') return s.board ? <RealOrders /> : null;
   if (tab === 'scan') return <ScanBoard />;
   if (tab === 'api') {
     return s.apiLog.slice(-150).map((r, i) => {
@@ -265,7 +265,7 @@ function Log({ tab }: { tab: Tab }) {
   // 바닥에 붙어 있었으면 새 행이 와도 바닥을 따라간다
   const stick = useRef(true);
   // 3D 에서 자리를 고르면(placeFilter) 주문 목록을 다시 그린다
-  const key = `${controller.placeFilter ?? ''}:${controller.workerFilter?.id ?? ''}:${controller.workerFilter?.shipmentId ?? ''}:${tab}:${tab === 'orders' || tab === 'scan' ? (s.real?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.real?.skuVersion ?? 0}.${s.real?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
+  const key = `${controller.placeFilter ?? ''}:${controller.workerFilter?.id ?? ''}:${controller.workerFilter?.shipmentId ?? ''}:${tab}:${tab === 'orders' || tab === 'scan' ? (s.board?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.board?.skuVersion ?? 0}.${s.board?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}`;
   // 내용이 바뀔 때만 다시 만든다 (4Hz 갱신마다 150행을 새로 그리지 않게)
   const body = useMemo(() => <LogBody tab={tab} />, [key]);
   const lastTab = useRef(tab);

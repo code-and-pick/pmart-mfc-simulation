@@ -143,7 +143,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   const [open, setOpen] = useState(true);
   // 한눈에는 화면 번호(주문번호·라벨 번호)만, 줄을 누르면 그 포장의 QR·시스템 번호(ADR-0070 — 사용자 2026-11-20 "버튼을 누르면 세부적으로, 관리자가 바로 볼 때는 직관적으로")
   const [pick, setPick] = useState<string | null>(null);
-  const real = sim.real;
+  const real = sim.board;
   const list = (real?.shipments() ?? [])
     .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId) && sim.rackFor(r.shipmentId) === rack)
     .filter((r) => !shipmentId || r.shipmentId === shipmentId)

@@ -10,7 +10,7 @@ const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PA
 /** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량 */
 function CellCard({ code }: { code: string }) {
   const { sim, controller } = useApp();
-  const rows = sim.real!.fullStock.filter((u) => u.locationCode === code);
+  const rows = sim.board!.fullStock.filter((u) => u.locationCode === code);
   const loc = sim.backendLocation(code);
   const rack = loc ? sim.layout.racks.find((r) => r.id === loc.rackId) : undefined;
   const total = rows.reduce((a, u) => a + u.qty, 0);
@@ -50,7 +50,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   const { sim, controller } = useApp();
   const view = useView();
   const [open, setOpen] = useState<string | null>(null);
-  const real = sim.real!;
+  const real = sim.board!;
   // 3D 에서 칸을 누르면 그 랙을 펼친다
   const focusRack = view.cellFocus ? (sim.backendLocation(view.cellFocus)?.rackId ?? null) : null;
   useEffect(() => {

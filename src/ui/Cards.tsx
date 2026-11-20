@@ -24,7 +24,7 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
   const temp: TemperatureZone | null = zoneKey === 'A' ? 'FROZEN' : zoneKey === 'B' ? 'CHILLED' : zoneKey === 'C-H' ? 'AMBIENT' : null;
   // 실서버: 센터 전체 재고로 구역 → 랙 → 단 → 칸
-  if (temp && s.real) return <RealZoneStock temp={temp} />;
+  if (temp && s.board) return <RealZoneStock temp={temp} />;
   if (temp) {
     const racks = s.layout.racks.filter((r) => r.temp === temp);
     const locs = s.layout.locationsByTemp[temp].length;
@@ -314,7 +314,7 @@ function DetailBody() {
         <dl>
           {/* 작업 ID(긴 시스템 ID)는 겉에 내지 않는다 — ADR-0070 */}
           <Row k="작업" v={TASK_KO[d.taskType] ?? d.taskType} />
-          <Row k="주문" v={d.shipmentId && sim.real ? orderText(sim.real.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId && d.orderId.length > 12 ? orderText(null, d.orderId) : d.orderId} />
+          <Row k="주문" v={d.shipmentId && sim.board ? orderText(sim.board.orderNumberOf(d.shipmentId), d.shipmentId) : d.orderId && d.orderId.length > 12 ? orderText(null, d.orderId) : d.orderId} />
           <Row k="진행" v={d.progress} />
           <Row
             k="현재 로케이션"
@@ -351,7 +351,7 @@ export function DetailCard() {
   // 실서버에서 점원을 누르면 오른쪽 실제 주문이 그 점원 주문을 보인다 — 떠 있는 점원 카드는 띄우지 않는다(사용자 2026-11-20 "팝업창이 왜 계속 남아있어")
   const exists =
     !!sel &&
-    !(sel.kind === 'worker' && sim.real) &&
+    !(sel.kind === 'worker' && sim.board) &&
     (sel.kind === 'location' ||
       (sel.kind === 'inbound' ? sim.inboundWorkers.some((x) => x.id === sel.id) : sim.siteWorkers().some((x) => x.id === sel.id)));
   return <div className={`pda${exists ? ' show' : ''}`}>{exists && <DetailBody />}</div>;

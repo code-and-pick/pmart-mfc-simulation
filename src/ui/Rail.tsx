@@ -32,7 +32,7 @@ export function Rail() {
       <span className="rail-logo" aria-hidden>
         P
       </span>
-      {(sim.real ? REAL_RIGHT : MOCK_RIGHT).map(([v, icon, label]) => (
+      {(sim.real ? REAL_RIGHT : [REAL_RIGHT[0], ...MOCK_RIGHT]).map(([v, icon, label]) => (
         <button key={v} className={view.rightView === v ? 'on' : ''} aria-pressed={view.rightView === v} onClick={() => view.toggleRight(v)} title={`${label} (다시 누르면 접기)`}>
           <span className="rail-i" aria-hidden>
             {icon}

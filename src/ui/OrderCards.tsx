@@ -55,9 +55,10 @@ const clock = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' }) : null;
 
 /** 걸린 시간 "3분 12초" — 시작 전이면 null */
+let nowFn: () => number = () => Date.now();
 function dur(fromIso: string | null | undefined, toMs: number | null): string | null {
   if (!fromIso) return null;
-  const sec = Math.max(0, Math.round(((toMs ?? Date.now()) - Date.parse(fromIso)) / 1000));
+  const sec = Math.max(0, Math.round(((toMs ?? nowFn()) - Date.parse(fromIso)) / 1000));
   if (sec < 60) return `${sec}초`;
   const m = Math.floor(sec / 60);
   return m < 60 ? `${m}분 ${sec % 60}초` : `${Math.floor(m / 60)}시간 ${m % 60}분`;
@@ -71,7 +72,8 @@ interface Stage {
 
 /** 피킹·패킹에 걸린 시간 — 시작(센터 출고 목록 startedAt, 진행 중이면 작업 activeStart) ~ 끝(작업 completedAt, 없으면 다음 단계 시작·출하 대기 시각). 서버 값만 */
 export function stageTimes(sim: Simulation, r: RealShipment): { pick: Stage; pack: Stage; readyAt: string | null } {
-  const c = sim.real?.centerShipments.get(r.shipmentId);
+  nowFn = () => sim.nowMs();
+  const c = sim.board?.centerShipments.get(r.shipmentId);
   const readyAt = c?.readyAt ?? r.info?.readyAt ?? null;
   const packStart = c?.pack?.startedAt ?? (r.pack ?? r.ret)?.detail?.activeStart?.startedAt ?? null;
   const one = (t: RealTask | undefined, started: string | null | undefined, next: string | null): Stage => {
@@ -92,7 +94,7 @@ export function stageTimes(sim: Simulation, r: RealShipment): { pick: Stage; pac
  */
 export function OrderCard({ r }: { r: RealShipment }) {
   const { sim } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const focus = useScanFocus();
   const on = focus.shipmentId === r.shipmentId;
   const st = orderStatus(sim, r);
@@ -194,7 +196,7 @@ export function OrderCard({ r }: { r: RealShipment }) {
         </li>
         <li>
           <span>전달지</span>
-          {r.dispatch?.dropAreaLabel ? <b>{r.dispatch.dropAreaLabel}</b> : <i>아직 안 옴 — R-27 배포 전</i>}
+          {(r.dispatch?.dropAreaLabel ?? (r.info as { dropAreaLabel?: string } | undefined)?.dropAreaLabel) ? <b>{r.dispatch?.dropAreaLabel ?? (r.info as { dropAreaLabel?: string }).dropAreaLabel}</b> : <i>배차되면 보임</i>}
         </li>
         <li className="note-li">
           <span>요청</span>
@@ -241,7 +243,7 @@ export function OrderCards() {
   // 점원이 다음 주문으로 넘어가면 따라 바뀐다(누른 때 주문이 아니라 지금 주문)
   const wf0 = view.workerFilter;
   const wf = wf0 ? { id: wf0.id, shipmentId: sim.siteWorkers().find((x) => x.id === wf0.id)?.pda?.shipmentId ?? wf0.shipmentId } : null;
-  const all = sim.real!.shipments();
+  const all = sim.board!.shipments();
   const at = place ? sim.shipmentsAt(place) : [];
   const rows = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : wf ? all.filter((r) => r.shipmentId === wf.shipmentId) : all;
   return (

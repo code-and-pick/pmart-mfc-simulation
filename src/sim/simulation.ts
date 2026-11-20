@@ -16,6 +16,7 @@ import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpo
 import { buildLocationCodeMap, SIM_POINT, type LocationCodeMap } from '../domain/locationCodes';
 import { NavGrid } from '../domain/navgrid';
 import { MockBackend } from '../backend/mock/MockBackend';
+import { MockReader } from '../backend/mock/MockReader';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
@@ -170,6 +171,44 @@ export class Simulation {
       mock.onApi((r) => this.push(this.apiLog, r));
       mock.onEvent((e) => this.onEvent(e));
       this.mock = mock;
+      this.mockBoard = new RealBoard(
+        new MockReader(mock, {
+          workers: () => this.workers,
+          riders: () => this.riders.filter((r): r is Rider => r instanceof Rider),
+          rackOf: (sid) => {
+            const sl = this.shipRack.ofShipment(sid)[0]?.slot;
+            return sl && sl.rackIndex >= 0 ? `DSP-A-0${sl.rackIndex + 1}` : null;
+          },
+          shelfStock: () => {
+            const out: { code: string; sku: string; name: string; qty: number }[] = [];
+            for (const k of this.catalog) {
+              const q = mock.inventory.get(k.sku)?.shelf ?? 0;
+              const code = this.codes.toBackend(k.location.code);
+              if (q > 0 && code) out.push({ code, sku: k.sku, name: k.name, qty: q });
+            }
+            return out;
+          },
+          skuInfo: (sku) => {
+            const k = this.skuMap.get(sku);
+            return k ? { name: k.name, barcode: k.barcode } : null;
+          },
+          nowMs: () => this.nowMs(),
+        }),
+        params.mfcId,
+        {
+          pollSec: REAL_LINK.pollSec,
+          workerRefreshSec: REAL_LINK.workerRefreshSec,
+          recentKeepSec: REAL_LINK.recentKeepSec,
+          openStates: REAL_LINK.openStates,
+          stockRefreshSec: REAL_LINK.stockRefreshSec,
+          maxStockPerPoll: REAL_LINK.maxStockPerPoll,
+          shipmentRefreshSec: 2,
+          maxShipmentPerPoll: 30,
+          handoverKeepSec: REAL_LINK.handoverKeepSec,
+          maxDetailPerPoll: 40,
+        },
+      );
+      this.mockBoard.fullStockOpt = { everySec: 5, maxPages: 1 };
       this.port = mock;
     } else {
       // 실서버 관찰: 시험 계정 토큰(개발 서버가 발급) + 주기 조회. 가상 작업자·가짜 주문 없음(SIM-4), 실제 시각(SIM-1)
@@ -288,6 +327,16 @@ export class Simulation {
   private virtualTarget = 0;
   /** 관찰 계정 어댑터(실서버 모드) — 시험 입고처럼 사용자가 누른 쓰기에만 쓴다 */
   private realHttp: HttpBackend | null = null;
+  /** MOCK 화면용 관찰판 — 실서버 화면(주문 카드·구역 재고·바코드)을 MOCK 에서도 보게. 시뮬 동작은 쓰지 않음(사용자 2026-11-20) */
+  private mockBoard: RealBoard | null = null;
+  /** 화면의 "지금"(ms) — 실서버는 실제 시각, MOCK 은 MOCK 시계(서버 시각과 같은 기준) */
+  nowMs(): number {
+    return this.real ? Date.now() : Date.parse(`${BASE_DATE}T00:00:00+09:00`) + this.time * 1000;
+  }
+  /** 화면이 읽는 관찰판 — 실서버면 실서버, MOCK 이면 MOCK 관찰판 */
+  get board(): RealBoard | null {
+    return this.real ?? this.mockBoard;
+  }
   /** PDA 가 쓰는 중이라 건너뛴 계정 → 그때(ms). REAL_LINK.pdaSkipSec 동안 다시 고르지 않는다 */
   private readonly pdaAccounts = new Map<string, number>();
   /** 가상 작업자로 마지막에 쓴 운영자 ID → 그때(ms) — 그 뒤 서버 활동만 PDA 것으로 본다 */
@@ -415,9 +464,16 @@ export class Simulation {
    * 그 작업자의 안내(PACK 패킹대) 또는 포장 packingLocation(0.20.0), 모르면 PAK-A-01(추정, 서버가 패킹대를 주지 않음).
    */
   shipmentsAt(code: string): { shipmentId: string; guess: boolean }[] {
-    const real = this.real;
+    const real = this.board;
     if (!real) return [];
     const out: { shipmentId: string; guess: boolean }[] = [];
+    // MOCK: 패킹대를 차지한 점원의 주문
+    if (!this.real && code.startsWith('PAK-A-')) {
+      const st = this.layout.stations[Number(code.slice(-2)) - 1];
+      const wid = st ? this.stations.occupant(st.id) : undefined;
+      const sid = wid ? this.workers.find((w) => w.id === wid)?.pda?.shipmentId : null;
+      return sid ? [{ shipmentId: sid, guess: false }] : [];
+    }
     for (const r of real.shipments()) {
       if (code.startsWith('DSP-')) {
         const st = r.info?.state;
@@ -442,7 +498,7 @@ export class Simulation {
    * 사용자 2026-11-20 "구역별 랙 갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수"
    */
   rackStock(): Map<string, RackStock> {
-    const real = this.real;
+    const real = this.board;
     if (!real) return new Map();
     if (this.rackStockCache?.ver === real.fullStockVersion) return this.rackStockCache.byRack;
     const byRack = new Map<string, RackStock>();
@@ -861,7 +917,7 @@ export class Simulation {
   private readonly rackChosen = new Map<string, string>();
   /** 서버가 아는 그 출고의 출하대기 랙 — 포장 `stagingLocation`(fulfillment 0.20.0, F-12). 아직 안 올렸으면 null */
   serverRack(shipmentId: string): string | null {
-    const pk = this.real?.shipmentInfo.get(shipmentId)?.data.packages ?? [];
+    const pk = this.board?.shipmentInfo.get(shipmentId)?.data.packages ?? [];
     return pk.find((p) => p.stagingLocation)?.stagingLocation ?? null;
   }
 
@@ -892,7 +948,7 @@ export class Simulation {
    * 화면에서 "랙 찍음"을 눌렀다 · 포장한 작업자가 다른 작업을 받았다(PDA 는 랙을 찍어야 "패킹 끝" → 다음 작업) · 가상 작업자가 포장했다
    */
   onRack(shipmentId: string): boolean {
-    const real = this.real;
+    const real = this.board;
     if (!real) return false;
     if (this.serverRack(shipmentId)) return true; // 서버가 안다(F-12)
     const pack = [...real.tasks.values()].find((t) => t.summary.taskType === 'PACK' && t.summary.shipmentId === shipmentId);
@@ -1093,6 +1149,7 @@ export class Simulation {
       }
       return;
     }
+    if (this.mockBoard && this.speed > 0) void this.mockBoard.tick();
     let remain = Math.min(dtReal, 0.1) * this.speed;
     while (remain > 1e-6) {
       const dt = Math.min(SUBSTEP, remain);

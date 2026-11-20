@@ -22,11 +22,13 @@ type Row = { at: string; what: string; who?: string; tone?: 'warn' | 'ok' };
 
 export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
   const { sim } = useApp();
-  const real = sim.real!;
+  const real = sim.board!;
   const orderId = real.shipmentInfo.get(shipmentId)?.data.orderId ?? null;
   useEffect(() => {
     if (orderId) real.requestOrderView(orderId);
   });
+  // MOCK 은 현장 기록(work-orders)이 없다
+  if (!sim.real) return null;
   if (!orderId) return <div className="note">현장 기록: 출고를 읽는 중</div>;
   const v = real.orderViews.get(orderId);
   if (v?.notYet) return <div className="note">현장 기록: 작업 지시가 아직 MFC 에 오지 않음</div>;
