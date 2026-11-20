@@ -213,6 +213,15 @@ export function OrderCard({ r, hit }: { r: RealShipment; hit?: SearchField | nul
           {os ? <b>{os.deliveryNote || '없음'}</b> : <i>배송이 생기면 보임</i>}
         </li>
       </ul>
+      {/* 현장 흐름판과 같은 단계 막대를 작고 얇게(사용자 2026-11-20 "상품 위쪽에 작고 얇게 *-*-*-*-*") */}
+      <ol className="sfl-steps mini">
+        {st.dots.map((d, i) => (
+          <li key={STEPS[i]} className={d}>
+            <i />
+            <span className="n">{STEPS[i]}</span>
+          </li>
+        ))}
+      </ol>
       <div className="ocd-items">
         <div className="ocd-ih">
           <span>상품 {items.length}개</span>

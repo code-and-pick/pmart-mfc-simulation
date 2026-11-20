@@ -961,3 +961,11 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .sfl-log summary { cursor: pointer; font-size: 12.5px; color: var(--muted); padding: 6px 2px; }
 @keyframes sfl-pulse { 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent) 8%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .sfl-steps li.now i { animation: none; } }
+
+/* 주문 카드 상품 위 작은 단계 막대 */
+.sfl-steps.mini { margin: 8px 0 6px; }
+.sfl-steps.mini li { gap: 2px; }
+.sfl-steps.mini li::before { top: 3.5px; height: 1px; }
+.sfl-steps.mini i { width: 8px; height: 8px; border-width: 1px; }
+.sfl-steps.mini li.now i { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.sfl-steps.mini .n { font-size: 11px; }
