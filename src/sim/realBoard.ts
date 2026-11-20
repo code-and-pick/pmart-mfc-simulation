@@ -3,7 +3,7 @@
 // 근거: SIM-5(주기 조회, 3초), SIM-2a(PDA 작업자는 서버 기록으로 추적). 서버가 준 상태만 그린다 — 목록에서 빠진 작업은
 // 상세를 다시 읽어 확정된 최종 상태를 받기 전까지 "확인 중"으로 둔다.
 
-import { ApiProblem } from '../domain/contract';
+import { ApiProblem, CategoryNode } from '../domain/contract';
 import type {
   OrderFulfillmentView,
   EmployeeLabel,
@@ -46,6 +46,9 @@ export interface RealReader {
   getRiderDisplayNames?(riderIds: string[]): Promise<RiderDisplayName[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
+  /** (product) 카테고리 트리·상품 대표 카테고리 — 구역 카테고리별 수량(사용자 2026-11-20) */
+  getCategoryTree?(): Promise<CategoryNode[]>;
+  listProductCategories?(maxPages: number): Promise<Map<string, string>>;
   /** (inventory 0.33.0, R-15) 센터 전체 재고 단위 행 */
   listAllStockUnits?(mfcId: string, maxPages: number): Promise<StockUnitRow[]>;
   /** (center-master) 센터 이름 — 화면에 MFC ID 대신 */
@@ -402,7 +405,63 @@ export class RealBoard {
   fullStockError: string | null = null;
   fullStockOpt = { everySec: 30, maxPages: 60 };
 
+  /**
+   * SKU → 대분류 카테고리 이름(카테고리 경로 첫 토막). 트리·상품 목록은 10분마다, SKU → 상품은 처음 본 SKU 만(/skus/{sku}, 6개씩 동시).
+   * 구역 패널 "카테고리별" 용(사용자 2026-11-20 "카테고리별 상품수량도 보게해줘")
+   */
+  skuCategory = new Map<string, string>();
+  categoryVersion = 0;
+  private catReadMs = 0;
+  private catBusy = false;
+  private catTree = new Map<string, CategoryNode>();
+  private productCat = new Map<string, string>();
+  private skuProduct = new Map<string, string | null>();
+
+  private topName(categoryId: string): string {
+    const n = this.catTree.get(categoryId);
+    if (!n) return '기타';
+    if (n.path) return n.path.split(' > ')[0];
+    let cur: CategoryNode | undefined = n;
+    while (cur?.parentId && this.catTree.get(cur.parentId)) cur = this.catTree.get(cur.parentId);
+    return cur?.name ?? '기타';
+  }
+
+  private async refreshCategories(now: number) {
+    if (this.catBusy || !this.reader.getCategoryTree || !this.reader.listProductCategories || !this.fullStock.length) return;
+    const fresh = now - this.catReadMs > 600_000;
+    const unknown = [...new Set(this.fullStock.map((u) => u.sku))].filter((k) => !this.skuProduct.has(k));
+    if (!fresh && !unknown.length) return;
+    this.catBusy = true;
+    try {
+      if (fresh) {
+        this.catReadMs = now;
+        this.catTree = new Map((await this.reader.getCategoryTree()).map((n) => [n.categoryId, n]));
+        this.productCat = await this.reader.listProductCategories(60);
+      }
+      // 실패한 SKU 는 비워 두고 다음 조회에서 다시(한 번에 4개씩, 한 번에 최대 120개)
+      const todo = unknown.slice(0, 120);
+      for (let i = 0; i < todo.length; i += 4) {
+        await Promise.all(
+          todo.slice(i, i + 4).map(async (k) => {
+            const s = await this.reader.getSku(k).catch(() => undefined);
+            if (s) this.skuProduct.set(k, s.productId ?? null);
+          }),
+        );
+      }
+      for (const [sku, pid] of this.skuProduct) {
+        const c = pid ? this.productCat.get(pid) : undefined;
+        this.skuCategory.set(sku, c ? this.topName(c) : '기타');
+      }
+      this.categoryVersion++;
+    } catch {
+      // 다음 조회에서 다시
+    } finally {
+      this.catBusy = false;
+    }
+  }
+
   private async refreshFullStock(now: number) {
+    void this.refreshCategories(now);
     if (!this.reader.listAllStockUnits || now - this.fullStockReadMs < this.fullStockOpt.everySec * 1000) return;
     this.fullStockReadMs = now;
     try {
@@ -410,6 +469,7 @@ export class RealBoard {
       this.fullStockError = null;
       this.fullStockVersion++;
       this.stockVersion++; // 3D 재고가 다시 그린다
+      void this.refreshCategories(now);
     } catch (e) {
       this.fullStockError = describe(e);
     }

@@ -1072,3 +1072,12 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .flow-no { font-size: 10.5px; font-variant-numeric: tabular-nums; opacity: 0.85; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .flow-more { font-size: 10px; opacity: 0.6; }
 .flow-st.cancel { flex: 0 0 auto; margin-left: 6px; padding: 6px 8px; border-style: dashed; opacity: 0.7; }
+
+/* 구역 카테고리별 수량 */
+.zst-cats { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; }
+.zst-cat { display: grid; grid-template-columns: minmax(0, 1.2fr) 1fr 36px 52px; align-items: center; gap: 6px; font-size: 12px; }
+.zst-cat .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.zst-cat .bar { height: 6px; border-radius: 3px; background: rgba(255,255,255,0.08); overflow: hidden; }
+.zst-cat .bar i { display: block; height: 100%; background: linear-gradient(90deg, #5b9bf2, #8f74ee); border-radius: 3px; }
+.zst-cat .k { opacity: 0.6; text-align: right; }
+.zst-cat b { text-align: right; font-variant-numeric: tabular-nums; }

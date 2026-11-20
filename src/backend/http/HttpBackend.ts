@@ -47,8 +47,7 @@ import {
   type TaskState,
   type TaskSummary,
   type TemperatureZone,
-  type WorkArea,
-} from '../../domain/contract';
+  type WorkArea, CategoryNode } from '../../domain/contract';
 import type { ApiListener, FulfillmentPort } from '../port';
 
 export interface HttpOptions {
@@ -257,6 +256,27 @@ export class HttpBackend implements FulfillmentPort {
   /** product-service SKU 조회 — 스캔 판의 상품 바코드(서버 값이 정본, CSV 사본 아님) */
   getSku(sku: string): Promise<SkuBarcodes> {
     return this.request('GET', `/skus/${enc(sku)}`);
+  }
+
+  /** product GET /categories/tree — 발효된 카테고리 트리(경로 "대 > 중 > …") */
+  async getCategoryTree(): Promise<CategoryNode[]> {
+    const r: { nodes?: CategoryNode[] } = await this.request('GET', '/categories/tree');
+    return r.nodes ?? [];
+  }
+
+  /** product GET /products — 모든 쪽(page.nextCursor)을 읽어 상품 → 대표 카테고리(primaryCategoryId) */
+  async listProductCategories(maxPages: number): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    let cursor: string | null = null;
+    for (let p = 0; p < maxPages; p++) {
+      const q = new URLSearchParams({ size: '100' });
+      if (cursor) q.set('cursor', cursor);
+      const r: { items?: { productId: string; primaryCategoryId?: string | null }[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/products?${q}`);
+      for (const it of r.items ?? []) if (it.primaryCategoryId) out.set(it.productId, it.primaryCategoryId);
+      cursor = r.page?.nextCursor ?? null;
+      if (!cursor) break;
+    }
+    return out;
   }
 
   /** mfc-capacity 다음 작업 받기 — 작업자 본인 토큰(주체 = workerId). 들고 있는 작업이 있으면 그것(200) */

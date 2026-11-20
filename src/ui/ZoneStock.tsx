@@ -73,6 +73,22 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
     for (const lv of st.levels.values()) filled += new Set(lv.map((x) => x.code)).size;
   }
   const loaded = real.fullStockVersion > 0;
+  // 카테고리별(대분류) 수량·상품 종류 — 이 구역 선반 재고를 상품 카테고리로(사용자 2026-11-20 "카테고리별 상품수량도 보게해줘")
+  const cats = new Map<string, { qty: number; skus: Set<string> }>();
+  for (const r of racks) {
+    const st = byRack.get(r.id);
+    if (!st) continue;
+    for (const lv of st.levels.values())
+      for (const x of lv) {
+        const name = real.skuCategory.get(x.sku) ?? '분류 읽는 중';
+        const c = cats.get(name) ?? { qty: 0, skus: new Set<string>() };
+        c.qty += x.qty;
+        c.skus.add(x.sku);
+        cats.set(name, c);
+      }
+  }
+  const catRows = [...cats.entries()].sort((a, b) => b[1].qty - a[1].qty);
+  const catMax = Math.max(1, ...catRows.map(([, c]) => c.qty));
   const stats: [string, string][] = [
     ['랙', racks.length.toLocaleString()],
     ['적치 수량', loaded ? qty.toLocaleString() : '…'],
@@ -91,6 +107,26 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
         ))}
       </div>
       {real.fullStockError && <div className="note warn">재고를 못 읽음 — 다음 조회에서 다시</div>}
+      {loaded && catRows.length > 0 && (
+        <>
+          <div className="zst-h">
+            <span>카테고리별</span>
+            <span>{catRows.length}개 분류</span>
+          </div>
+          <div className="zst-cats">
+            {catRows.map(([name, c]) => (
+              <div key={name} className="zst-cat">
+                <span className="nm">{name}</span>
+                <span className="bar">
+                  <i style={{ width: `${(100 * c.qty) / catMax}%` }} />
+                </span>
+                <span className="k">{c.skus.size}종</span>
+                <b>{c.qty.toLocaleString()}</b>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
       <div className="zst-h">
         <span>랙별</span>
         <span>{loaded ? `${new Date(real.fullStockReadMs).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })} 기준` : '읽는 중'}</span>

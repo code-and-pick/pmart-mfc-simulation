@@ -451,6 +451,17 @@ export interface CapacityAssignment {
 export interface SkuBarcodes {
   sku: string;
   barcodes?: string[];
+  /** (product) 이 SKU 의 상품 — 카테고리 찾기 */
+  productId?: string;
+}
+
+/** product GET /categories/tree 의 노드(필요한 것만) */
+export interface CategoryNode {
+  categoryId: string;
+  name: string;
+  parentId?: string | null;
+  level?: string;
+  path?: string;
 }
 
 // ── 주문 번호로 현장 상태(fulfillment 0.10.0 GET /work-orders?orderId= — 백오피스 통합 조회 MFC 칸, 개인정보 없음) ──
