@@ -7,7 +7,6 @@ import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import type { Layout, Location } from '../../domain/layout';
 import { SCENE } from '../colors';
-import { boxTexture, palletTexture } from '../sprites';
 
 /** 통로 가운데 선(점선 + 화살표). [x0, z0, x1, z1] — 배치의 빈 띠(벽 사이)에서 */
 function walkways(L: Layout): [number, number, number, number][] {
@@ -345,9 +344,6 @@ export function InboundDecor() {
     <>
       {/* 입고창고 안 지게차는 뺌(사용자 2026-11-20 "입고 창고 안에 있는 지게차는 없애고") — 입고·검수 하차 자리 1대만(장식, 서버 작업 없음) */}
       <Forklift x={38.4} z={22.1} rot={Math.PI / 2} />
-      {/* 입고창고 안 지게차 자리에 팔레트 위 높게 쌓은 상자(장식, 서버 재고와 무관 — 사용자 2026-11-20 "지게차 있던 곳에 장식으로 상자들좀 높게 쌓아놔줘") */}
-      <BoxStack x={38.6} z={15.0} />
-      <BoxStack x={39.9} z={15.0} layers={4} />
     </>
   );
 }
@@ -463,35 +459,6 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
           </mesh>
         )),
       )}
-    </group>
-  );
-}
-
-/** 팔레트 + 골판지 상자 3×2 × 단(장식). 단마다 밝기를 조금씩 달리한다 */
-function BoxStack({ x, z, layers = 6 }: { x: number; z: number; layers?: number }) {
-  const S = 0.36;
-  const cells = useMemo(() => {
-    const out: { p: [number, number, number]; c: number }[] = [];
-    for (let l = 0; l < layers; l++)
-      for (let i = 0; i < 3; i++)
-        for (let j = 0; j < 2; j++) {
-          const tone = new THREE.Color(SCENE.box).offsetHSL(0, 0, (((l * 5 + i * 3 + j * 7) % 5) - 2) / 40).getHex();
-          out.push({ p: [(i - 1) * (S + 0.02), 0.14 + S / 2 + l * (S + 0.01), (j - 0.5) * (S + 0.02)], c: tone });
-        }
-    return out;
-  }, [layers]);
-  return (
-    <group position={[x, 0, z]}>
-      <mesh position={[0, 0.06, 0]} castShadow receiveShadow>
-        <boxGeometry args={[1.2, 0.12, 0.84]} />
-        <meshStandardMaterial color={0x8d6e4a} map={palletTexture()} roughness={0.85} />
-      </mesh>
-      {cells.map((b, k) => (
-        <mesh key={k} position={b.p} castShadow>
-          <boxGeometry args={[S, S, S]} />
-          <meshStandardMaterial color={b.c} map={boxTexture()} roughness={0.7} />
-        </mesh>
-      ))}
     </group>
   );
 }
