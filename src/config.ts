@@ -155,6 +155,8 @@ export const REAL_WORKERS = {
   unconfirmedResendSec: 3,
   /** 적치가 거절되면 다른 칸(서버 추천 → 이미 놓인 선반 → 위치 후보 순)으로 다시 보내는 최대 칸 수 [시뮬] */
   putawayTries: 3,
+  /** 선반 가득으로 입고칸에 남긴 적치를 다시 시도하는 간격(초) — 그사이 피킹으로 선반에 자리가 날 수 있다 [시뮬] */
+  overflowRetrySec: 300,
   /** RETURN 실적 뒤 서버 반영(pendingQty)을 기다리는 최대 초 [시뮬] */
   returnConfirmWaitSec: 30,
   /**
@@ -235,7 +237,8 @@ export const REAL_LINK = {
    * 이 PC(PC 1)와 똑같이 쓰는 다른 기기 — 토큰을 받고 가상 작업자·입고·주문 넣기·관리 조치까지(사용자 2026-11-20 "가상 작업자랑 입고 그걸 PC5에서 뜨게 하라고").
    * PC 5 = 192.168.0.101(D603-13, 백엔드 docs/operations/2026-11-15-ssh-hostname-resolution.md) [확정]. 그 밖의 기기는 조회만
    */
-  lanViewers: ['192.168.0.101'] as readonly string[],
+  // 192.168.0.222(D603-15 — 백엔드 문서상 PC 3): 사용자가 "PC5에서 켜" 로 고른 크롬(이름 D603-15)이 이 주소 — 같은 권한(2026-11-20)
+  lanViewers: ['192.168.0.101', '192.168.0.222'] as readonly string[],
   /** 입고 작업자 수 상한(입고·검수 대기 자리 8) · 처음 켤 때 기본(MOCK 과 같은 기준 3명 = 검사 2 + 적치 1, MFC 10장 가정) [시뮬] */
   inboundMax: 8,
   inboundDefault: 3,

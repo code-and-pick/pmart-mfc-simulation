@@ -21,7 +21,19 @@ export default defineConfig({
     host: true,
     proxy: {
       // IPv4 로만 붙는다 — D603-16 이 IPv6 링크 로컬(fe80::…)을 먼저 돌려주면 프록시가 거기에 붙으려다 멈춘다(2026-11-20, 게이트웨이는 정상인데 /api 만 시간 초과)
-      '/api': { target: gateway, changeOrigin: true, agent: new Agent({ family: 4, keepAlive: true }) },
+      // Origin 헤더는 빼고 넘긴다 — 다른 PC 에서 연 화면(Origin http://192.168.0.32:5180)의 쓰기를 게이트웨이 CORS 가 빈 403 으로 막았다(2026-11-20 PC 5·D603-15 가상 작업자 "작업 받기 거절 HTTP_403").
+      // 브라우저 → 개발 서버는 같은 출처라 CORS 가 필요 없고, 게이트웨이에는 서버 대 서버 요청으로 보인다
+      '/api': {
+        target: gateway,
+        changeOrigin: true,
+        agent: new Agent({ family: 4, keepAlive: true }),
+        configure: (proxy) => {
+          proxy.on('proxyReq', (req) => {
+            req.removeHeader('origin');
+            req.removeHeader('referer');
+          });
+        },
+      },
     },
   },
   build: {

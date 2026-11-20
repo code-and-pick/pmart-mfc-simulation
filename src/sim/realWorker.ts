@@ -90,6 +90,8 @@ export class RealWorker extends Agent {
   idle = true;
   /** 받은 운영자 ID(= capacity workerId) */
   workerId: string | null = null;
+  /** 선반 가득으로 남은 양을 입고칸에 둔 적치 작업 — 같은 작업을 다시 받으면 기다린다(R-30) */
+  readonly overflow = new Map<string, { sku: string; rest: number; at: number }>();
   /** 마지막 거절·오류(화면 표시) */
   lastProblem: string | null = null;
   /** 퇴근 요청 — 들고 있는 작업을 마치면 멈춘다 */
@@ -769,6 +771,15 @@ export class RealWorker extends Agent {
     const t = await this.inboundTask(a);
     if (!t) return;
     const qty = t.plannedQty - t.doneQty;
+    // 선반 가득으로 입고칸에 남긴 작업 — 선반에 자리가 날 때까지 잠깐씩 기다렸다 다시(R-30, 서버에 입고창고 보충재고 자리가 생기면 거기로)
+    const ov = this.overflow.get(t.taskId);
+    if (ov && Date.now() - ov.at < REAL_WORKERS.overflowRetrySec * 1000) {
+      this.pda = this.inboundView(t, 'PUTAWAY', `선반 가득 — ${qty}개 입고칸에 둠(입고창고 자리 없음)`, qty);
+      this.activity = `${t.sku} 선반 가득 — 입고칸에 둠, 자리 나면 다시`;
+      await this.wait(30);
+      return;
+    }
+    this.overflow.delete(t.taskId);
     this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
     // 놓을 선반(사용자 2026-11-20 "계속 적치 거절 된다고"): 재고 서버가 진열 규칙(칸 분류 = 상품 분류 CATEGORY_MISMATCH, 한 상품 한 선반
     // SKU_ALREADY_SHELVED — mfc-inventory MoveRules)으로 판정한다. 위치 후보(mfc-location)는 그 규칙을 몰라 첫 칸이 거절되곤 했다.
@@ -842,17 +853,12 @@ export class RealWorker extends Agent {
             ctx.log(`${this.account} 적치 ${t.taskId} ${t.sku} ${room} → ${dest} (칸에 들어가는 만큼)`);
           }
           const rest = room > 0 && room < qty ? qty - room : qty;
-          this.activity = `${dest} 가득 — 남은 ${rest}개 예외 보고`;
-          await this.retry(() =>
-            unknownAsResend(() =>
-              be.reportInboundTaskException(
-                t.taskId,
-                { reason: 'BLOCKED', qty: rest, locationCode: dest, note: `도착 칸 가득(${cap[1]}개까지, 지금·예정 ${cap[2]}개) — 시뮬레이터 가상 작업자` },
-                this.key('putaway-blocked', t.taskId, `:${dest}:${rest}`),
-              ),
-            ),
-          );
-          ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — ${dest} 가득, 남은 ${rest}개 적치 예외(BLOCKED) 보고`);
+          // 남은 양은 입고창고 보충재고로 가야 하지만(사용자 2026-11-20 "선반칸이 가득차면 남는 건 입고 창고에 넣어놔야지") 서버에 보충재고 자리가
+          // 없고 한 상품 한 자리 규칙이 막는다(R-30). 분실 조사 보류(적치 예외 BLOCKED)로 빼지 않고 입고칸에 그대로 둔다 — 이 작업은 넘침 대기로 표시
+          this.overflow.set(t.taskId, { sku: t.sku, rest, at: Date.now() });
+          this.activity = `${dest} 가득 — 남은 ${rest}개 입고칸에 둠(입고창고 자리 없음)`;
+          this.lastProblem = null;
+          ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — ${dest} 가득, 남은 ${rest}개는 입고칸에(입고창고 보충재고 자리 없음, R-30)`);
           break;
         }
         const next = targets[i + 1];
