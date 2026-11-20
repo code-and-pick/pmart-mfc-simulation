@@ -9,7 +9,7 @@ import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/lay
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { ZoneNames } from './ZoneNames';
-import { CartDepot, InboundDecor, ParkingDecor, Walkways, WorkingCells } from './Decor';
+import { CartDepot, InboundDecor, StartMark, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
 
@@ -352,6 +352,35 @@ function ShipRack({ r, h, grey = false }: { r: { x0: number; z0: number; x1: num
           ))}
         </group>
       ))}
+      {/* 포장재 랙: 단마다 접어 쌓은 비닐봉투 묶음(흰 비닐·은색 보냉) + 봉투 롤(장식, 사용자 2026-11-20 "패킹랙에는 비닐봉지 같은 부품 장식으로") */}
+      {grey &&
+        levels.map((y, li) => {
+          const long = D > W; // 긴 쪽으로 늘어놓는다
+          const L = (long ? D : W) - 0.2;
+          const S = (long ? W : D) - 0.16;
+          const at = (t: number): [number, number] => (long ? [0, t] : [t, 0]);
+          return (
+            <group key={`bag${y}`}>
+              {[0, 1, 2].map((k) => {
+                const [ox, oz] = at(-L / 2 + (L / 3) * (k + 0.5));
+                const silver = (k + li) % 2 === 1;
+                const hh = 0.06 + ((k * 3 + li) % 3) * 0.03;
+                return (
+                  <mesh key={k} position={[ox, y + hh / 2, oz]} castShadow>
+                    <boxGeometry args={long ? [S, hh, L / 3 - 0.06] : [L / 3 - 0.06, hh, S]} />
+                    <meshStandardMaterial color={silver ? 0xc9d3de : 0xf7f8fa} roughness={silver ? 0.3 : 0.4} metalness={silver ? 0.25 : 0} />
+                  </mesh>
+                );
+              })}
+              {li % 2 === 0 && (
+                <mesh position={[...((): [number, number, number] => { const [ox, oz] = at(L / 2 - 0.12); return [ox, y + 0.2, oz]; })()]} rotation={long ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]} castShadow>
+                  <cylinderGeometry args={[0.07, 0.07, S * 0.9, 14]} />
+                  <meshStandardMaterial color={0xeef1f6} roughness={0.35} />
+                </mesh>
+              )}
+            </group>
+          );
+        })}
       {/* 옆면 가새(대각선) */}
       {[-1, 1].map((sx) =>
         [0, 1, 2].filter((k) => 0.35 + k * 0.6 + 0.3 < h).map((k) => (
@@ -525,6 +554,7 @@ export function Facility() {
       <Obstacles L={L} />
       <Stations L={L} />
       <CartDepot x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
+      <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z + 0.2} />
       <Label text="장바구니 거치대" position={[L.points.cartDepot.x, 1.4, L.points.cartDepot.z - 0.6]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
     </>
