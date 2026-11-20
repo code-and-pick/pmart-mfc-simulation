@@ -85,10 +85,21 @@ export function hasWallName(L: Layout, z: Zone): boolean {
 export function placeZoneNames(L: Layout, aspectOf: (z: Zone) => number): Placement[] {
   const out: Placement[] = [];
   for (const z of L.zones) {
-    if (!BIG_NAME_KINDS.has(z.kind)) continue;
+    if (!BIG_NAME_KINDS.has(z.kind) && z.kind !== 'PARKING') continue;
     const a = aspectOf(z);
     const wall = backWall(L, z);
-    if (wall) {
+    if (z.kind === 'PARKING') {
+      // 라이더 대기(= 외부 출하대기) — 바닥에 흰 글씨(사용자 2026-11-20 "바닥에 하얀글자로 라이더 대기라고 써")
+      const r = z.rect;
+      let h = Math.min(2.2, (r.z1 - r.z0) * 0.75);
+      let w = h * a;
+      const room = (r.x1 - r.x0) * 0.8;
+      if (w > room) {
+        w = room;
+        h = w / a;
+      }
+      out.push({ zone: z, pos: [(r.x0 + r.x1) / 2, 0.02, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
+    } else if (wall) {
       let h = WALL_TEXT_H;
       let w = h * a;
       const room = (wall.x1 - wall.x0) * 0.9;
@@ -105,7 +116,10 @@ export function placeZoneNames(L: Layout, aspectOf: (z: Zone) => number): Placem
 export function ZoneNames({ L }: { L: Layout }) {
   const items = useMemo(() => {
     const tex = new Map<string, { tex: THREE.CanvasTexture; aspect: number }>();
-    for (const z of L.zones) if (BIG_NAME_KINDS.has(z.kind)) tex.set(z.id, makeTexture(z.label, null, tint(ZONE_COLOR[z.kind]))); // 평수는 작아 안 읽혀 뺌(왼쪽 구역 패널에 있음)
+    for (const z of L.zones) {
+      if (z.kind === 'PARKING') tex.set(z.id, makeTexture('라이더 대기', null, '#ffffff'));
+      else if (BIG_NAME_KINDS.has(z.kind)) tex.set(z.id, makeTexture(z.label, null, tint(ZONE_COLOR[z.kind])));
+    } // 평수는 작아 안 읽혀 뺌(왼쪽 구역 패널에 있음)
     return placeZoneNames(L, (z) => tex.get(z.id)!.aspect).map((p) => ({ ...p, tex: tex.get(p.zone.id)!.tex }));
   }, [L]);
   return (
