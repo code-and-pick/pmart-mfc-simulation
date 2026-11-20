@@ -20,6 +20,7 @@ const ALLOWED: RegExp[] = [
   new RegExp(`^/api/v1/deliveries/${ID}/dispatch$`), // 배차 상태·시도
   new RegExp(`^/api/v1/tasks/${ID}/executions$`), // 작업 실적(칸·시각·수량) — 관리 탭 지난 주문, 개인정보 없음(fulfillment 0.24.0)
   new RegExp(`^/api/v1/riders/display-names$`), // 라이더 번호·가린 이름만(rider 0.18.0, ADR-0070) — 전화·주소 없음
+  new RegExp(`^/api/v1/inbound-tasks$`), // 입고 작업 목록(품질검사·적치) — 상품·수량·위치·담당 ID, 개인정보 없음(입고·검수 카드)
   new RegExp(`^/api/v1/work-orders$`), // 주문 번호로 현장 상태(?orderId) — 개인정보 없음(fulfillment 0.10.0)
 ];
 

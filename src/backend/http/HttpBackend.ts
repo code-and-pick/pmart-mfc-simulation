@@ -415,6 +415,15 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('POST', `/inbound-tasks/${enc(taskId)}/putaways`, { body, idempotencyKey });
   }
 
+  /** mfc-inbound listInboundTasks — 센터 입고 작업(품질검사·적치) 목록. 상품 이름 포함(withLabels 기본 true) */
+  async listInboundTasks(mfcId: string, state?: 'READY' | 'COMPLETED', taskType?: 'INSPECT' | 'PUTAWAY'): Promise<InboundTask[]> {
+    const q = new URLSearchParams({ mfcId });
+    if (state) q.set('state', state);
+    if (taskType) q.set('taskType', taskType);
+    const r: { items?: InboundTask[] } = await this.request('GET', `/inbound-tasks?${q}`);
+    return r.items ?? [];
+  }
+
   /** mfc-location listPutawayCandidates — 적치 후보(온도대·구역 적합, rank 순) */
   async listPutawayCandidates(mfcId: string, sku: string, qty?: number, temperatureZone?: TemperatureZone): Promise<PutawayCandidate[]> {
     const q = new URLSearchParams({ mfcId, sku });

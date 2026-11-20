@@ -144,9 +144,9 @@ export const REAL_WORKERS = {
   /** 한 개 싣거나 놓는 데(초) [시뮬] */
   shelveSecPerUnit: 1.5,
   /** 품질검사 기본 시간(초, 라벨·기한 확인) [시뮬] */
-  inspectBaseSec: 20,
+  inspectBaseSec: 10,
   /** 품질검사 한 개당(초) [시뮬] */
-  inspectSecPerUnit: 2,
+  inspectSecPerUnit: 1,
   /** 입고 작업 실행이 CAPTURED·UNKNOWN_RESULT 로 오면 같은 키로 다시 보내는 최대 횟수와 간격(초) [시뮬] */
   unconfirmedResendMax: 5,
   unconfirmedResendSec: 3,

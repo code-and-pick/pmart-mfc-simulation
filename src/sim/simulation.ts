@@ -22,6 +22,7 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
+import type { InboundTask } from '../domain/contract';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -376,6 +377,24 @@ export class Simulation {
   }
 
   /** 가상 작업자 하나를 만들어 일을 시작한다(resumeOnly = 끊긴 작업만 이어 하기) */
+  /** 실서버 입고 작업(입고·검수 카드 — 사용자 2026-11-20 "작업 내역 횡하니 별거 없어 … 칸은 왜 만든거지?") */
+  realInbound: { readAt: number | null; ready: InboundTask[]; doneToday: InboundTask[]; error: string | null; loading: boolean } = { readAt: null, ready: [], doneToday: [], error: null, loading: false };
+  /** 입고 작업 목록을 다시 읽는다 — 화면이 열려 있을 때 부른다. 너무 잦으면 건너뜀 */
+  async refreshRealInbound(minGapMs = 4000) {
+    const h = this.realHttp;
+    const r = this.realInbound;
+    if (!h || r.loading || (r.readAt && Date.now() - r.readAt < minGapMs)) return;
+    r.loading = true;
+    try {
+      const [ready, done] = await Promise.all([h.listInboundTasks(this.params.mfcId, 'READY'), h.listInboundTasks(this.params.mfcId, 'COMPLETED')]);
+      const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+      const ofToday = (t: InboundTask) => !!t.createdAt && new Date(Date.parse(t.createdAt) + 9 * 3600_000).toISOString().slice(0, 10) === today;
+      this.realInbound = { readAt: Date.now(), ready, doneToday: done.filter(ofToday), error: null, loading: false };
+    } catch (e) {
+      this.realInbound = { ...r, error: (e as Error).message, loading: false, readAt: Date.now() };
+    }
+  }
+
   /** 입고 작업자 목표 인원(사용자 2026-11-20 "입고 작업자는 왜 1명밖에 안 되냐?") */
   inboundTarget = 0;
 

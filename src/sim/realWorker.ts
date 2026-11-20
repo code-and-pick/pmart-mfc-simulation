@@ -723,6 +723,8 @@ export class RealWorker extends Agent {
     await this.walkTo(ctx.point(t.locationCode) ?? ctx.layout.points.inboundIdle[0]);
     this.pda.step = '라벨·기한 확인';
     this.activity = `품질검사 ${t.sku} ${qty}개`;
+    // 상자를 들고 라벨을 본다(사용자 2026-11-20 "한참 가만히 서있다가 한 손에 폰 같은 거 들고간다") — 그림만
+    this.carrying = [t.storageType ?? 'AMBIENT'];
     // 소비기한·제조일·제조 LOT 표기 = 사람이 상품에서 읽는 값 → 서버 LOT 정보. 판정은 PDA 와 같은 기준(inspectVerdict)
     const label = await this.retry(() => be.getLotLabel(ctx.mfcId, t.lotId)).catch((e: unknown) => {
       if (e instanceof ApiProblem && e.problem.status === 404) return null;
@@ -735,6 +737,7 @@ export class RealWorker extends Agent {
     const filled = fillInspectInputs(t, label, today);
     if (filled.made.length) ctx.log(`${this.account} INSPECT ${t.taskId} ${t.sku} — 라벨 값 없음, 시뮬레이터가 넣음: ${filled.made.join(', ')}`);
     const v = inspectVerdict(filled.task, filled.label, qty, today);
+    this.carrying = [];
     if (!v.ok) {
       this.lastProblem = `${t.sku} 품질검사 못 함 — ${v.why}`;
       ctx.log(`${this.account} INSPECT ${t.taskId} ${t.sku} — ${v.why}, 손대지 않음`);
@@ -755,7 +758,13 @@ export class RealWorker extends Agent {
     const qty = t.plannedQty - t.doneQty;
     this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
     // 놓을 선반 = 적치 후보(mfc-location, rank 순) 첫 칸. 온도대는 서버가 SKU 로 정하게 보내지 않는다
-    const cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty));
+    // 위치 서비스는 SKU 보관 유형을 모른다 — 온도대 필수(400 VALIDATION_FAILED, 2026-11-20 실서버). 작업 storageType, 모르면 상온→냉장→냉동 순
+    const zones: TemperatureZone[] = t.storageType ? [t.storageType] : ['AMBIENT', 'CHILLED', 'FROZEN'];
+    let cands: Awaited<ReturnType<typeof be.listPutawayCandidates>> = [];
+    for (const z of zones) {
+      cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty, z));
+      if (cands.length) break;
+    }
     let to = cands.find((c) => c.locationCode && c.locationCode !== t.locationCode && !c.locationCode.startsWith('CRT-'))?.locationCode;
     if (!to) {
       // 후보가 없으면 그 상품이 이미 놓인 선반으로(사용자 2026-11-20 "그냥 알아서 값 넣어" — 멈추지 않게). 입고·카트·포장·출하 자리는 뺀다

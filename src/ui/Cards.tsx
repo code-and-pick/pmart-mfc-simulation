@@ -1,6 +1,6 @@
 // 확대한 구역 요약 카드, 선택한 작업자 PDA / 로케이션 카드.
 import { orderText } from './OrderNo';
-import type { ReactNode } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useApp, useTick, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
@@ -95,6 +95,7 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
       </>
     );
   }
+  if (zoneKey === 'RCV' && s.board) return <RealInboundCard />;
   if (zoneKey === 'RCV') {
     const ibb = s.inboundBoard();
     const st = { APPROACHING: '진입 중', DOCKED: '도착', DONE: '수령 완료', LEAVING: '출발', GONE: '' } as const;
@@ -154,6 +155,91 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
 /** PDA 카드의 작업 종류 이름 */
 const TASK_KO: Record<string, string> = { PICK: '피킹', PACK: '패킹', RETURN: '취소품 복귀', PUTAWAY: '적치', REPLENISH: '보충', MOVE: '재고 이동', INSPECT: '품질검사' };
 /** 왼쪽 패널 "구역" — 구역 고르기 칩 + 고른 구역 정보(구역 카드는 떠 있지 않고 여기 고정) */
+/**
+ * 실서버 입고·검수 카드 — 서버 입고 작업(mfc-inbound GET /inbound-tasks) 그대로: 검사·적치 대기/진행, 상품·수량·위치·담당, 오늘 끝난 수,
+ * 입고 차량(그림)·입고 가상 작업자 지금 하는 일. MOCK 숫자(롤테이너·누적 수령)는 실서버에 없어 쓰지 않는다(사용자 2026-11-20 "횡하니 별거 없어").
+ */
+function RealInboundCard() {
+  const { sim: s, controller } = useApp();
+  useTick();
+  useEffect(() => {
+    void s.refreshRealInbound(0);
+    const id = setInterval(() => void s.refreshRealInbound(), 5000);
+    return () => clearInterval(id);
+  }, [s]);
+  const r = s.realInbound;
+  const real = s.board!;
+  const inspect = r.ready.filter((t) => t.taskType === 'INSPECT');
+  const put = r.ready.filter((t) => t.taskType === 'PUTAWAY');
+  const working = r.ready.filter((t) => t.assigneeId);
+  const doneUnits = r.doneToday.reduce((a, t) => a + t.doneQty, 0);
+  const rows = [...r.ready].sort((a, b) => Number(!!b.assigneeId) - Number(!!a.assigneeId) || (a.createdAt ?? '').localeCompare(b.createdAt ?? ''));
+  const MAX = 30;
+  const name = (id?: string | null) => {
+    if (!id) return null;
+    // 이 화면의 가상 작업자면 계정 이름(검사 qc-01 등), 아니면 인사 이름, 그것도 모르면 ID 끝
+    const v = s.virtualWorkers.find((w) => w.workerId === id);
+    if (v) return `${v.account.includes('-qc-') ? '검사' : v.account.includes('-rcv-') ? '적치' : ''} ${v.account.replace('mfcw-', '')}`.trim();
+    const n = real.workerName(id);
+    return n === '작업자 확인 중' ? `작업자 ${id.slice(-4)}` : n.split(' · ')[0];
+  };
+  const inb = s.inboundVirtual();
+  const st: Record<string, string> = { APPROACHING: '진입 중', DOCKED: '도착', UNLOADING: '하차 중', DONE: '수령 완료', LEAVING: '출발', GONE: '' };
+  return (
+    <>
+      <div className="stats">
+        <Stat v={inspect.length} k="품질검사 대기" />
+        <Stat v={put.length} k="적치 대기" />
+        <Stat v={working.length} k="담당 있음(진행)" />
+        <Stat v={`${r.doneToday.length}건 · ${doneUnits.toLocaleString()}개`} k="오늘 끝남" />
+      </div>
+      {s.trucks.length > 0 && (
+        <div className="lows">
+          {s.trucks.map((t) => (
+            <div key={t.trfId}>
+              <span>🚚 {t.trfId}</span>
+              <span>{st[t.state]}</span>
+              <span>{t.lines.length}품목 {t.lines.reduce((a, l) => a + l.qty, 0)}개</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {inb.length > 0 && (
+        <div className="rin-ws">
+          {inb.map((w) => (
+            <div key={w.account} className={w.lastProblem ? 'bad' : ''}>
+              <b>{w.account.includes('-qc-') ? '검사' : '적치'} {w.account.replace('mfcw-', '')}</b> {w.activity}
+              {w.lastProblem && <span> · {w.lastProblem}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+      <div className="rin-h">
+        <b>입고 작업</b>
+        <span className="muted">{r.readAt ? `${new Date(r.readAt).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit', second: '2-digit' })} 읽음` : '읽는 중…'}</span>
+      </div>
+      {r.error && <div className="note warn">읽지 못함: {r.error}</div>}
+      {!rows.length && r.readAt && !r.error && <div className="scan-empty">남은 입고 작업이 없습니다. 설정 → 재고 채우기로 입고를 넣으면 여기에 품질검사·적치 작업이 생깁니다.</div>}
+      <div className="rin-list">
+        {rows.slice(0, MAX).map((t) => {
+          const who = name(t.assigneeId);
+          return (
+            <button key={t.taskId} className={`rin-row ${t.assigneeId ? 'on' : ''}`} onClick={() => controller.focusBackendCode?.(t.locationCode)} title={t.taskId}>
+              <span className={`rin-k ${t.taskType === 'INSPECT' ? 'qc' : 'put'}`}>{t.taskType === 'INSPECT' ? '검사' : '적치'}</span>
+              <span className="rin-n">{t.productName ?? t.sku}</span>
+              <span className="rin-q">
+                {t.doneQty}/{t.plannedQty}
+              </span>
+              <span className={`rin-w ${who ? '' : 'muted'}`}>{who ?? '대기'}</span>
+            </button>
+          );
+        })}
+      </div>
+      {rows.length > MAX && <div className="note">외 {rows.length - MAX}건</div>}
+    </>
+  );
+}
+
 export function ZonePanel() {
   const { sim } = useApp();
   const view = useView();
