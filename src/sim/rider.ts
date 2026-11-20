@@ -10,11 +10,21 @@ import type { VehicleType } from '../domain/contract';
 import { getOff, loadAndGetOn, offLot, rideTo, walkOn } from './realRider';
 import type { SiteContext } from './context';
 
+/** 0~1 값 → MOCK 수단(RIDER_VEHICLE.mockMix 누적 비율) */
+export function pickVehicle(u: number): VehicleType {
+  let acc = 0;
+  for (const [v, w] of Object.entries(RIDER_VEHICLE.mockMix)) {
+    acc += w;
+    if (u < acc) return v as VehicleType;
+  }
+  return RIDER_VEHICLE.fallback;
+}
+
 export class Rider extends Agent {
   done = false;
   carrying = 0;
-  /** MOCK 라이더는 오토바이 [시뮬] */
-  readonly vehicle: VehicleType = RIDER_VEHICLE.fallback;
+  /** MOCK 라이더 수단 — RIDER_VEHICLE.mockMix 비율로 뽑음 [시뮬] */
+  readonly vehicle: VehicleType;
   riding = true;
   door = false;
   trunk = false;
@@ -34,6 +44,7 @@ export class Rider extends Agent {
   ) {
     super(id, offLot(ctx.layout.points.riderEntry), ctx.nav, 1.4);
     this.parking = parking;
+    this.vehicle = pickVehicle(ctx.rng.next());
   }
 
   private async retry<T>(fn: () => Promise<T>): Promise<T> {

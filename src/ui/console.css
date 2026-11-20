@@ -792,6 +792,9 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .scan-top .scan-mode { display: inline-flex; gap: 4px; margin: 0; }
 .scan-print { margin-left: auto; font-size: 12px; color: var(--muted); }
 .scan-print a { color: var(--accent); }
+.scan-pick { display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.scan-pick b { color: var(--text); font-size: 15px; }
+.scan-pick .link { align-self: flex-start; font-size: 14px; }
 .scan-empty { background: var(--soft); border: 1px dashed var(--line-strong); border-radius: 10px; padding: 12px; font-size: 13px; color: var(--muted); line-height: 1.5; }
 .scan-sec { background: var(--soft); border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
 .scan-sec-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 10px; }

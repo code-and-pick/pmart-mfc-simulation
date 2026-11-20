@@ -186,8 +186,10 @@ export const RIDER_VEHICLE = {
   offLot: 17,
   /** 문·트렁크(배달통 뚜껑) 열고 닫는 데 쓰는 시간(초) — 그림 애니메이션과 같은 길이 [시뮬] */
   hatchSec: 0.7,
-  /** 수단을 모를 때(옛 배정·MOCK) [시뮬] */
+  /** 수단을 모를 때(옛 배정) [시뮬] */
   fallback: 'MOTORCYCLE' as const,
+  /** MOCK 라이더 수단 비율(사용자 2026-11-20 "왜 오토바이 기사만 픽업하러 와?" → 섞기, 업무 문서에 비율 없음) [시뮬] */
+  mockMix: { MOTORCYCLE: 0.6, CAR: 0.15, E_BIKE: 0.1, BICYCLE: 0.05, KICKBOARD: 0.05, WALK: 0.05 } as Record<string, number>,
 };
 
 export const REAL_LINK = {

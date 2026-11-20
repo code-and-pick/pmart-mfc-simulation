@@ -4,7 +4,7 @@
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
 import { OrderNo } from './OrderNo';
 import { useEffect } from 'react';
-import { useApp } from '../app/context';
+import { useApp, useView } from '../app/context';
 import { lotGs1 } from '../domain/barcode';
 import { BACKEND_FACTS } from '../config';
 import type { TaskLine, TaskPick } from '../domain/contract';
@@ -235,6 +235,7 @@ export function ScanBoard() {
   const { sim } = useApp();
   const focus = useScanFocus();
   const view = useScanView();
+  const ctl = useView();
   const real = sim.board;
   // 실제 주문 줄에서 고른 출고의 PICK·PACK(끝난 것도)만 — 고르기 전에는 주문 바코드를 보이지 않는다(3D 말풍선과 같은 기준, 사용자 2026-11-17)
   const tasks =
@@ -275,7 +276,16 @@ export function ScanBoard() {
       </Why>
 
       {/* ① 고른 주문 — 작업마다 칸 하나 */}
-      {real && !focus.shipmentId && <div className="scan-empty">실제 주문 탭에서 주문을 누르면 그 주문의 지시 칸·상품·포장 위치 바코드가 여기에 나옵니다.</div>}
+      {/* 주문을 안 고르면 카트 QR 만 남아 "카트 바코드밖에 없다"로 보임(사용자 2026-11-20) — 안내를 크게, 누르면 실제 주문 탭 */}
+      {real && !focus.shipmentId && (
+        <div className="scan-empty scan-pick">
+          <b>주문을 고르면 그 주문 바코드가 나와요</b>
+          <span>지시 칸 위치·상품·포장 위치 바코드는 고른 주문 것만 보입니다.</span>
+          <button className="link" onClick={() => ctl.toggleRight('orders')}>
+            실제 주문 탭에서 고르기 →
+          </button>
+        </div>
+      )}
       {!real && <div className="scan-empty">실서버 모드에서 고른 주문의 바코드가 여기에 나옵니다. 선반 칸을 누르면 그 칸의 위치 바코드가 카드에 나옵니다.</div>}
       {focus.shipmentId && (
         <section className="scan-sec">
