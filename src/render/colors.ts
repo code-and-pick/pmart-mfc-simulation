@@ -12,7 +12,7 @@ export const ZONE_COLOR: Record<ZoneKind, number> = {
   RECEIVING: 0x48589a, // 입고·검수 — 남색
   OFFICE: 0x3d3d44,
   PACKING: 0xd686a3, // 패킹 — 분홍색
-  QUARANTINE: 0x7a3434,
+  QUARANTINE: 0x1a1a1d, // 격리 — 검정(사용자 2026-11-20 "격리는 검정색으로")
   SHIPPING: 0xd4b43a, // 외부 출하대기 — 칙칙한 올리브 → 노랑(2026-11-20)
   PARKING: 0x2e2e2e,
 };
