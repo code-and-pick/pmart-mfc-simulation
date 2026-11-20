@@ -1140,7 +1140,7 @@ export class Simulation {
   }
 
   get virtualWorkerCount(): number {
-    return this.virtualWorkers.filter((w) => !w.leaving && !w.left).length;
+    return this.virtualWorkers.filter((w) => !w.leaving && !w.left && REAL_LINK.virtualAccounts.includes(w.account)).length;
   }
 
   // ── 설정 변경 ───────────────────────────────────────
