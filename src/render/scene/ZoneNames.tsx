@@ -1,5 +1,5 @@
 // 구역 이름을 벽·바닥에 크게(사용자 2026-11-20 "MFC 안에 나타나는 글자가 너무 작은데 … 벽에 적히는 건?", "하양에 가까운 바닥색으로").
-// 구역 앞(남쪽, 처음 시야 쪽) 벽의 바깥 면에 칠한 글씨 — 문을 피해 가장 긴 벽 조각에. 앞에 벽이 없으면(상온 C~H) 앞 가장자리 바로 바깥 통로 바닥에.
+// 모두 구역 안쪽 뒷벽(북쪽, 처음 시야의 반대편)에 칠한 글씨 — 문을 피해 가장 긴 벽 조각에(사용자 2026-11-20 "그냥 다 벽에 붙여 내 시야 안 가리게 다 반대편 쪽에").
 // 글자색 = 구역 색을 조금 섞은 흰색, 노란 바닥에서도 보이게 얇은 어두운 테두리. 벽 숨김·랙 번호 끔과 상관없이 늘 보인다.
 import { useMemo } from 'react';
 import * as THREE from 'three';
@@ -7,10 +7,11 @@ import type { Layout, Zone } from '../../domain/layout';
 import { ZONE_COLOR } from '../colors';
 
 /** 글씨를 쓸 구역 — 격리·출하대기·라이더 대기는 작아서 기존 이름표 */
-export const BIG_NAME_KINDS = new Set(['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE', 'RECEIVING', 'OFFICE', 'PACKING']);
+const BIG_NAME_KINDS = new Set(['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE', 'RECEIVING', 'OFFICE', 'PACKING']);
 
-const WALL_TEXT_H = 2.6; // 벽(3 m)에 쓰는 글씨 판 높이
-const FLOOR_TEXT_H = 2.6; // 바닥 글씨 판 길이(앞뒤)
+const WALL_TEXT_H = 2.4; // 글씨 판 높이
+/** 글씨 아래 끝 — 랙(2.1 m) 바로 밑. 처음 시야에서 앞 랙이 벽 아래쪽을 가려, 벽(3 m) 위로 1.2 m 솟게 둔다 */
+const WALL_TEXT_BOTTOM = 1.8;
 
 function tint(hex: number): string {
   const c = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), 0.82);
@@ -59,15 +60,15 @@ interface Placement {
   h: number;
 }
 
-/** 구역 앞(z1) 벽 조각 중 문을 뺀 가장 긴 것 — 높이 2.5 m 이상(울타리 제외), 구역 폭 안 */
-function frontWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } | null {
+/** 구역 뒤(z0) 벽 조각 중 문을 뺀 가장 긴 것 — 높이 2.5 m 이상(울타리 제외), 구역 폭 안. 글씨는 그 벽의 남쪽(구역 안쪽) 면 */
+function backWall(L: Layout, z: Zone): { x0: number; x1: number; face: number } | null {
   const r = z.rect;
   let best: { x0: number; x1: number; face: number } | null = null;
   for (const w of L.walls) {
     const wr = w.rect;
     if (w.height < 2.5 || wr.x1 - wr.x0 < wr.z1 - wr.z0) continue; // 가로(동서) 벽만
     const cz = (wr.z0 + wr.z1) / 2;
-    if (Math.abs(cz - r.z1) > 0.35) continue;
+    if (Math.abs(cz - r.z0) > 0.35) continue;
     const x0 = Math.max(wr.x0, r.x0);
     const x1 = Math.min(wr.x1, r.x1);
     if (x1 - x0 < 2.5) continue;
@@ -76,13 +77,17 @@ function frontWall(L: Layout, z: Zone): { x0: number; x1: number; face: number }
   return best;
 }
 
+/** 벽에 큰 이름을 쓰는 구역인가 — 아니면(뒷벽이 없으면) 예전 떠 있는 이름표 */
+export function hasWallName(L: Layout, z: Zone): boolean {
+  return BIG_NAME_KINDS.has(z.kind) && !!backWall(L, z);
+}
+
 export function placeZoneNames(L: Layout, aspectOf: (z: Zone) => number): Placement[] {
   const out: Placement[] = [];
   for (const z of L.zones) {
     if (!BIG_NAME_KINDS.has(z.kind)) continue;
-    const r = z.rect;
     const a = aspectOf(z);
-    const wall = frontWall(L, z);
+    const wall = backWall(L, z);
     if (wall) {
       let h = WALL_TEXT_H;
       let w = h * a;
@@ -91,17 +96,7 @@ export function placeZoneNames(L: Layout, aspectOf: (z: Zone) => number): Placem
         w = room;
         h = w / a;
       }
-      out.push({ zone: z, pos: [(wall.x0 + wall.x1) / 2, 0.15 + h / 2, wall.face], rotX: 0, w, h });
-    } else {
-      let h = FLOOR_TEXT_H;
-      let w = h * a;
-      const room = (r.x1 - r.x0) * 0.8;
-      if (w > room) {
-        w = room;
-        h = w / a;
-      }
-      // 앞 가장자리 바깥 통로 바닥 — 랙이 덮지 않고, 가장자리의 장바구니 거치대·점원 이름표와 겹치지 않게 2 m 더 앞
-      out.push({ zone: z, pos: [(r.x0 + r.x1) / 2, 0.02, r.z1 + 2.0 + h / 2], rotX: -Math.PI / 2, w, h });
+      out.push({ zone: z, pos: [(wall.x0 + wall.x1) / 2, WALL_TEXT_BOTTOM + h / 2, wall.face], rotX: 0, w, h });
     }
   }
   return out;

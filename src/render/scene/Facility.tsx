@@ -8,7 +8,7 @@ import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { ZONE_COLOR } from '../colors';
 import { makeLabel } from '../sprites';
-import { BIG_NAME_KINDS, ZoneNames } from './ZoneNames';
+import { hasWallName, ZoneNames } from './ZoneNames';
 
 type Vec3 = [number, number, number];
 
@@ -112,7 +112,7 @@ function Zones({ L }: { L: Layout }) {
             {z.kind === 'SHIPPING' ? (
               // 랙 사이·앞(라이더가 서는 곳)이 아니라 구역 왼쪽 바깥 바닥에, 사람이 들어오면 희미하게
               <ShipLabel text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label} position={[r.x0 - 3.2, 0.25, r.z0 + d / 2]} rect={r} />
-            ) : BIG_NAME_KINDS.has(z.kind) ? null : (
+            ) : hasWallName(L, z) ? null : (
             <Label
               text={z.docPyeong ? `${z.label} · ${z.docPyeong}평` : z.label}
               position={[r.x0 + w / 2, tall ? 2.4 : 3.6, r.z0 + Math.min(1.5, d / 2)]}
