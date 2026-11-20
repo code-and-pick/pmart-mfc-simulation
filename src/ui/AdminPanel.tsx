@@ -93,6 +93,12 @@ function History({ desk: d0 }: { desk: AdminDesk }) {
       {desk.history.loading && <div className="note">끝난 작업 읽는 중…</div>}
       {desk.history.error && <div className="note warn">읽지 못함: {desk.history.error}</div>}
       {!desk.history.loading && !rows.length && <div className="scan-empty">{q ? `"${q}" 와 맞는 끝난 주문이 그날 없습니다.` : '그날 끝난 작업이 없습니다.'}</div>}
+      {/* 날짜와 상관없이 번호로(fulfillment 0.27.0) — 8자리일 때 */}
+      {/^\d{8}$/.test(q.replace(/[\s-]/g, '')) && (
+        <button className="link" onClick={() => void desk.openByNumber(q)}>
+          날짜와 상관없이 {q.replace(/[\s-]/g, '')} 열기 →
+        </button>
+      )}
       {rows.map((o) => (
         <HistoryRow key={o.shipmentId} o={o} onOpen={() => void desk.openOrder(o.shipmentId, o.orderNumber)} />
       ))}

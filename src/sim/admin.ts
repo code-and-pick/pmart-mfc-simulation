@@ -130,6 +130,24 @@ export class AdminDesk {
     if (this.detail === d) this.bump();
   }
 
+  /** 날짜와 상관없이 주문번호(8자리)로 찾아 연다(fulfillment 0.27.0 `GET /work-orders?orderNumber=`) — 원래 지시의 첫 출고 */
+  async openByNumber(orderNumber: string) {
+    const no = orderNumber.replace(/[\s-]/g, '');
+    this.detail = { shipmentId: '', orderNumber: no, names: new Map(), orderId: null, view: null, execs: new Map(), loading: true, error: null };
+    this.bump();
+    try {
+      const v = await this.obs.getOrderFulfillmentByNumber(no);
+      const wo = (v.workOrders ?? []).find((w) => w.kind === 'ORIGINAL') ?? v.workOrders?.[0];
+      const sid = wo?.shipments[0]?.shipmentId;
+      if (!sid) throw new Error('이 주문의 출고가 없음');
+      await this.openOrder(sid, no);
+    } catch (e) {
+      const nf = e instanceof ApiProblem && e.problem.status === 404;
+      this.detail = { shipmentId: '', orderNumber: no, names: new Map(), orderId: null, view: null, execs: new Map(), loading: false, error: nf ? `주문번호 ${no} 를 찾지 못함` : errText(e) };
+      this.bump();
+    }
+  }
+
   closeOrder() {
     this.detail = null;
     this.bump();

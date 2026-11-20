@@ -288,6 +288,11 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('GET', `/work-orders?${new URLSearchParams({ orderId })}`);
   }
 
+  /** (fulfillment 0.27.0, R-29) 화면 주문번호 8자리로 같은 조회 — 번호 사본이 없으면 404 */
+  getOrderFulfillmentByNumber(orderNumber: string): Promise<OrderFulfillmentView> {
+    return this.request('GET', `/work-orders?${new URLSearchParams({ orderNumber })}`);
+  }
+
   getTask(taskId: string): Promise<TaskDetail> {
     return this.request('GET', `/tasks/${enc(taskId)}`);
   }
