@@ -91,6 +91,8 @@ export interface RealStockUnit {
   workState: StockWorkState;
   qualityState: StockQualityState;
   qty: number;
+  /** 재고 줄의 온도대(listStockUnits 에만 있음) */
+  temperatureZone?: string | null;
 }
 
 /** 한 번 본 피킹 조각 — 서버는 다 집은 조각을 상세 picks 에서 뺀다(TaskService.detail remaining <= 0 건너뜀). 패킹까지 바코드를 보이려고 든다 */
@@ -712,7 +714,7 @@ export class RealBoard {
       }
     }
     for (const u of this.fullStock) {
-      if (u.qty > 0 && !this.stock.has(u.sku)) out.push({ sku: u.sku, locationCode: u.locationCode, workState: u.workState, qualityState: u.qualityState, qty: u.qty });
+      if (u.qty > 0 && !this.stock.has(u.sku)) out.push({ sku: u.sku, locationCode: u.locationCode, workState: u.workState, qualityState: u.qualityState, qty: u.qty, temperatureZone: u.temperatureZone });
     }
     return out;
   }

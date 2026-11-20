@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { BAG_COLOR, bagGeometry, boxTexture } from '../sprites';
 import { SCENE, zoneBoxColor } from '../colors';
 import { useApp } from '../../app/context';
-import type { StockWorkState, TaskState } from '../../domain/contract';
+import type { StockWorkState, TaskState, TemperatureZone } from '../../domain/contract';
 import { RACK_DEPTH, type Location } from '../../domain/layout';
 import { makeLabel } from '../sprites';
 import { dispatchText, dispatchView } from '../../sim/realBoard';
@@ -152,13 +152,6 @@ const MAX_BOXES = 16000;
 const PER_POINT_CAP = 48;
 /** 봉투(포장분) 최대 개수 */
 const MAX_BAGS = 400;
-const WORK_COLOR: Record<StockWorkState, number> = {
-  STORED: 0xffffff, // 선반 STORED 는 온도대 색을 쓴다
-  PICKED: 0xfbbc04,
-  PACKED: 0xa1887f,
-  CANCEL_RETURN_PENDING: 0xea4335,
-  UNSTOWED: 0x9aa0a6,
-};
 const WORK_KO: Record<StockWorkState, string> = {
   STORED: '보관',
   PICKED: '집품',
@@ -222,7 +215,19 @@ export function RealStock() {
 
     const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number }>();
     cellOf.current = [];
-    const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number> }>();
+    const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number>; tz: Map<string, number> }>();
+    // 상품 보관 온도대(SKU → 냉동·냉장·상온) — 재고 줄의 temperatureZone, 없으면 그 상품이 놓인 선반 칸의 온도대.
+    // 입고칸·탁자 상자도 선반과 같은 구역색으로(사용자 2026-11-20 "입고되는 곳에는 다 같은 색의 상자들이 … 실제 재고 상품박스색대로")
+    const skuTemp = new Map<string, TemperatureZone>();
+    const isTemp = (v: unknown): v is TemperatureZone => v === 'AMBIENT' || v === 'CHILLED' || v === 'FROZEN';
+    for (const u of real.stockUnits()) {
+      if (skuTemp.has(u.sku)) continue;
+      if (isTemp(u.temperatureZone)) skuTemp.set(u.sku, u.temperatureZone);
+      else {
+        const l = sim.backendLocation(u.locationCode);
+        if (l) skuTemp.set(u.sku, l.temp);
+      }
+    }
     for (const u0 of real.stockUnits()) {
       let u = u0;
       if (u.workState === 'PICKED' && held.has(u.locationCode)) continue; // 작업자 카트 위에 그림
@@ -233,7 +238,7 @@ export function RealStock() {
           if (take <= 0) continue;
           bySku.set(u.sku, (bySku.get(u.sku) ?? 0) - take);
           rackGuess.set(rk, (rackGuess.get(rk) ?? 0) + take);
-          const g = points.get(rk) ?? { x: rp!.x, z: rp!.z, table: true, by: new Map() };
+          const g = points.get(rk) ?? { x: rp!.x, z: rp!.z, table: true, by: new Map(), tz: new Map() };
           g.by.set('PACKED', (g.by.get('PACKED') ?? 0) + take);
           points.set(rk, g);
           u = { ...u, qty: u.qty - take };
@@ -261,9 +266,13 @@ export function RealStock() {
       const g =
         points.get(key) ??
         (crt
-          ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map() }
-          : { x: p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map() });
+          ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map(), tz: new Map() }
+          : { x: p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map() });
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);
+      if (u.workState !== 'PACKED') {
+        const tk = skuTemp.get(u.sku) ?? '?';
+        g.tz.set(tk, (g.tz.get(tk) ?? 0) + u.qty);
+      }
       points.set(key, g);
     }
 
@@ -304,7 +313,8 @@ export function RealStock() {
       const S = g.table ? 0.2 : 0.34;
       let i = 0;
       for (const [ws, qty] of g.by) {
-        if (ws === 'PACKED') {
+        if (ws !== 'PACKED') continue;
+        {
           // 포장분 = 배달 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투에 패킹하는데?") — 낱개 CARTON_UNITS 개당 봉투 1개, 한 줄 4개씩
           const bags = Math.max(1, Math.ceil(qty / CARTON_UNITS));
           for (let q = 0; q < bags && b < MAX_BAGS; q++) {
@@ -315,8 +325,12 @@ export function RealStock() {
             bm.setColorAt(b, col.setHex(BAG_COLOR.AMBIENT));
             b++;
           }
-          continue;
         }
+      }
+      // 상자 = 상품 온도대별 구역색(선반과 같은 zoneBoxColor) — 냉동·냉장·상온 순으로 쌓는다. 온도대를 모르면 골판지 기본색
+      for (const tk of ['FROZEN', 'CHILLED', 'AMBIENT', '?'] as const) {
+        const qty = g.tz.get(tk) ?? 0;
+        if (qty <= 0) continue;
         const cartons = Math.max(1, Math.ceil(qty / CARTON_UNITS));
         for (let q = 0; q < cartons && i < PER_POINT_CAP && n < MAX_BOXES; q++, i++) {
           const c = i % 3;
@@ -324,8 +338,7 @@ export function RealStock() {
           const l = Math.floor(i / 9);
           mtx.compose(new THREE.Vector3(g.x + (c - 1) * (S + 0.03), baseY + S / 2 + l * (S + 0.01), g.z + (r - 1) * (S + 0.03)), quat, sc.set(S, S, S));
           m.setMatrixAt(n, mtx);
-          // 골판지 빛에 작업 상태 색을 조금 섞는다(무늬 텍스처와 곱해짐)
-          m.setColorAt(n, col.setHex(SCENE.box).lerp(new THREE.Color(WORK_COLOR[ws]), 0.35));
+          m.setColorAt(n, isTemp(tk) ? zoneBoxColor(tk, col) : col.setHex(SCENE.box));
           n++;
         }
       }

@@ -349,8 +349,8 @@ function VirtualWorkers() {
       step={1}
       hint={
         injected
-          ? '이 화면의 아바타 걷기 속도만 — 가상 작업자는 켠 PC 의 배수를 따릅니다'
-          : '서버 속도 배율 위에 곱합니다. 가상 작업자의 걷기·집기·포장과 PDA 작업자 아바타 걷기만 — 서버 응답·조회 간격은 그대로'
+          ? '이 화면에서 사람들이 걷는 속도만 빨라져요'
+          : '가상 작업자가 일하는 속도예요. 숫자만큼 빨라져요'
       }
       apply={(v) => sim.setSpeedBoost(v)}
     />
@@ -369,7 +369,7 @@ function VirtualWorkers() {
         min={0}
         max={REAL_LINK.virtualAccounts.length}
         step={1}
-        hint="끊긴 작업이 남은 계정부터, 그다음 pp-01부터. PDA 가 쓰는 계정은 건너뜀. 실서버에 실제로 기록합니다 — 한 탭에서만"
+        hint="피킹·포장을 하는 가상 직원 수예요. 실제 서버에 기록되니 한 화면에서만 켜세요"
         apply={(v) => sim.setVirtualWorkers(v)}
       />
       {/* 입고 작업자(품질검사 mfcw-qc · 적치 mfcw-rcv) — 같은 칸·같은 속도 배수(사용자 2026-11-20 "따론데 속도 올리면 같이 빨라지고 … 한 박스에 넣고 조절하게") */}
@@ -379,7 +379,7 @@ function VirtualWorkers() {
         min={0}
         max={REAL_LINK.inboundMax}
         step={1}
-        hint="품질검사(mfcw-qc)·적치(mfcw-rcv) 계정, 검사 ≈ 2/3·적치 나머지. 기준 3명(검사 2 + 적치 1, MFC 10장 가정) — 실서버에 실제로 기록합니다"
+        hint="입고 상품을 검사하고 선반에 올리는 가상 직원 수예요. 한 화면에서만 켜세요"
         apply={(v) => sim.setInboundVirtual(v)}
       />
       {speed}
@@ -396,7 +396,7 @@ function VirtualWorkers() {
       {cut.length > 0 && (
         <div className="cut">
           <div className="cut-h">
-            끊긴 작업 {cut.length} <Tip text="서버에 남은, 가상 작업자가 시작한 작업. 이어 하기 = 그 작업과 자기가 피킹한 주문 패킹까지 하고 퇴근" />
+            끊긴 작업 {cut.length} <Tip text="화면을 새로고침해서 멈춘 작업이에요. 이어 하기를 누르면 마저 끝내요" />
           </div>
           {cut.map((c) => (
             <div key={c.account} className="cut-r">
