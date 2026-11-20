@@ -104,8 +104,12 @@ export class ViewController extends Emitter {
   /** 오른쪽 실제 주문을 이 자리(패킹대 PAK-·출하대기 랙 DSP-)의 주문만으로 — 3D 에서 그 자리를 누름(사용자 2026-11-20 "오른쪽 탭에 해당 주문이 뜨게") */
   placeFilter: string | null = null;
 
+  /** 오른쪽 실제 주문을 이 점원의 주문만으로 — 3D 에서 점원을 누름(사용자 2026-11-20 "옆에 오른쪽 탭에 해당 주문내역이 뜨게") */
+  workerFilter: { id: string; shipmentId: string | null } | null = null;
+
   showPlace(code: string | null) {
     this.placeFilter = code;
+    if (code) this.workerFilter = null;
     if (code) {
       this.rightView = 'orders';
       const at = this.sim.shipmentsAt(code);
@@ -235,6 +239,17 @@ export class ViewController extends Emitter {
 
   select(s: Selection, fly = true) {
     this.selection = s;
+    // 실서버: 점원을 누르면 오른쪽에 그 점원 주문만(실제 주문·바코드 탭이 그 주문). 다른 걸 고르면 풂
+    if (s?.kind === 'worker' && this.sim.real) {
+      const w = this.sim.siteWorkers().find((x) => x.id === s.id);
+      const sid = w?.pda?.shipmentId ?? null;
+      this.workerFilter = { id: s.id, shipmentId: sid };
+      this.placeFilter = null;
+      if (sid) this.scanShipment = sid;
+      if (this.rightView !== 'scan') this.rightView = 'orders';
+    } else if (this.workerFilter) {
+      this.workerFilter = null;
+    }
     this.follow = s && (s.kind === 'worker' || s.kind === 'inbound') ? s.id : null;
     if (s?.kind === 'location') {
       const sku = this.sim.skuMap.get(s.sku);

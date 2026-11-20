@@ -238,11 +238,24 @@ export function OrderCards() {
   const { sim } = useApp();
   const view = useView();
   const place = view.placeFilter;
+  // 점원이 다음 주문으로 넘어가면 따라 바뀐다(누른 때 주문이 아니라 지금 주문)
+  const wf0 = view.workerFilter;
+  const wf = wf0 ? { id: wf0.id, shipmentId: sim.siteWorkers().find((x) => x.id === wf0.id)?.pda?.shipmentId ?? wf0.shipmentId } : null;
   const all = sim.real!.shipments();
   const at = place ? sim.shipmentsAt(place) : [];
-  const rows = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : all;
+  const rows = place ? all.filter((r) => at.some((a) => a.shipmentId === r.shipmentId)) : wf ? all.filter((r) => r.shipmentId === wf.shipmentId) : all;
   return (
     <div className="ocds">
+      {wf && (
+        <div className="ocd-place">
+          <b>{wf.id}</b>
+          <span>{wf.shipmentId ? '지금 작업 중인 주문' : '작업 중인 주문 없음'}</span>
+          <button className="link" onClick={() => view.select(null, false)}>
+            전체 주문 ✕
+          </button>
+        </div>
+      )}
+      {wf && !rows.length && <div className="scan-empty">이 점원은 지금 맡은 주문이 없습니다.</div>}
       {place && (
         <div className="ocd-place">
           <b>{placeName(place)}</b>
