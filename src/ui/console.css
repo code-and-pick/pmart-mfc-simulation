@@ -969,3 +969,37 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .sfl-steps.mini i { width: 8px; height: 8px; border-width: 1px; }
 .sfl-steps.mini li.now i { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
 .sfl-steps.mini .n { font-size: 11px; }
+
+/* 관리 탭 — 지난 주문·진행 중 작업·인계 확인 */
+.adm { display: flex; flex-direction: column; gap: 8px; }
+.adm-tabs { display: flex; gap: 4px; position: sticky; top: 0; z-index: 3; background: var(--panel-solid); padding-bottom: 4px; }
+.adm-tabs button { flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--muted); font: inherit; font-size: 13px; cursor: pointer; }
+.adm-tabs button.on { border-color: var(--accent); color: var(--text); font-weight: 700; }
+.adm-row { display: block; width: 100%; text-align: left; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; cursor: pointer; }
+.adm-row:hover { border-color: var(--accent); }
+.adm-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.adm-h b { font-size: 15px; }
+.adm-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.adm-chip { display: inline-block; font-size: 12px; padding: 1px 7px; border-radius: 999px; border: 1px solid var(--line-strong); color: var(--muted); }
+.adm-chip.st-COMPLETED { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 50%, transparent); }
+.adm-chip.st-CANCELLED, .adm-chip.st-BLOCKED, .adm-chip.st-FAILED { color: var(--bad); border-color: color-mix(in srgb, var(--bad) 50%, transparent); }
+.adm-chip.st-IN_PROGRESS, .adm-chip.st-ASSIGNED { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.adm-ship { padding: 10px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); display: flex; flex-direction: column; gap: 6px; }
+.adm-t { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.adm-t th { text-align: left; color: var(--muted); font-weight: 500; padding: 3px 4px; border-bottom: 1px solid var(--line); }
+.adm-t td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.adm-sec h5 { margin: 4px 0; font-size: 12.5px; color: var(--muted); font-weight: 600; }
+.adm-line { font-size: 12.5px; padding: 2px 0; font-variant-numeric: tabular-nums; }
+.adm-line.warn, .adm-detail .warn { color: var(--warn-ink); }
+.adm-task { padding: 8px 0; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 6px; }
+.adm-task:first-of-type { border-top: 0; }
+.adm-acts { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.adm-acts select, .adm-confirm input { font: inherit; font-size: 12.5px; padding: 4px 6px; border-radius: 6px; border: 1px solid var(--line-strong); background: var(--panel-solid); color: var(--text); }
+.adm-btn { font: inherit; font-size: 12.5px; padding: 4px 10px; border-radius: 6px; border: 1px solid var(--accent); background: none; color: var(--accent); cursor: pointer; }
+.adm-btn.danger { border-color: var(--bad); color: var(--bad); }
+.adm-btn:disabled { opacity: 0.4; cursor: default; }
+.adm-confirm { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.adm-act { font-size: 12px; }
+.adm-act.done { color: var(--ok); }
+.adm-act.error { color: var(--bad); }
+.adm-act.unknown { color: var(--warn-ink); }

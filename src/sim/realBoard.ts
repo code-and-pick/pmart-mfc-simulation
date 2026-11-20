@@ -26,6 +26,7 @@ import type {
   TaskDetail,
   TaskState,
   TaskSummary,
+  RiderDisplayName,
 } from '../domain/contract';
 
 export interface RealReader {
@@ -41,6 +42,8 @@ export interface RealReader {
   getEmployeeLabels?(operatorIds: string[]): Promise<EmployeeLabel[]>;
   /** (delivery-execution 0.28.0) MFC 반납 인증번호 — 없으면 화면이 보이지 않는다 */
   listReturnHandovers?(mfcId: string): Promise<ReturnHandover[]>;
+  /** (rider 0.18.0) 라이더 번호·가린 이름 — 없거나 실패하면 화면은 라이더 ID 그대로 */
+  getRiderDisplayNames?(riderIds: string[]): Promise<RiderDisplayName[]>;
   /** (fulfillment 0.10.0) 없으면 화면이 현장 기록을 보이지 않는다 */
   getOrderFulfillment?(orderId: string): Promise<OrderFulfillmentView>;
   /** (inventory 0.33.0, R-15) 센터 전체 재고 단위 행 */
@@ -204,9 +207,10 @@ const DETAIL_STATES: ReadonlySet<TaskState> = new Set(['ASSIGNED', 'IN_PROGRESS'
 const hhmm = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
 
 /** 배차·배송 단계 한 줄 (출고 줄 · 3D 출하대기 이름표 같이 씀). 서버 상태 그대로 */
-export function dispatchText(r: RealShipment): string {
+/** riderLabel = 화면 라이더 표기(ADR-0070). 없으면 라이더 ID 를 쓰지 않고 "라이더" */
+export function dispatchText(r: RealShipment, riderLabel?: (id: string) => string | null): string {
   const v = dispatchView(r);
-  const rider = v.riderId ?? '';
+  const rider = v.riderId ? (riderLabel?.(v.riderId) ?? '라이더') : '';
   switch (v.stage) {
     case 'UNKNOWN':
       return '확인 중';
@@ -351,6 +355,7 @@ export class RealBoard {
       await this.refreshShipments(now);
       await this.refreshOrderFacts(now);
       await this.refreshReturnHandovers(now);
+      await this.refreshRiderNames(now);
       await this.refreshStock(now);
       this.lastOkMs = now;
       this.lastError = null;
@@ -731,6 +736,35 @@ export class RealBoard {
         /* 이름 없이 사번만 */
       }
     }
+  }
+
+  /** 라이더 ID → 화면 표기(rider 0.18.0, ADR-0070) — 한 번 읽은 것은 둔다. 못 읽은 ID 는 60초 뒤 다시 */
+  readonly riderNames = new Map<string, RiderDisplayName>();
+  private riderTried = new Map<string, number>();
+  private async refreshRiderNames(now: number) {
+    if (!this.reader.getRiderDisplayNames) return;
+    const ids = new Set<string>();
+    for (const d of this.deliveries.values()) if (d.riderId) ids.add(d.riderId);
+    for (const d of this.dispatches.values()) if (d.data.assignment?.riderId) ids.add(d.data.assignment.riderId);
+    for (const d of this.returnPickups) if (d.riderId) ids.add(d.riderId);
+    for (const h of this.returnHandovers) if (h.riderId) ids.add(h.riderId);
+    const want = [...ids].filter((id) => !this.riderNames.has(id) && now - (this.riderTried.get(id) ?? -Infinity) > 60_000);
+    if (!want.length) return;
+    for (const id of want) this.riderTried.set(id, now);
+    try {
+      for (let i = 0; i < want.length; i += 50) for (const n of await this.reader.getRiderDisplayNames(want.slice(i, i + 50))) this.riderNames.set(n.riderId, n);
+      this.orderViewVersion++;
+    } catch {
+      /* ID 그대로 */
+    }
+  }
+
+  /** 화면 라이더 표기 "김*수 · 148281"(ADR-0070, 라이더 시뮬과 같은 꼴) — 모르면 null(부르는 쪽이 대체) */
+  riderLabel(riderId: string | null | undefined): string | null {
+    if (!riderId) return null;
+    const n = this.riderNames.get(riderId);
+    if (!n?.riderNumber) return null;
+    return n.nameMasked ? `${n.nameMasked} · ${n.riderNumber}` : n.riderNumber;
   }
 
   /** 운영자 ID → 이름·사번(hr employee-labels) */

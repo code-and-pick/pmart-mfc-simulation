@@ -190,7 +190,7 @@ export function OrderCard({ r, hit }: { r: RealShipment; hit?: SearchField | nul
               {dispSince ? `${clock(dispSince)} · ` : ''}
               <b className={waitingRider ? 'warn' : ''}>
                 {waitingRider && dispSince ? `${dur(dispSince, null)}째 ` : ''}
-                {dispatchText(r).replace(/ RD-\S+/, '')}
+                {dispatchText(r, (id) => real.riderLabel(id))}
               </b>
             </dd>
           </>
@@ -276,7 +276,7 @@ export function OrderCards() {
         <input
           type="text"
           value={q}
-          placeholder="주문번호 · 점원 이름/사번 · 라이더 ID"
+          placeholder="주문번호 · 점원 이름/사번 · 라이더 번호"
           onChange={(e) => view.setOrderSearch(e.target.value)}
           onKeyDown={(e) => {
             // Esc 는 3D 나가기로 가지 않고 검색만 지운다
@@ -295,7 +295,18 @@ export function OrderCards() {
           </>
         )}
       </div>
-      {q.trim() && !rows.length && <div className="scan-empty">“{q.trim()}” 와 맞는 주문이 없습니다. 주문번호 일부, 점원 이름·사번, 라이더 ID 로 찾을 수 있어요.</div>}
+      {q.trim() && !rows.length && (
+        <div className="scan-empty">
+          “{q.trim()}” 와 맞는 진행 중 주문이 없습니다. 주문번호 일부, 점원 이름·사번, 라이더 번호로 찾을 수 있어요.
+          {sim.admin && (
+            <div>
+              <button className="link" onClick={() => view.openAdminHistory(q.trim())}>
+                끝난 주문에서 찾기 →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       {wf && (
         <div className="ocd-place">
           <b>{wf.id}</b>

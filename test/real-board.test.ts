@@ -428,13 +428,15 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
 });
 
 describe('시험 계정 — 비밀번호 파일 대응', () => {
-  it('관찰 계정과 가상 작업자 pp-01~10 만 허용한다', () => {
+  it('관찰 계정·센터 관리자(관리 탭)·가상 작업자 pp-01~10 만 허용한다', () => {
     expect(passwordFileFor('claude-mfc-wrk')).toBe('keycloak-claude-mfc-wrk-password');
     expect(passwordFileFor('mfcw-pp-01')).toBe('keycloak-mfc-test-workers-password');
     expect(passwordFileFor('mfcw-pp-10@pmart.com')).toBe('keycloak-mfc-test-workers-password');
     expect(passwordFileFor('mfcw-pp-11')).toBeNull(); // PDA 용으로 남긴 계정
     expect(passwordFileFor('claude-dev')).toBeNull();
-    expect(passwordFileFor('claude-mfc-sup')).toBeNull();
+    // 관리 탭(재배정·내놓기·인계 확인) — 사용자 허락 2026-11-20
+    expect(passwordFileFor('claude-mfc-sup')).toBe('keycloak-claude-mfc-sup-password');
+    expect(passwordFileFor('test-cs-rider@pmart.com')).toBeNull();
     expect(passwordFileFor('../keycloak-admin')).toBeNull();
     expect(keycloakUsername('claude-mfc-wrk')).toBe('claude-mfc-wrk@pmart.com');
   });

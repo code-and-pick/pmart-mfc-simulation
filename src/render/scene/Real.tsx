@@ -117,7 +117,7 @@ export function RealShipLabels() {
       const rk = sim.onRack(r.shipmentId) ? sim.rackFor(r.shipmentId) : sim.racks[0];
       const list = byRack.get(rk) ?? [];
       byRack.set(rk, list);
-      if (list.length < MAX_SHIP_LABELS) list.push(`${orderText(real.orderNumberOf(r.shipmentId), r.shipmentId)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r)}`);
+      if (list.length < MAX_SHIP_LABELS) list.push(`${orderText(real.orderNumberOf(r.shipmentId), r.shipmentId)} · ${r.info!.state === 'PREPARING' ? '포장 중' : '출하 대기'} · ${dispatchText(r, (id) => real.riderLabel(id))}`);
       else if (list.length === MAX_SHIP_LABELS) list.push('외 더 있음');
     }
     const key = [...byRack].map(([k, v]) => `${k}:${v.join('|')}`).join('#');

@@ -193,6 +193,10 @@ export const RIDER_VEHICLE = {
 export const REAL_LINK = {
   /** 실서버 읽기(작업 목록·상세·작업자 목록)에 쓰는 계정. 백엔드 문서의 "시뮬레이터 작업자" [확정] */
   observerAccount: 'claude-mfc-wrk',
+  /** 관리 탭 쓰기(재배정·내놓기·인계 확인) 계정 — 그 센터 MFC_SUPERVISOR(lan-test-accounts.md). 사용자 허락 2026-11-20 [확정] */
+  supervisorAccount: 'claude-mfc-sup',
+  /** 관리 탭 지난 주문: 하루치 끝난 작업 목록 최대 쪽 수(쪽당 서버 기본) [시뮬] */
+  historyMaxPages: 5,
   /** 가상 작업자 계정 — 앞에서부터 켠다(기본 0명, 화면에서 켬). 사용자 결정 2026-11-16 [확정] */
   virtualAccounts: Array.from({ length: 10 }, (_, i) => `mfcw-pp-${String(i + 1).padStart(2, '0')}`),
   /** 작업 목록 주기 조회 간격(초). SIM-5 "시작 3초" [확정] */

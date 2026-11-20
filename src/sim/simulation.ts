@@ -17,6 +17,7 @@ import { buildLocationCodeMap, SIM_POINT, type LocationCodeMap } from '../domain
 import { NavGrid } from '../domain/navgrid';
 import { MockBackend } from '../backend/mock/MockBackend';
 import { MockReader } from '../backend/mock/MockReader';
+import { AdminDesk } from './admin';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
@@ -92,6 +93,8 @@ export class Simulation {
   /** 실서버 관찰(읽기 전용). MOCK 모드에서는 null */
   readonly real: RealBoard | null = null;
   readonly realTokens: TokenSource | null = null;
+  /** 관리 탭(실서버 전용) — 지난 주문·재배정·내놓기·인계 확인. 쓰기는 센터 관리자 계정(REAL_LINK.supervisorAccount) */
+  readonly admin: AdminDesk | null = null;
   /** 실서버의 실제 PDA 작업자 — 서버가 확정한 마지막 집품 칸에 세운다(그리기만, SIM-2a) */
   readonly observedWorkers: ObservedWorker[] = [];
   private observedPoll = -1;
@@ -226,6 +229,14 @@ export class Simulation {
       this.port = h;
       this.realHttp = h;
       this.realTokens = tokens;
+      // 관리 탭 쓰기 계정 — 토큰은 이 PC(loopback)에만 나온다. 다른 기기에서 연 화면은 조회만(쓰기 버튼은 화면이 숨김)
+      const supTokens = new TokenSource(REAL_LINK.supervisorAccount, REAL_LINK.tokenRefreshMarginSec);
+      const sup = new HttpBackend({ baseUrl: http?.baseUrl ?? '/api/v1', token: () => supTokens.get(), sourceSystem: 'mfc-simulator-admin', now: () => this.time, timeoutMs: 8000 });
+      sup.onApi((r) => this.push(this.apiLog, { ...r, note: '관리자' }));
+      (this as { admin: AdminDesk | null }).admin = new AdminDesk(h, sup, params.mfcId, () => Date.now(), REAL_LINK.historyMaxPages, () => supTokens.operatorId, async (ids) => {
+        const need = ids.filter((id) => !this.real?.labels.has(id));
+        for (let i = 0; i < need.length; i += 50) for (const l of await h.getEmployeeLabels(need.slice(i, i + 50))) this.real?.labels.set(l.operatorId, l);
+      });
       this.real = new RealBoard(h, params.mfcId, {
         pollSec: REAL_LINK.pollSec,
         workerRefreshSec: REAL_LINK.workerRefreshSec,
@@ -330,6 +341,11 @@ export class Simulation {
   private realHttp: HttpBackend | null = null;
   /** MOCK 화면용 관찰판 — 실서버 화면(주문 카드·구역 재고·바코드)을 MOCK 에서도 보게. 시뮬 동작은 쓰지 않음(사용자 2026-11-20) */
   private mockBoard: RealBoard | null = null;
+  /** 3D 라이더 이름표 — 실서버면 라이더 번호·가린 이름(ADR-0070), 모르면 그대로(사용자 2026-11-20 "RD-… 왜 또 이렇게 뜨냐", PC 5 요청) */
+  riderLabel(id: string): string {
+    const base = id.replace(/ \(.*\)$/, '');
+    return this.board?.riderLabel(base) ?? (id.startsWith('RD-') ? '라이더' : id);
+  }
   /** 화면의 "지금"(ms) — 실서버는 실제 시각, MOCK 은 MOCK 시계(서버 시각과 같은 기준) */
   nowMs(): number {
     return this.real ? Date.now() : Date.parse(`${BASE_DATE}T00:00:00+09:00`) + this.time * 1000;

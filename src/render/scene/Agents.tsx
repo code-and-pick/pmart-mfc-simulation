@@ -305,7 +305,7 @@ function VehicleModel({ v, door, lid }: { v: VehicleType; door: Hinge; lid: Hing
   }
 }
 
-function RiderMesh({ id, parking }: { id: string; parking: Point }) {
+function RiderMesh({ id, label, parking }: { id: string; label: string; parking: Point }) {
   const { sim } = useApp();
   const group = useRef<THREE.Group>(null!);
   const body = useRef<THREE.Group>(null!);
@@ -316,7 +316,7 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
   const ang = useRef({ door: 0, lid: 0 });
   const fig = useRef<HumanoidHandle>(null);
   const last = useRef<{ x: number; z: number } | null>(null);
-  const tag = useMemo(() => makeLabel(id, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [id]);
+  const tag = useMemo(() => makeLabel(label, { size: 28, bg: 'rgba(0,80,90,0.75)', screenPx: 15 }), [label]);
   const vehicle = sim.riders.find((x) => x.id === id)?.vehicle ?? 'MOTORCYCLE';
   useFrame((_, dt) => {
     const r = sim.riders.find((x) => x.id === id);
@@ -374,14 +374,14 @@ function RiderMesh({ id, parking }: { id: string; parking: Point }) {
 export function Riders() {
   const { sim } = useApp();
   const riders = useIdList(
-    () => sim.riders.map((r) => ({ id: r.id, parking: r.parking, vehicle: r.vehicle })),
-    // 수단이 바뀌면(배차 상세가 늦게 옴) 모델을 다시 만든다
-    (r) => r.id + ':' + r.vehicle,
+    () => sim.riders.map((r) => ({ id: r.id, parking: r.parking, vehicle: r.vehicle, label: sim.riderLabel(r.id) })),
+    // 수단이 바뀌면(배차 상세가 늦게 옴)·라이더 번호가 오면 다시 만든다
+    (r) => r.id + ':' + r.vehicle + ':' + r.label,
   );
   return (
     <>
       {riders.map((r) => (
-        <RiderMesh key={r.id + ':' + r.vehicle} id={r.id} parking={r.parking} />
+        <RiderMesh key={r.id + ':' + r.vehicle + ':' + r.label} id={r.id} label={r.label} parking={r.parking} />
       ))}
     </>
   );

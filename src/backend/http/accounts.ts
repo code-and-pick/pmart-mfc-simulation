@@ -10,12 +10,15 @@ export function keycloakUsername(account: string): string {
 /**
  * 시뮬레이터가 토큰을 받아도 되는 계정 → 비밀번호 파일 이름. 목록 밖이면 null(거절).
  * - `claude-mfc-wrk`: 백엔드 문서가 "시뮬레이터 작업자"로 정한 계정 — 실서버 관찰(읽기)에 쓴다.
+ * - `claude-mfc-sup`: 센터 관리자(MFC_SUPERVISOR) — 관리 탭 쓰기만(이 PC 화면만, 토큰은 loopback 에만 줌).
  * - `mfcw-pp-01`~`10`: 가상 작업자(사용자 결정 2026-11-16). 70명 공용 비밀번호 파일.
  * 백엔드 staff_auth.py 처럼 "파일이 없으면 비밀번호를 새로 정하는" 동작은 하지 않는다 — 공용 비밀번호가 깨진다.
  */
 export function passwordFileFor(account: string): string | null {
   const short = account.replace(/@pmart\.com$/, '');
   if (short === 'claude-mfc-wrk') return 'keycloak-claude-mfc-wrk-password';
+  // 관리 탭(재배정·내놓기·인계 확인) — 그 센터 MFC_SUPERVISOR. 사용자 2026-11-20 "API 받아오면 되잖아. 허락 받았어"
+  if (short === 'claude-mfc-sup') return 'keycloak-claude-mfc-sup-password';
   if (/^mfcw-pp-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
   return null;
 }

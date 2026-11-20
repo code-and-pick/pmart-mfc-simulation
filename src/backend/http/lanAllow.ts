@@ -18,6 +18,8 @@ const ALLOWED: RegExp[] = [
   new RegExp(`^/api/v1/shipments$`), // 센터 출고 목록(?mfcId) — 피킹·패킹 시작 시각, 개인정보 없음(fulfillment 0.15.0)
   new RegExp(`^/api/v1/deliveries$`), // 직원 배송 찾기(?mfcId) — 요약, 개인정보 없음
   new RegExp(`^/api/v1/deliveries/${ID}/dispatch$`), // 배차 상태·시도
+  new RegExp(`^/api/v1/tasks/${ID}/executions$`), // 작업 실적(칸·시각·수량) — 관리 탭 지난 주문, 개인정보 없음(fulfillment 0.24.0)
+  new RegExp(`^/api/v1/riders/display-names$`), // 라이더 번호·가린 이름만(rider 0.18.0, ADR-0070) — 전화·주소 없음
   new RegExp(`^/api/v1/work-orders$`), // 주문 번호로 현장 상태(?orderId) — 개인정보 없음(fulfillment 0.10.0)
 ];
 

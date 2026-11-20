@@ -281,6 +281,12 @@ export interface TaskExecution {
   rejectCode?: string | null;
   /** (0.16.0) REJECTED 일 때 짧은 설명 — 화면에 그대로 */
   rejectReason?: string | null;
+  /** (0.24.0, R-17) 실적 유형·등록 작업자·찍은 칸·줄 — GET /tasks/{id}/executions */
+  executionType?: 'PICK' | 'RETURN';
+  workerId?: string;
+  fromLocation?: string | null;
+  toLocation?: string | null;
+  lines?: { orderLineId: string; sku: string; lotId?: string | null; pickedQty: number }[];
 }
 
 export interface SealPackageRequest {
@@ -480,7 +486,16 @@ export interface OrderFulfillmentView {
         remainingQty: number;
       }[];
       shortages: { taskId: string; orderLineId: string; sku: string; qty: number; reason?: string | null; reportedAt: string; executionState: string }[];
-      packages: { packageId: string; state: string; sealedAt?: string | null; fenceState: string; handoverAuthorizedAt?: string | null; handoverStatus?: string | null }[];
+      packages: {
+        packageId: string;
+        state: string;
+        sealedAt?: string | null;
+        fenceState: string;
+        handoverAuthorizedAt?: string | null;
+        handoverStatus?: string | null;
+        handedOverAt?: string | null;
+        handoverRejectReason?: string | null;
+      }[];
     }[];
   }[];
   stopRequests: unknown[];
@@ -735,4 +750,51 @@ export interface PutawayCandidate {
   /** V 사본. null 은 불명 */
   remainingSpace?: number | null;
   rank?: number;
+}
+
+// ── 관리자(MFC_SUPERVISOR) — 관리 탭(사용자 2026-11-20 "관리자가 바로 피패킹 제어", R-29) ──
+
+/** mfc-capacity Assignment (GET·POST /assignments) */
+export interface Assignment {
+  assignmentId: string;
+  mfcId: string;
+  taskId: string;
+  taskType: string;
+  workerId: string;
+  assignmentVersion: number;
+  state: 'ACTIVE' | 'SUPERSEDED' | 'RELEASED';
+  assignedBy?: string | null;
+  assignedAt: string;
+  warnings?: string[];
+}
+
+/** mfc-capacity AssignTaskRequest — 그 센터 MFC_SUPERVISOR 만, X-Expected-Version = 지금 활성 assignmentVersion(없으면 0) */
+export interface AssignTaskRequest {
+  mfcId: string;
+  taskId: string;
+  taskType: TaskType;
+  workerId: string;
+  temperatureZone?: TemperatureZone;
+  reason?: string;
+}
+
+/** fulfillment HandoverResolution 일부(GET /packages?checkRequired=true) — 화면이 쓰는 칸만 */
+export interface PackageToCheck {
+  packageId: string;
+  handoverCode?: string | null;
+  orderNumber?: string | null;
+  packageState?: string;
+  fence?: { state: string; expiresAt?: string | null };
+  checkRequired?: boolean;
+  shipmentId?: string;
+  orderId?: string;
+  packingLocation?: string | null;
+  riderId?: string | null;
+}
+
+/** rider-service 0.18.0 GET /riders/display-names — 라이더 번호 6자리·가린 이름만(ADR-0070) */
+export interface RiderDisplayName {
+  riderId: string;
+  riderNumber: string | null;
+  nameMasked: string | null;
 }

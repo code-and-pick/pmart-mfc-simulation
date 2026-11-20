@@ -35,6 +35,10 @@ import {
   type Shipment,
   type TaskDetail,
   type TaskExecution,
+  type Assignment,
+  type AssignTaskRequest,
+  type PackageToCheck,
+  type RiderDisplayName,
   type TaskExecutionRequest,
   type TaskState,
   type TaskSummary,
@@ -130,6 +134,62 @@ export class HttpBackend implements FulfillmentPort {
       if (!cursor) break;
     }
     return out;
+  }
+
+  /** (0.12.0) 그날(Asia/Seoul) 활동이 있는 작업 — 관리 탭 지난 주문. from·to = YYYY-MM-DD, 최대 31일 */
+  async listTasksByActivity(mfcId: string, states: TaskState[], from: string, to: string, maxPages = 5): Promise<TaskSummary[]> {
+    const out: TaskSummary[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < maxPages; i++) {
+      const q = new URLSearchParams({ mfcId, pageSize: '100', activityFrom: from, activityTo: to });
+      for (const s of states) q.append('state', s);
+      if (cursor) q.set('cursor', cursor);
+      const r: { items?: TaskSummary[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/tasks?${q}`);
+      out.push(...(r.items ?? []));
+      cursor = r.page?.nextCursor ?? null;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
+  /** (0.24.0, R-17) 작업 실적 — 최근 순, 칸·시각·줄 */
+  async listTaskExecutions(taskId: string, size = 200): Promise<TaskExecution[]> {
+    const r = await this.request<{ items?: TaskExecution[] }>('GET', `/tasks/${enc(taskId)}/executions?size=${size}`);
+    return r.items ?? [];
+  }
+
+  /** mfc-capacity 지금 담당(ACTIVE) — 재배정의 X-Expected-Version */
+  async listAssignments(mfcId: string, taskId: string): Promise<Assignment[]> {
+    const r = await this.request<{ items?: Assignment[] }>('GET', `/assignments?${new URLSearchParams({ mfcId, taskId })}`);
+    return r.items ?? [];
+  }
+
+  /** mfc-capacity 수동 배정·재배정 — 그 센터 MFC_SUPERVISOR. expectedVersion = 지금 활성 assignmentVersion(없으면 0) */
+  assignTask(body: AssignTaskRequest, expectedVersion: number, idempotencyKey: string): Promise<Assignment> {
+    return this.request('POST', '/assignments', { body, expectedVersion, idempotencyKey });
+  }
+
+  /** 작업 내놓기(0.4.8) — 담당 본인 또는 센터 관리자, READY 로 */
+  releaseTask(taskId: string, body: { workerId: string; reason?: string }, idempotencyKey: string): Promise<TaskSummary> {
+    return this.request('POST', `/tasks/${enc(taskId)}/releases`, { body, idempotencyKey });
+  }
+
+  /** 점원 확인이 필요한 포장(인계 허가 만료·확정 없음) — 그 센터 MFC_WORKER·MFC_SUPERVISOR */
+  async listPackagesToCheck(mfcId: string): Promise<PackageToCheck[]> {
+    const r = await this.request<{ items?: PackageToCheck[] }>('GET', `/packages?${new URLSearchParams({ mfcId, checkRequired: 'true' })}`);
+    return r.items ?? [];
+  }
+
+  /** 점원 확인 — AT_STATION(아직 있음, 허가 해제) / TAKEN_BY_RIDER(라이더가 가져감, 인계 전기) */
+  checkPackageHandover(packageId: string, body: { result: 'AT_STATION' | 'TAKEN_BY_RIDER'; note?: string }, idempotencyKey: string): Promise<unknown> {
+    return this.request('POST', `/packages/${enc(packageId)}/handover-checks`, { body, idempotencyKey });
+  }
+
+  /** rider-service 0.18.0 — 라이더 번호·가린 이름(ADR-0070). 50개까지, 없는 ID 는 빠진다 */
+  async getRiderDisplayNames(riderIds: string[]): Promise<RiderDisplayName[]> {
+    if (!riderIds.length) return [];
+    const r = await this.request<{ items?: RiderDisplayName[] }>('GET', `/riders/display-names?${new URLSearchParams({ riderIds: riderIds.slice(0, 50).join(',') })}`);
+    return r.items ?? [];
   }
 
   /** mfc-capacity listWorkers — 담당자 표시 이름용(그 센터 운영자면 읽을 수 있다). */

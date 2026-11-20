@@ -6,6 +6,7 @@ import { collectIssues } from '../sim/issues';
 const REAL_RIGHT: [RightView, string, string][] = [
   ['orders', '📋', '실제 주문'],
   ['logs', '☰', '현장'],
+  ['admin', '⚑', '관리'],
   ['inventory', '▦', '재고'],
   ['scan', '▥', '바코드'],
   ['api', '⧉', 'API'],

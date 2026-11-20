@@ -65,7 +65,7 @@ export interface CameraRequest {
 export type LabelMode = 'all' | 'rack' | 'off';
 
 /** 오른쪽 패널 화면(왼쪽 아이콘 메뉴로 고름) */
-export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan';
+export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan' | 'admin';
 /** 왼쪽 패널 화면 */
 /** 왼쪽 패널 — 설정 · 구역(구역 정보·재고, 2026-11-20 떠 있는 카드에서 옮김) · 도움말 */
 export type LeftView = 'settings' | 'zone' | 'help';
@@ -147,6 +147,25 @@ export class ViewController extends Emitter {
   orderSearch = '';
   setOrderSearch(q: string) {
     this.orderSearch = q;
+    this.emit();
+  }
+  /** 관리 탭 안 칸(지난 주문·진행 중 작업·인계 확인)을 밖에서 정할 때 — 화면이 한 번 읽고 지운다 */
+  adminSub: 'history' | 'live' | 'checks' | null = null;
+  /** 관리 탭 지난 주문 검색어를 밖에서 넣을 때(실제 주문 검색에서 "지난 주문에서 찾기") */
+  adminQuery: string | null = null;
+  setAdminSub(s: 'history' | 'live' | 'checks' | null) {
+    this.adminSub = s;
+    this.emit();
+  }
+  setAdminQuery(q: string | null) {
+    this.adminQuery = q;
+    this.emit();
+  }
+  /** 실제 주문에 없는(끝난) 주문 → 관리 탭 지난 주문에서 그 번호로 */
+  openAdminHistory(q: string) {
+    this.adminSub = 'history';
+    this.adminQuery = q;
+    this.rightView = 'admin';
     this.emit();
   }
   /** 현장 흐름판에서 주문을 누름 — 실제 주문 탭을 그 주문 검색으로(자리·점원 거르기는 풂) */

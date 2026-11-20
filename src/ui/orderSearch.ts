@@ -3,6 +3,7 @@
 import type { Simulation } from '../sim/simulation';
 import { dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
 
+// 라이더: 번호 6자리·가린 이름·ID
 export type HitKind = '주문번호' | '배송번호' | '점원' | '라이더' | '시스템 ID';
 
 export interface SearchField {
@@ -49,7 +50,8 @@ export function searchFields(sim: Simulation, r: RealShipment): SearchField[] {
     out.push({ kind: '점원', text: shown, extra: [id] });
   }
   const rider = dispatchView(r).riderId;
-  if (rider) out.push({ kind: '라이더', text: rider });
+  // 라이더 번호·가린 이름(ADR-0070, rider 0.18.0)으로도 찾는다 — 화면엔 번호 표기, ID 는 비교에만
+  if (rider) out.push({ kind: '라이더', text: real.riderLabel(rider) ?? rider, extra: [rider, real.riderNames.get(rider)?.riderNumber ?? ''].filter(Boolean) });
   out.push({ kind: '시스템 ID', text: r.shipmentId, extra: [r.fulfillmentId, r.delivery?.deliveryId ?? '', r.delivery?.orderId ?? ''].filter(Boolean) });
   return out;
 }
