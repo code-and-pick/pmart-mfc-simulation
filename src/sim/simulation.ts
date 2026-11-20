@@ -102,7 +102,8 @@ export class Simulation {
   readonly runId = Math.random().toString(36).slice(2, 8);
 
   time: number;
-  speed = 15;
+  /** MOCK 처음 배속 — 사용자 2026-11-20 "기본 속도 ×5"(전에는 15) */
+  speed = 5;
   /** 주문 흐름 전용 난수 — 인원·설비를 바꿔도 같은 주문이 들어와 비교할 수 있다 */
   private rng: Rng;
   /** 현장 작업(결품·라이더 도착) 난수 */

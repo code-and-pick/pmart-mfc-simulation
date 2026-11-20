@@ -230,7 +230,8 @@ export class ViewController extends Emitter {
     const size = Math.max((r.x1 - r.x0) * 1.1, (r.z1 - r.z0) * 1.45);
     // 구역은 위에서 비스듬히(약 60°) 가깝게 — 랙 번호판이 읽힐 만큼(사용자 2026-11-20 "랙 식별 번호만 보일 만큼 위에서 비스듬하게"). 전체는 그대로
     // 구역 전체가 들어오는 거리는 그대로, 각도만 더 위에서(약 63°) — 위 머리줄·칩 줄에 가리지 않게 목표를 조금 앞으로
-    const dist = key === 'ALL' ? 62 : size * 0.85 + 3;
+    // 사용자 2026-11-20 "각도는 좋은데 조금 멀리서" — 같은 각도로 약 20% 가깝게(0.85·+3 → 0.7·+2.5)
+    const dist = key === 'ALL' ? 62 : size * 0.7 + 2.5;
     const target = new THREE.Vector3(cx, 0, key === 'ALL' ? cz + 1 : cz - dist * 0.12);
     const pos = key === 'ALL' ? new THREE.Vector3(cx, dist * 0.78, cz + dist * 0.72) : new THREE.Vector3(cx, dist * 0.92, cz + dist * 0.42);
     this.cameraRequest = { pos, target, animate };
