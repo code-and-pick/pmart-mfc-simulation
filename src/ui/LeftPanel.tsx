@@ -327,15 +327,6 @@ export function TestInboundControls() {
           </div>
         </Ask>
       )}
-      {/* 입고 가상 작업자(품질검사 mfcw-qc · 적치 mfcw-rcv) — "가상 작업자로" 입고 때 켜짐 */}
-      {sim.inboundVirtual().length > 0 && (
-        <div className="note">
-          입고 가상 작업자 켜짐 — {sim.inboundVirtual().map((w) => (w.account.includes('-qc-') ? '품질검사' : '적치')).join(' · ')}{' '}
-          <button className="link" onClick={() => sim.stopInboundVirtual()}>
-            끄기
-          </button>
-        </div>
-      )}
       <ResultLog rows={log} />
     </Sec>
   );
@@ -369,7 +360,7 @@ function VirtualWorkers() {
   const cut = sim.interruptedVirtual();
   const tooMany = ws.filter((w) => !w.leaving).length > BACKEND_FACTS.cartLocations.length;
   return (
-    <Sec title="가상 작업자" aside={`${ws.filter((w) => !w.leaving).length}/${REAL_LINK.virtualAccounts.length}`}>
+    <Sec title="가상 작업자" aside={`${ws.filter((w) => !w.leaving && REAL_LINK.virtualAccounts.includes(w.account)).length}/${REAL_LINK.virtualAccounts.length}`}>
       <Slider
         name="인원"
         initial={sim.virtualWorkerCount}
@@ -380,6 +371,17 @@ function VirtualWorkers() {
         apply={(v) => sim.setVirtualWorkers(v)}
       />
       {speed}
+      {/* 입고 작업자(품질검사 mfcw-qc-01 · 적치 mfcw-rcv-01) — 늘 보이게 켜기/끄기(사용자 2026-11-20 "그 버튼 어딨는데").
+          피킹포장 인원과 따로. 시험 입고 "가상 작업자로"를 누르면 저절로도 켜진다 */}
+      <div className="srow">
+        <span className="srow-l">입고 작업자</span>
+        <span className="muted" style={{ flex: 1 }}>
+          {sim.inboundVirtual().length ? `켜짐 — ${sim.inboundVirtual().map((w) => (w.account.includes('-qc-') ? '품질검사' : '적치')).join(' · ')}` : '꺼짐 (품질검사 1 · 적치 1)'}
+        </span>
+        <button className="link" onClick={() => (sim.inboundVirtual().length ? sim.stopInboundVirtual() : sim.ensureInboundVirtual())}>
+          {sim.inboundVirtual().length ? '끄기' : '켜기'}
+        </button>
+      </div>
       {(tooMany || skipped.length > 0) && (
         <div className="chips static">
           {tooMany && <span className="y">카트 {BACKEND_FACTS.cartLocations.length}대뿐</span>}
