@@ -226,16 +226,60 @@ export class ViewController extends Emitter {
     const r = v.rect;
     const cx = (r.x0 + r.x1) / 2;
     const cz = (r.z0 + r.z1) / 2;
-    // 위 머리줄·확인할 일·칩 줄(약 150px)과 좌우 패널이 가리므로 앞뒤로 긴 구역(냉동 A 등)은 더 물러선다
-    const size = Math.max((r.x1 - r.x0) * 1.1, (r.z1 - r.z0) * 1.45);
-    // 구역은 위에서 비스듬히(약 60°) 가깝게 — 랙 번호판이 읽힐 만큼(사용자 2026-11-20 "랙 식별 번호만 보일 만큼 위에서 비스듬하게"). 전체는 그대로
-    // 구역 전체가 들어오는 거리는 그대로, 각도만 더 위에서(약 63°) — 위 머리줄·칩 줄에 가리지 않게 목표를 조금 앞으로
-    // 사용자 2026-11-20 "각도는 좋은데 조금 멀리서" — 같은 각도로 약 20% 가깝게(0.85·+3 → 0.7·+2.5)
-    const dist = key === 'ALL' ? 62 : size * 0.7 + 2.5;
+    const dist = this.zoneDist(key);
     const target = new THREE.Vector3(cx, 0, key === 'ALL' ? cz + 1 : cz - dist * 0.12);
     const pos = key === 'ALL' ? new THREE.Vector3(cx, dist * 0.78, cz + dist * 0.72) : new THREE.Vector3(cx, dist * 0.92, cz + dist * 0.42);
     this.cameraRequest = { pos, target, animate };
     this.emit();
+  }
+
+  /** 구역 위에서 보기의 카메라 거리 */
+  zoneDist(key: string): number {
+    if (key === 'ALL') return 62;
+    const r = this.views.find((x) => x.key === key)?.rect;
+    if (!r) return 62;
+    // 위 머리줄·확인할 일·칩 줄(약 150px)과 좌우 패널이 가리므로 앞뒤로 긴 구역(냉동 A 등)은 더 물러선다
+    const size = Math.max((r.x1 - r.x0) * 1.1, (r.z1 - r.z0) * 1.45);
+    // 구역은 위에서 비스듬히(약 63°) — 랙 번호판이 읽힐 만큼(사용자 2026-11-20 "랙 식별 번호만 보일 만큼 위에서 비스듬하게").
+    // 사용자 2026-11-20 "각도는 좋은데 조금 멀리서" — 같은 각도로 약 20% 가깝게(0.85·+3 → 0.7·+2.5)
+    return size * 0.7 + 2.5;
+  }
+
+  /**
+   * 3D 에서 선반 칸을 누름 — 카메라가 멀면(구역 위에서 보기보다 멀리) 그 구역 위에서 보기, 가까우면 그 랙 앞 통로에서 비스듬히(사용자 2026-11-20
+   * "멀리서 구역 클릭하면 위에서 쳐다보고 가까이서 클릭하면 랙 가까이서 보는 걸로"). 가까울 때는 칸 카드도 연다.
+   */
+  clickCell(code: string, camDist: number) {
+    const loc = this.sim.backendLocation(code);
+    if (loc) {
+      const v = this.views.find((x) => x.key !== 'ALL' && x.zoneId && loc.shelf.x >= x.rect.x0 && loc.shelf.x <= x.rect.x1 && loc.shelf.z >= x.rect.z0 && loc.shelf.z <= x.rect.z1);
+      if (v && camDist > this.zoneDist(v.key) * 1.25) {
+        this.focusZone(v.key);
+        return;
+      }
+      this.rememberHome();
+      this.focusRack(loc);
+    }
+    this.focusCell(code);
+  }
+
+  /**
+   * 랙 가까이 — 그 칸 앞 통로 위, 통로를 따라 4.2 m 떨어진 3.6 m 높이(랙 2.1 m 위)에서 칸 쪽을 비스듬히 내려다본다(약 35°).
+   * 통로를 따라 보므로 맞은편 랙에 덜 가리고 양쪽 랙 앞면이 보인다. 지금 카메라가 있는 쪽 통로 끝에서 들어온다.
+   */
+  focusRack(loc: Location) {
+    this.follow = null;
+    this.nearCut = 0;
+    const target = new THREE.Vector3(loc.shelf.x, 0.8, loc.shelf.z);
+    const now = this.cameraNow?.().pos;
+    const along = loc.along === 'z' ? 'z' : 'x';
+    const sign = now ? Math.sign(now[along] - target[along]) || 1 : 1;
+    const pos = new THREE.Vector3(loc.pick.x, 3.6, loc.pick.z);
+    pos[along] += sign * 4.2;
+    // 칸 쪽으로 조금 비켜 서서 앞면이 더 보이게(통로 가운데에서 맞은편 쪽으로 0.15 m)
+    const n = loc.along === 'z' ? new THREE.Vector3(loc.face, 0, 0) : new THREE.Vector3(0, 0, loc.face);
+    pos.add(n.multiplyScalar(0.15));
+    this.cameraRequest = { pos, target, animate: true };
   }
 
   /** 로케이션(랙 칸) 정면으로 붙는다. */

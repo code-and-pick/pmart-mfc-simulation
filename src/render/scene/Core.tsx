@@ -178,10 +178,12 @@ export function Picker() {
         const box = new THREE.Box3();
         const hitP = new THREE.Vector3();
         const dir = raycaster.ray.direction;
-        for (const loc of sim.layout.locations) {
-          // 칸 앞면(통로 쪽)이 카메라를 볼 때만
+        // 앞면(통로 쪽)이 카메라를 보는 칸 먼저. 없으면(위에서 내려다볼 때 등을 보인 랙) 앞뒤 가리지 않고 — 구역 위에서 어느 랙을 눌러도 잡히게
+        for (const anyFace of [false, true]) {
+          if (best) break;
+          for (const loc of sim.layout.locations) {
           const facing = loc.along === 'z' ? loc.face * dir.x : loc.face * dir.z;
-          if (facing > 0) continue;
+          if (!anyFace && facing > 0) continue;
           const half = loc.slotW / 2;
           const y0 = loc.shelf.y - 0.035;
           const cross = loc.along === 'z' ? loc.shelf.x : loc.shelf.z;
@@ -197,9 +199,11 @@ export function Picker() {
           if (d < camera.near || (best && d >= best.d)) continue;
           const code = sim.codes.toBackend(loc.code);
           if (code) best = { code, d };
+          }
         }
         if (best) {
-          controller.focusCell(best.code);
+          // 멀면 구역 위에서, 가까우면 랙 가까이(controller.clickCell)
+          controller.clickCell(best.code, camera.position.distanceTo(registry.controls?.target ?? new THREE.Vector3()));
           return;
         }
       }
