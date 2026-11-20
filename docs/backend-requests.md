@@ -67,12 +67,14 @@
   2. 이미 멈춘 배송(위 1건 포함)을 다시 판정하는 백필 또는 운영자 API. execution 상태 정정은 ARRIVED_AT_STORE → PICKED_UP 을 허용하지 않아 지금 계약으로는 못 풂.
 - 이 주문: 실물은 라이더가 가져갔고 재고 인계(H·E·R −q)도 반영됨 — 다시 피킹·재인계 하지 말 것. 백엔드 수정 전까지 지원센터 케이스(422 안내 경로).
 - **전달(11-20 13:50)**: 사용자 "백엔드 세션에 바로 보내" → "라이더백엔드"(배송 쪽 수정)·"PC1 백엔드"(fulfillment 사건 발행 포함, mfc 백엔드 세션 offline) 세션에 메시지. 읽음 확인 없음, 회신 대기.
+- **회신(11-20, "PC1 백엔드" 세션)**: 받음, 사용자에게 올렸고 결정 전. execution 쪽은 PC 5 가 PR #293(execution `PackageInvalidated` 구독, V25)으로 고치는 중, 멈춘 DLV-eb09780b 복구(사건 재발행)는 사용자 결정 대기. dispatch `containsAll` 쪽과 fulfillment 사건 발행(원하는 것 1)은 #293 범위 밖 — 따로 정함.
 - 시뮬레이터: 실서버 라이더는 fulfillment 출고 HANDED_OVER 를 보고 떠난 것으로 그림 — 배송 쪽이 PICKED_UP 이 아니면 "배송 쪽 픽업 미확인" 으로 표시할지 후속(아래 R-29 관리 탭과 같이).
 
 ### R-29 관리자 제어·지난 주문 조회에 필요한 것 — 중간 (2026-11-20 추가)
 - 사용자 2026-11-20: "방금 전 주문 보고 피킹내역이랑 현재흐름을 보려고 해도 이미 인계가 끝나서 볼 수가 없었어. 지원센터에 연동되게 해주던 이쪽에서 관리자가 바로 피패킹 제어가능한 탭을 만들던 처리가 가능하게 해야할 것 같아."
 - 지금 계약으로 되는 것(시뮬레이터가 쓸 수 있음): 지난 작업 `GET /tasks?state=COMPLETED&activityFrom=&activityTo=`(orderNumber 있음), `GET /work-orders?orderId=`, `GET /tasks/{id}/executions`; 관리자(`MFC_SUPERVISOR`) 배정·재배정 `POST /assignments`, 내놓기 `POST /tasks/{id}/releases`, 인계 확인 `GET /packages?checkRequired=true`·`POST /packages/{id}/handover-checks`. (MFC 백오피스 `web/mfc-backoffice` 에 이미 있음.)
 - **전달(11-20 13:50)**: "PC1 백엔드" 세션에 메시지. 회신 대기.
+- **회신(11-20, "PC1 백엔드")**: MFC(PC 3) 영역 — 사용자 결정 뒤 담당 정해 회신.
 - 계약에 없어 요청하는 것:
   1. 관리자의 작업 강제 중지·취소(PICK·PACK 단위), BLOCKED 해제, 직접 부분 종료(CLOSED_PARTIAL), 끝난 작업 다시 열기 — 지금은 사가 내부 전용.
   2. 피킹 시작 뒤 주문 취소(지금 claim 은 상품준비 전 전체 취소만, 뒤는 422 ORDER_NOT_CANCELLABLE).
