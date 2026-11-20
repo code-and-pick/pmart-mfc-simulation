@@ -76,6 +76,7 @@
 - 지금 계약으로 되는 것(시뮬레이터가 쓸 수 있음): 지난 작업 `GET /tasks?state=COMPLETED&activityFrom=&activityTo=`(orderNumber 있음), `GET /work-orders?orderId=`, `GET /tasks/{id}/executions`; 관리자(`MFC_SUPERVISOR`) 배정·재배정 `POST /assignments`, 내놓기 `POST /tasks/{id}/releases`, 인계 확인 `GET /packages?checkRequired=true`·`POST /packages/{id}/handover-checks`. (MFC 백오피스 `web/mfc-backoffice` 에 이미 있음.)
 - **전달(11-20 13:50)**: "PC1 백엔드" 세션에 메시지. 회신 대기.
 - **회신(11-20, "PC1 백엔드")**: MFC(PC 3) 영역 — 사용자 결정 뒤 담당 정해 회신.
+- **됨(11-20, 이 세션이 직접 — 사용자 "R-29 … 니가 바로 고쳐", 반영 "main 에 직접")**: 백엔드 origin/main `c465ecde`·`bf1caea2`. fulfillment 0.27.0(V21) `GET /work-orders?orderNumber=`, `GET /shipments` `orderNumber`·`createdFrom/To`(서울 날짜 ≤31일)·`sort=recent`. claim 0.8.0·ADR-0076 취소 사유 `OPERATOR_DECISION`(그 센터 MFC_SUPERVISOR·OPERATOR_ADMIN, 상품준비 뒤 인계 전, 메모 필수, CS_AGENT 403). 시험 fulfillment·claim check 통과(rebase 뒤 단위 다시). **LAN 배포는 PC 1**(메시지 보냄) — 배포 전이라 시뮬레이터는 아직 안 씀. 아래 1(작업 단위 중지 등)·4(배정 이력)는 업무 규칙 결정 필요로 남김, 3 은 위로 됨, PACK 시작 시각·담당은 이미 `/work-orders` 에 있음.
 - 계약에 없어 요청하는 것:
   1. 관리자의 작업 강제 중지·취소(PICK·PACK 단위), BLOCKED 해제, 직접 부분 종료(CLOSED_PARTIAL), 끝난 작업 다시 열기 — 지금은 사가 내부 전용.
   2. 피킹 시작 뒤 주문 취소(지금 claim 은 상품준비 전 전체 취소만, 뒤는 422 ORDER_NOT_CANCELLABLE).
