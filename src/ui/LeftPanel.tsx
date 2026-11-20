@@ -254,6 +254,7 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
 /** 입고·검수 구역 카드(Cards)에서도 쓴다 — 사용자 2026-11-20 "왼쪽에 있다는 문구 없애고 버튼 만들어" */
 export function TestInboundControls() {
   const { sim, controller } = useApp();
+  useTick();
   const [plan, setPlan] = useState<{ lines: InboundPlanLine[]; withVirtual: boolean } | null>(null);
   const [busy, setBusy] = useState('');
   const [log, setLog] = useState<OrderLog[]>([]);
@@ -325,6 +326,15 @@ export function TestInboundControls() {
             </button>
           </div>
         </Ask>
+      )}
+      {/* 입고 가상 작업자(품질검사 mfcw-qc · 적치 mfcw-rcv) — "가상 작업자로" 입고 때 켜짐 */}
+      {sim.inboundVirtual().length > 0 && (
+        <div className="note">
+          입고 가상 작업자 켜짐 — {sim.inboundVirtual().map((w) => (w.account.includes('-qc-') ? '품질검사' : '적치')).join(' · ')}{' '}
+          <button className="link" onClick={() => sim.stopInboundVirtual()}>
+            끄기
+          </button>
+        </div>
       )}
       <ResultLog rows={log} />
     </Sec>

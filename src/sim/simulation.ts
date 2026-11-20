@@ -376,13 +376,36 @@ export class Simulation {
   }
 
   /** 가상 작업자 하나를 만들어 일을 시작한다(resumeOnly = 끊긴 작업만 이어 하기) */
-  private spawnVirtual(account: string, slot: number, resumeOnly: boolean): RealWorker {
+  /** 입고 가상 작업자(품질검사·적치 계정)를 켠다 — 이미 돌면 그대로. 입고·검수 칸 대기 자리에서 시작 */
+  ensureInboundVirtual() {
+    if (!this.realCtx || this.realTokens?.serverInjected) return;
+    REAL_LINK.inboundAccounts.forEach((account, i) => {
+      const w = this.virtualWorkers.find((x) => x.account === account && !x.left);
+      if (w) {
+        w.leaving = false;
+        return;
+      }
+      this.spawnVirtual(account, i, false, this.layout.points.inboundIdle[i % this.layout.points.inboundIdle.length]);
+    });
+  }
+
+  /** 입고 가상 작업자 끄기(하던 일은 마치고 퇴근) */
+  stopInboundVirtual() {
+    for (const w of this.virtualWorkers) if (REAL_LINK.inboundAccounts.includes(w.account) && !w.left) w.leaving = true;
+  }
+
+  /** 지금 도는 입고 가상 작업자 */
+  inboundVirtual(): RealWorker[] {
+    return this.virtualWorkers.filter((w) => REAL_LINK.inboundAccounts.includes(w.account) && !w.left);
+  }
+
+  private spawnVirtual(account: string, slot: number, resumeOnly: boolean, at?: { x: number; z: number }): RealWorker {
     const old = this.virtualWorkers.find((w) => w.account === account);
     if (old) this.virtualWorkers.splice(this.virtualWorkers.indexOf(old), 1);
     const tokens = new TokenSource(account, REAL_LINK.tokenRefreshMarginSec);
     const be = new HttpBackend({ baseUrl: this.realBaseUrl, token: () => tokens.get(), sourceSystem: 'mfc-simulator', now: () => this.time, timeoutMs: 8000 });
     be.onApi((r) => this.push(this.apiLog, { ...r, note: account }));
-    const w = new RealWorker(account, this.layout.points.idle[slot % this.layout.points.idle.length], this.realCtx!, be, tokens);
+    const w = new RealWorker(account, at ?? this.layout.points.idle[slot % this.layout.points.idle.length], this.realCtx!, be, tokens);
     w.resumeOnly = resumeOnly;
     this.virtualWorkers.push(w);
     void w.run();
@@ -586,7 +609,8 @@ export class Simulation {
     this.log(`시험 입고 ${load.receiptId} — ${lines.length}품목 ${units}개 수령(${TEST_INBOUND.receivingLocation}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
     // 실서버엔 차량이 없다 — 입고가 서버에 들어가면 그림 차량이 도로에서 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아"). 수령은 서버가 이미 끝냄
     this.trucks.push({ trfId: `입고 ${load.receiptId.slice(-6)}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: 80, unloaded: lines.length, scheduledAt: this.time });
-    if (withVirtual && this.virtualTarget === 0) this.setVirtualWorkers(1);
+    // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없어 아무도 못 받았다(사용자 2026-11-20)
+    if (withVirtual) this.ensureInboundVirtual();
     return { receiptId: load.receiptId, units };
   }
 
@@ -597,7 +621,7 @@ export class Simulation {
     const target = this.virtualTarget;
     for (const w of this.virtualWorkers) if (w.workerId && !w.skipped) this.virtualUsed.set(w.workerId, Date.now());
     // 이어 하기 작업자(resumeOnly)는 인원 수에 넣지 않는다 — 슬라이더가 그 계정까지 닿으면 보통 작업자로 바꾼다
-    const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left && !w.resumeOnly);
+    const active = this.virtualWorkers.filter((w) => !w.leaving && !w.left && !w.resumeOnly && REAL_LINK.virtualAccounts.includes(w.account));
     // 켜는 순서: 서버에 끊긴 작업이 남은 계정부터(그 계정이 켜지면 다음 작업 받기가 들고 있던 작업·자기 PACK 을 먼저 준다), 나머지는 번호 순
     // (사용자 2026-11-19 "이미 주문에 대해서 피킹 시작한 계정있으면 그것부터 먼저 걸리는거지?")
     const cut = new Set(this.interruptedVirtual().map((c) => c.account));

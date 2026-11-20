@@ -213,6 +213,11 @@ export const REAL_LINK = {
   historyMaxPages: 5,
   /** 가상 작업자 계정 — 앞에서부터 켠다(기본 0명, 화면에서 켬). 사용자 결정 2026-11-16 [확정] */
   virtualAccounts: Array.from({ length: 10 }, (_, i) => `mfcw-pp-${String(i + 1).padStart(2, '0')}`),
+  /**
+   * 입고 가상 작업자 — 시험 입고 "가상 작업자로" 때 켠다. 품질검사(INSPECT) mfcw-qc, 적치(PUTAWAY) mfcw-rcv
+   * [확정 백엔드 docs/operations/lan-test-accounts.md — qc = INSPECT, rcv = RECEIVE·PUTAWAY] (피킹포장 mfcw-pp 는 입고 업무 권한이 없다)
+   */
+  inboundAccounts: ['mfcw-qc-01', 'mfcw-rcv-01'] as readonly string[],
   /** 작업 목록 주기 조회 간격(초). SIM-5 "시작 3초" [확정] */
   pollSec: 3,
   /** 작업자 목록(표시 이름) 다시 읽기 간격(초) [시뮬] */

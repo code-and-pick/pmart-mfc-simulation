@@ -8,7 +8,6 @@ import { INBOUND_KO, STATE_KO, TEMP_KO } from './text';
 import { Barcode } from './Barcode';
 import { RealZoneStock } from './ZoneStock';
 import { BACKEND_FACTS } from '../config';
-import { TestInboundControls } from './LeftPanel';
 
 function Stat({ v, k }: { v: ReactNode; k: string }) {
   return (
@@ -121,17 +120,7 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
         ) : (
           <div className="note">입고 차량 없음</div>
         )}
-        {/* 부르는 버튼을 이 카드에 바로(사용자 2026-11-20 "실서버엔 어딨는 거야 … 왼쪽에 있다는 문구 없애고 버튼 만들어").
-            MOCK = 가상 입고 차량, 실서버 = 시험 입고(재고 채우기 — 이 PC 에서만, 다른 기기 화면은 조회만) */}
-        {s.mock ? (
-          <button className="btn rcv-call" onClick={() => s.callTruck()}>
-            🚚 입고 차량 지금 부르기
-          </button>
-        ) : !s.realTokens?.serverInjected ? (
-          <TestInboundControls />
-        ) : (
-          <div className="note">실서버 입고(재고 채우기)는 시뮬레이터를 띄운 PC 화면에서만</div>
-        )}
+        {/* 입고 버튼은 설정 탭 한 곳에만(사용자 2026-11-20 "입고예정이랑 가상작업자로 작업하기 버튼은 왜 또 중복으로 뜨고") */}
       </>
     );
   }

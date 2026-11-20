@@ -20,6 +20,8 @@ export function passwordFileFor(account: string): string | null {
   // 관리 탭(재배정·내놓기·인계 확인) — 그 센터 MFC_SUPERVISOR. 사용자 2026-11-20 "API 받아오면 되잖아. 허락 받았어"
   if (short === 'claude-mfc-sup') return 'keycloak-claude-mfc-sup-password';
   if (/^mfcw-pp-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
+  // 입고 가상 작업자(사용자 2026-11-20 "피패킹 권한만 있는 가상 작업자가 생겨서 아무도 입고작업을 못하잖아") — 같은 70명 공용 비밀번호(lan-test-accounts.md)
+  if (/^mfcw-(qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
   return null;
 }
 
