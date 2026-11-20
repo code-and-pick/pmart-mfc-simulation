@@ -1,5 +1,5 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
-// 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기) → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
+// 위에서부터: 할 일(실제 주문 넣기 · 입고 차량 부르기) → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
@@ -251,21 +251,31 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
 
 // ───────── 실서버: 재고 채우기(시험 입고 MI-3·R-23) — 계획을 보여 주고 한 번 더 묻기 ─────────
 
-/** 입고·검수 구역 카드(Cards)에서도 쓴다 — 사용자 2026-11-20 "왼쪽에 있다는 문구 없애고 버튼 만들어" */
+/**
+ * 실서버 입고 — MOCK 과 같은 이름·자리 "입고·적치·보충 → 🚚 입고 차량 부르기" 하나로(사용자 2026-11-20 "입고예정만 … 입고차량 부르기랑 통합하던가").
+ * 누르면 재고 적은 상품을 찾아 계획을 보여 주고, 그 확인 창에서 검사·적치를 누가 할지(가상 작업자 / PDA) 고른 뒤 "입고하기".
+ * 실제로는 시험 입고(MI-3·R-23: 입고 예정 → RCV 수령) — 이 PC 에서만. 입고·검수 구역 카드(Cards)에서도 쓴다.
+ */
 export function TestInboundControls() {
   const { sim, controller } = useApp();
-  const [plan, setPlan] = useState<{ lines: InboundPlanLine[]; withVirtual: boolean } | null>(null);
+  useTick();
+  const [plan, setPlan] = useState<InboundPlanLine[] | null>(null);
+  const [withVirtual, setWithVirtual] = useState(true);
   const [busy, setBusy] = useState('');
   const [log, setLog] = useState<OrderLog[]>([]);
   const push = (text: string, warn = false) => setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn }, ...l].slice(0, 12));
   const why = (e: unknown) => ((e as Error).message ?? String(e)).slice(0, 90);
+  const running = sim.virtualWorkers.filter((w) => !w.left).length;
 
-  const start = async (withVirtual: boolean) => {
+  const start = async () => {
     setBusy('재고 적은 상품 찾는 중…');
     try {
       const lines = await sim.planTestInbound();
       if (!lines.length) push('채울 상품을 못 찾았습니다(센터 취급 상품 없음)', true);
-      else setPlan({ lines, withVirtual });
+      else {
+        setWithVirtual(running > 0 || withVirtual);
+        setPlan(lines);
+      }
     } catch (e) {
       push(`상품 찾기 실패 — ${why(e)}`, true);
     }
@@ -273,28 +283,25 @@ export function TestInboundControls() {
   };
   const go = async () => {
     if (!plan) return;
-    const p = plan;
+    const lines = plan;
+    const v = withVirtual;
     setPlan(null);
     setBusy('입고 예정 만들고 수령하는 중…');
     try {
-      const r = await sim.runTestInbound(p.lines, p.withVirtual);
-      push(`시험 입고 ${p.lines.length}품목 ${r.units}개 수령 → ${p.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+      const r = await sim.runTestInbound(lines, v);
+      push(`입고 ${lines.length}품목 ${r.units}개 수령 → ${v ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
       controller.focusZone('RCV');
     } catch (e) {
-      push(`시험 입고 실패 — ${why(e)}`, true);
+      push(`입고 실패 — ${why(e)}`, true);
     }
     setBusy('');
   };
-  const units = plan?.lines.reduce((a, l) => a + l.qty, 0) ?? 0;
+  const units = plan?.reduce((a, l) => a + l.qty, 0) ?? 0;
   return (
-    <Sec title="재고 채우기" aside="시험 입고">
-      <div className="act-split">
-        <Act icon="📦" title="입고 예정만" sub="검사·적치는 PDA" disabled={!!busy} onClick={() => start(false)} />
-        <Act icon="🤖" title="가상 작업자로" sub="수령→검사→적치" disabled={!!busy} onClick={() => start(true)} />
-      </div>
-      {busy && <div className="busy">{busy}</div>}
+    <Sec title="입고·적치·보충" aside="실서버 시험 입고">
+      <Act icon="🚚" title="입고 차량 부르기" sub={busy || '재고 적은 상품을 입고 → 입고·검수 칸에 수령'} primary disabled={!!busy} onClick={start} />
       {plan && (
-        <Ask title={`${plan.lines.length}품목 ${units}개를 입고할까요?`} onClose={() => setPlan(null)}>
+        <Ask title={`${plan.length}품목 ${units}개를 입고할까요?`} onClose={() => setPlan(null)}>
           <table className="ask-tbl">
             <thead>
               <tr>
@@ -304,7 +311,7 @@ export function TestInboundControls() {
               </tr>
             </thead>
             <tbody>
-              {plan.lines.map((l) => (
+              {plan.map((l) => (
                 <tr key={l.sku}>
                   <td title={l.sku}>{l.name}</td>
                   <td>{l.available ?? '?'}</td>
@@ -313,10 +320,16 @@ export function TestInboundControls() {
               ))}
             </tbody>
           </table>
-          <div className="ask-warn">
-            ⚠ 실서버 재고가 바뀝니다 — {TEST_INBOUND.receivingLocation} 에 수령까지 하고,{' '}
-            {plan.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
+          <div className="ask-l">검사·적치는 누가</div>
+          <div className="chips">
+            <button className={withVirtual ? 'on' : ''} onClick={() => setWithVirtual(true)}>
+              가상 작업자{running ? ` (${running}명 켜짐)` : ' (없으면 하나 켬)'}
+            </button>
+            <button className={!withVirtual ? 'on' : ''} onClick={() => setWithVirtual(false)}>
+              PDA(사람)
+            </button>
           </div>
+          <div className="ask-warn">⚠ 실서버 재고가 바뀝니다 — {TEST_INBOUND.receivingLocation} 에 수령까지 합니다</div>
           <div className="ask-acts">
             <button onClick={() => setPlan(null)}>취소</button>
             <button className="red" onClick={go}>
