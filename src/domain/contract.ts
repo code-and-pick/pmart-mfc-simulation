@@ -794,6 +794,25 @@ export interface PackageToCheck {
   riderId?: string | null;
 }
 
+/** claim-service 0.8.0 POST /claims — 관리자 판단 전체 취소(ADR-0076): 그 센터 MFC_SUPERVISOR·OPERATOR_ADMIN, 인계 전, reasonDetail 필수 */
+export interface OperatorCancelRequest {
+  orderId: string;
+  type: 'CANCEL';
+  lines: { orderLineId: string; qty: number }[];
+  reason: 'OPERATOR_DECISION';
+  reasonDetail: string;
+  channel: 'OPERATOR';
+}
+
+/** claim-service Claim(쓰는 칸만) */
+export interface Claim {
+  claimId: string;
+  orderId: string;
+  type: string;
+  state: string;
+  stopRequestId?: string | null;
+}
+
 /** rider-service 0.18.0 GET /riders/display-names — 라이더 번호 6자리·가린 이름만(ADR-0070) */
 export interface RiderDisplayName {
   riderId: string;

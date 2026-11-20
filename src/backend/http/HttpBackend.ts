@@ -38,6 +38,8 @@ import {
   type Assignment,
   type AssignTaskRequest,
   type PackageToCheck,
+  type OperatorCancelRequest,
+  type Claim,
   type RiderDisplayName,
   type TaskExecutionRequest,
   type TaskState,
@@ -167,6 +169,11 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-capacity 수동 배정·재배정 — 그 센터 MFC_SUPERVISOR. expectedVersion = 지금 활성 assignmentVersion(없으면 0) */
   assignTask(body: AssignTaskRequest, expectedVersion: number, idempotencyKey: string): Promise<Assignment> {
     return this.request('POST', '/assignments', { body, expectedVersion, idempotencyKey });
+  }
+
+  /** claim 0.8.0 관리자 판단 전체 취소(OPERATOR_DECISION, ADR-0076) — 인계 전이면 피킹 시작 뒤라도. 접수일 뿐 확정은 S3 뒤 */
+  createOperatorCancel(body: OperatorCancelRequest, idempotencyKey: string): Promise<Claim> {
+    return this.request('POST', '/claims', { body, idempotencyKey });
   }
 
   /** 작업 내놓기(0.4.8) — 담당 본인 또는 센터 관리자, READY 로 */

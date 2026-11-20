@@ -192,6 +192,33 @@ export class AdminDesk {
     });
   }
 
+  /**
+   * 주문 전체 취소 — 관리자 판단(claim 0.8.0 OPERATOR_DECISION, ADR-0076). 인계 전이면 피킹 시작 뒤라도. 사유 메모 필수.
+   * 줄 = 원래 작업 지시 PICK 줄의 미이행 수량(지시 − 취소). 서버가 "모든 행 × 미이행"과 다르면 422 로 거절한다.
+   * 접수만 확정 — 실제 취소·복귀·환불은 주문 사가(S3) 뒤라 작업 화면이 바뀌는 것으로 본다.
+   */
+  cancelOrder(shipmentId: string, orderId: string | null, memo: string) {
+    return this.run(`cancel:${shipmentId}`, async (key) => {
+      if (!memo.trim()) throw new Error('취소 사유를 적어 주세요(필수)');
+      const oid = orderId ?? (await this.obs.getShipment(shipmentId)).orderId ?? null;
+      if (!oid) throw new Error('주문 ID 를 못 읽음');
+      const view = await this.obs.getOrderFulfillment(oid);
+      const qty = new Map<string, number>();
+      for (const w of view.workOrders ?? []) {
+        if (w.kind !== 'ORIGINAL') continue;
+        for (const s of w.shipments)
+          for (const t of s.tasks.filter((x) => x.taskType === 'PICK')) {
+            const d = await this.obs.getTask(t.taskId);
+            for (const l of d.lines) qty.set(l.orderLineId, (qty.get(l.orderLineId) ?? 0) + Math.max(0, l.plannedQty - l.cancelledQty));
+          }
+      }
+      const lines = [...qty].filter(([, q]) => q > 0).map(([orderLineId, q]) => ({ orderLineId, qty: q }));
+      if (!lines.length) throw new Error('취소할 수량이 없음(모두 취소·결품)');
+      const c = await this.sup.createOperatorCancel({ orderId: oid, type: 'CANCEL', lines, reason: 'OPERATOR_DECISION', reasonDetail: memo.trim(), channel: 'OPERATOR' }, key);
+      return `취소 접수됨(${c.state}) — 작업 정리·환불은 서버가 이어서 함`;
+    });
+  }
+
   /** 인계 허가가 만료된 포장 확인 — AT_STATION(아직 있음) / TAKEN_BY_RIDER(라이더가 가져감 → 재고 인계 전기) */
   check(packageId: string, result: 'AT_STATION' | 'TAKEN_BY_RIDER', note: string) {
     return this.run(`check:${packageId}`, async (key) => {

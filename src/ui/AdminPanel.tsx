@@ -1,7 +1,7 @@
 // 관리 탭(실서버 전용) — 사용자 2026-11-20 "방금 전 주문 보고 피킹내역이랑 현재흐름을 보려고 해도 이미 인계가 끝나서 볼 수가 없었어",
 // "관리자가 바로 피패킹 제어가능한 탭", "API 받아오면 되잖아. 허락 받았어".
 // 세 칸: 지난 주문(끝난 주문의 흐름·집품 실적) · 진행 중 작업(담당 바꾸기·내려놓기) · 인계 확인(허가 만료 포장).
-// 쓰기는 누를 때마다 한 번 더 확인(사유 입력). 계약에 없는 조치(작업 중지·취소·막힘 해제·다시 열기)는 없다 — 백엔드 R-29.
+// 쓰기는 누를 때마다 한 번 더 확인(사유 입력). 주문 취소 = claim 0.8.0 관리자 판단 취소(R-29 1단계). 작업 중지·막힘 해제·부분 종료·후속 작업은 백엔드 R-29 2단계 배포 뒤.
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useApp, useView } from '../app/context';
 import type { AdminDesk, HistoryOrder } from '../sim/admin';
@@ -219,7 +219,7 @@ function Detail({ desk }: { desk: AdminDesk }) {
 }
 
 /** 쓰기 버튼 — 누르면 사유 칸과 "확인"이 나온다(두 번 눌러야 보냄) */
-function Confirm({ label, danger, onGo, disabled, children }: { label: string; danger?: boolean; onGo: (reason: string) => void; disabled?: boolean; children?: React.ReactNode }) {
+function Confirm({ label, danger, onGo, disabled, required, children }: { label: string; danger?: boolean; onGo: (reason: string) => void; disabled?: boolean; required?: boolean; children?: React.ReactNode }) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
   if (!open)
@@ -231,9 +231,10 @@ function Confirm({ label, danger, onGo, disabled, children }: { label: string; d
   return (
     <span className="adm-confirm">
       {children}
-      <input type="text" value={reason} placeholder="사유(선택)" onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+      <input type="text" value={reason} placeholder={required ? '사유(필수)' : '사유(선택)'} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
       <button
         className={`adm-btn ${danger ? 'danger' : ''}`}
+        disabled={required && !reason.trim()}
         onClick={() => {
           setOpen(false);
           onGo(reason);
@@ -268,12 +269,18 @@ function Live({ desk: d0, readOnly }: { desk: AdminDesk; readOnly: boolean }) {
   if (!open.length) return <div className="scan-empty">지금 열린 작업이 없습니다.</div>;
   return (
     <>
-      <div className="note">담당 바꾸기·내려놓기는 센터 관리자 계정(claude-mfc-sup)으로 보냅니다. 작업 중지·취소·막힘 해제는 계약에 없어 백엔드 요청 중(R-29).</div>
+      <div className="note">담당 바꾸기·내려놓기·주문 취소는 센터 관리자 계정(claude-mfc-sup)으로 보냅니다. 주문 취소는 관리자 판단 취소(claim 0.8.0) — 인계 전이면 피킹 뒤라도, 사유 필수. 작업 중지·막힘 해제·남은 수량 취소는 백엔드 배포 대기(R-29 2단계).</div>
       {[...by].map(([sid, ts]) => (
         <div key={sid} className="adm-ship">
           <div className="adm-h">
             <b>{real.orderNumberOf(sid) ?? sid.slice(-8)}</b>
+            {!readOnly && (
+              <Confirm label="주문 취소" danger required onGo={(r) => void desk.cancelOrder(sid, real.shipmentInfo.get(sid)?.data.orderId ?? null, r)}>
+                <span className="muted">주문 전체 · 환불까지</span>
+              </Confirm>
+            )}
           </div>
+          <ActionNote desk={desk} k={`cancel:${sid}`} />
           {ts.map((t) => (
             <LiveTask key={t.summary.taskId} desk={desk} t={t.summary} workers={workers} readOnly={readOnly} />
           ))}

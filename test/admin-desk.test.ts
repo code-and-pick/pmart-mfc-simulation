@@ -66,4 +66,38 @@ describe('관리 탭', () => {
     expect(got).toBe(3);
     expect(d.actions.get('assign:S1-PICK')?.state).toBe('done');
   });
+  it('주문 취소: 원래 지시 PICK 줄의 미이행 수량으로 관리자 판단 취소, 사유 없으면 안 보냄', async () => {
+    const sent: unknown[] = [];
+    const obs = {
+      getOrderFulfillment: async () => ({
+        orderId: 'ORD-1',
+        workOrders: [
+          { kind: 'ORIGINAL', shipments: [{ shipmentId: 'S1', tasks: [{ taskId: 'S1-PICK', taskType: 'PICK' }, { taskId: 'S1-PACK', taskType: 'PACK' }] }] },
+          { kind: 'RESHIPMENT', shipments: [{ shipmentId: 'S9', tasks: [{ taskId: 'S9-PICK', taskType: 'PICK' }] }] },
+        ],
+      }),
+      getTask: async (id: string) => ({
+        lines:
+          id === 'S1-PICK'
+            ? [
+                { orderLineId: 'L1', plannedQty: 3, cancelledQty: 1 },
+                { orderLineId: 'L2', plannedQty: 2, cancelledQty: 2 },
+              ]
+            : [{ orderLineId: 'L9', plannedQty: 5, cancelledQty: 0 }],
+      }),
+    } as unknown as HttpBackend;
+    const sup = {
+      createOperatorCancel: async (body: unknown) => {
+        sent.push(body);
+        return { claimId: 'CLM-1', orderId: 'ORD-1', type: 'CANCEL', state: 'STOP_PENDING' };
+      },
+    } as unknown as HttpBackend;
+    const d = new AdminDesk(obs, sup, 'M', () => 1, 1, () => 'OP-SUP');
+    await d.cancelOrder('S1', 'ORD-1', '  ');
+    expect(d.actions.get('cancel:S1')?.state).toBe('error');
+    expect(sent).toEqual([]);
+    await d.cancelOrder('S1', 'ORD-1', '고객 요청 — 배송지 오류');
+    expect(d.actions.get('cancel:S1')?.state).toBe('done');
+    expect(sent).toEqual([{ orderId: 'ORD-1', type: 'CANCEL', lines: [{ orderLineId: 'L1', qty: 2 }], reason: 'OPERATOR_DECISION', reasonDetail: '고객 요청 — 배송지 오류', channel: 'OPERATOR' }]);
+  });
 });
