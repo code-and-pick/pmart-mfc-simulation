@@ -18,8 +18,8 @@ const ICON: Partial<Record<ZoneKind, string>> = {
   PARKING: '🛵',
 };
 
-/** 둥근 판 캔버스 → 텍스처(+ 가로세로 비) */
-function makePill(title: string, sub: string | null, icon: string | null, bg: string): { tex: THREE.CanvasTexture; aspect: number } {
+/** 둥근 판 캔버스 → 텍스처(+ 가로세로 비). 그림처럼 아래로 번지는 그림자 + 위가 밝은 보라 그라데이션 + 위쪽 얇은 빛 */
+function makePill(title: string, sub: string | null, icon: string | null, bg: string, top: string): { tex: THREE.CanvasTexture; aspect: number } {
   const S = 64; // 글자 기준 크기(캔버스 px)
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
@@ -31,23 +31,43 @@ function makePill(title: string, sub: string | null, icon: string | null, bg: st
   ctx.font = fS;
   const wS = sub ? ctx.measureText(sub).width : 0;
   const iconW = icon ? S * 1.25 : 0;
-  const padX = S * 0.55;
+  const padX = S * 0.6;
   const gap = sub ? S * 0.35 : 0;
-  c.width = Math.ceil(padX * 2 + iconW + wT + gap + wS);
-  c.height = Math.ceil(S * 1.7);
-  const h = c.height;
-  // 그림자 + 판
-  ctx.fillStyle = 'rgba(30,27,75,0.18)';
-  ctx.beginPath();
-  ctx.roundRect(2, 6, c.width - 4, h - 8, (h - 8) / 2);
-  ctx.fill();
+  const M = S * 0.45; // 그림자 여백
+  const pw = Math.ceil(padX * 2 + iconW + wT + gap + wS);
+  const ph = Math.ceil(S * 1.55);
+  c.width = Math.ceil(pw + M * 2);
+  c.height = Math.ceil(ph + M * 2);
+  const x0 = M;
+  const y0 = M * 0.6;
+  const r = ph / 2;
+  // 그림자(아래로)
+  ctx.save();
+  ctx.shadowColor = 'rgba(40,32,120,0.38)';
+  ctx.shadowBlur = S * 0.45;
+  ctx.shadowOffsetY = S * 0.18;
   ctx.fillStyle = bg;
   ctx.beginPath();
-  ctx.roundRect(0, 0, c.width, h - 6, (h - 6) / 2);
+  ctx.roundRect(x0, y0, pw, ph, r);
   ctx.fill();
+  ctx.restore();
+  // 판(위 밝게 → 아래 진하게)
+  const g = ctx.createLinearGradient(0, y0, 0, y0 + ph);
+  g.addColorStop(0, top);
+  g.addColorStop(1, bg);
+  ctx.fillStyle = g;
+  ctx.beginPath();
+  ctx.roundRect(x0, y0, pw, ph, r);
+  ctx.fill();
+  // 위쪽 얇은 빛
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = S * 0.05;
+  ctx.beginPath();
+  ctx.roundRect(x0 + S * 0.05, y0 + S * 0.05, pw - S * 0.1, ph - S * 0.1, r);
+  ctx.stroke();
   ctx.textBaseline = 'middle';
-  const cy = (h - 6) / 2 + 2;
-  let x = padX;
+  const cy = y0 + ph / 2 + 2;
+  let x = x0 + padX;
   if (icon) {
     ctx.font = fI;
     ctx.fillStyle = '#ffffff';
@@ -60,7 +80,7 @@ function makePill(title: string, sub: string | null, icon: string | null, bg: st
   x += wT + gap;
   if (sub) {
     ctx.font = fS;
-    ctx.fillStyle = 'rgba(255,255,255,0.78)';
+    ctx.fillStyle = 'rgba(255,255,255,0.8)';
     ctx.fillText(sub, x, cy + 2);
   }
   const tex = new THREE.CanvasTexture(c);
@@ -113,7 +133,7 @@ export function zoneTags(L: Layout): Tag[] {
     const dim = z.kind === 'QUARANTINE';
     const racks = rackCount(L, z);
     const sub = dim ? (z.docPyeong ? `${z.docPyeong}평` : null) : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
-    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : SCENE.pill);
+    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : SCENE.pill, dim ? '#44528a' : SCENE.pillTop);
     const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
     if (wall) {
       let h = WALL_CARD_H;

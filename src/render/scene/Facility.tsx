@@ -7,7 +7,7 @@ import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
-import { makeLabel } from '../sprites';
+import { boxTexture, makeLabel, makePillSprite } from '../sprites';
 import { ZoneNames } from './ZoneNames';
 import { ParkingDecor, Walkways, WorkingCells } from './Decor';
 
@@ -161,7 +161,7 @@ function Walls({ L }: { L: Layout }) {
               ref={(m: THREE.MeshStandardMaterial | null) => {
                 if (m) mats.current[i] = m;
               }}
-              color={w.glass ? 0x9fd3ff : SCENE.wall}
+              color={w.glass ? 0xd2e4fa : SCENE.wall}
               transparent
               opacity={w.glass ? 0.18 : 0.32}
               roughness={0.4}
@@ -180,6 +180,9 @@ function Racks({ L }: { L: Layout }) {
   const shelves = useRef<THREE.InstancedMesh>(null!);
   const dividers = useRef<THREE.InstancedMesh>(null!);
   const beams = useRef<THREE.InstancedMesh>(null!);
+  // 양 끝 옆틀 대각 보강대(그림의 랙 옆면) — 끝마다 BRACES 개 지그재그
+  const braces = useRef<THREE.InstancedMesh>(null!);
+  const BRACES = 4;
   // 기둥: 그림처럼 칸 사이(약 1.25 m)마다 앞뒤 한 쌍 — 파란색. 가로대: 단마다 앞·뒤 주황 띠
   const bays = Math.max(1, Math.round(RACK_LEN / 1.25));
   const postCount = L.racks.length * (bays + 1) * 2;
@@ -192,7 +195,26 @@ function Racks({ L }: { L: Layout }) {
     let si = 0;
     let di = 0;
     let bi = 0;
+    let ki = 0;
     for (const r of L.racks) {
+      // 옆틀 대각선: 끝(길이 방향 ±) 마다, 앞뒤 기둥 사이를 지그재그로
+      const segH = (RACK_HEIGHT - 0.15) / BRACES;
+      const depth = RACK_DEPTH - 0.08;
+      const len = Math.hypot(depth, segH);
+      const ang = Math.atan2(segH, depth);
+      for (const e of [-1, 1]) {
+        const a = e * (RACK_LEN / 2 - 0.03);
+        for (let k = 0; k < BRACES; k++) {
+          const y = 0.08 + segH * (k + 0.5);
+          const flip = k % 2 ? -1 : 1;
+          const pos = r.along === 'x' ? new THREE.Vector3(r.cx + a, y, r.cz) : new THREE.Vector3(r.cx, y, r.cz + a);
+          // 막대는 처음에 깊이 방향(along x 면 z, along z 면 x)으로 누워 있고, 그 면 안에서 기울인다
+          const rot = r.along === 'x' ? new THREE.Quaternion().setFromEuler(new THREE.Euler(flip * ang, 0, 0)) : new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, flip * ang));
+          const sc = r.along === 'x' ? new THREE.Vector3(0.025, 0.025, len) : new THREE.Vector3(len, 0.025, 0.025);
+          mtx.compose(pos, rot, sc);
+          braces.current.setMatrixAt(ki++, mtx);
+        }
+      }
       const lx = r.along === 'x' ? RACK_LEN : RACK_DEPTH;
       const lz = r.along === 'x' ? RACK_DEPTH : RACK_LEN;
       for (let b = 0; b <= bays; b++) {
@@ -206,7 +228,7 @@ function Racks({ L }: { L: Layout }) {
       }
       const levelH = (RACK_HEIGHT - 0.25) / r.levels;
       const slotW = (RACK_LEN * 0.9) / r.slotsPerLevel;
-      const dh = Math.min(0.12, levelH * 0.4); // 칸막이 높이 — 상품을 가리지 않게 낮게
+      const dh = Math.min(0.05, levelH * 0.2); // 칸막이 높이 — 그림처럼 거의 안 보이게 낮게(칸 수는 보이되 어지럽지 않게)
       const spans = L.wideSpans ?? [];
       for (let lv = 0; lv < r.levels; lv++) {
         const y = 0.1 + (lv * (RACK_HEIGHT - 0.25)) / r.levels;
@@ -234,7 +256,7 @@ function Racks({ L }: { L: Layout }) {
         }
       }
     }
-    for (const m of [dividers, posts, shelves, beams]) {
+    for (const m of [dividers, posts, shelves, beams, braces]) {
       m.current.instanceMatrix.needsUpdate = true;
       m.current.computeBoundingSphere();
     }
@@ -244,6 +266,10 @@ function Racks({ L }: { L: Layout }) {
       <instancedMesh ref={posts} args={[undefined, undefined, postCount]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackPost} metalness={0.2} roughness={0.45} />
+      </instancedMesh>
+      <instancedMesh ref={braces} args={[undefined, undefined, L.racks.length * 2 * BRACES]}>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={SCENE.rackPost} metalness={0.2} roughness={0.5} />
       </instancedMesh>
       <instancedMesh ref={beams} args={[undefined, undefined, shelfCount * 2]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
@@ -352,54 +378,85 @@ function ReturnIntake() {
   );
 }
 
-/** 패킹대: 꺼짐 회색 · 비어 있음 초록 · 사용 중 주황. */
+/**
+ * 패킹대(사용자 2026-11-20 참고 그림 "패킹대 생김새도 똑같이"): 흰 긴 작업대 + 연회색 틀 + 아래 파란 바구니 2개 + 위 상자 2개·테이프 디스펜서.
+ * 상태는 위 PS-n 판 색(꺼짐 회색·비어 있음 보라·사용 중 주황) — 몸통 색으로 칠하지 않는다.
+ */
 function Stations({ L }: { L: Layout }) {
   const { sim } = useApp();
-  const mats = useRef<THREE.MeshStandardMaterial[]>([]);
-  const tags = useMemo(() => L.stations.map((st) => makeLabel(st.id, { size: 32, bg: 'rgba(0,0,0,0.6)', screenPx: 16 })), [L]);
+  const tags = useMemo(
+    () =>
+      L.stations.map((st) => ({
+        free: makePillSprite(st.id, '#5b4fd6', '#7a62ee', 17),
+        busy: makePillSprite(st.id, '#e8742a', '#ff9a4d', 17),
+        off: makePillSprite(st.id, '#9aa1ad', '#b6bcc6', 15),
+      })),
+    [L],
+  );
   useFrame(() => {
     L.stations.forEach((st, i) => {
       const active = sim.stations.isActive(i);
-      const busy = sim.stations.occupant(st.id);
-      mats.current[i]?.color.setHex(!active ? SCENE.stationOff : busy ? 0xff8a50 : 0x5cb860);
-      tags[i].visible = active;
+      const busy = !!sim.stations.occupant(st.id);
+      tags[i].free.visible = active && !busy;
+      tags[i].busy.visible = active && busy;
+      tags[i].off.visible = !active;
     });
   });
+  const frame = 0xc9d0da;
   return (
     <>
-      {L.stations.map((st, i) => (
-        <group key={st.id}>
-          {/* 작업대(그림처럼): 흰 상판 + 회색 다리 + 아래 선반, 앞 띠 색 = 상태(꺼짐 회색·비어 있음 초록·사용 중 주황) */}
-          <mesh position={[st.table.x, 0.87, st.table.z]} castShadow receiveShadow>
-            <boxGeometry args={[1.6, 0.05, 0.8]} />
-            <meshStandardMaterial color={SCENE.station} roughness={0.5} />
-          </mesh>
-          <mesh position={[st.table.x, 0.25, st.table.z]} receiveShadow>
-            <boxGeometry args={[1.5, 0.03, 0.7]} />
-            <meshStandardMaterial color={SCENE.rackDeck} roughness={0.7} />
-          </mesh>
-          {[-1, 1].flatMap((sx) =>
-            [-1, 1].map((sz) => (
-              <mesh key={`${sx}${sz}`} position={[st.table.x + sx * 0.75, 0.43, st.table.z + sz * 0.35]} castShadow>
-                <boxGeometry args={[0.05, 0.86, 0.05]} />
-                <meshStandardMaterial color={0x8a929c} metalness={0.3} roughness={0.5} />
+      {L.stations.map((st, i) => {
+        const { x, z } = st.table;
+        return (
+          <group key={st.id}>
+            {/* 상판(흰) + 앞 모서리 띠 */}
+            <mesh position={[x, 0.86, z]} castShadow receiveShadow>
+              <boxGeometry args={[1.6, 0.05, 0.8]} />
+              <meshStandardMaterial color={0xffffff} roughness={0.45} />
+            </mesh>
+            <mesh position={[x, 0.82, z]}>
+              <boxGeometry args={[1.62, 0.04, 0.82]} />
+              <meshStandardMaterial color={frame} roughness={0.5} />
+            </mesh>
+            {/* 다리·아래 선반 */}
+            {[-1, 1].flatMap((sx) =>
+              [-1, 1].map((sz) => (
+                <mesh key={`${sx}${sz}`} position={[x + sx * 0.76, 0.41, z + sz * 0.36]} castShadow>
+                  <boxGeometry args={[0.045, 0.82, 0.045]} />
+                  <meshStandardMaterial color={frame} metalness={0.2} roughness={0.5} />
+                </mesh>
+              )),
+            )}
+            <mesh position={[x, 0.16, z]} receiveShadow>
+              <boxGeometry args={[1.52, 0.03, 0.72]} />
+              <meshStandardMaterial color={0xe9edf2} roughness={0.7} />
+            </mesh>
+            {/* 아래 파란 바구니 2개 */}
+            {[-0.38, 0.38].map((dx) => (
+              <mesh key={dx} position={[x + dx, 0.32, z]} castShadow>
+                <boxGeometry args={[0.6, 0.28, 0.5]} />
+                <meshStandardMaterial color={0x2f80ed} roughness={0.55} />
               </mesh>
-            )),
-          )}
-          {/* 상태 띠 — 상판 네 둘레 */}
-          <mesh position={[st.table.x, 0.82, st.table.z]}>
-            <boxGeometry args={[1.64, 0.09, 0.84]} />
-            <meshStandardMaterial
-              ref={(m: THREE.MeshStandardMaterial | null) => {
-                if (m) mats.current[i] = m;
-              }}
-              color={SCENE.stationOff}
-              roughness={0.5}
-            />
-          </mesh>
-          <primitive object={tags[i]} position={[st.table.x, 1.5, st.table.z]} />
-        </group>
-      ))}
+            ))}
+            {/* 위 상자 2개 + 테이프 디스펜서(회색) */}
+            <mesh position={[x - 0.45, 0.99, z - 0.12]} castShadow>
+              <boxGeometry args={[0.36, 0.22, 0.3]} />
+              <meshStandardMaterial color={SCENE.box} map={boxTexture()} roughness={0.7} />
+            </mesh>
+            <mesh position={[x + 0.05, 0.96, z - 0.15]} castShadow>
+              <boxGeometry args={[0.28, 0.16, 0.24]} />
+              <meshStandardMaterial color={SCENE.box} map={boxTexture()} roughness={0.7} />
+            </mesh>
+            <mesh position={[x + 0.55, 0.93, z + 0.1]} castShadow>
+              <boxGeometry args={[0.18, 0.1, 0.1]} />
+              <meshStandardMaterial color={0x7b8494} roughness={0.5} />
+            </mesh>
+            <primitive object={tags[i].free} position={[x, 1.65, z]} />
+            <primitive object={tags[i].busy} position={[x, 1.65, z]} />
+            <primitive object={tags[i].off} position={[x, 1.65, z]} />
+          </group>
+        );
+      })}
     </>
   );
 }

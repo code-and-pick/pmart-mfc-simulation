@@ -16,8 +16,9 @@ function drawTag(ctx: CanvasRenderingContext2D, x: number, y: number, w: number,
   ctx.beginPath();
   ctx.roundRect(x + 2, y + 2, w - 4, h - 4, h * 0.18);
   ctx.fill();
-  ctx.strokeStyle = '#1b1b1b';
-  ctx.lineWidth = 2;
+  // 노란 판은 규칙(MFC 8-2) 그대로, 테두리만 부드럽게(사용자 2026-11-20 "좀 세련되게")
+  ctx.strokeStyle = 'rgba(120,90,0,0.55)';
+  ctx.lineWidth = 1.5;
   ctx.stroke();
   ctx.fillStyle = '#111';
   ctx.textAlign = 'center';

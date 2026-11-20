@@ -6,6 +6,7 @@ import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE } from '../colors';
 import { Label } from './Facility';
+import { boxTexture } from '../sprites';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -152,7 +153,7 @@ export function Goods() {
   return (
     <instancedMesh ref={mesh} args={[undefined, undefined, total]} receiveShadow frustumCulled={false}>
       <boxGeometry args={[1, 1, 1]} />
-      <meshStandardMaterial roughness={0.65} />
+      <meshStandardMaterial roughness={0.7} map={boxTexture()} />
     </instancedMesh>
   );
 }
@@ -225,7 +226,7 @@ export function Reserves() {
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
         <boxGeometry args={[0.255, 0.22, 0.255]} />
-        <meshStandardMaterial roughness={0.85} />
+        <meshStandardMaterial roughness={0.8} map={boxTexture()} />
       </instancedMesh>
     </>
   );

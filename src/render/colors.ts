@@ -22,20 +22,20 @@ export const ZONE_COLOR: Record<ZoneKind, number> = {
  * 흰 바닥 + 구역은 구역색 점선 테두리·옅은 물빛(구역색은 위 ZONE_COLOR 그대로), 파란 기둥·주황 가로대 랙, 재고만큼 갈색 상자.
  */
 export const SCENE = {
-  // 전반적으로 밝고 맑게(사용자 2026-11-20 "색이 전반적으로 너무 칙칙해")
-  backdrop: 0xf0f3f7,
-  outside: 0xe9ecf1,
-  floor: 0xffffff,
-  yard: 0xd3d8df,
-  wall: 0xf7f8fa,
+  // 참고 그림 색 그대로(사용자 2026-11-20 "벽이랑 배경이랑 바닥색이 너무 밝게 됐는데 이미지랑 같은 색으로") — 연보라빛 회색 배경, 옅은 회청 바닥, 흰 유리 벽
+  backdrop: 0xe3e6ef,
+  outside: 0xdfe2eb,
+  floor: 0xeceef4,
+  yard: 0xd6d9e2,
+  wall: 0xeaf0fb,
   /** 구역 바닥 물빛(구역색) 불투명도 — 흰 바닥 위 아주 옅게 */
   zoneTint: 0.14,
   rackPost: 0x1f73f0,
   rackBeam: 0xff9d2e,
   rackDeck: 0xe6eaf0,
-  rackDivider: 0xb7c0cc,
+  rackDivider: 0xd3d9e2,
   /** 상자(갈색 골판지) — 상품마다 조금씩 다르게 */
-  box: 0xe6b072,
+  box: 0xe2b27a,
   /** 실서버 모드에서 수량을 모르는 시뮬레이터 상자 — 연회색(실제 재고처럼 보이지 않게) */
   boxUnknown: 0xd6dae0,
   station: 0xffffff,
@@ -46,7 +46,9 @@ export const SCENE = {
   innerWall: 0xe2e6ec,
   /** 구역 이름표(보라 둥근 판)·격리 이름표(남색) */
   pill: '#5b4fd6',
-  pillDim: '#2f3a5c',
+  /** 판 그라데이션 위쪽(밝은 보라) — 그림의 "상온 C~H" 판 */
+  pillTop: '#7a62ee',
+  pillDim: '#2f3a63',
   /** 작업 중 칸 빛(보라) */
   working: 0x8b5cf6,
   walkway: 0xffffff,
@@ -57,16 +59,16 @@ export const SCENE = {
  * (그 전 6색 ZONE_COLOR 는 점선·물빛에서 빠짐 — 아래 ZONE_COLOR 는 왼쪽 구역 패널 등 다른 곳 호환용으로 남김)
  */
 export const ZONE_FLOOR: Record<ZoneKind, number> = {
-  FROZEN: 0xcfe6ff,
-  CHILLED: 0xd4f2c9,
-  AMBIENT: 0xffffff,
-  INBOUND_STORE: 0xfffaf2,
-  RECEIVING: 0xf7f8fb,
-  OFFICE: 0xf7f8fb,
-  PACKING: 0xfbf8ff,
-  QUARANTINE: 0xe6e9ef,
-  SHIPPING: 0xfff4cc,
-  PARKING: 0xdfe3e9,
+  FROZEN: 0xd3e2f6,
+  CHILLED: 0xdaeacf,
+  AMBIENT: 0xeceef4,
+  INBOUND_STORE: 0xeceef4,
+  RECEIVING: 0xeceef4,
+  OFFICE: 0xeef0f6,
+  PACKING: 0xeceef4,
+  QUARANTINE: 0xdfe2ea,
+  SHIPPING: 0xeceef4,
+  PARKING: 0xe2e5ec,
 };
 
 export const TEMP_COLOR: Record<TemperatureZone, number> = {
