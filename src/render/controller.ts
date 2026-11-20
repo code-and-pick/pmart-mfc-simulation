@@ -246,8 +246,8 @@ export class ViewController extends Emitter {
   }
 
   /**
-   * 3D 에서 선반 칸을 누름 — 카메라가 멀면(구역 위에서 보기보다 멀리) 그 구역 위에서 보기, 가까우면 그 랙 앞 통로에서 비스듬히(사용자 2026-11-20
-   * "멀리서 구역 클릭하면 위에서 쳐다보고 가까이서 클릭하면 랙 가까이서 보는 걸로"). 가까울 때는 칸 카드도 연다.
+   * 3D 에서 선반 칸을 누름 — 카메라가 멀면(구역 위에서 보기보다 멀리) 그 구역 위에서 보기, 가까우면 그 칸 정면으로(+ 칸 카드).
+   * (사용자 2026-11-20 "멀리서 구역 클릭하면 위에서 … 가까이서 클릭하면 랙 가까이서", 통로 위 비스듬한 시야에 "선반 칸을 보고 싶어서 클릭하는데 왜 자꾸 측면 천장에서" → 칸 정면)
    */
   clickCell(code: string, camDist: number) {
     const loc = this.sim.backendLocation(code);
@@ -258,28 +258,9 @@ export class ViewController extends Emitter {
         return;
       }
       this.rememberHome();
-      this.focusRack(loc);
+      this.focusLocation(loc);
     }
     this.focusCell(code);
-  }
-
-  /**
-   * 랙 가까이 — 그 칸 앞 통로 위, 통로를 따라 4.2 m 떨어진 3.6 m 높이(랙 2.1 m 위)에서 칸 쪽을 비스듬히 내려다본다(약 35°).
-   * 통로를 따라 보므로 맞은편 랙에 덜 가리고 양쪽 랙 앞면이 보인다. 지금 카메라가 있는 쪽 통로 끝에서 들어온다.
-   */
-  focusRack(loc: Location) {
-    this.follow = null;
-    this.nearCut = 0;
-    const target = new THREE.Vector3(loc.shelf.x, 0.8, loc.shelf.z);
-    const now = this.cameraNow?.().pos;
-    const along = loc.along === 'z' ? 'z' : 'x';
-    const sign = now ? Math.sign(now[along] - target[along]) || 1 : 1;
-    const pos = new THREE.Vector3(loc.pick.x, 3.6, loc.pick.z);
-    pos[along] += sign * 4.2;
-    // 칸 쪽으로 조금 비켜 서서 앞면이 더 보이게(통로 가운데에서 맞은편 쪽으로 0.15 m)
-    const n = loc.along === 'z' ? new THREE.Vector3(loc.face, 0, 0) : new THREE.Vector3(0, 0, loc.face);
-    pos.add(n.multiplyScalar(0.15));
-    this.cameraRequest = { pos, target, animate: true };
   }
 
   /** 로케이션(랙 칸) 정면으로 붙는다. */
@@ -292,7 +273,8 @@ export class ViewController extends Emitter {
     // 카메라를 맞은편 랙 뒤 정면에 두고, 그 사이(맞은편 랙)는 근접 클리핑으로 잘라 낸다.
     const pos = target.clone().add(n.multiplyScalar(2.6)).add(new THREE.Vector3(0, 0.12, 0));
     this.cameraRequest = { pos, target, animate: true };
-    this.nearCut = 1.75;
+    // 카메라에서 맞은편 랙 앞면까지 약 1.79 m — 1.75 는 그 앞 기둥·선반 끝이 4 cm 남아 화면을 가렸다
+    this.nearCut = 1.85;
   }
 
   /** 바코드에서 고른 자리 — 3D 에 잠깐 표시(노란 기둥·고리). until = performance.now() 기준 ms */

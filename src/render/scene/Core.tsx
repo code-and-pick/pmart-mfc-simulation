@@ -202,7 +202,7 @@ export function Picker() {
           }
         }
         if (best) {
-          // 멀면 구역 위에서, 가까우면 랙 가까이(controller.clickCell)
+          // 멀면 구역 위에서, 가까우면 그 칸 정면(controller.clickCell)
           controller.clickCell(best.code, camera.position.distanceTo(registry.controls?.target ?? new THREE.Vector3()));
           return;
         }
