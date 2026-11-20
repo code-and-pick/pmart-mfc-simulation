@@ -185,11 +185,31 @@ export function Declutter() {
     const W = size.width;
     const v = new THREE.Vector3();
     const items: { s: THREE.Sprite; prio: number; d: number; r: [number, number, number, number] }[] = [];
+    // 구역 이름 카드(벽·바닥에 붙은 판)는 움직이지 않는 자리 — 이름표가 그 위에 겹치지 않게 먼저 잡아 둔다
+    // (사용자 2026-11-20 "여기도 겹치는데 뭐가 겹치는 건지 모르겠어" — 회수 반입 이름표가 휴게·사무 카드 위)
+    const blocks: [number, number, number, number][] = [];
+    const box = new THREE.Box3();
+    const corner = new THREE.Vector3();
     const shown = (o: THREE.Object3D | null): boolean => {
       for (let x = o; x; x = x.parent) if (!x.visible) return false;
       return true;
     };
     scene.traverse((o) => {
+      if (o.userData.declutterBlock && (o as THREE.Mesh).isMesh && shown(o)) {
+        const g = (o as THREE.Mesh).geometry;
+        if (!g.boundingBox) g.computeBoundingBox();
+        box.copy(g.boundingBox!).applyMatrix4(o.matrixWorld);
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = false;
+        for (let i = 0; i < 8; i++) {
+          corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera);
+          if (corner.z < 1) front = true;
+          const px = ((corner.x + 1) / 2) * W;
+          const py = ((1 - corner.y) / 2) * H;
+          x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+        }
+        if (front) blocks.push([x0, y0, x1, y1]);
+        return;
+      }
       const s = o as THREE.Sprite;
       if (!s.isSprite || !(s.material instanceof THREE.SpriteMaterial) || s.material.sizeAttenuation) return;
       if (!shown(s)) return;
@@ -206,16 +226,34 @@ export function Declutter() {
       items.push({ s, prio: (s.userData.prio as number | undefined) ?? 1, d, r: [x0, y0, x0 + wp, y0 + hp] });
     });
     items.sort((a, b) => b.prio - a.prio || a.d - b.d);
-    const placed: [number, number, number, number][] = [];
+    const placed: [number, number, number, number][] = [...blocks];
     const M = 3;
+    const hits = (r: [number, number, number, number]) => placed.some((p) => r[0] < p[2] + M && r[2] > p[0] - M && r[1] < p[3] + M && r[3] > p[1] - M);
     for (const it of items) {
-      const mat = it.s.material as THREE.SpriteMaterial;
-      if (it.s.userData.baseOpacity === undefined) it.s.userData.baseOpacity = mat.opacity;
+      const s = it.s;
+      const mat = s.material as THREE.SpriteMaterial;
+      if (s.userData.baseOpacity === undefined) s.userData.baseOpacity = mat.opacity;
+      if (s.userData.baseCenterY === undefined) s.userData.baseCenterY = s.center.y;
+      const baseY = s.userData.baseCenterY as number;
+      // 겹치면 위로 한 칸·두 칸 비켜 본다(제 높이만큼) — 그래도 겹치면 숨김
+      const h = it.r[3] - it.r[1];
+      const nowShift = (baseY - s.center.y) * h; // 이미 비켜 있는 만큼(화면 px)
+      const r0: [number, number, number, number] = [it.r[0], it.r[1] + nowShift, it.r[2], it.r[3] + nowShift];
       const far = (it.prio <= 1 && it.d > 40) || (it.prio <= 2 && it.d > 65);
-      const hit = placed.some((p) => it.r[0] < p[2] + M && it.r[2] > p[0] - M && it.r[1] < p[3] + M && it.r[3] > p[1] - M);
-      const hide = far || hit;
-      mat.opacity = hide ? 0 : (it.s.userData.baseOpacity as number);
-      if (!hide) placed.push(it.r);
+      let k = -1;
+      if (!far) {
+        for (let j = 0; j <= 2; j++) {
+          const dy = j * (h + M);
+          const r: [number, number, number, number] = [r0[0], r0[1] - dy, r0[2], r0[3] - dy];
+          if (!hits(r)) {
+            k = j;
+            placed.push(r);
+            break;
+          }
+        }
+      }
+      s.center.y = baseY - Math.max(0, k) * (1 + M / Math.max(1, h));
+      mat.opacity = k < 0 ? 0 : (s.userData.baseOpacity as number);
     }
   });
   return null;

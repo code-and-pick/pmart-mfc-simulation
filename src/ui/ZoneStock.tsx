@@ -1,11 +1,12 @@
 // 실서버 구역 재고 — 구역 → 랙 → 단 → 칸(상품·수량). 센터 전체 재고(inventory 0.33.0 stock-units, R-15)를 평면 칸에 맞춰 센다.
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
+import { WORK_SHORT } from '../domain/placeName';
 import { useEffect, useState } from 'react';
 import { useApp, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
 
 const QUALITY_KO: Record<string, string> = { NORMAL: '정상', QUARANTINED: '격리', PENDING: '판정 전' };
-const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PACKED: '포장', CANCEL_RETURN_PENDING: '복귀 대기', UNSTOWED: '미적치' };
+const WORK_KO: Record<string, string> = WORK_SHORT;
 
 /** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량 */
 function CellCard({ code }: { code: string }) {

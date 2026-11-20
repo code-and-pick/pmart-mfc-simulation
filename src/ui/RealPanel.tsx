@@ -1,5 +1,6 @@
 // 실서버 관찰 화면: 실제 주문(출고)별 PICK·PACK 상태와 담당 작업자. 서버가 준 값만 보인다.
 // 주문 줄을 누르면 "바코드" 탭으로 넘어가 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)를 보인다.
+import { WORK_SHORT } from '../domain/placeName';
 import { OrderCards } from './OrderCards';
 import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
@@ -152,7 +153,7 @@ export function RealOrders() {
   );
 }
 
-const WORK_KO: Record<string, string> = { STORED: '보관', PICKED: '집품', PACKED: '포장', CANCEL_RETURN_PENDING: '복귀 대기', UNSTOWED: '미적치' };
+const WORK_KO: Record<string, string> = WORK_SHORT;
 
 /** 주문에 나온 SKU 의 실제 재고(서버 응답 그대로). 평면에 없는 위치는 표에만 나온다 */
 /**

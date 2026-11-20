@@ -164,7 +164,7 @@ export function ZoneNames({ L }: { L: Layout }) {
   return (
     <>
       {tags.map((t) => (
-        <mesh key={t.id} position={t.pos} rotation={[t.rotX, 0, 0]} renderOrder={5} raycast={() => null}>
+        <mesh key={t.id} position={t.pos} rotation={[t.rotX, 0, 0]} renderOrder={5} raycast={() => null} userData={{ declutterBlock: true }}>
           <planeGeometry args={[t.w, t.h]} />
           <meshBasicMaterial map={t.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
         </mesh>

@@ -1,5 +1,6 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
+import { placeShortName, WORK_SHORT } from '../../domain/placeName';
 import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
@@ -290,7 +291,9 @@ export function RealStock() {
     }
 
     // 선반 밖 자리(입고·검수 칸·카트·포장대 등): 골판지 상자로 쌓는다 — CARTON_UNITS 낱개당 1개, 3×3 한 층(MOCK 하차 칸처럼, 사용자 2026-11-20 "목업은 박스채로 옆 공간에 쌓아두던데")
-    for (const g of points.values()) {
+    for (const [pcode, g] of points) {
+      // 장바구니(CRT-) 재고는 카트 안에 있는 것 — 거치대 앞에 상자를 따로 쌓지 않는다(사용자 2026-11-20 "장바구니 앞에 상자 없애")
+      if (pcode.startsWith('CRT-')) continue;
       const baseY = g.table ? 0.9 : 0.02;
       const S = g.table ? 0.2 : 0.34;
       let i = 0;
@@ -342,9 +345,14 @@ export function RealStock() {
       const text =
         rackGuess.get(code)
           ? `${code} 포장 ${rackGuess.get(code)} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
-          : `${code} ${[...g.by].map(([ws, q]) => `${WORK_KO[ws]} ${q}`).join(' · ')}`;
+          : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
-      s.position.set(g.x, (g.table ? 0.9 : 0.02) + 0.9, g.z);
+      // 쌓인 상자 더미 위에(전엔 0.9 m — 더미에 묻혔다, 사용자 2026-11-20 "여기도 겹치는데")
+      let cartons = 0;
+      for (const [ws, q] of g.by) if (ws !== 'PACKED') cartons += Math.max(1, Math.ceil(q / CARTON_UNITS));
+      const S = g.table ? 0.2 : 0.34;
+      const layers = Math.ceil(Math.min(cartons, PER_POINT_CAP) / 9);
+      s.position.set(g.x, (g.table ? 0.9 : 0.02) + Math.max(0.9, layers * (S + 0.01) + 0.35), g.z);
       labels.add(s);
     }
   });
