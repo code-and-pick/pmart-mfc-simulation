@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
-import { ZONE_COLOR } from '../colors';
+import { SCENE, ZONE_COLOR } from '../colors';
 import { makeLabel } from '../sprites';
 import { hasWallName, ZoneNames } from './ZoneNames';
 
@@ -48,22 +48,60 @@ function Ground({ L }: { L: Layout }) {
     <>
       <mesh rotation={flat} position={[30, -0.02, 20]} receiveShadow>
         <planeGeometry args={[200, 200]} />
-        <meshStandardMaterial color={0x1b1d21} roughness={1} />
+        <meshStandardMaterial color={SCENE.outside} roughness={1} />
       </mesh>
       <mesh rotation={flat} position={[L.width / 2, -0.01, L.buildingDepth / 2]} receiveShadow>
         <planeGeometry args={[L.width, L.buildingDepth]} />
-        <meshStandardMaterial color={0x3a3c40} roughness={0.95} />
+        <meshStandardMaterial color={SCENE.floor} roughness={0.95} />
       </mesh>
-      {/* 남쪽 앞마당(라이더), 동쪽 입고 차량 진입로 */}
+      {/* 남쪽 앞마당(라이더), 동쪽 입고 차량 진입로 — 그림의 회색 도크처럼 */}
       <mesh rotation={flat} position={[30, -0.015, 36]} receiveShadow>
         <planeGeometry args={[19.7, 8]} />
-        <meshStandardMaterial color={0x2a2c30} roughness={1} />
+        <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
       <mesh rotation={flat} position={[68, -0.015, L.points.truckDock.z]} receiveShadow>
         <planeGeometry args={[40, 5]} />
-        <meshStandardMaterial color={0x26282c} roughness={1} />
+        <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
     </>
+  );
+}
+
+/** 바닥 점선 사각형(그림의 구역 테두리) — 얇은 점 띠는 선(line)보다 화면에서 굵기가 일정하게 보이도록 짧은 판을 늘어놓는다 */
+function DashedRect({ x0, z0, x1, z1, color }: { x0: number; z0: number; x1: number; z1: number; color: number }) {
+  const mesh = useRef<THREE.InstancedMesh>(null!);
+  const dash = 0.35;
+  const gap = 0.25;
+  const thick = 0.07;
+  const segs = useMemo(() => {
+    const out: { x: number; z: number; len: number; alongX: boolean }[] = [];
+    const run = (a0: number, a1: number, fixed: number, alongX: boolean) => {
+      for (let a = a0; a < a1; a += dash + gap) {
+        const len = Math.min(dash, a1 - a);
+        out.push(alongX ? { x: a + len / 2, z: fixed, len, alongX } : { x: fixed, z: a + len / 2, len, alongX });
+      }
+    };
+    run(x0, x1, z0, true);
+    run(x0, x1, z1, true);
+    run(z0, z1, x0, false);
+    run(z0, z1, x1, false);
+    return out;
+  }, [x0, z0, x1, z1]);
+  useLayoutEffect(() => {
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    segs.forEach((s, i) => {
+      m.compose(new THREE.Vector3(s.x, 0.012, s.z), q, s.alongX ? new THREE.Vector3(s.len, 0.004, thick) : new THREE.Vector3(thick, 0.004, s.len));
+      mesh.current.setMatrixAt(i, m);
+    });
+    mesh.current.instanceMatrix.needsUpdate = true;
+    mesh.current.computeBoundingSphere();
+  }, [segs]);
+  return (
+    <instancedMesh ref={mesh} args={[undefined, undefined, segs.length]} raycast={() => null}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshBasicMaterial color={color} />
+    </instancedMesh>
   );
 }
 
@@ -89,8 +127,10 @@ function Zones({ L }: { L: Layout }) {
               userData={{ zoneId: z.id }}
             >
               <planeGeometry args={[w, d]} />
-              <meshStandardMaterial color={ZONE_COLOR[z.kind]} roughness={0.9} transparent opacity={0.85} />
+              {/* 흰 바닥 위 구역색 아주 옅게 + 구역색 점선 테두리(사용자 2026-11-20 "흰 바닥 + 구역색 점선") — 격리는 회색 물빛·검정 점선 */}
+              <meshStandardMaterial color={ZONE_COLOR[z.kind]} roughness={0.9} transparent opacity={z.kind === 'QUARANTINE' ? 0.1 : SCENE.zoneTint} depthWrite={false} />
             </mesh>
+            <DashedRect x0={r.x0 + 0.15} z0={r.z0 + 0.15} x1={r.x1 - 0.15} z1={r.z1 - 0.15} color={ZONE_COLOR[z.kind]} />
             {/* 외부 출하대기·라이더 대기는 같은 곳 — 떠 있는 이름표 없이 바닥 흰 글씨 "라이더 대기" 하나(ZoneNames, 사용자 2026-11-20) */}
             {z.kind === 'SHIPPING' || z.kind === 'PARKING' || hasWallName(L, z) ? null : (
             <Label
@@ -129,7 +169,7 @@ function Walls({ L }: { L: Layout }) {
               ref={(m: THREE.MeshStandardMaterial | null) => {
                 if (m) mats.current[i] = m;
               }}
-              color={w.glass ? 0x9fd3ff : 0xc9ccd1}
+              color={w.glass ? 0x9fd3ff : SCENE.wall}
               transparent
               opacity={w.glass ? 0.18 : 0.32}
               roughness={0.4}
@@ -147,6 +187,10 @@ function Racks({ L }: { L: Layout }) {
   const posts = useRef<THREE.InstancedMesh>(null!);
   const shelves = useRef<THREE.InstancedMesh>(null!);
   const dividers = useRef<THREE.InstancedMesh>(null!);
+  const beams = useRef<THREE.InstancedMesh>(null!);
+  // 기둥: 그림처럼 칸 사이(약 1.25 m)마다 앞뒤 한 쌍 — 파란색. 가로대: 단마다 앞·뒤 주황 띠
+  const bays = Math.max(1, Math.round(RACK_LEN / 1.25));
+  const postCount = L.racks.length * (bays + 1) * 2;
   const shelfCount = L.racks.reduce((a, r) => a + r.levels, 0);
   const dividerCount = L.racks.reduce((a, r) => a + r.levels * (r.slotsPerLevel - 1), 0);
   useLayoutEffect(() => {
@@ -155,14 +199,19 @@ function Racks({ L }: { L: Layout }) {
     let pi = 0;
     let si = 0;
     let di = 0;
+    let bi = 0;
     for (const r of L.racks) {
       const lx = r.along === 'x' ? RACK_LEN : RACK_DEPTH;
       const lz = r.along === 'x' ? RACK_DEPTH : RACK_LEN;
-      for (const sx of [-1, 1])
-        for (const sz of [-1, 1]) {
-          mtx.compose(new THREE.Vector3(r.cx + (sx * (lx - 0.05)) / 2, RACK_HEIGHT / 2, r.cz + (sz * (lz - 0.05)) / 2), q, new THREE.Vector3(0.05, RACK_HEIGHT, 0.05));
+      for (let b = 0; b <= bays; b++) {
+        const a = -RACK_LEN / 2 + 0.03 + (b * (RACK_LEN - 0.06)) / bays; // 랙 길이 방향 위치
+        for (const s of [-1, 1]) {
+          const c = (s * (RACK_DEPTH - 0.06)) / 2; // 앞·뒤
+          const p = r.along === 'x' ? new THREE.Vector3(r.cx + a, RACK_HEIGHT / 2, r.cz + c) : new THREE.Vector3(r.cx + c, RACK_HEIGHT / 2, r.cz + a);
+          mtx.compose(p, q, new THREE.Vector3(0.06, RACK_HEIGHT, 0.06));
           posts.current.setMatrixAt(pi++, mtx);
         }
+      }
       const levelH = (RACK_HEIGHT - 0.25) / r.levels;
       const slotW = (RACK_LEN * 0.9) / r.slotsPerLevel;
       const dh = Math.min(0.12, levelH * 0.4); // 칸막이 높이 — 상품을 가리지 않게 낮게
@@ -170,8 +219,15 @@ function Racks({ L }: { L: Layout }) {
       for (let lv = 0; lv < r.levels; lv++) {
         const y = 0.1 + (lv * (RACK_HEIGHT - 0.25)) / r.levels;
         // 세로로 합친 칸(넓은 칸) 안의 선반 판은 뺀다 — 숨김(크기 0)
-        mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, shelfInside(spans, r.id, lv + 1, r.slotsPerLevel) ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(lx, 0.03, lz));
+        const hidden = shelfInside(spans, r.id, lv + 1, r.slotsPerLevel);
+        mtx.compose(new THREE.Vector3(r.cx, y, r.cz), q, hidden ? new THREE.Vector3(0, 0, 0) : new THREE.Vector3(lx, 0.03, lz));
         shelves.current.setMatrixAt(si++, mtx);
+        for (const s of [-1, 1]) {
+          const c = (s * (RACK_DEPTH - 0.02)) / 2;
+          const p = r.along === 'x' ? new THREE.Vector3(r.cx, y - 0.02, r.cz + c) : new THREE.Vector3(r.cx + c, y - 0.02, r.cz);
+          mtx.compose(p, q, hidden ? new THREE.Vector3(0, 0, 0) : r.along === 'x' ? new THREE.Vector3(RACK_LEN, 0.07, 0.035) : new THREE.Vector3(0.035, 0.07, RACK_LEN));
+          beams.current.setMatrixAt(bi++, mtx);
+        }
         for (let s = 1; s < r.slotsPerLevel; s++) {
           if (dividerInside(spans, r.id, lv + 1, s)) {
             // 합친 칸 안의 칸막이는 뺀다(크기 0)
@@ -186,26 +242,28 @@ function Racks({ L }: { L: Layout }) {
         }
       }
     }
-    dividers.current.instanceMatrix.needsUpdate = true;
-    dividers.current.computeBoundingSphere();
-    posts.current.instanceMatrix.needsUpdate = true;
-    shelves.current.instanceMatrix.needsUpdate = true;
-    posts.current.computeBoundingSphere();
-    shelves.current.computeBoundingSphere();
-  }, [L]);
+    for (const m of [dividers, posts, shelves, beams]) {
+      m.current.instanceMatrix.needsUpdate = true;
+      m.current.computeBoundingSphere();
+    }
+  }, [L, bays]);
   return (
     <>
-      <instancedMesh ref={posts} args={[undefined, undefined, L.racks.length * 4]} castShadow>
+      <instancedMesh ref={posts} args={[undefined, undefined, postCount]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={0x8a8f98} metalness={0.4} roughness={0.5} />
+        <meshStandardMaterial color={SCENE.rackPost} metalness={0.2} roughness={0.45} />
+      </instancedMesh>
+      <instancedMesh ref={beams} args={[undefined, undefined, shelfCount * 2]} castShadow>
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial color={SCENE.rackBeam} roughness={0.5} />
       </instancedMesh>
       <instancedMesh ref={shelves} args={[undefined, undefined, shelfCount]} castShadow receiveShadow>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={0xb8bcc4} roughness={0.6} />
+        <meshStandardMaterial color={SCENE.rackDeck} roughness={0.7} />
       </instancedMesh>
       <instancedMesh ref={dividers} args={[undefined, undefined, dividerCount]}>
         <boxGeometry args={[1, 1, 1]} />
-        <meshStandardMaterial color={0x6f7580} roughness={0.6} />
+        <meshStandardMaterial color={SCENE.rackDivider} roughness={0.6} />
       </instancedMesh>
     </>
   );
@@ -228,7 +286,8 @@ function Obstacles({ L }: { L: Layout }) {
       {L.obstacles.map((o, i) => {
         if (o.kind === 'TABLE' || o.kind === 'RESERVE') return null;
         const r = o.rect;
-        const color = o.kind === 'PALLET' ? 0x8d6e4a : o.kind === 'SHIP_RACK' ? 0xb0a060 : 0x7d6a8a;
+        // 밝은 장면(SCENE): 팔레트 나무색, 인계 랙 노랑, 포장재 연한 회청색(전엔 보라)
+        const color = o.kind === 'PALLET' ? 0x8d6e4a : o.kind === 'SHIP_RACK' ? 0xd4b43a : 0xaab6c4;
         return (
           <Box
             key={i}
@@ -310,7 +369,7 @@ function Stations({ L }: { L: Layout }) {
     L.stations.forEach((st, i) => {
       const active = sim.stations.isActive(i);
       const busy = sim.stations.occupant(st.id);
-      mats.current[i]?.color.setHex(!active ? 0x3a3a3a : busy ? 0xff7043 : 0x43a047);
+      mats.current[i]?.color.setHex(!active ? SCENE.stationOff : busy ? 0xff8a50 : 0x5cb860);
       tags[i].visible = active;
     });
   });
@@ -318,14 +377,32 @@ function Stations({ L }: { L: Layout }) {
     <>
       {L.stations.map((st, i) => (
         <group key={st.id}>
-          <mesh position={[st.table.x, 0.45, st.table.z]} castShadow receiveShadow>
-            <boxGeometry args={[1.6, 0.9, 0.8]} />
+          {/* 작업대(그림처럼): 흰 상판 + 회색 다리 + 아래 선반, 앞 띠 색 = 상태(꺼짐 회색·비어 있음 초록·사용 중 주황) */}
+          <mesh position={[st.table.x, 0.87, st.table.z]} castShadow receiveShadow>
+            <boxGeometry args={[1.6, 0.05, 0.8]} />
+            <meshStandardMaterial color={SCENE.station} roughness={0.5} />
+          </mesh>
+          <mesh position={[st.table.x, 0.25, st.table.z]} receiveShadow>
+            <boxGeometry args={[1.5, 0.03, 0.7]} />
+            <meshStandardMaterial color={SCENE.rackDeck} roughness={0.7} />
+          </mesh>
+          {[-1, 1].flatMap((sx) =>
+            [-1, 1].map((sz) => (
+              <mesh key={`${sx}${sz}`} position={[st.table.x + sx * 0.75, 0.43, st.table.z + sz * 0.35]} castShadow>
+                <boxGeometry args={[0.05, 0.86, 0.05]} />
+                <meshStandardMaterial color={0x8a929c} metalness={0.3} roughness={0.5} />
+              </mesh>
+            )),
+          )}
+          {/* 상태 띠 — 상판 네 둘레 */}
+          <mesh position={[st.table.x, 0.82, st.table.z]}>
+            <boxGeometry args={[1.64, 0.09, 0.84]} />
             <meshStandardMaterial
               ref={(m: THREE.MeshStandardMaterial | null) => {
                 if (m) mats.current[i] = m;
               }}
-              color={0x555555}
-              roughness={0.6}
+              color={SCENE.stationOff}
+              roughness={0.5}
             />
           </mesh>
           <primitive object={tags[i]} position={[st.table.x, 1.5, st.table.z]} />
@@ -349,7 +426,7 @@ export function Facility() {
       <ReturnIntake />
       <Obstacles L={L} />
       <Stations L={L} />
-      <Box size={[1.6, 0.9, 0.7]} color={0x4a90d9} position={[L.points.cartDepot.x, 0.45, L.points.cartDepot.z - 0.6]} />
+      <Box size={[1.6, 0.9, 0.7]} color={SCENE.rackPost} position={[L.points.cartDepot.x, 0.45, L.points.cartDepot.z - 0.6]} />
       <Label text="장바구니 거치대" position={[L.points.cartDepot.x, 1.4, L.points.cartDepot.z - 0.6]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
     </>

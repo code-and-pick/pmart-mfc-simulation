@@ -7,6 +7,7 @@ import { AppContext, type AppCtx } from '../../app/context';
 import { People, Riders, Trucks } from './Agents';
 import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
+import { SCENE } from '../colors';
 import { Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
 import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { ScanMarker } from './Marker';
@@ -45,14 +46,15 @@ export function SiteScene({ app }: { app: AppCtx }) {
 }
 
 /** 3D 배경·안개 — 화면 테마(어둡게/밝게)를 따른다 */
-const BACKDROP = { dark: 0x14161a, light: 0xdde3ec } as const;
+// 밝은 도면풍 장면(SCENE) — 화면 테마와 상관없이 밝게(사용자 2026-11-20 그림 참고)
+const BACKDROP = { dark: SCENE.backdrop, light: SCENE.backdrop } as const;
 function Backdrop() {
   const view = useView();
   const scene = useThree((s) => s.scene);
   useEffect(() => {
     const c = new THREE.Color(BACKDROP[view.theme]);
     scene.background = c;
-    scene.fog = new THREE.Fog(c, 80, 160);
+    scene.fog = new THREE.Fog(c, 110, 220);
   }, [scene, view.theme]);
   return null;
 }

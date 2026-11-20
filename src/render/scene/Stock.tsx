@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
-import { TEMP_COLOR } from '../colors';
+import { SCENE } from '../colors';
 import { Label } from './Facility';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
@@ -32,9 +32,10 @@ export function Goods() {
       const rackCross = (along === 'z' ? loc.shelf.x : loc.shelf.z) - (face * RACK_DEPTH) / 4;
       const alongC = along === 'z' ? loc.shelf.z : loc.shelf.x;
       const baseY = loc.shelf.y - 0.035;
+      // 갈색 골판지 상자(사용자 2026-11-20 "파란 랙 + 재고만큼 상자") — 상품마다 밝기·채도만 조금 다르게
       const col = new THREE.Color()
-        .setHex(TEMP_COLOR[s.temp])
-        .offsetHSL(((ci * 13) % 10) / 100 - 0.05, -0.2 + ((ci * 7) % 5) / 25, -0.12 + ((ci * 11) % 6) / 30);
+        .setHex(SCENE.box)
+        .offsetHSL(((ci * 13) % 7) / 200 - 0.015, -0.08 + ((ci * 7) % 5) / 40, -0.08 + ((ci * 11) % 6) / 30);
       let placed = 0;
       for (let r = 0; r < rows && placed < s.shelfCap; r++) {
         for (let l = 0; l < layers && placed < s.shelfCap; l++) {
@@ -68,7 +69,7 @@ export function Goods() {
   useLayoutEffect(() => {
     const zero = new THREE.Matrix4().makeScale(0, 0, 0);
     // 실서버 모드: 시뮬레이터 가짜 상품은 "수량 모름" — 회색으로 흐리게(실제 재고처럼 보이지 않게)
-    const unknown = sim.mock ? null : new THREE.Color(0x4a4d52);
+    const unknown = sim.mock ? null : new THREE.Color(SCENE.boxUnknown);
     for (let k = 0; k < total; k++) {
       if (unknown) mesh.current.setColorAt(k, unknown);
       else if (layout.colors[k]) mesh.current.setColorAt(k, layout.colors[k]);

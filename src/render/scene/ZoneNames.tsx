@@ -13,8 +13,9 @@ const WALL_TEXT_H = 2.4; // 글씨 판 높이
 /** 글씨 아래 끝 — 랙(2.1 m) 바로 밑. 처음 시야에서 앞 랙이 벽 아래쪽을 가려, 벽(3 m) 위로 1.2 m 솟게 둔다 */
 const WALL_TEXT_BOTTOM = 1.8;
 
+// 밝은 벽·바닥(SCENE) 위라 구역색을 조금 어둡게 + 흰 테두리(전엔 어두운 장면이라 흰빛에 가깝게)
 function tint(hex: number): string {
-  const c = new THREE.Color(hex).lerp(new THREE.Color(0xffffff), 0.82);
+  const c = new THREE.Color(hex).lerp(new THREE.Color(0x1a1d22), 0.28);
   return `#${c.getHexString()}`;
 }
 
@@ -37,7 +38,7 @@ function makeTexture(name: string, sub: string | null, color: string): { tex: TH
   ctx.lineJoin = 'round';
   const draw = (t: string, font: string, y: number, lw: number) => {
     ctx.font = font;
-    ctx.strokeStyle = 'rgba(0,0,0,0.55)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
     ctx.lineWidth = lw;
     ctx.strokeText(t, c.width / 2, y);
     ctx.fillStyle = color;
@@ -117,7 +118,7 @@ export function ZoneNames({ L }: { L: Layout }) {
   const items = useMemo(() => {
     const tex = new Map<string, { tex: THREE.CanvasTexture; aspect: number }>();
     for (const z of L.zones) {
-      if (z.kind === 'PARKING') tex.set(z.id, makeTexture('라이더 대기', null, '#ffffff'));
+      if (z.kind === 'PARKING') tex.set(z.id, makeTexture('라이더 대기', null, '#5b616b'));
       else if (BIG_NAME_KINDS.has(z.kind)) tex.set(z.id, makeTexture(z.label, null, tint(ZONE_COLOR[z.kind])));
     } // 평수는 작아 안 읽혀 뺌(왼쪽 구역 패널에 있음)
     return placeZoneNames(L, (z) => tex.get(z.id)!.aspect).map((p) => ({ ...p, tex: tex.get(p.zone.id)!.tex }));
