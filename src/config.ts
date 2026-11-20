@@ -177,6 +177,12 @@ export const HANDOVER_CODE = {
   qrFailRate: 0.2,
 };
 
+/** 실서버 그림 입고 차량(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아") — 시험 입고가 서버에 들어가면 그림만 온다 */
+export const REAL_TRUCK = {
+  /** 입고 차량문에 서 있는 시간(초) — 서버 수령은 이미 끝났으므로 보여 주기만 [시뮬] */
+  dockSec: 40,
+};
+
 /** 반납 인증번호(delivery-execution 0.28.0 — PC 5 요청 "시뮬에도 붙여"). 관리 탭 "반납 번호"는 보기만 */
 export const RETURN_HANDOVER = {
   /** 틀리면 잠기는 횟수(계약 "5번 틀려 잠김") [확정] */

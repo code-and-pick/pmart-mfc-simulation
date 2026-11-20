@@ -8,7 +8,7 @@
 //  - 피킹·패킹·밀봉·QR 인계            → 현장(점원 PDA·라이더 앱) = 이 시뮬레이터가 가상 현장으로서 계약 API 를 부른다
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_WORKERS, TEST_INBOUND, type SimParams } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, TEST_INBOUND, type SimParams } from '../config';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
@@ -584,6 +584,8 @@ export class Simulation {
     );
     const units = lines.reduce((a, l) => a + l.qty, 0);
     this.log(`시험 입고 ${load.receiptId} — ${lines.length}품목 ${units}개 수령(${TEST_INBOUND.receivingLocation}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
+    // 실서버엔 차량이 없다 — 입고가 서버에 들어가면 그림 차량이 도로에서 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아"). 수령은 서버가 이미 끝냄
+    this.trucks.push({ trfId: `입고 ${load.receiptId.slice(-6)}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: 80, unloaded: lines.length, scheduledAt: this.time });
     if (withVirtual && this.virtualTarget === 0) this.setVirtualWorkers(1);
     return { receiptId: load.receiptId, units };
   }
@@ -1154,6 +1156,7 @@ export class Simulation {
       void this.real.tick();
       this.syncRealRiders();
       this.syncObservedWorkers();
+      if (this.trucks.length) this.realTruckTick(Math.max(0, Math.min(this.time - prev, 0.25)));
       if (this.virtualWorkers.length || this.riders.length || this.observedWorkers.length) {
         // 가상 작업자·앞마당 라이더는 실제 시간으로 걷고 기다린다(1×)
         const dt = Math.max(0, Math.min(this.time - prev, 0.25));
@@ -1420,6 +1423,26 @@ export class Simulation {
     }
     cand.sort((a, b) => b.urgency - a.urgency);
     return cand.slice(0, this.params.inboundMaxLines).map(({ sku, qty }) => ({ sku, qty }));
+  }
+
+  /** 실서버 그림 입고 차량: 도로 → 입고 차량문(섬) → REAL_TRUCK.dockSec 뒤 떠남. 서버 수령과 무관한 그림 */
+  private realTruckTick(dt: number) {
+    const dockX = this.layout.points.truckDock.x;
+    for (const t of this.trucks) {
+      if (t.state === 'APPROACHING') {
+        t.x = Math.max(dockX, t.x - 7 * dt);
+        if (t.x <= dockX) {
+          t.state = 'DOCKED';
+          t.scheduledAt = this.time;
+        }
+      } else if (t.state === 'DOCKED' && this.time - t.scheduledAt >= REAL_TRUCK.dockSec) {
+        t.state = 'LEAVING';
+      } else if (t.state === 'LEAVING') {
+        t.x += 7 * dt;
+        if (t.x > 85) t.state = 'GONE';
+      }
+    }
+    this.trucks = this.trucks.filter((t) => t.state !== 'GONE');
   }
 
   private inboundTick(dt: number) {
