@@ -243,6 +243,22 @@ export class RealWorker extends Agent {
           this.halt(a);
           break;
         }
+        // 하던 작업이 그사이 취소됨(주문 취소 — 예: 배차 불가 자동 취소 DISPATCH_UNAVAILABLE, 관리자 판단 취소)이면 오류가 아니다.
+        // 서버 작업 상태를 다시 읽어 끝난 작업이면 멈추고 다음 작업으로(남은 물건은 서버가 만든 복귀 작업 RETURN 이 처리). 사용자 2026-11-20 "409 INVALID_STATE — 포장 작업은 CANCELLED" 화면 오류
+        if (e instanceof ApiProblem && e.problem.status === 409) {
+          const now = await this.be.getTask(a.taskId).catch(() => null);
+          if (now && (now.state === 'CANCELLED' || now.state === 'CLOSED_PARTIAL')) {
+            this.lastProblem = null;
+            this.activity = `주문 취소 — ${a.taskType === 'PACK' ? '포장' : '작업'} 멈춤(${now.state === 'CANCELLED' ? '취소' : '부분 종료'})`;
+            this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 이 ${now.state} — 주문 취소로 멈추고 다음 작업으로(남은 물건은 복귀 작업)`);
+            if (now.shipmentId) this.ctx.carts.release(now.shipmentId);
+            this.hasCart = false;
+            this.carrying = [];
+            this.pda = null;
+            this.currentTarget = null;
+            continue;
+          }
+        }
         this.state = 'ERROR';
         this.lastProblem = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}${e.problem.detail ? ` — ${e.problem.detail.slice(0, 80)}` : ''}` : (e as Error).message;
         this.activity = `오류: ${this.lastProblem}`;

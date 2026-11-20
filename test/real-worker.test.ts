@@ -197,7 +197,14 @@ class FakeBe {
     if (this.dispatchFails) throw new ApiProblem({ status: 409, code: 'INVALID_STATE' });
     return {};
   }
+  /** 밀봉 직전에 주문이 취소되는 경우(배차 불가 자동 취소 등) — 그 작업을 CANCELLED 로 바꾸고 409 */
+  cancelOnSeal: string | null = null;
   async sealPackage(s: string, body: { contents: { sku: string }[]; temperatureZone?: string; packingLocation?: string }) {
+    if (this.cancelOnSeal) {
+      const t = this.tasks.get(this.cancelOnSeal)!;
+      this.tasks.set(this.cancelOnSeal, { ...t, state: 'CANCELLED' });
+      throw new ApiProblem({ status: 409, code: 'INVALID_STATE', detail: '포장 작업은 CANCELLED 상태입니다(시작한 포장 작업만 밀봉).' });
+    }
     this.calls.push(`seal ${s} ${body.contents.map((c) => c.sku).join('+')} ${body.temperatureZone ?? '-'} @${body.packingLocation ?? '-'}`);
     return { packageId: `PKG-${body.temperatureZone ?? 'X'}` };
   }
@@ -377,6 +384,20 @@ describe('RealWorker — 실서버 가상 작업자', () => {
     expect(be.calls).toContain('seal ORD-1-S1 B-1+F-1 - @PAK-A-01');
     expect(be.calls).not.toContain('stock');
     expect(w.ordersDone).toBe(1);
+    w.stop();
+  });
+
+  it('포장 중 주문이 취소돼 밀봉이 409 이고 작업이 CANCELLED 면 오류가 아니라 멈추고 다음 작업을 묻는다', async () => {
+    const { w, be, logs } = setup();
+    be.cancelOnSeal = 'K3';
+    be.tasks.set('K3', task('K3', 'PACK', 'ASSIGNED', { packingLocations: ['PAK-A-01'] }));
+    be.queue = [{ assignmentId: 'AS4', mfcId: 'MFC-SEED-01', taskId: 'K3', taskType: 'PACK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
+    void w.run();
+    await runFor(w, 400);
+    expect(w.state).not.toBe('ERROR');
+    expect(w.lastProblem).toBeNull();
+    expect(logs.some((l) => l.includes('주문 취소로 멈추고'))).toBe(true);
+    expect(be.calls.filter((x) => x.startsWith('pull')).length).toBeGreaterThanOrEqual(2);
     w.stop();
   });
 
