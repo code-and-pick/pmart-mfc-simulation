@@ -779,10 +779,14 @@ export class RealWorker extends Agent {
     const add = (c?: string | null) => {
       if (shelfOk(c) && !targets.includes(c!)) targets.push(c!);
     };
-    (t.suggestedToLocations ?? []).forEach(add);
+    // 서버 규칙 "한 상품 한 자리"(SKU_ALREADY_SHELVED): 그 상품이 이미 선반에 있으면 그 선반에만 놓을 수 있다 — 다른 칸은 보내지 않는다.
+    // 선반에 없을 때만 서버 추천 칸 → 위치 후보(사용자 2026-11-20 "적치거절 해결 안됐네")
     const st = await be.getCenterStock(ctx.mfcId, t.sku).catch(() => null);
-    st?.units.forEach((u) => add(u.locationCode));
-    if (targets.length < REAL_WORKERS.putawayTries) {
+    const onShelf = [...new Set((st?.units ?? []).filter((u) => u.qty > 0 && shelfOk(u.locationCode)).map((u) => u.locationCode))];
+    onShelf.forEach(add);
+    if (onShelf.length > 1) ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 이미 ${onShelf.join('·')} 두 곳 이상에 있음(서버가 거절할 수 있음)`);
+    if (!onShelf.length) (t.suggestedToLocations ?? []).forEach(add);
+    if (!onShelf.length && targets.length < REAL_WORKERS.putawayTries) {
       const zones: TemperatureZone[] = t.storageType ? [t.storageType] : ['AMBIENT', 'CHILLED', 'FROZEN'];
       for (const z of zones) {
         const cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty, z));
@@ -822,12 +826,12 @@ export class RealWorker extends Agent {
     for (let i = 0; ; i++) {
       try {
         const dest = to;
-        await this.applied('적치', this.key('putaway', t.taskId, `:${dest}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: dest, qty }, k));
+        await this.applied(`적치(${dest})`, this.key('putaway', t.taskId, `:${dest}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: dest, qty }, k));
         break;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         const next = targets[i + 1];
-        if (!msg.startsWith('적치 거절') || !next || i + 1 >= REAL_WORKERS.putawayTries) throw e;
+        if (!/^적치\(.*\) 거절/.test(msg) || !next || i + 1 >= REAL_WORKERS.putawayTries) throw e;
         ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} ${to} ${msg} — 다음 칸 ${next}`);
         this.activity = `${to} 거절 — ${next} 로`;
         to = next;

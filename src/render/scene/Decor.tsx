@@ -460,3 +460,28 @@ function BoxStack({ x, z, layers = 6 }: { x: number; z: number; layers?: number 
     </group>
   );
 }
+
+/**
+ * 되돌릴 상품 탁자 — 취소 주문에서 이미 집은 상품(서버 위치 CRT-A-01, 상태 CANCEL_RETURN_PENDING)을 장바구니 안이 아니라 거치대 옆 탁자 위에 그린다
+ * (사용자 2026-11-20 "장바구니에 그걸 왜 놔둬. 장바구니 옆에 테이블 두고 거기에 올리게"). 그림 자리만 — 서버 위치는 그대로 CRT-A-01.
+ * 윗면 높이 0.88 m(RealStock 탁자 자리 baseY 0.9 와 맞춤).
+ */
+export const RETURN_TABLE = { dx: 1.7, dz: -0.6 };
+export function ReturnTable({ x, z }: { x: number; z: number }) {
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, 0.86, 0]} castShadow receiveShadow>
+        <boxGeometry args={[1.1, 0.04, 0.7]} />
+        <meshStandardMaterial color={0xffffff} roughness={0.5} />
+      </mesh>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`${sx}${sz}`} position={[sx * 0.5, 0.42, sz * 0.3]}>
+            <boxGeometry args={[0.04, 0.84, 0.04]} />
+            <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
+          </mesh>
+        )),
+      )}
+    </group>
+  );
+}
