@@ -51,6 +51,32 @@
 
 ## 열린 요청
 
+### R-28 재포장·재구성 뒤 배차·배송 수행이 옛 포장을 계속 기다려 픽업 완료가 안 됨 — 높음 (2026-11-20 추가)
+- 사용자 2026-11-20: "QR코드 말고 번호로 픽업하니까 시뮬 쪽에선 인식하고 라이더가 인계완료후 출발해버렸는데 라이더앱은 인식이 안 돼서 계속 QR코드 픽업 예정 상태야. 배송 시뮬 쪽은 가게 도착이라고만 떴어. 배차 취소하려고 하니까 이미 픽업해서 취소 안 된다는 대환장파티".
+- 실서버에서 읽음(11-20 12:42, 관찰 계정 `claude-mfc-wrk`, 주문 23631583 · 배송 `DLV-eb09780b…` · 출고 `ORD-cd58420b…-S1`):
+  - fulfillment `GET /work-orders`: 출고 HANDED_OVER. 포장 4개 중 `PKG-7689199c`(03:10:52 밀봉)·`PKG-4d59b00f`·`PKG-5ddeb145` 는 INVALIDATED, `PKG-7ffe0913` 만 인계 APPLIED(허가 03:24:38.492, 인계 03:24:38.827).
+  - delivery-execution `GET /deliveries/{id}`: ARRIVED_AT_STORE, `pickedUpAt` null, **`packageIds` = [`PKG-7689199c`(무효), `PKG-7ffe0913`]**.
+  - delivery-dispatch `GET /deliveries/{id}/dispatch`: assignment ASSIGNED, `pickedUpAt` null. 배차 취소는 422 PICKED_UP_CASE_REQUIRED(포장 하나라도 인계면 `handoverStarted()`).
+- 원인(백엔드 코드를 읽어 추정 — 시뮬레이터 세션 조사, 고치지 않음):
+  - 재포장·재구성(`RepackService`)은 `PackageInvalidated` 만 내고, 새 포장 목록을 싣는 사건(`PackingFinished`·`ShipmentReady` 류)은 다시 내지 않음.
+  - `PackageInvalidated` 를 받는 곳이 없음 — dispatch `FulfillmentEventHandler`·execution `ExecutionEventHandler` 구독 목록에 없음.
+  - 그래서 픽업 판정 "알던 포장이 모두 인계됨"(dispatch `handed.containsAll(known)`, execution `PickupJudgement.allHandedOver`)이 무효 포장 때문에 끝내 거짓.
+  - 번호 인계 자체는 QR 과 같은 `authorize` 를 탐(서버 차이 없음). 차이는 라이더 앱: QR 은 앱이 `packageIds` 에 있는지 먼저 봐서 새 포장 QR 을 막았을 것이고, 번호 입력은 그 검사가 없어 통과. 라이더 앱 "QR 픽업 예정"은 `packageIds` 2개 중 1개만 인계라서.
+- 원하는 것:
+  1. 재포장·재구성 때 바뀐 출고 포장 목록을 배차·배송 수행에 알림(새 목록 사건, 또는 `PackageInvalidated` 구독해 known 목록에서 빼고 다시 판정).
+  2. 이미 멈춘 배송(위 1건 포함)을 다시 판정하는 백필 또는 운영자 API. execution 상태 정정은 ARRIVED_AT_STORE → PICKED_UP 을 허용하지 않아 지금 계약으로는 못 풂.
+- 이 주문: 실물은 라이더가 가져갔고 재고 인계(H·E·R −q)도 반영됨 — 다시 피킹·재인계 하지 말 것. 백엔드 수정 전까지 지원센터 케이스(422 안내 경로).
+- 시뮬레이터: 실서버 라이더는 fulfillment 출고 HANDED_OVER 를 보고 떠난 것으로 그림 — 배송 쪽이 PICKED_UP 이 아니면 "배송 쪽 픽업 미확인" 으로 표시할지 후속(아래 R-29 관리 탭과 같이).
+
+### R-29 관리자 제어·지난 주문 조회에 필요한 것 — 중간 (2026-11-20 추가)
+- 사용자 2026-11-20: "방금 전 주문 보고 피킹내역이랑 현재흐름을 보려고 해도 이미 인계가 끝나서 볼 수가 없었어. 지원센터에 연동되게 해주던 이쪽에서 관리자가 바로 피패킹 제어가능한 탭을 만들던 처리가 가능하게 해야할 것 같아."
+- 지금 계약으로 되는 것(시뮬레이터가 쓸 수 있음): 지난 작업 `GET /tasks?state=COMPLETED&activityFrom=&activityTo=`(orderNumber 있음), `GET /work-orders?orderId=`, `GET /tasks/{id}/executions`; 관리자(`MFC_SUPERVISOR`) 배정·재배정 `POST /assignments`, 내놓기 `POST /tasks/{id}/releases`, 인계 확인 `GET /packages?checkRequired=true`·`POST /packages/{id}/handover-checks`. (MFC 백오피스 `web/mfc-backoffice` 에 이미 있음.)
+- 계약에 없어 요청하는 것:
+  1. 관리자의 작업 강제 중지·취소(PICK·PACK 단위), BLOCKED 해제, 직접 부분 종료(CLOSED_PARTIAL), 끝난 작업 다시 열기 — 지금은 사가 내부 전용.
+  2. 피킹 시작 뒤 주문 취소(지금 claim 은 상품준비 전 전체 취소만, 뒤는 422 ORDER_NOT_CANCELLABLE).
+  3. 센터 계정이 쓸 수 있는 주문번호(8자리) → orderId 조회(`/orders/lookups?orderNumber=` 는 본사 역할만), `GET /shipments` 의 날짜 거르기·최근 순·orderNumber 거르기.
+  4. PACK 단계 이력(누가·언제 포장 시작), 작업 상태 변경 이력(배정 변경·내놓기 기록).
+
 ### R-15 칸(위치) 단위 재고 조회 — 중간 (2026-11-16 추가)
 - **됨·LAN(확인 11-20)**: inventory 0.33.0(main `ce3e5c21`) `GET /mfcs/{mfcId}/stock-units` 에 `locationPrefix`·`zone`·`temperatureZone`·`asOf`(0.26.0 부터 거르기 없이 센터 전체 가능). 관찰 계정 실측: 1,258줄·7쪽·504칸 0.17초. 시뮬레이터 반영 — 구역 카드 실서버 재고(아래 후속 표).
 지금 재고 조회는 `GET /mfcs/{mfcId}/stock?sku=`(SKU 1개)뿐이라 "이 칸에 무엇이 몇 개" 를 물을 수 없다. 그래서 시뮬레이터 실서버 화면은 **열린 주문에 나온 SKU 의 칸만** 실제 수량으로 그리고, 나머지 1만 4천여 칸(11-16 칸 설계 뒤 선반 14,559)은 "수량 모름"(회색)으로 둔다. PDA 앱도 같은 공백이 있다(클라이언트 MB-1 — "칸으로 재고를 찾는 API 가 없어 상품부터 고른다").
