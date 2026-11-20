@@ -5,7 +5,7 @@ import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { BAG_COLOR, bagGeometry, boxTexture } from '../sprites';
-import { SCENE } from '../colors';
+import { SCENE, zoneBoxColor } from '../colors';
 import { useApp } from '../../app/context';
 import type { StockWorkState, TaskState } from '../../domain/contract';
 import { RACK_DEPTH, type Location } from '../../domain/layout';
@@ -283,7 +283,7 @@ export function RealStock() {
         sc.set(loc.along === 'z' ? cd : cw, ch, loc.along === 'z' ? cw : cd);
         mtx.compose(new THREE.Vector3(loc.along === 'z' ? cross : a, y, loc.along === 'z' ? a : cross), quat, sc);
         m.setMatrixAt(n, mtx);
-        m.setColorAt(n, col.setHex(i < nNormal ? SCENE.box : 0xd9826f));
+        m.setColorAt(n, i < nNormal ? zoneBoxColor(loc.temp, col) : col.setHex(0xd9826f));
         cellOf.current[n] = code;
         n++;
       }

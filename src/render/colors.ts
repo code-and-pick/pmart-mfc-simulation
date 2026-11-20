@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { TemperatureZone } from '../domain/contract';
 import type { ZoneKind } from '../domain/layout';
 import type { InboundState } from '../sim/inbound';
@@ -102,3 +103,11 @@ export const VEST_PICKER = 0x1e88e5;
 export const VEST_INBOUND = 0xff9800;
 
 export const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
+
+/**
+ * 선반 상품 상자 색 = 그 구역 바닥색(사용자 2026-11-20 "구역별로 박스 색 바닥색으로 바꿔줘").
+ * 바닥 그대로면 흰 랙·바닥에 묻혀 안 보여 채도 +0.18, 밝기 −0.1 만 진하게(무늬 텍스처와 곱해짐).
+ */
+export function zoneBoxColor(temp: 'AMBIENT' | 'CHILLED' | 'FROZEN', out = new THREE.Color()): THREE.Color {
+  return out.setHex(ZONE_FLOOR[temp]).offsetHSL(0, 0.18, -0.1);
+}

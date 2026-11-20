@@ -1,5 +1,6 @@
 // 밝은 도면풍 장식(사용자 2026-11-20 참고 그림 — "바닥 통로 화살표·점선", "라이더 대기 주차 칸·볼라드·스쿠터", "작업 중 칸 보라 빛 + 작은 카드").
 // 업무 규칙·통행(navgrid)에는 관여하지 않는다 — 그림만. 통로 선은 배치(layout.ts) 의 빈 띠를 따라 손으로 둔 것.
+import { workerShortName, workerTagColor } from '../../domain/workerName';
 import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
@@ -176,37 +177,46 @@ export function ParkingDecor() {
   );
 }
 
-/** 칸 카드(보라 테두리 흰 판) — 칸 코드 + 상태 줄 */
-function makeCard(code: string, line: string): THREE.Sprite {
+/**
+ * 피킹 중 칸 카드 — 한 줄: [작업자 짧은 이름(역할색)] 칸 코드(굵게). 작게, 글자는 굵고 크게
+ * (사용자 2026-11-20 "정보는 짧고굵게 잘보이는데 팝업창은 작게"). 전엔 두 줄(칸 코드 + "피킹 중 · 이름") 34px.
+ */
+function makeCard(code: string, who: string): THREE.Sprite {
   const S = 44;
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
-  const fA = `800 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  const fB = `600 ${Math.round(S * 0.72)}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  ctx.font = fA;
-  const wA = ctx.measureText(code).width;
-  ctx.font = fB;
-  const wB = ctx.measureText(line).width;
-  c.width = Math.ceil(Math.max(wA, wB) + S * 1.2);
-  c.height = Math.ceil(S * 2.9);
+  const f = `900 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  ctx.font = f;
+  const name = workerShortName(who);
+  const wN = ctx.measureText(name).width;
+  const wC = ctx.measureText(code).width;
+  const pad = S * 0.32;
+  const chipW = wN + pad * 2;
+  c.width = Math.ceil(chipW + wC + pad * 3);
+  c.height = Math.ceil(S * 1.45);
+  const r = c.height / 2 - 3;
   ctx.fillStyle = 'rgba(255,255,255,0.97)';
   ctx.strokeStyle = '#8b5cf6';
   ctx.lineWidth = 5;
   ctx.beginPath();
-  ctx.roundRect(3, 3, c.width - 6, c.height - 6, S * 0.35);
+  ctx.roundRect(3, 3, c.width - 6, c.height - 6, r);
   ctx.fill();
   ctx.stroke();
+  ctx.fillStyle = workerTagColor(who).replace(/rgba\(0,0,0,[0-9.]+\)/, '#6d28d9');
+  ctx.beginPath();
+  ctx.roundRect(7, 7, chipW, c.height - 14, r - 4);
+  ctx.fill();
   ctx.textBaseline = 'middle';
-  ctx.font = fA;
+  ctx.font = f;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText(name, 7 + pad, c.height / 2 + 2);
   ctx.fillStyle = '#1e1b4b';
-  ctx.fillText(code, S * 0.6, S * 0.95);
-  ctx.font = fB;
-  ctx.fillStyle = '#6d28d9';
-  ctx.fillText(line, S * 0.6, S * 2.0);
+  ctx.fillText(code, 7 + chipW + pad, c.height / 2 + 2);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthWrite: false, depthTest: false, transparent: true, sizeAttenuation: false }));
-  const sh = 34 / (2.414 * 475);
+  // 화면 높이 18px(한 줄)
+  const sh = 18 / (2.414 * 475);
   sp.scale.set((sh * c.width) / c.height, sh, 1);
   sp.center.set(0.5, 0);
   sp.renderOrder = 14;
@@ -236,8 +246,9 @@ export function WorkingCells() {
       mtx.compose(new THREE.Vector3(loc.shelf.x, loc.shelf.y + loc.levelH * 0.45, loc.shelf.z), q, new THREE.Vector3(sx, loc.levelH * 0.92, sz));
       m.setMatrixAt(n++, mtx);
       // 카드
-      const name = sim.board?.workerName((w as { workerId?: string }).workerId ?? '') ?? w.id;
-      const who = !name || name === '작업자 확인 중' || name === '미배정' ? w.id : name.split(' · ')[0];
+      // 가상 작업자(mfcw-…)는 짧은 이름, 실제 PDA 작업자는 현황판 이름 첫 토막
+      const bn = w.id.startsWith('mfcw-') ? null : sim.board?.workerName((w as { workerId?: string }).workerId ?? '');
+      const who = bn && bn !== '작업자 확인 중' && bn !== '미배정' ? bn.split(' · ')[0] : w.id;
       const key = `${loc.code}|${who}`;
       live.add(w.id);
       let c = cards.current.get(w.id);
@@ -247,7 +258,7 @@ export function WorkingCells() {
           c.sprite.material.map?.dispose();
           c.sprite.material.dispose();
         }
-        c = { sprite: makeCard(loc.code, `피킹 중 · ${who}`), key };
+        c = { sprite: makeCard(loc.code, who), key };
         cards.current.set(w.id, c);
         group.current.add(c.sprite);
       }
@@ -331,8 +342,55 @@ function Forklift({ x, z, rot }: { x: number; z: number; rot: number }) {
 export function InboundDecor() {
   return (
     <>
-      <Forklift x={38.6} z={15.4} rot={Math.PI / 2} />
+      {/* 입고창고 안 지게차는 뺌(사용자 2026-11-20 "입고 창고 안에 있는 지게차는 없애고") — 입고·검수 하차 자리 1대만(장식, 서버 작업 없음) */}
       <Forklift x={38.4} z={22.1} rot={Math.PI / 2} />
     </>
+  );
+}
+
+/** 장바구니(피킹 카트) 한 대 — 바퀴 달린 틀 + 파란 철망 바구니 2단 + 손잡이 */
+function PickCart({ x, z }: { x: number; z: number }) {
+  const frame = 0x9aa3b0;
+  return (
+    <group position={[x, 0, z]}>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <group key={`${sx}${sz}`}>
+            <mesh position={[sx * 0.24, 0.5, sz * 0.32]}>
+              <boxGeometry args={[0.025, 0.9, 0.025]} />
+              <meshStandardMaterial color={frame} metalness={0.4} roughness={0.4} />
+            </mesh>
+            <mesh position={[sx * 0.24, 0.05, sz * 0.32]} rotation={[0, 0, Math.PI / 2]}>
+              <cylinderGeometry args={[0.05, 0.05, 0.03, 10]} />
+              <meshStandardMaterial color={0x2b2f36} />
+            </mesh>
+          </group>
+        )),
+      )}
+      {[0.32, 0.72].map((y) => (
+        <mesh key={y} position={[0, y, 0]}>
+          <boxGeometry args={[0.46, 0.22, 0.62]} />
+          <meshStandardMaterial color={0x2f7df0} transparent opacity={0.55} roughness={0.5} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.98, -0.34]}>
+        <boxGeometry args={[0.5, 0.03, 0.03]} />
+        <meshStandardMaterial color={0x1f2733} />
+      </mesh>
+    </group>
+  );
+}
+
+/**
+ * 장바구니 거치대 — 카트를 한 줄로 바짝 붙여 세워 둔 모습(사용자 2026-11-20 "장바구니 적치된 것처럼 만들어봐").
+ * 대수는 그림(서버 카트 수와 무관). 카트 사이 0.28 m(앞 카트에 겹쳐 밀어 넣은 모양).
+ */
+export function CartDepot({ x, z, count = 6 }: { x: number; z: number; count?: number }) {
+  return (
+    <group position={[x, 0, z]}>
+      {Array.from({ length: count }, (_, i) => (
+        <PickCart key={i} x={(i - (count - 1) / 2) * 0.28} z={0} />
+      ))}
+    </group>
   );
 }

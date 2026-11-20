@@ -9,7 +9,7 @@ import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/lay
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { ZoneNames } from './ZoneNames';
-import { InboundDecor, ParkingDecor, Walkways, WorkingCells } from './Decor';
+import { CartDepot, InboundDecor, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
 
@@ -287,22 +287,81 @@ function Obstacles({ L }: { L: Layout }) {
         // 랙 앞면 아래(라이더 쪽) — 위에 뜨는 랙 말풍선에 가리지 않게. 다른 랙 번호판과 같은 파란 판·흰 글자(사용자 2026-11-20 "인계랙 식별값 … 왜 지혼자 노란배경에 검정 글씨")
         <primitive key={`sr${i}`} object={shipTags[i]} position={[(o.rect.x0 + o.rect.x1) / 2, 0.55, o.rect.z1 + 0.15]} />
       ))}
+      {ship.map((o, i) => (
+        <ShipRack key={`srk${i}`} r={o.rect} h={o.height} />
+      ))}
+      {L.obstacles
+        .filter((o) => o.kind === 'MATERIAL')
+        .map((o, i) => (
+          <ShipRack key={`mat${i}`} r={o.rect} h={o.height} grey />
+        ))}
       {L.obstacles.map((o, i) => {
-        if (o.kind === 'TABLE' || o.kind === 'RESERVE') return null;
+        if (o.kind === 'TABLE' || o.kind === 'RESERVE' || o.kind === 'SHIP_RACK' || o.kind === 'MATERIAL') return null;
         const r = o.rect;
-        // 밝은 장면(SCENE): 팔레트 나무색, 인계 랙 노랑, 포장재 연한 회청색(전엔 보라)
-        const color = o.kind === 'PALLET' ? 0x8d6e4a : o.kind === 'SHIP_RACK' ? 0xd4b43a : 0xaab6c4;
+        // 밝은 장면(SCENE): 팔레트 나무색, 포장재 연한 회청색 (인계 랙은 ShipRack)
+        const color = o.kind === 'PALLET' ? 0x8d6e4a : 0xaab6c4;
         return (
           <Box
             key={i}
             size={[r.x1 - r.x0, o.height, r.z1 - r.z0]}
             color={color}
             position={[(r.x0 + r.x1) / 2, o.height / 2, (r.z0 + r.z1) / 2]}
-            material={o.kind === 'SHIP_RACK' ? { transparent: true, opacity: 0.45 } : {}}
           />
         );
       })}
     </>
+  );
+}
+
+/**
+ * 인계(출하대기) 랙 — 안쪽 보관 랙과 같은 생김새(기둥·앞뒤 가로대·선반 판·옆면 가새), 색만 흰색
+ * (사용자 2026-11-20 "인계랙도 안에 있는 랙에리아 똑같이 생긴건데. 색은 대신 하양색"). 단 높이 = 출하 칸(layout shippingSlots y 0.25 + 0.5·단).
+ */
+function ShipRack({ r, h, grey = false }: { r: { x0: number; z0: number; x1: number; z1: number }; h: number; grey?: boolean }) {
+  const W = r.x1 - r.x0;
+  const D = r.z1 - r.z0;
+  const cx = (r.x0 + r.x1) / 2;
+  const cz = (r.z0 + r.z1) / 2;
+  // 패킹 구역 포장재 랙도 같은 모양·같은 흰색(사용자 2026-11-20 "패킹구역에 있는 회색도 같은 랙인데 인계랙이랑 같은 흰색으로") — grey 는 단 높이만
+  const post = 0xf4f6fa;
+  const beam = 0xffffff;
+  const deck = 0xe9edf3;
+  const levels = grey ? [0.3, 0.8, 1.3].filter((y) => y < h - 0.1) : [0.25, 0.75, 1.25, 1.75];
+  const P = 0.06;
+  return (
+    <group position={[cx, 0, cz]}>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`p${sx}${sz}`} position={[(sx * (W - P)) / 2, h / 2, (sz * (D - P)) / 2]} castShadow>
+            <boxGeometry args={[P, h, P]} />
+            <meshStandardMaterial color={post} roughness={0.45} />
+          </mesh>
+        )),
+      )}
+      {levels.map((y) => (
+        <group key={y}>
+          <mesh position={[0, y - 0.02, 0]} receiveShadow>
+            <boxGeometry args={[W - 0.04, 0.025, D - 0.04]} />
+            <meshStandardMaterial color={deck} roughness={0.6} />
+          </mesh>
+          {[-1, 1].map((sz) => (
+            <mesh key={sz} position={[0, y - 0.05, (sz * (D - 0.05)) / 2]} castShadow>
+              <boxGeometry args={[W, 0.07, 0.05]} />
+              <meshStandardMaterial color={beam} roughness={0.35} />
+            </mesh>
+          ))}
+        </group>
+      ))}
+      {/* 옆면 가새(대각선) */}
+      {[-1, 1].map((sx) =>
+        [0, 1, 2].filter((k) => 0.35 + k * 0.6 + 0.3 < h).map((k) => (
+          <mesh key={`b${sx}${k}`} position={[(sx * (W - P)) / 2, 0.35 + k * 0.6, 0]} rotation={[k % 2 ? 0.75 : -0.75, 0, 0]}>
+            <boxGeometry args={[0.02, 0.62, 0.02]} />
+            <meshStandardMaterial color={post} roughness={0.45} />
+          </mesh>
+        )),
+      )}
+    </group>
   );
 }
 
@@ -465,7 +524,7 @@ export function Facility() {
       <WorkingCells />
       <Obstacles L={L} />
       <Stations L={L} />
-      <Box size={[1.6, 0.9, 0.7]} color={SCENE.rackPost} position={[L.points.cartDepot.x, 0.45, L.points.cartDepot.z - 0.6]} />
+      <CartDepot x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
       <Label text="장바구니 거치대" position={[L.points.cartDepot.x, 1.4, L.points.cartDepot.z - 0.6]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
     </>

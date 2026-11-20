@@ -4,7 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
-import { SCENE } from '../colors';
+import { SCENE, zoneBoxColor } from '../colors';
 import { Label } from './Facility';
 import { boxTexture, palletTexture } from '../sprites';
 
@@ -34,8 +34,7 @@ export function Goods() {
       const alongC = along === 'z' ? loc.shelf.z : loc.shelf.x;
       const baseY = loc.shelf.y - 0.035;
       // 갈색 골판지 상자(사용자 2026-11-20 "파란 랙 + 재고만큼 상자") — 상품마다 밝기·채도만 조금 다르게
-      const col = new THREE.Color()
-        .setHex(SCENE.box)
+      const col = zoneBoxColor(loc.temp)
         .offsetHSL(((ci * 13) % 7) / 200 - 0.015, -0.08 + ((ci * 7) % 5) / 40, -0.08 + ((ci * 11) % 6) / 30);
       let placed = 0;
       for (let r = 0; r < rows && placed < s.shelfCap; r++) {

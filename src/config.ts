@@ -150,6 +150,8 @@ export const REAL_WORKERS = {
   /** 입고 작업 실행이 CAPTURED·UNKNOWN_RESULT 로 오면 같은 키로 다시 보내는 최대 횟수와 간격(초) [시뮬] */
   unconfirmedResendMax: 5,
   unconfirmedResendSec: 3,
+  /** 적치가 거절되면 다른 칸(서버 추천 → 이미 놓인 선반 → 위치 후보 순)으로 다시 보내는 최대 칸 수 [시뮬] */
+  putawayTries: 3,
   /** RETURN 실적 뒤 서버 반영(pendingQty)을 기다리는 최대 초 [시뮬] */
   returnConfirmWaitSec: 30,
   /**

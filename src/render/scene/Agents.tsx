@@ -9,6 +9,7 @@ import type { InboundWorker } from '../../sim/inbound';
 import type { SiteWorker } from '../../sim/worker';
 import { INBOUND_COLOR, STATE_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
 import { BAG_COLOR, makeLabel } from '../sprites';
+import { workerShortName, workerTagColor } from '../../domain/workerName';
 import { Box } from './Facility';
 import { Humanoid, type HumanoidHandle, type HumanoidLook } from './Humanoid';
 
@@ -59,7 +60,8 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   const look = useMemo(() => workerLook(id, kind), [id, kind]);
   const cart = useRef<THREE.Mesh>(null!);
   const bags = useRef<THREE.Mesh[]>([]);
-  const tag = useMemo(() => makeLabel(id, { size: 30, bg: kind === 'worker' ? 'rgba(0,0,0,0.65)' : 'rgba(120,60,0,0.75)', screenPx: 15, prio: 3 }), [id, kind]);
+  // 짧은 이름·역할 색(사용자 2026-11-20 "작업자들 식별값이 너무 길어서") — 전체 계정은 누르면 오른쪽 카드에
+  const tag = useMemo(() => makeLabel(workerShortName(id), { size: 34, bg: kind === 'worker' ? workerTagColor(id) : 'rgba(120,60,0,0.75)', screenPx: 17, prio: 3 }), [id, kind]);
   const ud = useMemo(() => ({ personId: id, personKind: kind }), [id, kind]);
 
   useEffect(() => {

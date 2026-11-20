@@ -1,5 +1,6 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
 // 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
+import { workerShortName } from '../domain/workerName';
 import { useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
@@ -413,7 +414,7 @@ function VirtualWorkers() {
         <div className="vw">
           {[...ws, ...inb].map((w) => (
             <div key={w.account} className={w.lastProblem ? 'bad' : ''}>
-              <b>{w.account.includes('-qc-') ? '검사 ' : w.account.includes('-rcv-') ? '적치 ' : ''}{w.account.replace('mfcw-', '')}</b> {w.leaving ? '퇴근 예정 · ' : ''}
+              <b title={w.account}>{workerShortName(w.account)}</b> {w.leaving ? '퇴근 예정 · ' : ''}
               {w.activity}
               {w.lastProblem && <span> · {w.lastProblem}</span>}
             </div>

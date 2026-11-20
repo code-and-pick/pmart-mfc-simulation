@@ -77,6 +77,7 @@ export function packDropFor(temp: TemperatureZone | null): string {
   return temp === 'FROZEN' ? 'PAK-F-01' : 'PAK-C-01';
 }
 
+
 export class RealWorker extends Agent {
   state: WorkerState = 'IDLE';
   pda: PdaView | null = null;
@@ -769,21 +770,27 @@ export class RealWorker extends Agent {
     if (!t) return;
     const qty = t.plannedQty - t.doneQty;
     this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
-    // 놓을 선반 = 적치 후보(mfc-location, rank 순) 첫 칸. 온도대는 서버가 SKU 로 정하게 보내지 않는다
-    // 위치 서비스는 SKU 보관 유형을 모른다 — 온도대 필수(400 VALIDATION_FAILED, 2026-11-20 실서버). 작업 storageType, 모르면 상온→냉장→냉동 순
-    const zones: TemperatureZone[] = t.storageType ? [t.storageType] : ['AMBIENT', 'CHILLED', 'FROZEN'];
-    let cands: Awaited<ReturnType<typeof be.listPutawayCandidates>> = [];
-    for (const z of zones) {
-      cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty, z));
-      if (cands.length) break;
+    // 놓을 선반(사용자 2026-11-20 "계속 적치 거절 된다고"): 재고 서버가 진열 규칙(칸 분류 = 상품 분류 CATEGORY_MISMATCH, 한 상품 한 선반
+    // SKU_ALREADY_SHELVED — mfc-inventory MoveRules)으로 판정한다. 위치 후보(mfc-location)는 그 규칙을 몰라 첫 칸이 거절되곤 했다.
+    // 순서: ① 작업의 서버 추천 칸(suggestedToLocations) ② 그 상품이 이미 놓인 선반 ③ 위치 후보(온도대별)
+    // 거절되면 다음 칸으로(최대 REAL_WORKERS.putawayTries) — 같은 칸을 다시 보내지 않는다
+    const shelfOk = (c?: string | null) => !!c && c !== t.locationCode && !/^(RCV|CRT|PAK|DSP|RTN)-/.test(c);
+    const targets: string[] = [];
+    const add = (c?: string | null) => {
+      if (shelfOk(c) && !targets.includes(c!)) targets.push(c!);
+    };
+    (t.suggestedToLocations ?? []).forEach(add);
+    const st = await be.getCenterStock(ctx.mfcId, t.sku).catch(() => null);
+    st?.units.forEach((u) => add(u.locationCode));
+    if (targets.length < REAL_WORKERS.putawayTries) {
+      const zones: TemperatureZone[] = t.storageType ? [t.storageType] : ['AMBIENT', 'CHILLED', 'FROZEN'];
+      for (const z of zones) {
+        const cands = await this.retry(() => be.listPutawayCandidates(ctx.mfcId, t.sku, qty, z));
+        cands.forEach((c) => add(c.locationCode));
+        if (targets.length >= REAL_WORKERS.putawayTries) break;
+      }
     }
-    let to = cands.find((c) => c.locationCode && c.locationCode !== t.locationCode && !c.locationCode.startsWith('CRT-'))?.locationCode;
-    if (!to) {
-      // 후보가 없으면 그 상품이 이미 놓인 선반으로(사용자 2026-11-20 "그냥 알아서 값 넣어" — 멈추지 않게). 입고·카트·포장·출하 자리는 뺀다
-      const st = await be.getCenterStock(ctx.mfcId, t.sku).catch(() => null);
-      to = st?.units.find((u) => u.locationCode && !/^(RCV|CRT|PAK|DSP|RTN)-/.test(u.locationCode) && u.locationCode !== t.locationCode)?.locationCode;
-      if (to) ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 적치 후보 없음, 이미 놓인 선반 ${to} 로`);
-    }
+    let to = targets[0];
     if (!to) {
       this.lastProblem = `${t.sku} 적치 후보 없음`;
       ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — 적치 후보 없음, 손대지 않음`);
@@ -812,7 +819,28 @@ export class RealWorker extends Agent {
       this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
     }
     await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
-    await this.applied('적치', this.key('putaway', t.taskId, `:${to}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: to, qty }, k));
+    for (let i = 0; ; i++) {
+      try {
+        const dest = to;
+        await this.applied('적치', this.key('putaway', t.taskId, `:${dest}:${qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: dest, qty }, k));
+        break;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const next = targets[i + 1];
+        if (!msg.startsWith('적치 거절') || !next || i + 1 >= REAL_WORKERS.putawayTries) throw e;
+        ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} ${to} ${msg} — 다음 칸 ${next}`);
+        this.activity = `${to} 거절 — ${next} 로`;
+        to = next;
+        const nl = ctx.location(to);
+        this.currentTarget = nl;
+        this.pda.location = to;
+        if (nl) {
+          await this.walkTo(nl.pick);
+          this.heading = Math.atan2(nl.shelf.x - this.pos.x, nl.shelf.z - this.pos.z);
+        }
+        await this.work(REAL_WORKERS.shelveBaseSec);
+      }
+    }
     this.carrying = [];
     this.hasCart = false;
     this.currentTarget = null;
