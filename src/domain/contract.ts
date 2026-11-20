@@ -804,6 +804,37 @@ export interface OperatorCancelRequest {
   channel: 'OPERATOR';
 }
 
+/** (fulfillment 0.28.0~0.30.0, R-29 2단계·ADR-0079) 센터 관리자 작업 조작 한 건 — BLOCK·UNBLOCK·PARTIAL_CLOSE(모르는 값은 그대로) */
+export interface TaskControl {
+  controlId: string;
+  taskId: string;
+  action: string;
+  fromState: TaskState;
+  toState: TaskState;
+  taskVersion: number;
+  reason: string;
+  actorId: string;
+  workerId?: string | null;
+  at: string;
+}
+
+/** (capacity 0.31.0, R-29) 배정 이력 한 행 — 배정과 끝 */
+export interface AssignmentHistoryEntry {
+  assignmentId: string;
+  taskId: string;
+  taskType?: string;
+  workerId: string;
+  assignmentVersion: number;
+  state: 'ACTIVE' | 'SUPERSEDED' | 'RELEASED';
+  source?: 'MANUAL' | 'PLAN' | 'SYSTEM';
+  assignedBy?: string | null;
+  reason?: string | null;
+  assignedAt: string;
+  endedAt?: string | null;
+  endedBy?: string | null;
+  endReason?: string | null;
+}
+
 /** claim-service Claim(쓰는 칸만) */
 export interface Claim {
   claimId: string;

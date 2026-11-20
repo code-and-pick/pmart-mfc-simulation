@@ -225,9 +225,27 @@ function Detail({ desk }: { desk: AdminDesk }) {
 }
 
 /** 쓰기 버튼 — 누르면 사유 칸과 "확인"이 나온다(두 번 눌러야 보냄) */
-function Confirm({ label, danger, onGo, disabled, required, children }: { label: string; danger?: boolean; onGo: (reason: string) => void; disabled?: boolean; required?: boolean; children?: React.ReactNode }) {
+function Confirm({
+  label,
+  danger,
+  onGo,
+  disabled,
+  required,
+  check,
+  children,
+}: {
+  label: string;
+  danger?: boolean;
+  onGo: (reason: string, checked: boolean) => void;
+  disabled?: boolean;
+  required?: boolean;
+  /** 있으면 이 확인 칸을 체크해야 보냄(예: 막힘 해제 실물 확인) */
+  check?: string;
+  children?: React.ReactNode;
+}) {
   const [open, setOpen] = useState(false);
   const [reason, setReason] = useState('');
+  const [checked, setChecked] = useState(false);
   if (!open)
     return (
       <button className={`adm-btn ${danger ? 'danger' : ''}`} disabled={disabled} onClick={() => setOpen(true)}>
@@ -238,12 +256,17 @@ function Confirm({ label, danger, onGo, disabled, required, children }: { label:
     <span className="adm-confirm">
       {children}
       <input type="text" value={reason} placeholder={required ? '사유(필수)' : '사유(선택)'} onChange={(e) => setReason(e.target.value)} onKeyDown={(e) => e.stopPropagation()} />
+      {check && (
+        <label className="adm-check">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} /> {check}
+        </label>
+      )}
       <button
         className={`adm-btn ${danger ? 'danger' : ''}`}
-        disabled={required && !reason.trim()}
+        disabled={(required && !reason.trim()) || (!!check && !checked)}
         onClick={() => {
           setOpen(false);
-          onGo(reason);
+          onGo(reason, checked);
         }}
       >
         확인
@@ -275,7 +298,7 @@ function Live({ desk: d0, readOnly }: { desk: AdminDesk; readOnly: boolean }) {
   if (!open.length) return <div className="scan-empty">지금 열린 작업이 없습니다.</div>;
   return (
     <>
-      <div className="note">담당 바꾸기·내려놓기·주문 취소는 센터 관리자 계정(claude-mfc-sup)으로 보냅니다. 주문 취소는 관리자 판단 취소(claim 0.8.0) — 인계 전이면 피킹 뒤라도, 사유 필수. 작업 중지·막힘 해제·남은 수량 취소는 백엔드 배포 대기(R-29 2단계).</div>
+      <div className="note">담당 바꾸기·내려놓기·주문 취소는 센터 관리자 계정(claude-mfc-sup)으로 보냅니다. 주문 취소는 관리자 판단 취소(claim 0.8.0) — 인계 전이면 피킹 뒤라도, 사유 필수. 작업 중지·막힘 해제(실물 확인)·남은 수량 취소·이력은 R-29 2단계(백엔드 main f967fab3) — LAN 배포 전이면 거절됩니다.</div>
       {[...by].map(([sid, ts]) => (
         <div key={sid} className="adm-ship">
           <div className="adm-h">
@@ -303,6 +326,8 @@ function LiveTask({ desk, t, workers, readOnly }: { desk: AdminDesk; t: TaskSumm
   const who = t.assignment?.workerId ?? null;
   const canRelease = (t.state === 'ASSIGNED' || t.state === 'IN_PROGRESS') && !!who;
   const canAssign = ['READY', 'ASSIGNED', 'IN_PROGRESS'].includes(t.state);
+  const canPartial = t.taskType === 'PICK' && t.completedQty > 0 && t.completedQty < t.plannedQty && ['READY', 'ASSIGNED', 'IN_PROGRESS', 'BLOCKED'].includes(t.state);
+  const [logOpen, setLogOpen] = useState(false);
   return (
     <div className="adm-task">
       <div className="adm-h">
@@ -332,10 +357,55 @@ function LiveTask({ desk, t, workers, readOnly }: { desk: AdminDesk; t: TaskSumm
             </>
           )}
           {canRelease && <Confirm label="내려놓기" danger onGo={(r) => void desk.release(t, r)} />}
+          {/* R-29 2단계(ADR-0079) — 서버 배포 전이면 404/405 로 거절된다 */}
+          {canAssign && <Confirm label="작업 중지" danger required onGo={(r) => void desk.block(t, r)} />}
+          {t.state === 'BLOCKED' && (
+            <Confirm label="막힘 해제" required check="장바구니·집은 물건을 실물로 확인함" onGo={(r, ok) => void desk.unblock(t, r, ok)} />
+          )}
+          {canPartial && (
+            <Confirm label="남은 수량 취소" danger required onGo={(r) => void desk.partialClose(t, r)}>
+              <span className="muted">안 집은 {t.plannedQty - t.completedQty}개 · 부분 환불</span>
+            </Confirm>
+          )}
+          <button className="link" onClick={() => (logOpen ? setLogOpen(false) : (setLogOpen(true), void desk.loadTaskLog(t.taskId)))}>
+            {logOpen ? '이력 닫기' : '이력'}
+          </button>
         </div>
       )}
       <ActionNote desk={desk} k={`assign:${t.taskId}`} />
       <ActionNote desk={desk} k={`release:${t.taskId}`} />
+      <ActionNote desk={desk} k={`block:${t.taskId}`} />
+      <ActionNote desk={desk} k={`unblock:${t.taskId}`} />
+      <ActionNote desk={desk} k={`pclose:${t.taskId}`} />
+      {logOpen && <TaskLog desk={desk} taskId={t.taskId} />}
+    </div>
+  );
+}
+
+/** 배정 이력(capacity)·조작 이력(fulfillment) — 시각 순으로 한 줄씩 */
+function TaskLog({ desk, taskId }: { desk: AdminDesk; taskId: string }) {
+  const { sim } = useApp();
+  const real = sim.board!;
+  const g = desk.taskLog.get(taskId);
+  if (!g || g.loading) return <div className="note">이력 읽는 중…</div>;
+  const name = (id?: string | null) => (!id ? '—' : id === 'SYSTEM' ? '시스템' : real.workerName(id));
+  const rows: { at: string; text: string }[] = [];
+  for (const a of g.assignments) {
+    rows.push({ at: a.assignedAt, text: `배정 v${a.assignmentVersion} → ${name(a.workerId)} (${a.source === 'SYSTEM' ? '시스템' : a.source === 'MANUAL' ? `관리자 ${name(a.assignedBy)}` : (a.source ?? '')}${a.reason ? ` · ${a.reason}` : ''})` });
+    if (a.endedAt) rows.push({ at: a.endedAt, text: `배정 v${a.assignmentVersion} 끝 — ${name(a.endedBy)}${a.endReason ? ` · ${a.endReason}` : ''}` });
+  }
+  const ACT: Record<string, string> = { BLOCK: '작업 중지', UNBLOCK: '막힘 해제', PARTIAL_CLOSE: '남은 수량 취소' };
+  for (const c of g.controls) rows.push({ at: c.at, text: `${ACT[c.action] ?? c.action} — ${name(c.actorId)} · ${c.reason} (${TASK_STATE_KO[c.fromState] ?? c.fromState} → ${TASK_STATE_KO[c.toState] ?? c.toState})` });
+  rows.sort((a, b) => a.at.localeCompare(b.at));
+  return (
+    <div className="adm-log">
+      {g.error && <div className="note warn">일부 못 읽음: {g.error}</div>}
+      {!rows.length && !g.error && <div className="muted">기록 없음</div>}
+      {rows.map((r, i) => (
+        <div key={i}>
+          <span className="muted">{hm(r.at)}</span> {r.text}
+        </div>
+      ))}
     </div>
   );
 }

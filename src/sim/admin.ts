@@ -2,7 +2,7 @@
 // React 없이: 화면은 subscribe/getVersion 으로 다시 그린다.
 // - 조회는 관찰 계정(claude-mfc-wrk), 쓰기(재배정·내놓기·인계 확인)는 센터 관리자 계정(claude-mfc-sup, MFC_SUPERVISOR) — 계약에 있는 경로만.
 // - 서버가 확정한 결과만 확정으로. 응답이 없으면 결과 불명 — 같은 Idempotency-Key 로 다시 보낸다(실패로 단정하지 않음).
-import { ApiProblem, ResultUnknown, type OrderFulfillmentView, type PackageToCheck, type TaskExecution, type TaskState, type TaskSummary } from '../domain/contract';
+import { ApiProblem, ResultUnknown, type AssignmentHistoryEntry, type OrderFulfillmentView, type PackageToCheck, type TaskControl, type TaskExecution, type TaskState, type TaskSummary } from '../domain/contract';
 import type { HttpBackend } from '../backend/http/HttpBackend';
 
 export type ActionState = { state: 'sending' | 'unknown' | 'done' | 'error'; msg: string; key: string };
@@ -235,6 +235,56 @@ export class AdminDesk {
       const c = await this.sup.createOperatorCancel({ orderId: oid, type: 'CANCEL', lines, reason: 'OPERATOR_DECISION', reasonDetail: memo.trim(), channel: 'OPERATOR' }, key);
       return `취소 접수됨(${c.state}) — 작업 정리·환불은 서버가 이어서 함`;
     });
+  }
+
+  /** 작업 중지(BLOCKED) — 담당·담은 물건·재고 그대로(ADR-0079). 사유 필수 */
+  block(task: TaskSummary, reason: string) {
+    return this.run(`block:${task.taskId}`, async (key) => {
+      if (!reason.trim()) throw new Error('사유를 적어 주세요(필수)');
+      const c = await this.sup.blockTask(task.taskId, reason.trim(), key);
+      return `중지됨(${c.fromState} → ${c.toState})`;
+    });
+  }
+
+  /** 막힘 해제 — 실물 확인(장바구니·집은 물건) 체크 필수. 담당이 살아 있으면 그 사람, 아니면 대기 */
+  unblock(task: TaskSummary, reason: string, cartChecked: boolean) {
+    return this.run(`unblock:${task.taskId}`, async (key) => {
+      if (!reason.trim()) throw new Error('사유를 적어 주세요(필수)');
+      if (!cartChecked) throw new Error('장바구니·집은 물건을 실물로 확인해야 풉니다');
+      const c = await this.sup.unblockTask(task.taskId, reason.trim(), true, key);
+      return c.toState === 'ASSIGNED' ? '해제 — 원래 담당에게 다시 배정' : `해제 — ${c.toState === 'READY' ? '대기로(아무나 받음)' : c.toState}`;
+    });
+  }
+
+  /** PICK 남은 수량만 취소 — 결품과 같은 흐름(그 상품 부분 환불, 집은 것은 패킹으로). 집은 게 0 이면 서버가 거절(주문 취소로) */
+  partialClose(task: TaskSummary, reason: string) {
+    return this.run(`pclose:${task.taskId}`, async (key) => {
+      if (!reason.trim()) throw new Error('사유를 적어 주세요(필수)');
+      await this.sup.partialCloseTask(task.taskId, reason.trim(), key);
+      return '남은 수량 취소 접수 — 결품 처리·부분 환불은 서버가 이어서(잔량 0 이 되면 부분 종료)';
+    });
+  }
+
+  /** 작업 하나의 배정 이력(capacity)·조작 이력(fulfillment) */
+  readonly taskLog = new Map<string, { loading: boolean; error: string | null; assignments: AssignmentHistoryEntry[]; controls: TaskControl[] }>();
+  async loadTaskLog(taskId: string) {
+    this.taskLog.set(taskId, { loading: true, error: null, assignments: [], controls: [] });
+    this.bump();
+    const [a, c] = await Promise.allSettled([this.sup.listAssignmentHistory(this.mfcId, taskId), this.sup.listTaskControls(taskId)]);
+    const err = [a, c].filter((x) => x.status === 'rejected').map((x) => errText((x as PromiseRejectedResult).reason));
+    this.taskLog.set(taskId, {
+      loading: false,
+      error: err.length ? err.join(' · ') : null,
+      assignments: a.status === 'fulfilled' ? a.value : [],
+      controls: c.status === 'fulfilled' ? c.value : [],
+    });
+    if (this.labelWorkers) {
+      const ids = new Set<string>();
+      for (const x of this.taskLog.get(taskId)!.assignments) for (const id of [x.workerId, x.assignedBy, x.endedBy]) if (id?.startsWith('OP-')) ids.add(id);
+      for (const x of this.taskLog.get(taskId)!.controls) for (const id of [x.actorId, x.workerId]) if (id?.startsWith('OP-')) ids.add(id);
+      if (ids.size) await this.labelWorkers([...ids]).catch(() => undefined);
+    }
+    this.bump();
   }
 
   /** 인계 허가가 만료된 포장 확인 — AT_STATION(아직 있음) / TAKEN_BY_RIDER(라이더가 가져감 → 재고 인계 전기) */

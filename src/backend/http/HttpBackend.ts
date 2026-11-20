@@ -39,6 +39,8 @@ import {
   type AssignTaskRequest,
   type PackageToCheck,
   type OperatorCancelRequest,
+  type TaskControl,
+  type AssignmentHistoryEntry,
   type Claim,
   type RiderDisplayName,
   type TaskExecutionRequest,
@@ -174,6 +176,33 @@ export class HttpBackend implements FulfillmentPort {
   /** claim 0.8.0 관리자 판단 전체 취소(OPERATOR_DECISION, ADR-0076) — 인계 전이면 피킹 시작 뒤라도. 접수일 뿐 확정은 S3 뒤 */
   createOperatorCancel(body: OperatorCancelRequest, idempotencyKey: string): Promise<Claim> {
     return this.request('POST', '/claims', { body, idempotencyKey });
+  }
+
+  /** (fulfillment 0.28.0, ADR-0079) 작업 중지 → BLOCKED. 배정·완료량·장바구니·재고·예약·배차 그대로. 센터 관리자 */
+  blockTask(taskId: string, reason: string, idempotencyKey: string): Promise<TaskControl> {
+    return this.request('POST', `/tasks/${enc(taskId)}/blocks`, { body: { reason }, idempotencyKey });
+  }
+
+  /** (0.29.0) 관리자 중지 해제 — cartChecked(실물 확인) 필수. 담당이 살아 있으면 ASSIGNED, 아니면 배정 해제·READY */
+  unblockTask(taskId: string, reason: string, cartChecked: boolean, idempotencyKey: string): Promise<TaskControl> {
+    return this.request('POST', `/tasks/${enc(taskId)}/unblocks`, { body: { reason, cartChecked }, idempotencyKey });
+  }
+
+  /** (0.30.0) PICK 남은 수량만 취소 — 결품 사가로 부분 환불, 집은 게 0 이면 422 NOTHING_EXECUTED(주문 취소로) */
+  partialCloseTask(taskId: string, reason: string, idempotencyKey: string): Promise<TaskControl> {
+    return this.request('POST', `/tasks/${enc(taskId)}/partial-closes`, { body: { reason }, idempotencyKey });
+  }
+
+  /** (0.28.0) 작업 조작 이력 — 최근 순 */
+  async listTaskControls(taskId: string): Promise<TaskControl[]> {
+    const r = await this.request<{ items?: TaskControl[] }>('GET', `/tasks/${enc(taskId)}/controls`);
+    return r.items ?? [];
+  }
+
+  /** (capacity 0.31.0) 배정 이력 — 버전 순, 누가·언제 배정·끝냈나 */
+  async listAssignmentHistory(mfcId: string, taskId: string): Promise<AssignmentHistoryEntry[]> {
+    const r = await this.request<{ items?: AssignmentHistoryEntry[] }>('GET', `/assignments/history?${new URLSearchParams({ mfcId, taskId })}`);
+    return r.items ?? [];
   }
 
   /** 작업 내놓기(0.4.8) — 담당 본인 또는 센터 관리자, READY 로 */

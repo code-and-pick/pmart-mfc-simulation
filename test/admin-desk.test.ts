@@ -100,4 +100,25 @@ describe('관리 탭', () => {
     expect(d.actions.get('cancel:S1')?.state).toBe('done');
     expect(sent).toEqual([{ orderId: 'ORD-1', type: 'CANCEL', lines: [{ orderLineId: 'L1', qty: 2 }], reason: 'OPERATOR_DECISION', reasonDetail: '고객 요청 — 배송지 오류', channel: 'OPERATOR' }]);
   });
+  it('작업 중지·막힘 해제·남은 수량 취소: 사유·실물 확인이 없으면 안 보내고, 있으면 관리자 계정으로', async () => {
+    const calls: string[] = [];
+    const ctl = (action: string, toState: string) => ({ controlId: 'C', taskId: 'S1-PICK', action, fromState: 'IN_PROGRESS', toState, taskVersion: 2, reason: 'r', actorId: 'OP-SUP', at: 'x' });
+    const sup = {
+      blockTask: async (id: string, r: string) => (calls.push(`block ${id} ${r}`), ctl('BLOCK', 'BLOCKED')),
+      unblockTask: async (id: string, r: string, ok: boolean) => (calls.push(`unblock ${id} ${r} ${ok}`), ctl('UNBLOCK', 'ASSIGNED')),
+      partialCloseTask: async (id: string, r: string) => (calls.push(`pclose ${id} ${r}`), ctl('PARTIAL_CLOSE', 'BLOCKED')),
+    } as unknown as HttpBackend;
+    const d = new AdminDesk(sup, sup, 'M', () => 1, 1, () => 'OP-SUP');
+    const t = task({ state: 'IN_PROGRESS', completedQty: 1, plannedQty: 3 });
+    await d.block(t, ' ');
+    await d.unblock(t, '확인함', false);
+    expect(calls).toEqual([]);
+    expect(d.actions.get('block:S1-PICK')?.state).toBe('error');
+    expect(d.actions.get('unblock:S1-PICK')?.state).toBe('error');
+    await d.block(t, '선반 확인');
+    await d.unblock(t, '확인함', true);
+    await d.partialClose(t, '나머지 없음');
+    expect(calls).toEqual(['block S1-PICK 선반 확인', 'unblock S1-PICK 확인함 true', 'pclose S1-PICK 나머지 없음']);
+    expect(d.actions.get('unblock:S1-PICK')?.msg).toContain('원래 담당');
+  });
 });
