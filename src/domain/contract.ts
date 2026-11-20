@@ -158,6 +158,8 @@ export interface TaskLine {
   barcode: string | null;
   /** (0.7.0) 그 SKU 의 활성 바코드 전부(선행 0 보존). 스캔 값이 이 중 하나면 같은 상품. 모르면 빈 배열. MOCK·0.6 이하는 없음 */
   barcodes?: string[];
+  /** (0.25.0) SKU 보관 온도대 — mfc-inventory SKU 사본, 모르면 null. PDA 는 온도대마다 봉투를 따로(섞지 않음) */
+  temperatureZone?: TemperatureZone | null;
   /** 지시 로케이션(첫 지시의 사본). PACK·DISPATCH 는 null 일 수 있음 */
   locationId: string | null;
   lotId: string | null;

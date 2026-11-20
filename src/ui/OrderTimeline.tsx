@@ -65,7 +65,12 @@ export function OrderTimeline({ shipmentId }: { shipmentId: string }) {
                 if (k.blockReason) rows.push({ at: k.startedAt ?? wo.createdAt, what: `${kind} 막힘 — ${k.blockReason}`, tone: 'warn' });
               }
               for (const x of s.shortages) rows.push({ at: x.reportedAt, what: `결품 보고 ${x.qty}개${x.reason ? ` · ${x.reason}` : ''}`, tone: 'warn' });
-              if (s.dispatchRequestedAt) rows.push({ at: s.dispatchRequestedAt, what: '배차 요청' });
+              // 점원이 고른 예상 포장 시간(PDA "배차 요청", estimatedPackMinutes)과 서버가 정한 준비 예정 시각(사용자 2026-11-20 "배차시간 뭐 선택했는지")
+              if (s.dispatchRequestedAt) {
+                const dr = info?.dispatchRequest;
+                const min = dr?.estimatedPackMinutes;
+                rows.push({ at: s.dispatchRequestedAt, what: `배차 요청${min ? ` · 예상 포장 ${min}분` : ''}${dr?.estimatedReadyAt ? ` (준비 ${hm(dr.estimatedReadyAt)})` : ''}`, who: dr?.requestedBy ? w(dr.requestedBy) : undefined });
+              }
               s.packages.forEach((p, pi) => {
                 ids.push([`포장 ${pi + 1}`, p.packageId]);
                 const pk = info?.packages?.find((x) => x.packageId === p.packageId);

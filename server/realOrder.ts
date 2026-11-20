@@ -86,21 +86,29 @@ function api(gateway: string, token: string | null) {
       if (opt.body !== undefined) headers['Content-Type'] = 'application/json';
       if (opt.version !== undefined) headers['X-Expected-Version'] = String(opt.version);
     }
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 15_000);
-    let res: Response;
-    try {
-      res = await fetch(`${gateway}/api/v1${path}`, {
-        method,
-        headers,
-        body: opt.body === undefined ? undefined : JSON.stringify(opt.body),
-        signal: ctl.signal,
-      });
-    } catch {
-      throw new NoResponse(`${method} ${path.split('?')[0]}`);
-    } finally {
-      clearTimeout(timer);
+    // 응답 없음은 결과 불명 — 같은 Idempotency-Key(헤더 그대로)로 다시 보낸다(사용자 2026-11-20 "두건 이상 주문 신청하려니까" GET /me/shopping-context 응답 없음)
+    let res: Response | null = null;
+    let why = '';
+    for (let attempt = 0; attempt < REAL_ORDER.noResponseRetries + 1 && !res; attempt++) {
+      if (attempt) await sleep(REAL_ORDER.noResponseRetryMs);
+      const ctl = new AbortController();
+      const timer = setTimeout(() => ctl.abort(), 15_000);
+      try {
+        res = await fetch(`${gateway}/api/v1${path}`, {
+          method,
+          headers,
+          body: opt.body === undefined ? undefined : JSON.stringify(opt.body),
+          signal: ctl.signal,
+        });
+      } catch (e) {
+        const c = (e as { cause?: { code?: string; message?: string } }).cause;
+        why = (e as Error).name === 'AbortError' ? '15초 안에 응답 없음' : (c?.code ?? c?.message ?? (e as Error).message);
+        console.warn(`[sim-order] ${method} ${path.split('?')[0]} 응답 없음(${attempt + 1}번째): ${why}`);
+      } finally {
+        clearTimeout(timer);
+      }
     }
+    if (!res) throw new NoResponse(`${method} ${path.split('?')[0]} (${why})`);
     const text = await res.text();
     const json = (text ? (JSON.parse(text) as unknown) : {}) as Json;
     if (!res.ok) {

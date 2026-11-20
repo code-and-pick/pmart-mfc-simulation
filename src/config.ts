@@ -270,6 +270,9 @@ export const REAL_ORDER = {
   /** 승인 뒤 주문번호를 기다리는 최대 시간(초) [시뮬] */
   orderNumberWaitSec: 15,
   pollMs: 1000,
+  /** 게이트웨이 응답 없음 때 같은 Idempotency-Key 로 다시 보내는 횟수·간격(사용자 2026-11-20 두 건째 응답 없음) [시뮬] */
+  noResponseRetries: 2,
+  noResponseRetryMs: 1500,
 };
 
 /** 시험 입고(MI-3·R-23 — mfc-inbound 0.14.0 POST /dev-initial-stock-loads, LAN 설정 켠 곳만). 재고만 채우는 시험 입구 */

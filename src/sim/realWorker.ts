@@ -468,8 +468,10 @@ export class RealWorker extends Agent {
           const u = st?.units.find((x) => x.workState === 'PICKED' && x.qty >= l.remainingQty && /^(PAK|CRT)-/.test(x.locationCode));
           d = u ? { loc: u.locationCode, temp: u.locationCode.startsWith('PAK-F') ? 'FROZEN' : null } : null;
         }
-        const k = `${d?.loc ?? '-'}|${d?.temp ?? '-'}`;
-        const g = groups.get(k) ?? { loc: d?.loc ?? null, temp: d?.temp ?? null, lines: [] };
+        // 온도대마다 봉투 하나 — 줄의 SKU 온도대(fulfillment 0.25.0)를 먼저, 모르면 위치로 짐작. PDA 처럼 섞지 않는다(사용자 2026-11-20 "포장도 제대로 하고 있는 거 맞아?" — 83072555 냉장·상온 한 봉투)
+        const temp = l.temperatureZone ?? d?.temp ?? null;
+        const k = `${d?.loc ?? '-'}|${temp ?? '-'}`;
+        const g = groups.get(k) ?? { loc: d?.loc ?? null, temp, lines: [] };
         g.lines.push(l);
         groups.set(k, g);
       }
