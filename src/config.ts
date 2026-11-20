@@ -226,6 +226,11 @@ export const REAL_LINK = {
     ...Array.from({ length: 10 }, (_, i) => `mfcw-qc-${String(i + 1).padStart(2, '0')}`),
     ...Array.from({ length: 10 }, (_, i) => `mfcw-rcv-${String(i + 1).padStart(2, '0')}`),
   ] as readonly string[],
+  /**
+   * 이 PC 처럼 다 보는(조회는 모두) 다른 기기 — 쓰기는 여전히 이 PC(PC 1)만(사용자 2026-11-20 "PC1에서만", "이거 PC5에서도 볼 수 있게 해줘").
+   * PC 5 = 192.168.0.101(D603-13, 백엔드 docs/operations/2026-11-15-ssh-hostname-resolution.md). 조회 경로 제한 없이 GET 만, 센터 관리자 조회 토큰 [확정]
+   */
+  lanViewers: ['192.168.0.101'] as readonly string[],
   /** 입고 작업자 수 상한(입고·검수 대기 자리 8) · 처음 켤 때 기본(MOCK 과 같은 기준 3명 = 검사 2 + 적치 1, MFC 10장 가정) [시뮬] */
   inboundMax: 8,
   inboundDefault: 3,

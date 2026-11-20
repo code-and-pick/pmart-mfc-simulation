@@ -16,6 +16,12 @@ function ownAddresses(): Set<string> {
   return out;
 }
 
+/** 다 보는 다른 기기(REAL_LINK.lanViewers — 예 PC 5)인가 */
+export function fromViewer(req: IncomingMessage, viewers: readonly string[]): boolean {
+  const a = strip(req.socket.remoteAddress ?? '').split('%')[0];
+  return viewers.includes(a);
+}
+
 export function fromThisPc(req: IncomingMessage): boolean {
   const a = strip(req.socket.remoteAddress ?? '').split('%')[0];
   return a !== '' && ownAddresses().has(a);

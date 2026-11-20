@@ -59,7 +59,7 @@ export function AdminPanel() {
           </button>
         ))}
       </div>
-      {remote && s !== 'history' && s !== 'returns' && <div className="note warn">다른 기기에서 연 화면은 조회만 됩니다 — 관리자 조치는 시뮬레이터를 띄운 PC 화면에서.</div>}
+      {remote && s !== 'history' && s !== 'returns' && <div className="note warn">이 기기는 조회만 됩니다 — 관리자 조치(버튼)는 PC 1(시뮬레이터를 띄운 PC) 화면에서.</div>}
       {s === 'returns' && <Returns />}
       {s === 'history' && <History desk={desk} />}
       {s === 'live' && <Live desk={desk} readOnly={remote} />}
@@ -458,9 +458,9 @@ function Checks({ desk: d0, readOnly }: { desk: AdminDesk; readOnly: boolean }) 
   const { sim } = useApp();
   const real = sim.board!;
   useEffect(() => {
-    if (!readOnly && !desk.checks.readAt && !desk.checks.loading) void desk.loadChecks();
+    if (!desk.checks.readAt && !desk.checks.loading) void desk.loadChecks();
   }, [desk, readOnly]);
-  if (readOnly) return null;
+  // 다른 기기(조회만)도 목록은 보인다 — 처리 버튼만 숨김(사용자 2026-11-20 "PC5에서도 볼 수 있게")
   return (
     <>
       <div className="note">
@@ -480,10 +480,12 @@ function Checks({ desk: d0, readOnly }: { desk: AdminDesk; readOnly: boolean }) 
               {p.packingLocation ?? ''} · 라이더 {real.riderLabel(p.riderId) ?? (p.riderId ? '번호 확인 중' : '—')} · 허가 만료 {hm(p.fence?.expiresAt)}
             </span>
           </div>
-          <div className="adm-acts">
-            <Confirm label="자리에 있음" onGo={(r) => void desk.check(p.packageId, 'AT_STATION', r)} />
-            <Confirm label="라이더가 가져감" danger onGo={(r) => void desk.check(p.packageId, 'TAKEN_BY_RIDER', r)} />
-          </div>
+          {!readOnly && (
+            <div className="adm-acts">
+              <Confirm label="자리에 있음" onGo={(r) => void desk.check(p.packageId, 'AT_STATION', r)} />
+              <Confirm label="라이더가 가져감" danger onGo={(r) => void desk.check(p.packageId, 'TAKEN_BY_RIDER', r)} />
+            </div>
+          )}
           <ActionNote desk={desk} k={`check:${p.packageId}`} />
         </div>
       ))}

@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { fromThisPc } from './thisPc';
+import { fromThisPc, fromViewer } from './thisPc';
 import type { Plugin } from 'vite';
 import { keycloakUsername, passwordFileFor, type SimToken } from '../src/backend/http/accounts';
 import { lanReadAllowed } from '../src/backend/http/lanAllow';
@@ -109,9 +109,11 @@ export function simAuthPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/') || isLoopback(req)) return next();
         if (!LAN_METHODS.has(req.method ?? '')) return send(res, 403, { code: 'LAN_READ_ONLY', detail: '다른 기기에서는 조회만 됩니다' });
-        if (!lanReadAllowed(req.url ?? '')) return send(res, 403, { code: 'LAN_PATH_NOT_ALLOWED', detail: '다른 기기에서는 관찰 화면이 읽는 경로만 됩니다' });
+        // 다 보는 기기(PC 5 등)는 경로 제한 없이 읽기만 — 센터 관리자 계정으로(관리 탭 지난 주문·배정 이력·인계 확인·작업자 이름까지)
+        const viewer = fromViewer(req, REAL_LINK.lanViewers);
+        if (!viewer && !lanReadAllowed(req.url ?? '')) return send(res, 403, { code: 'LAN_PATH_NOT_ALLOWED', detail: '다른 기기에서는 관찰 화면이 읽는 경로만 됩니다' });
         delete req.headers.authorization;
-        issue(REAL_LINK.observerAccount)
+        issue(viewer ? REAL_LINK.supervisorAccount : REAL_LINK.observerAccount)
           .then((t) => {
             req.headers.authorization = `Bearer ${t.accessToken}`;
             next();
