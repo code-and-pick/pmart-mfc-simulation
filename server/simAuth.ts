@@ -83,9 +83,9 @@ async function issue(account: string): Promise<SimToken> {
   return t;
 }
 
-/** 이 PC(PC 1) 화면인가 — localhost 와 이 PC 자기 IP 모두(thisPc.ts) */
+/** 이 PC(PC 1) 또는 같은 권한 기기(REAL_LINK.lanViewers — PC 5) 화면인가 — localhost·이 PC 자기 IP 포함(thisPc.ts) */
 function isLoopback(req: IncomingMessage): boolean {
-  return fromThisPc(req);
+  return fromThisPc(req) || fromViewer(req, REAL_LINK.lanViewers);
 }
 
 function send(res: ServerResponse, status: number, body: unknown) {
@@ -109,11 +109,9 @@ export function simAuthPlugin(): Plugin {
       server.middlewares.use((req, res, next) => {
         if (!req.url?.startsWith('/api/') || isLoopback(req)) return next();
         if (!LAN_METHODS.has(req.method ?? '')) return send(res, 403, { code: 'LAN_READ_ONLY', detail: '다른 기기에서는 조회만 됩니다' });
-        // 다 보는 기기(PC 5 등)는 경로 제한 없이 읽기만 — 센터 관리자 계정으로(관리 탭 지난 주문·배정 이력·인계 확인·작업자 이름까지)
-        const viewer = fromViewer(req, REAL_LINK.lanViewers);
-        if (!viewer && !lanReadAllowed(req.url ?? '')) return send(res, 403, { code: 'LAN_PATH_NOT_ALLOWED', detail: '다른 기기에서는 관찰 화면이 읽는 경로만 됩니다' });
+        if (!lanReadAllowed(req.url ?? '')) return send(res, 403, { code: 'LAN_PATH_NOT_ALLOWED', detail: '다른 기기에서는 관찰 화면이 읽는 경로만 됩니다' });
         delete req.headers.authorization;
-        issue(viewer ? REAL_LINK.supervisorAccount : REAL_LINK.observerAccount)
+        issue(REAL_LINK.observerAccount)
           .then((t) => {
             req.headers.authorization = `Bearer ${t.accessToken}`;
             next();

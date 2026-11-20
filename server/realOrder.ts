@@ -6,9 +6,9 @@
 
 import { randomUUID } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import { fromThisPc } from './thisPc';
+import { fromThisPc, fromViewer } from './thisPc';
 import type { Plugin } from 'vite';
-import { REAL_ORDER } from '../src/config';
+import { REAL_LINK, REAL_ORDER } from '../src/config';
 import {
   ORDER_MODES,
   orderCandidates,
@@ -339,9 +339,9 @@ async function placeOrder(gateway: string, accountId: string, mfcId: string, cho
   }
 }
 
-/** 이 PC(PC 1) 화면인가 — localhost 와 이 PC 자기 IP 모두(thisPc.ts) */
+/** 이 PC(PC 1) 또는 같은 권한 기기(REAL_LINK.lanViewers — PC 5) 화면인가 — localhost·이 PC 자기 IP 포함(thisPc.ts) */
 function isLoopback(req: IncomingMessage): boolean {
-  return fromThisPc(req);
+  return fromThisPc(req) || fromViewer(req, REAL_LINK.lanViewers);
 }
 
 function send(res: ServerResponse, status: number, body: unknown) {
