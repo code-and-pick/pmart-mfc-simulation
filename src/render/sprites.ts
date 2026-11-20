@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /** screenPx 를 주면 화면 고정 크기(px) 라벨, 아니면 월드 크기 라벨. */
 export function makeLabel(text: string, opts: { size?: number; color?: string; bg?: string; screenPx?: number } = {}): THREE.Sprite {
@@ -138,3 +139,24 @@ export function palletTexture(): THREE.CanvasTexture {
   palletTex.colorSpace = THREE.SRGBColorSpace;
   return palletTex;
 }
+
+let bagGeo: THREE.BufferGeometry | null = null;
+/**
+ * 배달 봉투 모양(사용자 2026-11-20 "박스가 아니라 비닐봉투에 패킹하는데?") — 크기 1 기준(가로 1 · 높이 1.2 · 두께 0.45) 몸통 +
+ * 위쪽 접힌 입구 + 손잡이 고리. 인스턴스로 크기만 바꿔 쓴다. 상온 흰 비닐, 냉장·냉동 은색 보냉봉투(BAG_COLOR).
+ */
+export function bagGeometry(): THREE.BufferGeometry {
+  if (bagGeo) return bagGeo;
+  const body = new THREE.BoxGeometry(1, 1.0, 0.45, 1, 1, 1);
+  body.translate(0, 0.5, 0);
+  const lip = new THREE.BoxGeometry(0.92, 0.12, 0.3);
+  lip.translate(0, 1.06, 0);
+  const handle = new THREE.TorusGeometry(0.2, 0.035, 6, 16, Math.PI);
+  handle.translate(0, 1.1, 0);
+  bagGeo = mergeGeometries([body.toNonIndexed(), lip.toNonIndexed(), handle.toNonIndexed()]) ?? body;
+  bagGeo.translate(0, -0.6, 0); // 가운데가 원점(높이 1.2 의 반)
+  return bagGeo;
+}
+
+/** 봉투 색 — 상온 흰 비닐, 냉장·냉동 은색 보냉봉투 */
+export const BAG_COLOR: Record<'AMBIENT' | 'CHILLED' | 'FROZEN', number> = { AMBIENT: 0xf7f8fa, CHILLED: 0xc9d3de, FROZEN: 0xb9c6d6 };

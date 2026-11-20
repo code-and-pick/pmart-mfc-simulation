@@ -7,7 +7,7 @@ import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
-import { boxTexture, makeLabel, makePillSprite } from '../sprites';
+import { makeLabel, makePillSprite } from '../sprites';
 import { ZoneNames } from './ZoneNames';
 import { InboundDecor, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
@@ -424,14 +424,14 @@ function Stations({ L }: { L: Layout }) {
                 <meshStandardMaterial color={0x2f80ed} roughness={0.55} />
               </mesh>
             ))}
-            {/* 위 상자 2개 + 테이프 디스펜서(회색) */}
-            <mesh position={[x - 0.45, 0.99, z - 0.12]} castShadow>
-              <boxGeometry args={[0.36, 0.22, 0.3]} />
-              <meshStandardMaterial color={SCENE.box} map={boxTexture()} roughness={0.7} />
+            {/* 위: 접어 둔 봉투 묶음(흰 비닐·은색 보냉) + 라벨 프린터(회색) — 포장은 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투") */}
+            <mesh position={[x - 0.45, 0.9, z - 0.12]} castShadow>
+              <boxGeometry args={[0.4, 0.06, 0.3]} />
+              <meshStandardMaterial color={0xf7f8fa} roughness={0.35} />
             </mesh>
-            <mesh position={[x + 0.05, 0.96, z - 0.15]} castShadow>
-              <boxGeometry args={[0.28, 0.16, 0.24]} />
-              <meshStandardMaterial color={SCENE.box} map={boxTexture()} roughness={0.7} />
+            <mesh position={[x - 0.05, 0.9, z - 0.15]} castShadow>
+              <boxGeometry args={[0.36, 0.05, 0.28]} />
+              <meshStandardMaterial color={0xc9d3de} roughness={0.3} metalness={0.2} />
             </mesh>
             <mesh position={[x + 0.55, 0.93, z + 0.1]} castShadow>
               <boxGeometry args={[0.18, 0.1, 0.1]} />

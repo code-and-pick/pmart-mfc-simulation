@@ -7,8 +7,8 @@ import { useApp } from '../../app/context';
 import type { P as Point } from '../../domain/navgrid';
 import type { InboundWorker } from '../../sim/inbound';
 import type { SiteWorker } from '../../sim/worker';
-import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
-import { makeLabel } from '../sprites';
+import { INBOUND_COLOR, STATE_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
+import { BAG_COLOR, makeLabel } from '../sprites';
 import { Box } from './Facility';
 import { Humanoid, type HumanoidHandle, type HumanoidLook } from './Humanoid';
 
@@ -89,7 +89,8 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     bags.current.forEach((b, i) => {
       const t = a.carrying[i];
       b.visible = t !== undefined;
-      if (t) (b.material as THREE.MeshStandardMaterial).color.setHex(kind === 'inbound' || inboundAcc ? (t === 'AMBIENT' ? 0xc8955a : 0xe3e8ee) : TEMP_COLOR[t]);
+      // 입고 = 골판지 상자 색, 피킹·포장 작업자가 들고 가는 것 = 포장 봉투 색(흰 비닐·은색 보냉)
+      if (t) (b.material as THREE.MeshStandardMaterial).color.setHex(kind === 'inbound' || inboundAcc ? (t === 'AMBIENT' ? 0xc8955a : 0xe3e8ee) : BAG_COLOR[t]);
     });
   });
 

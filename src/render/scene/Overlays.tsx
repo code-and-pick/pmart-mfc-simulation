@@ -5,7 +5,7 @@ import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE, STATE_COLOR } from '../colors';
-import { boxTexture } from '../sprites';
+import { BAG_COLOR, bagGeometry, boxTexture } from '../sprites';
 import type { TemperatureZone } from '../../domain/contract';
 
 /** 상자 빛깔(사용자 2026-11-20 "입고구역 UI도 똑같이") — 골판지 무늬(boxTexture)와 곱해진다 */
@@ -55,9 +55,10 @@ export function Staged() {
     let n = 0;
     for (const s of sim.shipRack.all()) {
       if (n >= 96) break;
-      mtx.makeTranslation(s.slot.pos.x, s.slot.pos.y + 0.16, s.slot.pos.z);
+      // 포장 = 배달 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투") — 가로 0.26 · 높이 0.31
+      mtx.compose(new THREE.Vector3(s.slot.pos.x, s.slot.pos.y + 0.16, s.slot.pos.z), new THREE.Quaternion(), new THREE.Vector3(0.26, 0.26, 0.26));
       m.setMatrixAt(n, mtx);
-      m.setColorAt(n, col.setHex(BOX_TINT[s.pkg.temperatureZone]));
+      m.setColorAt(n, col.setHex(BAG_COLOR[s.pkg.temperatureZone]));
       n++;
     }
     m.count = n;
@@ -65,9 +66,8 @@ export function Staged() {
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, 96]} count={0} frustumCulled={false}>
-      <boxGeometry args={[0.26, 0.32, 0.26]} />
-      <meshStandardMaterial roughness={0.6} map={boxTexture()} />
+    <instancedMesh ref={mesh} args={[bagGeometry(), undefined, 96]} count={0} frustumCulled={false}>
+      <meshStandardMaterial roughness={0.35} metalness={0.05} />
     </instancedMesh>
   );
 }

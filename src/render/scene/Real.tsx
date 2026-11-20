@@ -4,7 +4,7 @@ import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
-import { boxTexture } from '../sprites';
+import { BAG_COLOR, bagGeometry, boxTexture } from '../sprites';
 import { SCENE } from '../colors';
 import { useApp } from '../../app/context';
 import type { StockWorkState, TaskState } from '../../domain/contract';
@@ -148,6 +148,8 @@ const MAX_BOXES = 16000;
 /** 선반 칸 하나에 그리는 최대 개수 — 넘으면 이 수까지만 보이고 라벨 없이 둔다 */
 /** 선반 밖 자리 한 곳에 그리는 최대 개수 */
 const PER_POINT_CAP = 48;
+/** 봉투(포장분) 최대 개수 */
+const MAX_BAGS = 400;
 const WORK_COLOR: Record<StockWorkState, number> = {
   STORED: 0xffffff, // 선반 STORED 는 온도대 색을 쓴다
   PICKED: 0xfbbc04,
@@ -176,6 +178,7 @@ const CARTON_UNITS = 6;
 export function RealStock() {
   const { sim, registry } = useApp();
   const mesh = useRef<THREE.InstancedMesh>(null!);
+  const bagMesh = useRef<THREE.InstancedMesh>(null!);
   // 상자 번호 → 칸 위치 코드(누르면 그 칸 상품 정보)
   const cellOf = useRef<(string | null)[]>([]);
   useEffect(() => {
@@ -212,6 +215,8 @@ export function RealStock() {
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color();
     let n = 0;
+    const bm = bagMesh.current;
+    let b = 0;
 
     const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number }>();
     cellOf.current = [];
@@ -290,6 +295,19 @@ export function RealStock() {
       const S = g.table ? 0.2 : 0.34;
       let i = 0;
       for (const [ws, qty] of g.by) {
+        if (ws === 'PACKED') {
+          // 포장분 = 배달 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투에 패킹하는데?") — 낱개 CARTON_UNITS 개당 봉투 1개, 한 줄 4개씩
+          const bags = Math.max(1, Math.ceil(qty / CARTON_UNITS));
+          for (let q = 0; q < bags && b < MAX_BAGS; q++) {
+            const c = q % 4;
+            const l = Math.floor(q / 4);
+            mtx.compose(new THREE.Vector3(g.x + (c - 1.5) * 0.27, baseY + 0.16 + l * 0.33, g.z), quat, sc.set(0.24, 0.24, 0.24));
+            bm.setMatrixAt(b, mtx);
+            bm.setColorAt(b, col.setHex(BAG_COLOR.AMBIENT));
+            b++;
+          }
+          continue;
+        }
         const cartons = Math.max(1, Math.ceil(qty / CARTON_UNITS));
         for (let q = 0; q < cartons && i < PER_POINT_CAP && n < MAX_BOXES; q++, i++) {
           const c = i % 3;
@@ -306,6 +324,9 @@ export function RealStock() {
     m.count = n;
     m.instanceMatrix.needsUpdate = true;
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
+    bm.count = b;
+    bm.instanceMatrix.needsUpdate = true;
+    if (bm.instanceColor) bm.instanceColor.needsUpdate = true;
     // 클릭 판정(레이캐스트)은 경계 구를 먼저 본다 — 상자가 바뀌면 다시 계산(안 하면 처음 빈 구라 상자를 못 누름)
     m.computeBoundingSphere();
 
@@ -332,6 +353,9 @@ export function RealStock() {
       <instancedMesh ref={mesh} args={[undefined, undefined, MAX_BOXES]} count={0} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.65} map={boxTexture()} />
+      </instancedMesh>
+      <instancedMesh ref={bagMesh} args={[bagGeometry(), undefined, MAX_BAGS]} count={0} frustumCulled={false}>
+        <meshStandardMaterial roughness={0.35} metalness={0.05} />
       </instancedMesh>
       <primitive object={labels} />
     </>
