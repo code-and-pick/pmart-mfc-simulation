@@ -4,10 +4,11 @@ import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
 import * as THREE from 'three';
+import { boxTexture } from '../sprites';
+import { SCENE } from '../colors';
 import { useApp } from '../../app/context';
 import type { StockWorkState, TaskState } from '../../domain/contract';
 import { RACK_DEPTH, type Location } from '../../domain/layout';
-import { TEMP_COLOR } from '../colors';
 import { makeLabel } from '../sprites';
 import { dispatchText, dispatchView } from '../../sim/realBoard';
 
@@ -144,10 +145,9 @@ export function RealShipLabels() {
 
 const BOX = 0.1;
 const GAP = 0.02;
-// 센터 전체 재고(약 1만 개)를 그리므로 넉넉히 — 칸마다 PER_SLOT_CAP 까지
+// 센터 전체 재고를 그리므로 넉넉히 — 선반 칸은 상자 수(CARTON_UNITS 낱개당 1개)
 const MAX_BOXES = 16000;
 /** 선반 칸 하나에 그리는 최대 개수 — 넘으면 이 수까지만 보이고 라벨 없이 둔다 */
-const PER_SLOT_CAP = 40;
 /** 선반 밖 자리 한 곳에 그리는 최대 개수 */
 const PER_POINT_CAP = 48;
 const WORK_COLOR: Record<StockWorkState, number> = {
@@ -172,6 +172,9 @@ const WORK_KO: Record<StockWorkState, string> = {
  * - 출고가 출하 대기(READY)면 밀봉한 포장 내용만큼의 포장분(PACKED, 서버 위치 PAK-…)을 출하대기 랙 1에 그린다 — PDA 랙 스캔은 서버에
  *   가지 않아(BR-52 R20 OPEN) 서버 위치는 패킹대 그대로. 이름표에 "추정"으로 적는다
  */
+/** 선반 상자 하나가 나타내는 낱개 수 — 칸 수량을 상자 수로(그림) [시뮬] */
+const CARTON_UNITS = 6;
+
 export function RealStock() {
   const { sim, registry } = useApp();
   const mesh = useRef<THREE.InstancedMesh>(null!);
@@ -252,26 +255,32 @@ export function RealStock() {
       points.set(key, g);
     }
 
-    // 선반 칸: 앞(통로 쪽)부터 채운다
+    // 선반 칸: 낱개 작은 상자 대신 칸 크기에 맞춘 골판지 상자(참고 그림처럼 — 사용자 2026-11-20 "랙 확대한 모습인데 UI가 없어보여").
+    // 상자 수 = 칸 수량 ÷ CARTON_UNITS(올림, 있으면 최소 1), 칸에 들어가는 만큼(가로 cols × 단 layers)까지. 품질 보류분은 붉은 상자
+    const sc = new THREE.Vector3();
+    const quat = new THREE.Quaternion();
     for (const { loc, code, normal, held } of shelf.values()) {
-      const cols = Math.max(1, Math.floor((loc.slotW * 0.9) / (BOX + GAP)));
-      const rows = 3;
-      const layers = Math.max(1, Math.min(3, Math.floor((loc.levelH - 0.05) / (BOX + GAP))));
+      const cols = Math.max(1, Math.min(3, Math.floor((loc.slotW * 0.92) / 0.3)));
+      const layers = loc.levelH > 0.5 ? 2 : 1;
+      const cw = (loc.slotW * 0.92) / cols - 0.02;
+      const ch = Math.min(0.32, (loc.levelH - 0.08) / layers - 0.02);
+      const cd = RACK_DEPTH / 2 - 0.06;
       const rackCross = (loc.along === 'z' ? loc.shelf.x : loc.shelf.z) - (loc.face * RACK_DEPTH) / 4;
       const alongC = loc.along === 'z' ? loc.shelf.z : loc.shelf.x;
       const baseY = loc.shelf.y - 0.035;
-      const total = Math.min(PER_SLOT_CAP, normal + held, cols * rows * layers);
+      const want = (q0: number) => (q0 > 0 ? Math.max(1, Math.ceil(q0 / CARTON_UNITS)) : 0);
+      const nNormal = want(normal);
+      const total = Math.min(cols * layers, nNormal + want(held));
       for (let i = 0; i < total && n < MAX_BOXES; i++) {
         const c = i % cols;
-        const r = Math.floor(i / cols) % rows;
-        const l = Math.floor(i / (cols * rows));
-        const a = alongC + (c - (cols - 1) / 2) * (BOX + GAP);
-        const depth = 0.15 - r * (BOX + GAP); // 앞(+) → 뒤
-        const cross = rackCross + loc.face * depth;
-        const y = baseY + BOX / 2 + l * (BOX + 0.01);
-        mtx.makeTranslation(loc.along === 'z' ? cross : a, y, loc.along === 'z' ? a : cross);
+        const l = Math.floor(i / cols);
+        const a = alongC + (c - (cols - 1) / 2) * (cw + 0.02);
+        const cross = rackCross + loc.face * 0.02; // 칸 앞쪽 반(통로 쪽)에
+        const y = baseY + ch / 2 + l * (ch + 0.015);
+        sc.set(loc.along === 'z' ? cd : cw, ch, loc.along === 'z' ? cw : cd);
+        mtx.compose(new THREE.Vector3(loc.along === 'z' ? cross : a, y, loc.along === 'z' ? a : cross), quat, sc);
         m.setMatrixAt(n, mtx);
-        m.setColorAt(n, col.setHex(i < normal ? TEMP_COLOR[loc.temp] : 0xd93025));
+        m.setColorAt(n, col.setHex(i < nNormal ? SCENE.box : 0xd9826f));
         cellOf.current[n] = code;
         n++;
       }
@@ -286,7 +295,7 @@ export function RealStock() {
           const c = i % 4;
           const r = Math.floor(i / 4) % 4;
           const l = Math.floor(i / 16);
-          mtx.makeTranslation(g.x + (c - 1.5) * (BOX + GAP), baseY + BOX / 2 + l * (BOX + 0.01), g.z + (r - 1.5) * (BOX + GAP));
+          mtx.compose(new THREE.Vector3(g.x + (c - 1.5) * (BOX + GAP), baseY + BOX / 2 + l * (BOX + 0.01), g.z + (r - 1.5) * (BOX + GAP)), quat, sc.set(BOX, BOX, BOX));
           m.setMatrixAt(n, mtx);
           m.setColorAt(n, col.setHex(WORK_COLOR[ws]));
           n++;
@@ -320,8 +329,8 @@ export function RealStock() {
   return (
     <>
       <instancedMesh ref={mesh} args={[undefined, undefined, MAX_BOXES]} count={0} frustumCulled={false}>
-        <boxGeometry args={[BOX, BOX, BOX]} />
-        <meshStandardMaterial roughness={0.55} />
+        <boxGeometry args={[1, 1, 1]} />
+        <meshStandardMaterial roughness={0.65} map={boxTexture()} />
       </instancedMesh>
       <primitive object={labels} />
     </>

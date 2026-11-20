@@ -32,8 +32,9 @@ export const SCENE = {
   zoneTint: 0.14,
   rackPost: 0x1f73f0,
   rackBeam: 0xff9d2e,
-  rackDeck: 0xe6eaf0,
-  rackDivider: 0xd3d9e2,
+  /** 선반 판 — 그림의 나무 팔레트 빛 */
+  rackDeck: 0xe7cfa6,
+  rackDivider: 0x9aa6b8,
   /** 상자(갈색 골판지) — 상품마다 조금씩 다르게 */
   box: 0xe2b27a,
   /** 실서버 모드에서 수량을 모르는 시뮬레이터 상자 — 연회색(실제 재고처럼 보이지 않게) */

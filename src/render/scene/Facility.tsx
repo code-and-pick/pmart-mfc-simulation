@@ -237,7 +237,11 @@ function Racks({ L }: { L: Layout }) {
           }
           const a = (s - r.slotsPerLevel / 2) * slotW; // 칸 경계(랙 중심 기준)
           const p = new THREE.Vector3(r.along === 'x' ? r.cx + a : r.cx, y + 0.015 + dh / 2, r.along === 'x' ? r.cz : r.cz + a);
-          mtx.compose(p, q, r.along === 'x' ? new THREE.Vector3(0.008, dh, RACK_DEPTH * 0.96) : new THREE.Vector3(RACK_DEPTH * 0.96, dh, 0.008));
+          // 칸 경계는 앞 가로대 위 짧은 표시만(전엔 선반 깊이 전체 칸막이 — 확대하면 지느러미처럼 어지러웠다, 사용자 2026-11-20)
+          const front = (r.face * (RACK_DEPTH - 0.04)) / 2;
+          if (r.along === 'x') p.z += front;
+          else p.x += front;
+          mtx.compose(p, q, r.along === 'x' ? new THREE.Vector3(0.012, dh, 0.05) : new THREE.Vector3(0.05, dh, 0.012));
           dividers.current.setMatrixAt(di++, mtx);
         }
       }
