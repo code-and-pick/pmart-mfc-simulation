@@ -187,8 +187,8 @@ export function zoneTags(L: Layout): Tag[] {
       }
       out.push({ id: z.id, tex, pos: [(wall.x0 + wall.x1) / 2, big ? WALL_CARD_Y_BIG + (h - WALL_CARD_H_BIG) / 2 : WALL_CARD_Y, wall.face], rotX: 0, w, h });
     } else {
-      // 바닥에 눕힘 — 격리는 작게
-      let h = dim ? 0.55 : 0.9;
+      // 바닥에 눕힘 — 격리는 작게, 패킹은 크게(벽을 뺀 뒤 바닥 카드, 사용자 2026-11-21 "바닥에 붙은 패킹구역카드 사이즈 좀 키워줘")
+      let h = dim ? 0.55 : z.kind === 'PACKING' ? 1.8 : 0.9;
       let w = h * aspect;
       const room = (r.x1 - r.x0) * 0.85;
       if (w > room) {

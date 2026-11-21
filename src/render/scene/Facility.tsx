@@ -437,11 +437,12 @@ function ReturnIntake() {
   const text = `회수 반입${coming ? ` · 오는 중 ${coming}` : ''}${arrived ? ` · 반납 ${arrived}` : ''}`;
   return (
     <>
+      {/* 바닥보다 조금 짙은 회색 판(사용자 2026-11-21 "회수반입은 그냥 바닥보다 좀 더 짙은 색으로" — 전엔 초록, 뜻 없던 색) */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[p.x, 0.012, p.z]} receiveShadow>
         <planeGeometry args={[1.2, 1.2]} />
-        <meshStandardMaterial color={0x2e7d32} roughness={0.9} transparent opacity={0.9} />
+        <meshStandardMaterial color={0xb9bdc6} roughness={0.9} />
       </mesh>
-      <Label text={text} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(20,90,30,0.75)', screenPx: 14 }} />
+      <Label text={text} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(52,58,70,0.8)', screenPx: 14 }} />
       {arrived > 0 && (
         <mesh position={[p.x, 0.25, p.z]} castShadow>
           <boxGeometry args={[0.5, 0.5, 0.4]} />

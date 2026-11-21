@@ -1,7 +1,10 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
 import { RETURN_TABLE } from './Decor';
-import { RESERVE_CODE, placeShortName, WORK_SHORT } from '../../domain/placeName';
+import { RESERVE_CODE, placeShortName, reserveName, WORK_SHORT } from '../../domain/placeName';
+
+/** 팔레트 번호 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 … 크기도 전처럼") */
+const PALLET_LABEL = { size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 };
 import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
@@ -372,16 +375,30 @@ export function RealStock() {
             ? // 장바구니 옆 탁자 — 자리 이름(장바구니1) 대신 무엇인지(사용자 2026-11-20 "장바구니1은 테이블에 왜 있는데")
               [...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}개`).join(' · ')
             : RESERVE_CODE.test(code)
-              ? // 팔레트 번호(WR-16)는 팔레트 앞 번호판이 보인다 — 위에는 수량만
-                `${[...g.by.values()].reduce((a, q) => a + q, 0).toLocaleString()}개`
+              ? // 팔레트: 번호와 수량을 한 이름표로(BR-1 · 361개)
+                `${reserveName(code)} · ${[...g.by.values()].reduce((a, q) => a + q, 0).toLocaleString()}개`
               : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
-      const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
+      const pallet = RESERVE_CODE.test(code);
+      const s = pallet ? makeLabel(text, PALLET_LABEL) : makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       // 쌓인 상자 더미 위에(전엔 0.9 m — 더미에 묻혔다, 사용자 2026-11-20 "여기도 겹치는데")
       let cartons = 0;
       for (const [ws, q] of g.by) if (ws !== 'PACKED') cartons += Math.max(1, Math.ceil(q / CARTON_UNITS));
       const S = g.table ? 0.2 : 0.34;
       const layers = Math.ceil(Math.min(cartons, PER_POINT_CAP) / 9);
-      s.position.set(g.x, (g.table ? 0.9 : 0.02) + Math.max(0.9, layers * (S + 0.01) + 0.35), g.z);
+      if (pallet) {
+        // 팔레트는 상자 더미 바로 위에 붙여(아래 끝 = 더미 꼭대기) — 높이 띄우면 뒤 랙을 가렸다(사용자 2026-11-21 "BR1 식별값이랑 갯수가 박스보다 너무 위쪽에")
+        s.center.set(0.5, 0);
+        s.position.set(g.x, 0.16 + layers * (S + 0.01) + 0.08, g.z);
+      } else s.position.set(g.x, (g.table ? 0.9 : 0.02) + Math.max(0.9, layers * (S + 0.01) + 0.35), g.z);
+      labels.add(s);
+    }
+    // 빈 팔레트: 번호만 팔레트 바로 위에
+    for (const rs of sim.layout.reserves) {
+      const code = sim.reserveCode(rs);
+      if (!code || points.has(code)) continue;
+      const s = makeLabel(reserveName(code) ?? rs.id, PALLET_LABEL);
+      s.center.set(0.5, 0);
+      s.position.set((rs.rect.x0 + rs.rect.x1) / 2, 0.22, (rs.rect.z0 + rs.rect.z1) / 2);
       labels.add(s);
     }
   });

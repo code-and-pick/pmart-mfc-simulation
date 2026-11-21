@@ -221,8 +221,8 @@ export function Reserves() {
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
         <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
       </instancedMesh>
-      {/* 팔레트 번호(WR-16·BR-1·AR-1) — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK·실서버 둘 다 */}
-      {L.reserves.map((r) => (
+      {/* 팔레트 번호(WR-16·BR-1·AR-1) — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
+      {sim.mode !== 'http' && L.reserves.map((r) => (
         <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>

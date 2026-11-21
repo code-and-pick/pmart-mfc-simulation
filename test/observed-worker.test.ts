@@ -183,7 +183,8 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
     expect(w.hasCart).toBe(true); // 피킹한 카트를 끌고 옴
     await walk(sim, 120);
     const st = sim.backendPoint('PAK-A-02')!;
-    expect(Math.hypot(w.pos.x - st.x, w.pos.z - st.z)).toBeLessThan(0.5);
+    // 패킹대(탁자 깊이 0.8 m) 바로 앞 — 패킹 구역 벽을 뺀 뒤(2026-11-21) 길찾기 격자 끝점이 0.53 m 로 조금 달라짐
+    expect(Math.hypot(w.pos.x - st.x, w.pos.z - st.z)).toBeLessThan(0.6);
 
     // 배차 요청이 이미 있어도(피킹 전 요청 — fulfillment 0.14.0) PDA 는 ① 패킹대 → ② 카트부터 묻는다
     ship({ dispatchRequest: { estimatedReadyAt: '2026-11-17T02:00:00Z' } });
