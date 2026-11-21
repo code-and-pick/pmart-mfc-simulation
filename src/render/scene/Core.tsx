@@ -214,6 +214,15 @@ export function Picker() {
           if (code) best = { code, d };
           }
         }
+        // 보충재고 팔레트(입고창고 바닥·저온실) — 팔레트와 그 위 상자 더미 높이까지(사용자 2026-11-21 "냉장냉동 입고창고는 눌러도 수량이 안 나와")
+        for (const rs of sim.layout.reserves) {
+          box.set(new THREE.Vector3(rs.rect.x0, 0, rs.rect.z0), new THREE.Vector3(rs.rect.x1, 1.6, rs.rect.z1));
+          if (!raycaster.ray.intersectBox(box, hitP)) continue;
+          const d = hitP.distanceTo(raycaster.ray.origin);
+          if (d < camera.near || (best && d >= best.d)) continue;
+          const code = sim.reserveCode(rs);
+          if (code) best = { code, d };
+        }
         if (best) {
           // 멀면 구역 위에서, 가까우면 그 칸 정면(controller.clickCell)
           controller.clickCell(best.code, camera.position.distanceTo(registry.controls?.target ?? new THREE.Vector3()));

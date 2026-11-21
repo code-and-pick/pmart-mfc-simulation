@@ -14,6 +14,8 @@ const TEMP: Record<string, string> = { A: '', C: '냉장 ', F: '냉동 ' };
 /** CRT-A-01 → 장바구니1, PAK-C-01 → 냉장 포장대1, RCV-DOCK → 하차장. 모르는 코드는 그대로 */
 export function placeShortName(code: string): string {
   if (code === 'RCV-DOCK') return '하차장';
+  const r = reserveName(code);
+  if (r) return r;
   const m = /^([A-Z]{3})-([ACF])(?:-0*(\d+))?$/.exec(code);
   if (!m || !PLACE[m[1]]) return code;
   return `${TEMP[m[2]]}${PLACE[m[1]]}${m[3] ?? ''}`;
@@ -27,3 +29,15 @@ export const WORK_SHORT: Record<string, string> = {
   CANCEL_RETURN_PENDING: '재진열 대기',
   UNSTOWED: '적치 전',
 };
+
+/** 보충재고 팔레트 칸(`{A|C|F}-R1-NN-1-01`, mfc-location 0.9.0 reserveStock) — 상온은 입고창고 바닥, 냉장·냉동은 저온실 안 */
+export const RESERVE_CODE = /^([ACF])-R1-(\d+)-1-01$/;
+
+/** A-R1-03-1-01 → 입고창고 팔레트3, C-R1-01-1-01 → 냉장 보충재고1. 보충재고 칸이 아니면 null
+ *  (사용자 2026-11-21 "BR-1 WR-16 이런 애들은 클릭해도 수량도 안나오고" — 평면 안쪽 이름 대신) */
+export function reserveName(code: string): string | null {
+  const m = RESERVE_CODE.exec(code);
+  if (!m) return null;
+  const n = Number(m[2]);
+  return m[1] === 'A' ? `입고창고 팔레트${n}` : `${m[1] === 'C' ? '냉장' : '냉동'} 보충재고${n}`;
+}

@@ -1,6 +1,6 @@
 // 실서버 구역 재고 — 구역 → 랙 → 단 → 칸(상품·수량). 센터 전체 재고(inventory 0.33.0 stock-units, R-15)를 평면 칸에 맞춰 센다.
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
-import { WORK_SHORT } from '../domain/placeName';
+import { WORK_SHORT, reserveName } from '../domain/placeName';
 import { useEffect, useState } from 'react';
 import { useApp, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
@@ -8,8 +8,8 @@ import type { TemperatureZone } from '../domain/contract';
 const QUALITY_KO: Record<string, string> = { NORMAL: '정상', QUARANTINED: '격리', PENDING: '판정 전' };
 const WORK_KO: Record<string, string> = WORK_SHORT;
 
-/** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량 */
-function CellCard({ code }: { code: string }) {
+/** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량. 보충재고 팔레트도 같은 카드 */
+export function CellCard({ code }: { code: string }) {
   const { sim, controller } = useApp();
   const rows = sim.board!.fullStock.filter((u) => u.locationCode === code);
   const loc = sim.backendLocation(code);
@@ -20,7 +20,7 @@ function CellCard({ code }: { code: string }) {
       <div className="cc-h">
         <b>{code}</b>
         <span>
-          {rack ? `${rack.group}-${String(rack.rackNo).padStart(2, '0')} · ${loc!.level}단` : ''} · {total}개
+          {rack ? `${rack.group}-${String(rack.rackNo).padStart(2, '0')} · ${loc!.level}단` : (reserveName(code) ?? '')} · {total}개
         </span>
         <button className="place-x" onClick={() => controller.focusCell(null)} aria-label="닫기">
           ✕
@@ -97,7 +97,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   ];
   return (
     <div className="zst">
-      {view.cellFocus && sim.backendLocation(view.cellFocus)?.temp === temp && <CellCard code={view.cellFocus} />}
+      {view.cellFocus && (sim.backendLocation(view.cellFocus) ?? sim.backendReserve(view.cellFocus))?.temp === temp && <CellCard code={view.cellFocus} />}
       <div className="stats four">
         {stats.map(([k, v]) => (
           <div key={k} className="stat">
@@ -127,6 +127,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
           </div>
         </>
       )}
+      {temp !== 'AMBIENT' && <ReservePallets temp={temp} />}
       <div className="zst-h">
         <span>랙별</span>
         <span>{loaded ? `${new Date(real.fullStockReadMs).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })} 기준` : '읽는 중'}</span>
@@ -183,6 +184,57 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/** 보충재고 팔레트 목록 — 자리마다 상품 종류·수량, 누르면 그 팔레트 카드(사용자 2026-11-21 "BR-1 WR-16 이런 애들은 클릭해도 수량도 안나오고") */
+export function ReservePallets({ temp }: { temp: TemperatureZone }) {
+  const { sim, controller } = useApp();
+  const view = useView();
+  const real = sim.board!;
+  const spots = sim.layout.reserves.filter((r) => r.temp === temp);
+  const rows = spots.map((rs) => {
+    const code = sim.reserveCode(rs) ?? rs.id;
+    const units = real.fullStock.filter((u) => u.locationCode === code && u.qty > 0);
+    return { code, qty: units.reduce((a, u) => a + u.qty, 0), skus: new Set(units.map((u) => u.sku)).size };
+  });
+  const used = rows.filter((r) => r.qty > 0);
+  return (
+    <>
+      <div className="zst-h">
+        <span>{temp === 'AMBIENT' ? '입고창고 팔레트' : '보충재고 팔레트'}</span>
+        <span>
+          {used.length}/{rows.length}자리 · {used.reduce((a, r) => a + r.qty, 0).toLocaleString()}개
+        </span>
+      </div>
+      <div className="zst-pallets">
+        {rows.map((r) => (
+          <button
+            key={r.code}
+            className={`zst-pal ${r.qty ? '' : 'empty'} ${view.cellFocus === r.code ? 'on' : ''}`}
+            onClick={() => controller.focusCell(r.code)}
+            title={r.code}
+          >
+            <span className="nm">{(reserveName(r.code) ?? r.code).replace(/^.*?(\d+)$/, '$1')}</span>
+            <b>{r.qty ? r.qty.toLocaleString() : '—'}</b>
+            {r.qty > 0 && <span className="k">{r.skus}종</span>}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+/** 입고창고 구역 패널(실서버) — 상온 보충재고 팔레트 */
+export function RealReserveStore() {
+  const { sim } = useApp();
+  const view = useView();
+  const focused = view.cellFocus && sim.backendReserve(view.cellFocus)?.temp === 'AMBIENT' ? view.cellFocus : null;
+  return (
+    <div className="zst">
+      {focused && <CellCard code={focused} />}
+      <ReservePallets temp="AMBIENT" />
     </div>
   );
 }

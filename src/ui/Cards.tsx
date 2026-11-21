@@ -7,7 +7,7 @@ import type { TemperatureZone } from '../domain/contract';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import { INBOUND_KO, STATE_KO, TEMP_KO } from './text';
 import { Barcode } from './Barcode';
-import { RealZoneStock } from './ZoneStock';
+import { RealReserveStore, RealZoneStock } from './ZoneStock';
 import { BACKEND_FACTS } from '../config';
 
 function Stat({ v, k }: { v: ReactNode; k: string }) {
@@ -84,6 +84,7 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
       </>
     );
   }
+  if (zoneKey === 'WH' && s.board) return <RealReserveStore />;
   if (zoneKey === 'WH') {
     const res = s.layout.reserves.filter((r) => r.temp === 'AMBIENT');
     const units = inv ? s.catalog.filter((k) => k.temp === 'AMBIENT').reduce((a, k) => a + inv.get(k.sku)!.reserve, 0) : 0;

@@ -1,7 +1,7 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
 import { RETURN_TABLE } from './Decor';
-import { placeShortName, WORK_SHORT } from '../../domain/placeName';
+import { RESERVE_CODE, placeShortName, WORK_SHORT } from '../../domain/placeName';
 import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
 import { useMemo, useRef, useEffect } from 'react';
@@ -224,8 +224,9 @@ export function RealStock() {
       if (skuTemp.has(u.sku)) continue;
       if (isTemp(u.temperatureZone)) skuTemp.set(u.sku, u.temperatureZone);
       else {
-        const l = sim.backendLocation(u.locationCode);
-        if (l) skuTemp.set(u.sku, l.temp);
+        // 선반 칸이 아니면 보충재고 팔레트의 온도대(재고 줄에 온도대가 빠진 것 — 사용자 2026-11-21 "입고창고 상품 박스 색은 온도별 색이 적용이 안 된")
+        const t = sim.backendLocation(u.locationCode)?.temp ?? sim.backendReserve(u.locationCode)?.temp;
+        if (t) skuTemp.set(u.sku, t);
       }
     }
     for (const u0 of real.stockUnits()) {
@@ -358,6 +359,16 @@ export function RealStock() {
       s.material.dispose();
       labels.remove(s);
     }
+    // 빈 보충재고 팔레트에도 자리 번호(평면 안쪽 이름 BR-1·WR-16 대신 — 사용자 2026-11-21)
+    for (const rs of sim.layout.reserves) {
+      const code = sim.reserveCode(rs);
+      if (!code || points.has(code)) continue;
+      // 빈 자리는 번호만 작게(24자리 이름이 줄줄이 겹치지 않게) — 수량 있는 자리는 아래에서 이름·수량
+      const s = makeLabel(placeShortName(code).replace(/^(입고창고|냉장|냉동) /, ''), { size: 30, bg: 'rgba(255,255,255,0.85)', color: '#7a8296', screenPx: 13 });
+      s.position.set((rs.rect.x0 + rs.rect.x1) / 2, 0.6, (rs.rect.z0 + rs.rect.z1) / 2);
+      s.userData.prio = 0;
+      labels.add(s);
+    }
     for (const [code, g] of points) {
       // 출하대기 랙은 랙 말풍선이 포장 수·주문을 보인다 — 같은 자리에 글을 또 띄우면 랙 번호판·구역 이름과 겹친다(사용자 2026-11-20 "겹쳐진 거 그대로")
       if (code.startsWith('DSP-')) continue;
@@ -367,7 +378,9 @@ export function RealStock() {
           : code.startsWith('CRT-') || code.startsWith('RCV-')
             ? // 장바구니 옆 탁자 — 자리 이름(장바구니1) 대신 무엇인지(사용자 2026-11-20 "장바구니1은 테이블에 왜 있는데")
               [...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}개`).join(' · ')
-            : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
+            : RESERVE_CODE.test(code)
+              ? `${placeShortName(code)} · ${[...g.by.values()].reduce((a, q) => a + q, 0).toLocaleString()}개`
+              : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       // 쌓인 상자 더미 위에(전엔 0.9 m — 더미에 묻혔다, 사용자 2026-11-20 "여기도 겹치는데")
       let cartons = 0;

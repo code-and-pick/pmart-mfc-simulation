@@ -8,5 +8,8 @@ describe('placeShortName', () => {
     expect(placeShortName('PAK-C-01')).toBe('냉장 포장대1');
     expect(placeShortName('RCV-DOCK')).toBe('하차장');
     expect(placeShortName('A-C1-01-1-01')).toBe('A-C1-01-1-01');
+    expect(placeShortName('A-R1-03-1-01')).toBe('입고창고 팔레트3');
+    expect(placeShortName('C-R1-01-1-01')).toBe('냉장 보충재고1');
+    expect(placeShortName('F-R1-12-1-01')).toBe('냉동 보충재고12');
   });
 });

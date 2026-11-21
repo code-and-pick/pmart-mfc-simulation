@@ -131,7 +131,10 @@ export class ViewController extends Emitter {
     this.cellFocus = code;
     if (code) {
       const loc = this.sim.backendLocation(code);
-      const key = loc ? (loc.temp === 'FROZEN' ? 'A' : loc.temp === 'CHILLED' ? 'B' : 'C-H') : null;
+      // 보충재고 팔레트: 냉동·냉장은 그 저온 구역, 상온은 입고창고(사용자 2026-11-21 "냉장냉동 입고창고는 눌러도 수량이 안 나와")
+      const rs = loc ? null : this.sim.backendReserve(code);
+      const temp = loc?.temp ?? rs?.temp;
+      const key = !temp ? null : temp === 'FROZEN' ? 'A' : temp === 'CHILLED' ? 'B' : rs ? 'WH' : 'C-H';
       if (key) this.focusedZone = key;
       this.leftView = 'zone';
     }
@@ -278,6 +281,11 @@ export class ViewController extends Emitter {
       }
       this.rememberHome();
       this.focusLocation(loc);
+    } else {
+      // 보충재고 팔레트: 멀면 그 구역 위로 옮기고, 가깝든 멀든 칸 카드(수량)를 바로 띄운다
+      const rs = this.sim.backendReserve(code);
+      const key = rs ? (rs.temp === 'FROZEN' ? 'A' : rs.temp === 'CHILLED' ? 'B' : 'WH') : null;
+      if (key && key !== this.focusedZone && camDist > this.zoneDist(key) * 1.25) this.focusZone(key);
     }
     this.focusCell(code);
   }

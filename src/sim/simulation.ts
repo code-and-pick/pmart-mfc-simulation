@@ -1695,6 +1695,17 @@ export class Simulation {
     return null;
   }
 
+  /** 백엔드 보충재고 칸(`{A|C|F}-R1-NN-1-01`) → 평면 팔레트 자리. 아니면 null */
+  backendReserve(code: string): ReserveSpot | null {
+    const sim = this.codes.toSim(code);
+    return sim ? (this.reserveMap.get(sim) ?? null) : null;
+  }
+
+  /** 평면 팔레트 자리 → 백엔드 보충재고 칸 코드 */
+  reserveCode(spot: ReserveSpot): string | null {
+    return this.codes.toBackend(spot.id) ?? null;
+  }
+
   /** 백엔드 위치 코드 → 평면의 선반 칸 (실서버 관찰 표시용). 평면에 없는 위치면 null */
   backendLocation(code: string): Location | null {
     const sim = this.codes.toSim(code);
