@@ -84,7 +84,8 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
       </>
     );
   }
-  if (zoneKey === 'WH' && s.board) return <RealReserveStore />;
+  // 실서버만 — MOCK 보충재고는 칸 단위 재고(fullStock)에 없어 아래 MOCK 요약으로
+  if (zoneKey === 'WH' && s.board && !s.mock) return <RealReserveStore />;
   if (zoneKey === 'WH') {
     const res = s.layout.reserves.filter((r) => r.temp === 'AMBIENT');
     const units = inv ? s.catalog.filter((k) => k.temp === 'AMBIENT').reduce((a, k) => a + inv.get(k.sku)!.reserve, 0) : 0;

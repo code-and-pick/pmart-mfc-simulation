@@ -1,6 +1,7 @@
 // MOCK 모드 화면용 읽기 — 실서버 화면(실제 주문 카드·구역 재고·바코드·자리 거르기)을 MOCK 에서도 확인하게(사용자 2026-11-20 "목업엔 적용이 안 되는 것 같네. 더미값이라도").
 // MockBackend 의 작업·출고를 그대로 읽고, MOCK 에 없는 것(주문번호·가격·배송지·요청사항·LOT·센터 이름·배송)은 [더미] 값을 만든다.
 // 실서버 동작을 대신하지 않는다 — 화면 확인용. 만든 값은 docs/backend-requests.md "시뮬레이터가 정한 값"에 적는다.
+import { workerShortName } from '../../domain/workerName';
 import type { RealReader } from '../../sim/realBoard';
 import type {
   CapacityWorker,
@@ -78,7 +79,7 @@ export class MockReader implements RealReader {
     return this.withTimes(this.withNo(d));
   }
   async listWorkers(): Promise<CapacityWorker[]> {
-    return this.world.workers().map((w) => ({ mfcId: '', workerId: w.id, displayName: `가상 점원 ${w.id}`, state: 'ACTIVE' as const }));
+    return this.world.workers().map((w) => ({ mfcId: '', workerId: w.id, displayName: workerShortName(w.id), state: 'ACTIVE' as const }));
   }
   async getCenterStock(_mfcId: string, sku: string): Promise<CenterStock> {
     const units = this.world

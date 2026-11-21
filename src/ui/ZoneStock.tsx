@@ -109,7 +109,8 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
         ))}
       </div>
       {real.fullStockError && <div className="note warn">재고를 못 읽음 — 다음 조회에서 다시</div>}
-      {loaded && catRows.length > 0 && (
+      {/* MOCK 은 카테고리 서버가 없어 "분류 읽는 중"에 머문다 — 실서버만 */}
+      {loaded && !sim.mock && catRows.length > 0 && (
         <>
           <div className="zst-h">
             <span>카테고리별</span>
@@ -129,7 +130,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
           </div>
         </>
       )}
-      {temp !== 'AMBIENT' && <ReservePallets temp={temp} />}
+      {temp !== 'AMBIENT' && !sim.mock && <ReservePallets temp={temp} />}
       <div className="zst-h">
         <span>랙별</span>
         <span>{loaded ? `${new Date(real.fullStockReadMs).toLocaleTimeString('ko-KR', { hour: 'numeric', minute: '2-digit' })} 기준` : '읽는 중'}</span>

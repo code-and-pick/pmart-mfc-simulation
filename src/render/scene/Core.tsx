@@ -215,7 +215,8 @@ export function Picker() {
           }
         }
         // 보충재고 팔레트(입고창고 바닥·저온실) — 팔레트와 그 위 상자 더미 높이까지(사용자 2026-11-21 "냉장냉동 입고창고는 눌러도 수량이 안 나와")
-        for (const rs of sim.layout.reserves) {
+        // 실서버만 — MOCK 보충재고는 칸 카드에 나올 칸 단위 재고가 없다
+        for (const rs of sim.real ? sim.layout.reserves : []) {
           box.set(new THREE.Vector3(rs.rect.x0, 0, rs.rect.z0), new THREE.Vector3(rs.rect.x1, 1.6, rs.rect.z1));
           if (!raycaster.ray.intersectBox(box, hitP)) continue;
           const d = hitP.distanceTo(raycaster.ray.origin);

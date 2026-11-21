@@ -4,6 +4,28 @@
 // 상세를 다시 읽어 확정된 최종 상태를 받기 전까지 "확인 중"으로 둔다.
 
 import { ApiProblem, CategoryNode } from '../domain/contract';
+import { REAL_LINK } from '../config';
+
+const CAT_SKU_BATCH = REAL_LINK.categorySkuBatch;
+const CAT_BACKOFF_MS = REAL_LINK.categoryBackoffSec * 1000;
+const SKU_CONCURRENCY = REAL_LINK.skuConcurrency;
+/** SKU → 상품 ID 를 탭 세션에 남겨 새로고침 때 다시 묻지 않는다(토큰 아님 — sessionStorage, 없거나 막히면 그냥 넘어감) */
+const SKU_PRODUCT_KEY = 'pmart-sim:sku-product';
+function loadSkuProducts(): Map<string, string | null> {
+  try {
+    const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SKU_PRODUCT_KEY) : null;
+    return new Map(raw ? (JSON.parse(raw) as [string, string | null][]) : []);
+  } catch {
+    return new Map();
+  }
+}
+function saveSkuProducts(m: Map<string, string | null>): void {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SKU_PRODUCT_KEY, JSON.stringify([...m]));
+  } catch {
+    /* 저장 못 하면 다음에 다시 묻는다 */
+  }
+}
 import type {
   OrderFulfillmentView,
   EmployeeLabel,
@@ -413,9 +435,10 @@ export class RealBoard {
   categoryVersion = 0;
   private catReadMs = 0;
   private catBusy = false;
+  private catBackoffUntil = 0;
   private catTree = new Map<string, CategoryNode>();
   private productCat = new Map<string, string>();
-  private skuProduct = new Map<string, string | null>();
+  private skuProduct = loadSkuProducts();
 
   private topName(categoryId: string): string {
     const n = this.catTree.get(categoryId);
@@ -430,7 +453,7 @@ export class RealBoard {
     if (this.catBusy || !this.reader.getCategoryTree || !this.reader.listProductCategories || !this.fullStock.length) return;
     const fresh = now - this.catReadMs > 600_000;
     const unknown = [...new Set(this.fullStock.map((u) => u.sku))].filter((k) => !this.skuProduct.has(k));
-    if (!fresh && !unknown.length) return;
+    if (!fresh && (!unknown.length || now < this.catBackoffUntil)) return;
     this.catBusy = true;
     try {
       if (fresh) {
@@ -438,16 +461,24 @@ export class RealBoard {
         this.catTree = new Map((await this.reader.getCategoryTree()).map((n) => [n.categoryId, n]));
         this.productCat = await this.reader.listProductCategories(60);
       }
-      // 실패한 SKU 는 비워 두고 다음 조회에서 다시(한 번에 4개씩, 한 번에 최대 120개)
-      const todo = unknown.slice(0, 120);
-      for (let i = 0; i < todo.length; i += 4) {
+      // 실패한 SKU 는 비워 두고 다음 조회에서 다시. 한 번에 2개씩, 한 번에 최대 CAT_SKU_BATCH 개, 속도 제한(429)이 오면 그 회차는 멈추고
+      // CAT_BACKOFF_MS 뒤에 — 4개씩 120개를 몰아 보내 게이트웨이 429 가 쏟아졌다(2026-11-21 점검, 화면 위 "429 RATE_LIMITED")
+      const todo = now < this.catBackoffUntil ? [] : unknown.slice(0, CAT_SKU_BATCH);
+      let limited = false;
+      for (let i = 0; i < todo.length && !limited; i += 2) {
         await Promise.all(
-          todo.slice(i, i + 4).map(async (k) => {
-            const s = await this.reader.getSku(k).catch(() => undefined);
-            if (s) this.skuProduct.set(k, s.productId ?? null);
+          todo.slice(i, i + 2).map(async (k) => {
+            try {
+              const s = await this.skuCall(k);
+              if (s) this.skuProduct.set(k, s.productId ?? null);
+            } catch (e) {
+              if (/^429/.test(e instanceof Error ? e.message : '')) limited = true;
+            }
           }),
         );
       }
+      if (limited) this.catBackoffUntil = now + CAT_BACKOFF_MS;
+      saveSkuProducts(this.skuProduct);
       for (const [sku, pid] of this.skuProduct) {
         const c = pid ? this.productCat.get(pid) : undefined;
         this.skuCategory.set(sku, c ? this.topName(c) : '기타');
@@ -572,11 +603,39 @@ export class RealBoard {
     for (const sku of skus) {
       if (this.skuBarcodes.has(sku)) continue;
       this.skuBarcodes.set(sku, 'LOADING');
-      this.reader
-        .getSku(sku)
+      this.skuCall(sku)
         .then((d) => this.skuBarcodes.set(sku, d.barcodes ?? []))
         .catch(() => this.skuBarcodes.set(sku, 'ERR'))
         .finally(() => this.skuVersion++);
+    }
+  }
+
+  // ── 상품(SKU) 조회 줄 — 바코드·카테고리가 같이 쓴다. 동시에 SKU_CONCURRENCY 개까지, 429 면 CAT_BACKOFF_MS 동안 새로 보내지 않음
+  //    (한꺼번에 수백 건을 보내 게이트웨이 429 가 쏟아졌다, 2026-11-21 점검). 받은 상품 ID 는 카테고리 쪽에도 남긴다.
+  private skuActive = 0;
+  private skuWait: (() => void)[] = [];
+  private skuPauseUntil = 0;
+  private skuLastAt = 0;
+  private async skuCall(sku: string): Promise<SkuBarcodes> {
+    while (this.skuActive >= SKU_CONCURRENCY) await new Promise<void>((r) => this.skuWait.push(r));
+    this.skuActive++;
+    // 쉬는 중(429)이거나 직전 조회와 간격이 짧으면 기다린다 — 자리(skuActive)를 잡은 채로 기다려 줄 선 것들이 한꺼번에 나가지 않게
+    for (;;) {
+      const wait = Math.max(this.skuPauseUntil - Date.now(), this.skuLastAt + REAL_LINK.skuMinGapMs - Date.now());
+      if (wait <= 0) break;
+      await new Promise((r) => setTimeout(r, wait));
+    }
+    this.skuLastAt = Date.now();
+    try {
+      const d = await this.reader.getSku(sku);
+      this.skuProduct.set(sku, d.productId ?? null);
+      return d;
+    } catch (e) {
+      if (/^429/.test(e instanceof Error ? e.message : '')) this.skuPauseUntil = Date.now() + CAT_BACKOFF_MS;
+      throw e;
+    } finally {
+      this.skuActive--;
+      this.skuWait.shift()?.();
     }
   }
 
@@ -786,8 +845,9 @@ export class RealBoard {
       const ws = await this.reader.listWorkers(this.mfcId);
       this.workers.clear();
       for (const w of ws) this.workers.set(w.workerId, w);
-    } catch {
-      /* 이름 표시만 못 한다 — 작업 조회는 계속 */
+    } catch (e) {
+      // 이름 표시만 못 한다 — 작업 조회는 계속. 권한 없음(403)은 바로 안 풀리므로 10분 뒤에 다시(1분마다 403 이 쌓였다, 2026-11-21 점검)
+      if (/^403/.test(e instanceof Error ? e.message : '')) this.lastWorkersMs = this.nowMs() + 540_000;
     }
     // 이름·사번(hr 0.8.0) — 50개씩. 못 읽으면(다른 기기 조회 경로 밖 403 등) 사번(displayName)만
     if (this.reader.getEmployeeLabels && this.workers.size) {
