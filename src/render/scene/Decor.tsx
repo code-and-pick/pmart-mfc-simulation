@@ -387,15 +387,16 @@ export function StartMark({ x, z }: { x: number; z: number }) {
     // 표지판: 짙은 남회색 판 + 위 가는 하늘색 띠 + 흰 글(사용자 2026-11-21 "보라색 배경 말고 좀 더 세련되게") — 장면 이름표(남색 카드)와 같은 계열
     const c = document.createElement('canvas');
     // 사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아? 글자 크기가 좀 작아서 안 보여" — 따로 있던 "장바구니 거치대" 이름표를 합치고 판을 넓게
+    // → 두 줄 "장바구니 거치대 / 시작점", 시작점을 크게(사용자 2026-11-21)
     c.width = 1280;
-    c.height = 224;
+    c.height = 448;
     const g = c.getContext('2d')!;
-    const grd = g.createLinearGradient(0, 0, 0, 224);
+    const grd = g.createLinearGradient(0, 0, 0, 448);
     grd.addColorStop(0, '#2a3346');
     grd.addColorStop(1, '#1b2231');
     g.fillStyle = grd;
     g.beginPath();
-    g.roundRect(4, 4, 1272, 216, 26);
+    g.roundRect(4, 4, 1272, 440, 30);
     g.fill();
     g.strokeStyle = 'rgba(255,255,255,0.18)';
     g.lineWidth = 3;
@@ -403,10 +404,14 @@ export function StartMark({ x, z }: { x: number; z: number }) {
     g.fillStyle = '#5ec8f2';
     g.fillRect(48, 30, 1184, 9);
     g.fillStyle = '#ffffff';
-    g.font = '800 124px "Noto Sans KR", "Malgun Gothic", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText('장바구니 거치대 시작점', 640, 130);
+    g.fillStyle = 'rgba(255,255,255,0.85)';
+    g.font = '700 104px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    g.fillText('장바구니 거치대', 640, 130);
+    g.fillStyle = '#ffffff';
+    g.font = '900 196px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    g.fillText('시작점', 640, 315);
     startTex = new THREE.CanvasTexture(c);
     startTex.colorSpace = THREE.SRGBColorSpace;
     startTex.anisotropy = 4;
@@ -414,13 +419,14 @@ export function StartMark({ x, z }: { x: number; z: number }) {
   return (
     <group position={[x, 0, z + 0.4]}>
       {[-1.45, 1.45].map((dx) => (
-        <mesh key={dx} position={[dx, 0.6, -0.02]}>
-          <boxGeometry args={[0.03, 1.2, 0.03]} />
+        <mesh key={dx} position={[dx, 0.73, -0.02]}>
+          <boxGeometry args={[0.03, 1.46, 0.03]} />
           <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
         </mesh>
       ))}
-      <mesh position={[0, 1.18, 0]} raycast={() => null} userData={{ declutterBlock: true }}>
-        <planeGeometry args={[3.2, 0.56]} />
+      {/* 판 위끝은 예전(한 줄 판)과 같은 1.46 m, 아래로 늘림 — 사용자 2026-11-21 "아니 위치는 내려" */}
+      <mesh position={[0, 0.9, 0]} raycast={() => null} userData={{ declutterBlock: true }}>
+        <planeGeometry args={[3.2, 1.12]} />
         <meshBasicMaterial map={startTex} transparent toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
