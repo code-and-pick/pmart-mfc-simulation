@@ -283,7 +283,10 @@ describe('실제 PDA 작업자 표시(실서버 관찰)', () => {
       view.setScanShipment('ORD-1-S1');
       const rack = sim.backendPoint('DSP-A-01')!;
       const req = view.takeCameraRequest()!;
-      expect(Math.hypot(req.target.x - rack.x, req.target.z - rack.z)).toBeLessThan(0.01);
+      // 선반 밖 자리는 그 구역 보기 거리로(2026-11-21) — 카메라는 출하대기 구역 위, 노란 표시가 그 랙에
+      expect(view.focusedZone).toBe('SHIP');
+      expect(Math.hypot(req.target.x - rack.x, req.target.z - rack.z)).toBeLessThan(6);
+      expect(Math.hypot(view.marker!.x - rack.x, view.marker!.z - rack.z)).toBeLessThan(0.01);
       expect(view.follow).toBeNull();
     } finally {
       vi.useRealTimers();

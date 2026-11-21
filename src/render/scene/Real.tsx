@@ -392,6 +392,10 @@ export function RealStock() {
         // 팔레트는 상자 더미 바로 위에 붙여(아래 끝 = 더미 꼭대기) — 높이 띄우면 뒤 랙을 가렸다(사용자 2026-11-21 "BR1 식별값이랑 갯수가 박스보다 너무 위쪽에")
         s.center.set(0.5, 0);
         s.position.set(g.x, 0.16 + layers * (S + 0.01) + 0.08, g.z);
+      } else if (code.startsWith('CRT-')) {
+        // 재진열 대기(거치대 옆 탁자): 왼쪽 끝을 탁자 왼쪽에 두고 오른쪽으로 — 왼쪽 "장바구니 거치대" 이름표와 겹치지 않게, 같은 높이
+        s.center.set(0, 0.5);
+        s.position.set(g.x - 0.4, 1.8, g.z);
       } else s.position.set(g.x, (g.table ? 0.9 : 0.02) + Math.max(0.9, layers * (S + 0.01) + 0.35), g.z);
       labels.add(s);
     }

@@ -37,9 +37,10 @@ export function Box({
 }
 
 /** 라벨 스프라이트. 내용이 바뀌지 않는 라벨만 쓴다. */
-export function Label({ text, position, opts, noNudge }: { text: string; position: Vec3; opts: Parameters<typeof makeLabel>[1]; noNudge?: boolean }) {
+export function Label({ text, position, opts, noNudge, anchorX }: { text: string; position: Vec3; opts: Parameters<typeof makeLabel>[1]; noNudge?: boolean; anchorX?: number }) {
   const sprite = useMemo(() => {
     const s = makeLabel(text, opts);
+    if (anchorX !== undefined) s.center.x = anchorX; // 0 = 왼쪽 끝이 자리, 1 = 오른쪽 끝이 자리
     if (noNudge) {
       s.userData.noNudge = true; // 겹치면 비키지 말고 숨김(Declutter)
       s.userData.shrinkFar = true; // 멀면 작게
@@ -564,7 +565,9 @@ export function Facility() {
       <CartDepot x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
       <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
-      <Label text="장바구니 거치대" position={[L.points.cartDepot.x, 1.4, L.points.cartDepot.z - 0.6]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
+      {/* 옆 "재진열 대기" 이름표와 같은 크기·높이, 오른쪽 끝을 거치대 가운데 조금 오른쪽에 — 재진열 대기는 탁자에서 오른쪽으로 펼쳐져 서로 겹치지 않는다
+          (사용자 2026-11-21 "옆에 재진열대기는 가만히 있는데 장바구니 거치대 카드는 작고 계속 움직이잖아") */}
+      <Label text="장바구니 거치대" position={[L.points.cartDepot.x + 0.7, 1.8, L.points.cartDepot.z - 0.6]} opts={{ size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18, prio: 2 }} anchorX={1} />
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
     </>
   );
