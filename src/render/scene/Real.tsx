@@ -268,9 +268,11 @@ export function RealStock() {
         points.get(key) ??
         (crt
           ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map(), tz: new Map() }
-          : { x: p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map() });
+          : // 인계 랙: 서버 점은 랙의 첫 칸(왼쪽 끝) — 봉투는 랙 가운데 아래 칸에
+            { x: key.startsWith('DSP-') ? p.x + 0.45 : p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map() });
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);
-      if (u.workState !== 'PACKED') {
+      // 인계 랙(DSP-)에 남은 것은 포장된 봉투째(취소 주문의 재진열 대기 포함) — 상자로 그리지 않는다(사용자 2026-11-21 "인계랙 옆에 상자는 … 비닐봉투 포장으로")
+      if (u.workState !== 'PACKED' && !key.startsWith('DSP-')) {
         const tk = skuTemp.get(u.sku) ?? '?';
         g.tz.set(tk, (g.tz.get(tk) ?? 0) + u.qty);
       }
@@ -309,19 +311,20 @@ export function RealStock() {
     }
 
     // 선반 밖 자리(입고·검수 칸·카트·포장대 등): 골판지 상자로 쌓는다 — CARTON_UNITS 낱개당 1개, 3×3 한 층(MOCK 하차 칸처럼, 사용자 2026-11-20 "목업은 박스채로 옆 공간에 쌓아두던데")
-    for (const g of points.values()) {
-      const baseY = g.table ? 0.9 : 0.02;
+    for (const [code, g] of points) {
+      const baseY = g.table ? 0.9 : code.startsWith('DSP-') ? 0.22 : 0.02;
       const S = g.table ? 0.2 : 0.34;
       let i = 0;
       for (const [ws, qty] of g.by) {
-        if (ws !== 'PACKED') continue;
+        if (ws !== 'PACKED' && !code.startsWith('DSP-')) continue;
         {
           // 포장분 = 배달 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투에 패킹하는데?") — 낱개 CARTON_UNITS 개당 봉투 1개, 한 줄 4개씩
           const bags = Math.max(1, Math.ceil(qty / CARTON_UNITS));
           for (let q = 0; q < bags && b < MAX_BAGS; q++) {
             const c = q % 4;
             const l = Math.floor(q / 4);
-            mtx.compose(new THREE.Vector3(g.x + (c - 1.5) * 0.27, baseY + 0.16 + l * 0.33, g.z), quat, sc.set(0.24, 0.24, 0.24));
+            const row = Math.min(4, bags - l * 4); // 한 줄 봉투 수만큼 가운데 맞춤
+            mtx.compose(new THREE.Vector3(g.x + (c - (row - 1) / 2) * 0.27, baseY + 0.16 + l * 0.33, g.z), quat, sc.set(0.24, 0.24, 0.24));
             bm.setMatrixAt(b, mtx);
             bm.setColorAt(b, col.setHex(BAG_COLOR.AMBIENT));
             b++;
@@ -359,16 +362,6 @@ export function RealStock() {
       s.material.dispose();
       labels.remove(s);
     }
-    // 빈 보충재고 팔레트에도 자리 번호(평면 안쪽 이름 BR-1·WR-16 대신 — 사용자 2026-11-21)
-    for (const rs of sim.layout.reserves) {
-      const code = sim.reserveCode(rs);
-      if (!code || points.has(code)) continue;
-      // 빈 자리는 번호만 작게(24자리 이름이 줄줄이 겹치지 않게) — 수량 있는 자리는 아래에서 이름·수량
-      const s = makeLabel(placeShortName(code).replace(/^(입고창고|냉장|냉동) /, ''), { size: 30, bg: 'rgba(255,255,255,0.85)', color: '#7a8296', screenPx: 13 });
-      s.position.set((rs.rect.x0 + rs.rect.x1) / 2, 0.6, (rs.rect.z0 + rs.rect.z1) / 2);
-      s.userData.prio = 0;
-      labels.add(s);
-    }
     for (const [code, g] of points) {
       // 출하대기 랙은 랙 말풍선이 포장 수·주문을 보인다 — 같은 자리에 글을 또 띄우면 랙 번호판·구역 이름과 겹친다(사용자 2026-11-20 "겹쳐진 거 그대로")
       if (code.startsWith('DSP-')) continue;
@@ -379,7 +372,8 @@ export function RealStock() {
             ? // 장바구니 옆 탁자 — 자리 이름(장바구니1) 대신 무엇인지(사용자 2026-11-20 "장바구니1은 테이블에 왜 있는데")
               [...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}개`).join(' · ')
             : RESERVE_CODE.test(code)
-              ? `${placeShortName(code)} · ${[...g.by.values()].reduce((a, q) => a + q, 0).toLocaleString()}개`
+              ? // 팔레트 번호(WR-16)는 팔레트 앞 번호판이 보인다 — 위에는 수량만
+                `${[...g.by.values()].reduce((a, q) => a + q, 0).toLocaleString()}개`
               : `${placeShortName(code)} · ${[...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}`).join(' · ')}`;
       const s = makeLabel(text, { size: 36, bg: 'rgba(20,22,26,0.85)', screenPx: 18 });
       // 쌓인 상자 더미 위에(전엔 0.9 m — 더미에 묻혔다, 사용자 2026-11-20 "여기도 겹치는데")

@@ -1,6 +1,8 @@
 // 실서버 구역 재고 — 구역 → 랙 → 단 → 칸(상품·수량). 센터 전체 재고(inventory 0.33.0 stock-units, R-15)를 평면 칸에 맞춰 센다.
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
-import { WORK_SHORT, reserveName } from '../domain/placeName';
+import { WORK_SHORT, placeShortName, reserveName } from '../domain/placeName';
+
+const placeShortNameSafe = (code: string) => (reserveName(code) ? placeShortName(code) : '');
 import { useEffect, useState } from 'react';
 import { useApp, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
@@ -20,7 +22,7 @@ export function CellCard({ code }: { code: string }) {
       <div className="cc-h">
         <b>{code}</b>
         <span>
-          {rack ? `${rack.group}-${String(rack.rackNo).padStart(2, '0')} · ${loc!.level}단` : (reserveName(code) ?? '')} · {total}개
+          {rack ? `${rack.group}-${String(rack.rackNo).padStart(2, '0')} · ${loc!.level}단` : (placeShortNameSafe(code))} · {total}개
         </span>
         <button className="place-x" onClick={() => controller.focusCell(null)} aria-label="닫기">
           ✕
@@ -213,10 +215,10 @@ export function ReservePallets({ temp }: { temp: TemperatureZone }) {
           <button
             key={r.code}
             className={`zst-pal ${r.qty ? '' : 'empty'} ${view.cellFocus === r.code ? 'on' : ''}`}
-            onClick={() => controller.focusCell(r.code)}
+            onClick={() => controller.clickCell(r.code, 0)}
             title={r.code}
           >
-            <span className="nm">{(reserveName(r.code) ?? r.code).replace(/^.*?(\d+)$/, '$1')}</span>
+            <span className="nm">{reserveName(r.code) ?? r.code}</span>
             <b>{r.qty ? r.qty.toLocaleString() : '—'}</b>
             {r.qty > 0 && <span className="k">{r.skus}종</span>}
           </button>

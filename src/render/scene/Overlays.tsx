@@ -199,10 +199,11 @@ export function Declutter() {
         const g = (o as THREE.Mesh).geometry;
         if (!g.boundingBox) g.computeBoundingBox();
         box.copy(g.boundingBox!).applyMatrix4(o.matrixWorld);
-        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = false;
+        // 모서리가 하나라도 카메라 뒤면 화면 사각형이 뒤집혀 화면 전체를 덮는다(가까이 붙으면 이름표가 다 숨던 것, 2026-11-21) — 그 판은 빼고 본다
+        let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, front = true;
         for (let i = 0; i < 8; i++) {
           corner.set(i & 1 ? box.max.x : box.min.x, i & 2 ? box.max.y : box.min.y, i & 4 ? box.max.z : box.min.z).project(camera);
-          if (corner.z < 1) front = true;
+          if (corner.z >= 1) front = false;
           const px = ((corner.x + 1) / 2) * W;
           const py = ((1 - corner.y) / 2) * H;
           x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);

@@ -356,7 +356,7 @@ function DetailBody() {
     return (
       <>
         <div className="hd">
-          <b>{w.id} · 입고 PDA</b>
+          <b>{workerShortName(w.id)} · 입고 PDA</b>
           <span>
             <StateBadge color={INBOUND_COLOR[w.state]} text={INBOUND_KO[w.state]} /> {follow} {close}
           </span>

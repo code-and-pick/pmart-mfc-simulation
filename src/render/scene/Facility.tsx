@@ -424,7 +424,7 @@ function HighTurnover({ L }: { L: Layout }) {
 }
 
 /**
- * 회수(반품) 반입 자리 RTN-A-01 — 평면에 회수 구역이 없어 백엔드가 입고·검수 구역 안에 정한 자리.
+ * 회수(반품) 반입 자리 RTN-A-01 — 화면은 인계 구역(라이더가 들고 옴, 사용자 2026-11-21). 서버 좌표는 입고·검수 구역(config returnIntake 주석).
  * 실서버: 이 센터로 오는 회수 배송(고객 반품·오배송 회수, delivery-dispatch 0.5.0) 수 — 오는 중 / 반납됨.
  */
 function ReturnIntake() {

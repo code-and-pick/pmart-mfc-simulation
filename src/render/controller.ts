@@ -33,6 +33,9 @@ export function zoneViews(L: Layout): ZoneView[] {
 }
 
 /** useSyncExternalStore 로 구독할 수 있는 작은 변경 알림. */
+/** 팔레트를 누를 때 카메라 거리(m) — 지금 거리가 max 보다 멀면 max 로, min 보다 가까우면 min 으로, 내려다보는 각은 minElevDeg 이상 [시뮬] */
+const RESERVE_VIEW_DIST = { min: 6, max: 9, minElevDeg: 55 };
+
 export class Emitter {
   private readonly listeners = new Set<() => void>();
   private version = 0;
@@ -282,10 +285,29 @@ export class ViewController extends Emitter {
       this.rememberHome();
       this.focusLocation(loc);
     } else {
-      // 보충재고 팔레트: 멀면 그 구역 위로 옮기고, 가깝든 멀든 칸 카드(수량)를 바로 띄운다
+      // 보충재고 팔레트: 그 팔레트 앞(꺼내는 통로 쪽) 비스듬히 위로 다가가고 칸 카드(수량)를 띄운다
+      // (사용자 2026-11-21 "입고 박스 클릭해도 좀 가까이 다가가지게 해줘")
       const rs = this.sim.backendReserve(code);
-      const key = rs ? (rs.temp === 'FROZEN' ? 'A' : rs.temp === 'CHILLED' ? 'B' : 'WH') : null;
-      if (key && key !== this.focusedZone && camDist > this.zoneDist(key) * 1.25) this.focusZone(key);
+      if (rs) {
+        this.rememberHome();
+        this.follow = null;
+        // 보던 방향은 그대로 두고(돌리지 않음) 팔레트를 가운데로, 거리만 줄인다 — 너무 붙지 않게 RESERVE_VIEW_DIST(사용자 2026-11-21 "너무 가까이 가지고 쳐다보던 방향도 돌려버리네")
+        const c = new THREE.Vector3((rs.rect.x0 + rs.rect.x1) / 2, 0.6, (rs.rect.z0 + rs.rect.z1) / 2);
+        const now = this.cameraNow?.();
+        const off = now ? now.pos.clone().sub(now.target) : new THREE.Vector3(0, 6, 5);
+        const d = off.length();
+        const want = Math.min(d, RESERVE_VIEW_DIST.max);
+        if (d < 1e-3) off.set(0, 6, 5);
+        // 좀 더 위에서 내려다보게 — 수평 방향(보던 쪽)은 그대로, 올려본 각만 RESERVE_VIEW_DIST.minElevDeg 이상(사용자 2026-11-21 "조금 더 위쪽에서 바라봐지게")
+        off.normalize();
+        const flat = Math.hypot(off.x, off.z);
+        const elev = Math.max((RESERVE_VIEW_DIST.minElevDeg * Math.PI) / 180, Math.atan2(off.y, flat));
+        const hx = flat > 1e-4 ? off.x / flat : 0;
+        const hz = flat > 1e-4 ? off.z / flat : 1;
+        off.set(hx * Math.cos(elev), Math.sin(elev), hz * Math.cos(elev));
+        const pos = c.clone().add(off.multiplyScalar(Math.max(RESERVE_VIEW_DIST.min, want)));
+        this.cameraRequest = { pos, target: c, animate: true };
+      }
     }
     this.focusCell(code);
   }

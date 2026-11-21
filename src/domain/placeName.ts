@@ -15,7 +15,7 @@ const TEMP: Record<string, string> = { A: '', C: '냉장 ', F: '냉동 ' };
 export function placeShortName(code: string): string {
   if (code === 'RCV-DOCK') return '하차장';
   const r = reserveName(code);
-  if (r) return r;
+  if (r) return `${reservePlace(code)} ${r}`;
   const m = /^([A-Z]{3})-([ACF])(?:-0*(\d+))?$/.exec(code);
   if (!m || !PLACE[m[1]]) return code;
   return `${TEMP[m[2]]}${PLACE[m[1]]}${m[3] ?? ''}`;
@@ -33,11 +33,18 @@ export const WORK_SHORT: Record<string, string> = {
 /** 보충재고 팔레트 칸(`{A|C|F}-R1-NN-1-01`, mfc-location 0.9.0 reserveStock) — 상온은 입고창고 바닥, 냉장·냉동은 저온실 안 */
 export const RESERVE_CODE = /^([ACF])-R1-(\d+)-1-01$/;
 
-/** A-R1-03-1-01 → 입고창고 팔레트3, C-R1-01-1-01 → 냉장 보충재고1. 보충재고 칸이 아니면 null
- *  (사용자 2026-11-21 "BR-1 WR-16 이런 애들은 클릭해도 수량도 안나오고" — 평면 안쪽 이름 대신) */
+/** 보충재고 칸 → 팔레트 번호(평면·번호판과 같은 이름): A-R1-16-1-01 → WR-16(입고창고), C-R1-01-1-01 → BR-1(냉장), F-R1-01-1-01 → AR-1(냉동).
+ *  번호는 온도대별 평면 순서(locationCodes.ts 대응과 같음). 보충재고 칸이 아니면 null
+ *  (사용자 2026-11-21 "팔레트에는 렉처럼 식별값WR-16이 붙어있어야") */
 export function reserveName(code: string): string | null {
   const m = RESERVE_CODE.exec(code);
   if (!m) return null;
   const n = Number(m[2]);
-  return m[1] === 'A' ? `입고창고 팔레트${n}` : `${m[1] === 'C' ? '냉장' : '냉동'} 보충재고${n}`;
+  return m[1] === 'A' ? `WR-${String(n).padStart(2, '0')}` : `${m[1] === 'C' ? 'BR' : 'AR'}-${n}`;
+}
+
+/** 보충재고 칸이 있는 곳 — 입고창고 팔레트·냉장 보충재고·냉동 보충재고 */
+export function reservePlace(code: string): string | null {
+  const m = RESERVE_CODE.exec(code);
+  return !m ? null : m[1] === 'A' ? '입고창고 팔레트' : m[1] === 'C' ? '냉장 보충재고' : '냉동 보충재고';
 }

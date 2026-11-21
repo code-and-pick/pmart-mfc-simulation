@@ -5,8 +5,7 @@ import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE, zoneBoxColor } from '../colors';
-import { Label } from './Facility';
-import { boxTexture, palletTexture } from '../sprites';
+import { boxTexture, makePillSprite, palletTexture } from '../sprites';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -159,12 +158,23 @@ export function Goods() {
 
 const CARTONS_PER_RESERVE = 96;
 
+/** 팔레트 번호판 자리 — 팔레트 가운데에서 꺼내는 쪽(stand)으로 0.62 m, 높이 0.3 m */
+function plateAt(r: { rect: { x0: number; z0: number; x1: number; z1: number }; stand: { x: number; z: number } }): [number, number, number] {
+  const cx = (r.rect.x0 + r.rect.x1) / 2;
+  const cz = (r.rect.z0 + r.rect.z1) / 2;
+  const dx = r.stand.x - cx;
+  const dz = r.stand.z - cz;
+  const n = Math.hypot(dx, dz) || 1;
+  return [cx + (dx / n) * 0.62, 0.3, cz + (dz / n) * 0.62];
+}
+
 /** 보충재고 팔레트: 나무 받침 + 박스 더미(보충재고 수량만큼 쌓임). */
 export function Reserves() {
   const { sim } = useApp();
   const L = sim.layout;
   const base = useRef<THREE.InstancedMesh>(null!);
   const cartons = useRef<THREE.InstancedMesh>(null!);
+  const plates = useMemo(() => L.reserves.map((r) => makePillSprite(r.id, '#1f63d8', '#3d8bff', 15)), [L]);
 
   useLayoutEffect(() => {
     const mtx = new THREE.Matrix4();
@@ -174,7 +184,7 @@ export function Reserves() {
       mtx.makeTranslation((r.rect.x0 + r.rect.x1) / 2, 0.07, (r.rect.z0 + r.rect.z1) / 2);
       base.current.setMatrixAt(i, mtx);
       for (let j = 0; j < CARTONS_PER_RESERVE; j++) {
-        cartons.current.setColorAt(i * CARTONS_PER_RESERVE + j, col.setHex(r.temp === 'AMBIENT' ? SCENE.box : 0xeef2f7).offsetHSL(0, 0, ((j * 7) % 5) / 60));
+        cartons.current.setColorAt(i * CARTONS_PER_RESERVE + j, (r.temp === 'AMBIENT' ? col.setHex(0xffffff) : zoneBoxColor(r.temp, col)).offsetHSL(0, 0, ((j * 7) % 5) / 60));
         cartons.current.setMatrixAt(i * CARTONS_PER_RESERVE + j, zero);
       }
     });
@@ -221,9 +231,9 @@ export function Reserves() {
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
         <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
       </instancedMesh>
-      {/* 실서버는 Real 이 자리 이름·수량을 띄운다(평면 안쪽 이름 BR-1·WR-16 대신, 사용자 2026-11-21) */}
-      {sim.mode !== 'http' && L.reserves.map((r) => (
-        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} />
+      {/* 팔레트 번호판(WR-16·BR-1·AR-1) — 랙 번호판처럼 파란 판, 꺼내는 통로 쪽 팔레트 앞(사용자 2026-11-21 "팔레트에는 렉처럼 식별값WR-16이 붙어있어야") */}
+      {L.reserves.map((r, i) => (
+        <primitive key={r.id} object={plates[i]} position={plateAt(r)} />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
         <boxGeometry args={[0.255, 0.22, 0.255]} />

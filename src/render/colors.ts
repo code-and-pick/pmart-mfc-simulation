@@ -109,5 +109,7 @@ export const hex = (n: number) => `#${n.toString(16).padStart(6, '0')}`;
  * 바닥 그대로면 흰 랙·바닥에 묻혀 안 보여 채도 +0.18, 밝기 −0.1 만 진하게(무늬 텍스처와 곱해짐).
  */
 export function zoneBoxColor(temp: 'AMBIENT' | 'CHILLED' | 'FROZEN', out = new THREE.Color()): THREE.Color {
+  // 상온은 흰 상자(사용자 2026-11-21 "상온 상자색 하양으로하고 팔레트 색은 그대로") — 상온 바닥색(연회색)은 "색 없음"처럼 보였다
+  if (temp === 'AMBIENT') return out.setHex(0xffffff);
   return out.setHex(ZONE_FLOOR[temp]).offsetHSL(0, 0.18, -0.1);
 }
