@@ -37,8 +37,12 @@ export function Box({
 }
 
 /** 라벨 스프라이트. 내용이 바뀌지 않는 라벨만 쓴다. */
-export function Label({ text, position, opts }: { text: string; position: Vec3; opts: Parameters<typeof makeLabel>[1] }) {
-  const sprite = useMemo(() => makeLabel(text, opts), [text]);
+export function Label({ text, position, opts, noNudge }: { text: string; position: Vec3; opts: Parameters<typeof makeLabel>[1]; noNudge?: boolean }) {
+  const sprite = useMemo(() => {
+    const s = makeLabel(text, opts);
+    if (noNudge) s.userData.noNudge = true; // 겹치면 비키지 말고 숨김(Declutter)
+    return s;
+  }, [text]);
   return <primitive object={sprite} position={position} />;
 }
 

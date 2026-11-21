@@ -1102,3 +1102,7 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .zst-pal .k { font-size: 10px; color: var(--muted); }
 .zst-pal.empty b { color: var(--muted); font-weight: 500; }
 .zst-pal.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+
+/* 재고 탭 상품 찾기 */
+.stk-q { width: 100%; box-sizing: border-box; margin: 2px 0 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--soft); color: var(--text); font: inherit; font-size: 13px; }
+.stk-q:focus { outline: none; border-color: var(--accent); }

@@ -243,7 +243,8 @@ export function Declutter() {
       const far = (it.prio <= 1 && it.d > 40) || (it.prio <= 2 && it.d > 65);
       let k = -1;
       if (!far) {
-        for (let j = 0; j <= 2; j++) {
+        // noNudge(팔레트 번호 등 줄지어 선 이름표): 위로 비키지 않고 제자리 아니면 숨김 — 비키면 지그재그로 흩어졌다(사용자 2026-11-21 "일자로 가만히 붙어있질 못해")
+        for (let j = 0; j <= (s.userData.noNudge ? 0 : 2); j++) {
           const dy = j * (h + M);
           const r: [number, number, number, number] = [r0[0], r0[1] - dy, r0[2], r0[3] - dy];
           if (!hits(r)) {

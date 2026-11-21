@@ -1,6 +1,7 @@
 // 실서버 관찰 화면: 실제 주문(출고)별 PICK·PACK 상태와 담당 작업자. 서버가 준 값만 보인다.
 // 주문 줄을 누르면 "바코드" 탭으로 넘어가 그 주문에서 찍을 바코드(카트·지시 칸·상품·포장 위치)를 보인다.
-import { WORK_SHORT } from '../domain/placeName';
+import { WORK_SHORT, placeShortName } from '../domain/placeName';
+import { useState } from 'react';
 import { OrderCards } from './OrderCards';
 import { useApp } from '../app/context';
 import { BACKEND_FACTS, REAL_LINK } from '../config';
@@ -161,11 +162,90 @@ const WORK_KO: Record<string, string> = WORK_SHORT;
  * 위치를 누르면 3D 에서 그 칸으로. 평면에 없는 위치는 회색(사용자 2026-11-20 "재고·바코드 탭도 … 작고 빽빽").
  */
 export function RealStockTable() {
+  const [q, setQ] = useState('');
+  return (
+    <>
+      {/* 상품 찾기 — 센터 전체 재고(칸 단위)에서 이름·SKU 로(사용자 2026-11-21 "쌀 적재 위치 찾고 싶으면" → "검색창 붙이자") */}
+      <input className="stk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품 찾기 — 이름 또는 SKU (예: 쌀)" />
+      {q.trim() ? <StockSearch q={q.trim()} /> : <OrderStock />}
+    </>
+  );
+}
+
+/** 이 위치로 3D 이동 — 선반 칸은 칸 정면 + 칸 카드, 보충재고 팔레트는 팔레트 위 + 카드, 그 밖은 그 자리 */
+function gotoCode(sim: ReturnType<typeof useApp>['sim'], controller: ReturnType<typeof useApp>['controller'], code: string) {
+  if (sim.backendReserve(code)) return controller.clickCell(code, 0);
+  if (controller.focusBackendCode(code) && sim.backendLocation(code)) controller.focusCell(code);
+}
+
+/** 상품 찾기 결과 — 상품마다 카드(이름·SKU·합계), 위치마다 한 줄(우리말 자리 이름·상태·수량), 누르면 3D 로 */
+function StockSearch({ q }: { q: string }) {
+  const { sim, controller } = useApp();
+  const real = sim.board!;
+  const needle = q.toLowerCase();
+  const bySku = new Map<string, { name: string; rows: Map<string, { code: string; ws: string; bad: boolean; qty: number }> }>();
+  for (const u of real.fullStock) {
+    if (u.qty <= 0) continue;
+    const name = u.productName ?? u.sku;
+    if (!name.toLowerCase().includes(needle) && !u.sku.toLowerCase().includes(needle)) continue;
+    const g = bySku.get(u.sku) ?? { name, rows: new Map() };
+    const bad = u.qualityState !== 'NORMAL';
+    const k = `${u.locationCode}:${u.workState}:${bad}`;
+    const r = g.rows.get(k) ?? { code: u.locationCode, ws: u.workState, bad, qty: 0 };
+    r.qty += u.qty;
+    g.rows.set(k, r);
+    bySku.set(u.sku, g);
+  }
+  if (real.fullStockVersion === 0) return <div className="note">센터 재고를 읽는 중…</div>;
+  const groups = [...bySku].sort((a, b) => a[1].name.localeCompare(b[1].name));
+  if (!groups.length) return <div className="note">"{q}" 에 맞는 재고가 없습니다.</div>;
+  const shown = groups.slice(0, 40);
+  return (
+    <div className="stk">
+      <div className="stk-h">
+        {groups.length}개 상품{groups.length > shown.length ? ` (앞 ${shown.length}개)` : ''} · 위치를 누르면 3D 에서 그 자리
+      </div>
+      {shown.map(([sku, g]) => {
+        const rows = [...g.rows.values()].sort((a, b) => b.qty - a.qty);
+        const total = rows.reduce((a, r) => a + r.qty, 0);
+        return (
+          <div key={sku} className="stk-c">
+            <div className="stk-t">
+              <span className="nm">{g.name}</span>
+              <span className="tot">
+                <b>{total.toLocaleString()}</b>
+                <small>개</small>
+              </span>
+            </div>
+            {rows.map((r) => {
+              const onPlan = !!(sim.backendLocation(r.code) || sim.backendPoint(r.code));
+              const rack = sim.backendLocation(r.code);
+              const rk = rack ? sim.layout.racks.find((x) => x.id === rack.rackId) : undefined;
+              const where = rk ? `${rk.group}-${String(rk.rackNo).padStart(2, '0')} · ${rack!.level}단` : placeShortName(r.code);
+              return (
+                <button key={`${r.code}:${r.ws}:${r.bad}`} className={`stk-r ${onPlan ? '' : 'off'}`} onClick={() => onPlan && gotoCode(sim, controller, r.code)} title={r.code}>
+                  <span className="loc">{where === r.code ? r.code : `${where}`}</span>
+                  <span className={`ws ws-${r.ws}`}>{WORK_KO[r.ws] ?? r.ws}</span>
+                  {r.bad && <span className="ws bad">보류</span>}
+                  <b className="q">{r.qty}</b>
+                </button>
+              );
+            })}
+            <div className="stk-sku">{sku}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** 열린 주문에 나온 상품의 재고(검색어가 없을 때) */
+function OrderStock() {
   const { sim, controller } = useApp();
   const real = sim.board!;
   const units = real.stockUnits();
   if (!units.length) {
-    return <div className="note">열린 주문에 나온 상품이 없어 읽은 재고가 없습니다(센터 전체 재고를 칸 단위로 읽는 API 는 없음).</div>;
+    return <div className="note">열린 주문에 나온 상품이 없습니다. 위에서 상품을 찾을 수 있습니다.</div>;
   }
   const names = new Map<string, string>();
   for (const t of real.tasks.values()) for (const l of t.detail?.lines ?? []) if (l.productName) names.set(l.sku, l.productName);
