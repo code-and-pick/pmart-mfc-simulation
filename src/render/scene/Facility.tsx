@@ -461,10 +461,9 @@ function ReturnIntake() {
   useTick();
   const rp = sim.real?.returnPickups ?? [];
   const arrived = rp.filter((d) => d.state === 'RETURNED_TO_STORE' || d.state === 'COMPLETED').length;
-  const coming = rp.length - arrived;
   // 이름 카드: 화면 고정 크기 이름표 → 격리 카드처럼 바닥에 눕힌 둥근 판(확대·축소 때 장면과 같은 비율, 사용자 2026-11-21 "회수반입1 이라고 바꾸고 이 카드 확대축소할 떄 비율이 이상하네")
-  const sub = [coming ? `오는 중 ${coming}` : '', arrived ? `반납 ${arrived}` : ''].filter(Boolean).join(' · ') || null;
-  const card = useMemo(() => makePill('회수반입1', sub, null, SCENE.pillDim, '#44528a'), [sub]);
+  // 카드는 이름만(사용자 2026-11-21 "회수반입1이라고만 하고 오는중을 없애라고") — 회수 배송 수는 오른쪽 패널에
+  const card = useMemo(() => makePill('회수반입1', null, null, SCENE.pillDim, '#44528a'), []);
   const ch = 0.55;
   const cw = Math.min(2.2, ch * card.aspect);
   return (
