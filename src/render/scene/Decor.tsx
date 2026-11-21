@@ -457,3 +457,83 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
     </group>
   );
 }
+
+/** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
+export const OFFICE_TABLE = { x: 42.6, z: 25.9, w: 3.6, d: 0.8, h: 0.74 };
+function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
+  // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
+  const seat = 0x2b3240;
+  return (
+    <group position={[x, 0, z]}>
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
+        <meshStandardMaterial color={0x9aa3b0} metalness={0.5} roughness={0.4} />
+      </mesh>
+      <mesh position={[0, 0.04, 0]}>
+        <cylinderGeometry args={[0.26, 0.26, 0.04, 16]} />
+        <meshStandardMaterial color={0x3a4150} roughness={0.6} />
+      </mesh>
+      <mesh position={[0, 0.47, 0]} castShadow>
+        <boxGeometry args={[0.46, 0.07, 0.44]} />
+        <meshStandardMaterial color={seat} roughness={0.7} />
+      </mesh>
+      <mesh position={[0, 0.78, -face * 0.21]} castShadow>
+        <boxGeometry args={[0.44, 0.52, 0.05]} />
+        <meshStandardMaterial color={seat} roughness={0.7} />
+      </mesh>
+    </group>
+  );
+}
+export function OfficeDecor() {
+  const T = OFFICE_TABLE;
+  const pcSeat = { x: T.x - 1.15, z: T.z - T.d / 2 }; // PC 는 북쪽 맨 왼쪽 자리 앞
+  return (
+    <group>
+      {/* 상판·다리 */}
+      <mesh position={[T.x, T.h - 0.02, T.z]} castShadow receiveShadow>
+        <boxGeometry args={[T.w, 0.04, T.d]} />
+        <meshStandardMaterial color={0xe9e4da} roughness={0.55} />
+      </mesh>
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`${sx}${sz}`} position={[T.x + sx * (T.w / 2 - 0.08), (T.h - 0.04) / 2, T.z + sz * (T.d / 2 - 0.08)]}>
+            <boxGeometry args={[0.05, T.h - 0.04, 0.05]} />
+            <meshStandardMaterial color={0x4a5160} metalness={0.3} roughness={0.5} />
+          </mesh>
+        )),
+      )}
+      {/* 의자: 북쪽 3개(남쪽을 봄)·남쪽 3개(북쪽을 봄) */}
+      {[-1.15, 0, 1.15].flatMap((dx) => [
+        <OfficeChair key={`n${dx}`} x={T.x + dx} z={T.z - T.d / 2 - 0.35} face={1} />,
+        <OfficeChair key={`s${dx}`} x={T.x + dx} z={T.z + T.d / 2 + 0.35} face={-1} />,
+      ])}
+      {/* PC: 모니터(받침·화면)·키보드·본체(상판 아래) */}
+      <group position={[pcSeat.x, T.h, pcSeat.z + 0.32]}>
+        <mesh position={[0, 0.06, 0.1]}>
+          <boxGeometry args={[0.04, 0.12, 0.04]} />
+          <meshStandardMaterial color={0x1f2430} />
+        </mesh>
+        <mesh position={[0, 0.005, 0.1]}>
+          <boxGeometry args={[0.2, 0.01, 0.14]} />
+          <meshStandardMaterial color={0x1f2430} />
+        </mesh>
+        <mesh position={[0, 0.3, 0.1]} castShadow>
+          <boxGeometry args={[0.6, 0.36, 0.03]} />
+          <meshStandardMaterial color={0x161a22} roughness={0.4} />
+        </mesh>
+        <mesh position={[0, 0.3, 0.084]}>
+          <planeGeometry args={[0.56, 0.32]} />
+          <meshBasicMaterial color={0x3b6fb6} side={THREE.DoubleSide} />
+        </mesh>
+        <mesh position={[0, 0.012, -0.12]}>
+          <boxGeometry args={[0.44, 0.02, 0.14]} />
+          <meshStandardMaterial color={0x2a2f3a} />
+        </mesh>
+      </group>
+      <mesh position={[pcSeat.x + 0.45, 0.22, T.z]} castShadow>
+        <boxGeometry args={[0.2, 0.44, 0.42]} />
+        <meshStandardMaterial color={0x232833} roughness={0.5} />
+      </mesh>
+    </group>
+  );
+}

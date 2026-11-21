@@ -499,6 +499,9 @@ export function buildLayout(): Layout {
       for (const z0 of [0.3, 1.45]) addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: 3.2 }, 'BULK');
     }
   }
+  // 휴게·사무 가운데 긴 사무용 테이블 3.6×0.8 m + 의자(양쪽 3개씩) 자리 — 걸어서 피해 가게 장애물로(그림은 Decor OfficeDecor) [시뮬]
+  // (사용자 2026-11-21 "휴게실 중간에 사무용 길다란 테이블이랑 의자랑 PC1대 놔줘")
+  obstacles.push({ rect: { x0: 40.8, z0: 24.95, x1: 44.4, z1: 26.85 }, height: 0.75, kind: 'TABLE' });
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다
   const dockSlots: DockSlot[] = [];
   for (const z of [17.15, 17.9, 21.35, 22.1]) {

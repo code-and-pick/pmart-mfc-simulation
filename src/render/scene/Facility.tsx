@@ -9,7 +9,7 @@ import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/lay
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
-import { CartDepot, InboundDecor, RETURN_TABLE, ReturnTable, StartMark, ParkingDecor, Walkways, WorkingCells } from './Decor';
+import { CartDepot, InboundDecor, OfficeDecor, RETURN_TABLE, ReturnTable, StartMark, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
 
@@ -592,6 +592,7 @@ export function Facility() {
       <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
       {/* 시작점 표지판은 카트 줄 가운데(사용자 2026-11-21 "장바구니 중앙으로") */}
       <StartMark x={L.points.cartDepot.x + 0.7 - ((DECOR.cartDepotDrawn - 1) * 0.28) / 2} z={L.points.cartDepot.z - 0.6} />
+      <OfficeDecor />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
       <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
