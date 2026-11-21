@@ -298,7 +298,7 @@ function Obstacles({ L }: { L: Layout }) {
       {ship.map((o, i) => (
         <ShipRack key={`srk${i}`} r={o.rect} h={o.height} />
       ))}
-      {/* 냉동·냉장·상온 격리 구역마다 흰 랙 2개(인계 랙과 같은 모양) — 뒤쪽 벽을 따라(사용자 2026-11-21 "각각 격리 구역에도 하얀랙으로") */}
+      {/* 냉동·냉장·상온 격리 구역마다 흰 랙 2개(인계 랙과 같은 모양, 사용자 2026-11-21 "각각 격리 구역에도 하얀랙으로") — 벽 쪽에 세로로 */}
       {L.zones
         .filter((z) => z.kind === 'QUARANTINE')
         .flatMap((z) =>
@@ -311,9 +311,10 @@ function Obstacles({ L }: { L: Layout }) {
               const z0 = z.rect.z0 + 0.3 + i * (RACK_LEN + 0.15);
               return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_DEPTH, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
             }
-            const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
-            const z0 = z.rect.z0 + 0.15;
-            return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_LEN, z1: z0 + RACK_DEPTH }} h={RACK_HEIGHT} />;
+            // 상온 격리는 오른쪽(동쪽) 벽 쪽 실선 안에 세로로 위아래 2개(사용자 2026-11-21 "상온 격리 랙 2개는 오른쪽 벽에 붙여") — 구역 깊이 3.0 m 라 간격 0.05
+            const x1 = z.rect.x1 - 0.2;
+            const z0 = z.rect.z0 + 0.2 + i * (RACK_LEN + 0.05);
+            return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0: x1 - RACK_DEPTH, z0, x1, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
           }),
         )}
       {L.obstacles

@@ -7,6 +7,7 @@ import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR, zoneBoxColor } from '../colors';
 import { boxTexture, palletTexture } from '../sprites';
 import { Label } from './Facility';
+import { makePill } from './ZoneNames';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -244,30 +245,12 @@ export function Reserves() {
   );
 }
 
-/** 바닥 글자 판(눕힌 글) — 보충재고·입고재고 구역 표시용, 격리 이름표와 같은 남색 글 */
+/** 구역 이름 카드 — 격리 구역 카드와 같은 둥근 판(사용자 2026-11-21 "대형재고, 입고재고, 보충재고라는 말 너무 작아서 안 보이니까 상온 격리 카드처럼 UI 변경해") */
+const CARD_H = 0.7; // 격리 카드(0.55)보다 조금 크게 [시뮬]
 function floorText(text: string): { tex: THREE.CanvasTexture; aspect: number } {
-  const S = 64;
-  const c = document.createElement('canvas');
-  const g = c.getContext('2d')!;
-  const f = `900 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
-  g.font = f;
-  c.width = Math.ceil(g.measureText(text).width + S);
-  c.height = Math.ceil(S * 1.5);
-  g.font = f;
-  g.fillStyle = '#44528a';
-  g.textAlign = 'center';
-  g.textBaseline = 'middle';
-  g.fillText(text, c.width / 2, c.height / 2 + 2);
-  const tex = new THREE.CanvasTexture(c);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return { tex, aspect: c.width / c.height };
+  return makePill(text, null, null, SCENE.pillDim, '#44528a');
 }
 
-/**
- * 보충재고 랙·입고재고 팔레트 구역 바닥 — 격리 구역과 같은 바닥색 + 흰 실선 + 바닥 글.
- * (사용자 2026-11-21 "보충재고랑 바로 픽업하는 적재구역 랙이 구분이 안 가 바닥에 표시라도 해둬"
- *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
- */
 // 보관 구역 판(화면 전용) — 격리 구역과 같은 바닥색·흰 실선. 한 판 안에서 실선 한 줄로 나눈다
 // (사용자 2026-11-21 "이따구로 구역나눠놓는게 맞아?" → "여기 그냥 공간 합치고 실선 한 줄로 구분하게 하자").
 // 저온: 격리 | 보충재고 | 입고재고 — 판 왼쪽 선이 격리 오른쪽 선과 같은 자리(격리 끝 −0.12)라 한 줄로 보인다, 위·아래 선도 격리와 같은 z.
@@ -296,9 +279,9 @@ const STORE_AREAS = [
     lines: [[37.32, 5.4, 47.88, 5.4], [40.35, 7.1, 47.88, 7.1]] as Seg[],
     texts: [
       { t: '대형 묶음', x: 44.0, z: 4.0 },
-      { t: '지게차 통로', x: 38.8, z: 11.0 },
+      // 서쪽 세로 통로(지게차가 다님)에 "보충재고" — 사용자 2026-11-21 "지게차 통로라는 말을 없애고 거기에 보충재고라고 적고"
       { t: '입고재고', x: 39.4, z: 6.05 },
-      { t: '보충재고', x: 44.0, z: 13.0 },
+      { t: '보충재고', x: 38.8, z: 11.0 },
     ],
   },
 ];
@@ -309,7 +292,7 @@ const STORE_AREAS = [
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
 export function ReserveFloors() {
-  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형 묶음', '지게차 통로'].map((t) => [t, floorText(t)])), []);
+  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형 묶음'].map((t) => [t, floorText(t)])), []);
   return (
     <>
       {STORE_AREAS.map((a, k) => {
@@ -328,11 +311,11 @@ export function ReserveFloors() {
             ))}
             {a.texts.map((t) => {
               const tx = texts.get(t.t)!;
-              const th = 0.42;
+              const th = CARD_H;
               return (
-                <mesh key={t.t} rotation={[-Math.PI / 2, 0, 0]} position={[t.x, 0.012, t.z]} renderOrder={4} raycast={() => null}>
+                <mesh key={t.t} rotation={[-Math.PI / 2, 0, 0]} position={[t.x, 0.03, t.z]} renderOrder={5} raycast={() => null} userData={{ declutterBlock: true }}>
                   <planeGeometry args={[th * tx.aspect, th]} />
-                  <meshBasicMaterial map={tx.tex} transparent depthWrite={false} toneMapped={false} />
+                  <meshBasicMaterial map={tx.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
                 </mesh>
               );
             })}

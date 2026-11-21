@@ -34,7 +34,7 @@ const PILL: Partial<Record<ZoneKind, [string, string]>> = {
  * 둥근 판 캔버스 → 텍스처(+ 가로세로 비). 다듬은 모양: 아이콘은 흰 원 안(구역색), 이름 굵게 흰 글자, 둘째 말(랙 수·평)은
  * 반투명 흰 작은 알약 안. 그림자는 짧고 부드럽게, 위쪽 반에 얇은 광택.
  */
-function makePill(title: string, sub: string | null, icon: string | null, bg: string, top: string): { tex: THREE.CanvasTexture; aspect: number } {
+export function makePill(title: string, sub: string | null, icon: string | null, bg: string, top: string): { tex: THREE.CanvasTexture; aspect: number } {
   const S = 64; // 글자 기준 크기(캔버스 px)
   const c = document.createElement('canvas');
   const ctx = c.getContext('2d')!;
