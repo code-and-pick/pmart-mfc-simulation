@@ -303,13 +303,13 @@ function Obstacles({ L }: { L: Layout }) {
         .filter((z) => z.kind === 'QUARANTINE')
         .flatMap((z) =>
           [0, 1].map((i) => {
-            // 냉동·냉장 격리는 오른쪽(동쪽) 선 쪽에 세로로 돌려(긴 쪽이 남북) 위아래로 2개 — 흰 실선(구역 끝 −0.12) 안쪽
-            // (사용자 2026-11-21 "냉동냉장 격리 랙을 오른쪽 벽에 방향을 세로로 돌려서 붙이라고 지금을 앞을 보고 있잖아 옆으로 돌리라고"). 상온은 구역 뒤쪽 그대로
+            // 냉동·냉장 격리는 왼쪽(서쪽) 벽 쪽에 세로로 돌려(긴 쪽이 남북) 위아래로 2개 — 흰 실선(구역 끝 +0.12) 안쪽
+            // (사용자 2026-11-21 "…방향을 세로로 돌려서 붙이라고 … 옆으로 돌리라고" → "격리구역 랙 오른쪽이 아니라 왼 쪽으로"). 상온은 구역 뒤쪽 그대로
             const cold = z.id === 'AQ' || z.id === 'BQ';
             if (cold) {
-              const x1 = z.rect.x1 - 0.2;
+              const x0 = z.rect.x0 + 0.2;
               const z0 = z.rect.z0 + 0.3 + i * (RACK_LEN + 0.15);
-              return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0: x1 - RACK_DEPTH, z0, x1, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
+              return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_DEPTH, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
             }
             const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
             const z0 = z.rect.z0 + 0.15;
