@@ -235,7 +235,7 @@ export function Reserves() {
       </instancedMesh>
       {/* 입고재고 팔레트 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
       {sim.mode !== 'http' && L.reserves.map((r) => (
-        <Label key={r.id} text={r.role === 'BULK' ? `대형 묶음 ${r.id}` : `입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
+        <Label key={r.id} text={r.role === 'BULK' ? `대형재고 ${r.id}` : `입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, Math.max(1, L.reserveRackSpots.length * cellMax)]} castShadow frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
@@ -278,7 +278,7 @@ const STORE_AREAS = [
     floor: [37.2, 0, 48, 16.5] as Seg,
     lines: [[37.32, 5.4, 47.88, 5.4], [40.35, 7.1, 47.88, 7.1]] as Seg[],
     texts: [
-      { t: '대형 묶음', x: 44.0, z: 4.0 },
+      { t: '대형재고', x: 44.0, z: 4.0 }, // 사용자 2026-11-21 "대형묶음이 아니라 대형재고라고 적어"
       // 서쪽 세로 통로(지게차가 다님)에 "보충재고" — 사용자 2026-11-21 "지게차 통로라는 말을 없애고 거기에 보충재고라고 적고"
       { t: '입고재고', x: 39.4, z: 6.05 },
       { t: '보충재고', x: 38.8, z: 11.0 },
@@ -292,7 +292,7 @@ const STORE_AREAS = [
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
 export function ReserveFloors() {
-  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형 묶음'].map((t) => [t, floorText(t)])), []);
+  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형재고'].map((t) => [t, floorText(t)])), []);
   return (
     <>
       {STORE_AREAS.map((a, k) => {

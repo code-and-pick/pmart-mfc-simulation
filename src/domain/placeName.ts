@@ -6,7 +6,7 @@ const PLACE: Record<string, string> = {
   RCV: '입고칸',
   PAK: '포장대',
   DSP: '인계 랙',
-  RTN: '회수칸',
+  RTN: '회수반입', // 사용자 2026-11-21 "회수반입1 이라고 바꾸고"
   QRT: '격리칸',
 };
 const TEMP: Record<string, string> = { A: '', C: '냉장 ', F: '냉동 ' };
@@ -45,5 +45,5 @@ export function reserveName(code: string): string | null {
 
 /** 대형 묶음 팔레트 칸이 있는 곳 */
 export function reservePlace(code: string): string | null {
-  return RESERVE_CODE.test(code) ? '입고창고 대형 묶음' : null;
+  return RESERVE_CODE.test(code) ? '입고창고 대형재고' : null;
 }

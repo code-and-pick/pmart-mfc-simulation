@@ -8,7 +8,7 @@ import { BACKEND_FACTS, DECOR } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
-import { ZoneNames } from './ZoneNames';
+import { makePill, ZoneNames } from './ZoneNames';
 import { CartDepot, InboundDecor, RETURN_TABLE, ReturnTable, StartMark, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
@@ -462,7 +462,11 @@ function ReturnIntake() {
   const rp = sim.real?.returnPickups ?? [];
   const arrived = rp.filter((d) => d.state === 'RETURNED_TO_STORE' || d.state === 'COMPLETED').length;
   const coming = rp.length - arrived;
-  const text = `회수 반입${coming ? ` · 오는 중 ${coming}` : ''}${arrived ? ` · 반납 ${arrived}` : ''}`;
+  // 이름 카드: 화면 고정 크기 이름표 → 격리 카드처럼 바닥에 눕힌 둥근 판(확대·축소 때 장면과 같은 비율, 사용자 2026-11-21 "회수반입1 이라고 바꾸고 이 카드 확대축소할 떄 비율이 이상하네")
+  const sub = [coming ? `오는 중 ${coming}` : '', arrived ? `반납 ${arrived}` : ''].filter(Boolean).join(' · ') || null;
+  const card = useMemo(() => makePill('회수반입1', sub, null, SCENE.pillDim, '#44528a'), [sub]);
+  const ch = 0.55;
+  const cw = Math.min(2.2, ch * card.aspect);
   return (
     <>
       {/* 바닥보다 조금 짙은 회색 판(사용자 2026-11-21 "회수반입은 그냥 바닥보다 좀 더 짙은 색으로" — 전엔 초록, 뜻 없던 색) */}
@@ -470,7 +474,10 @@ function ReturnIntake() {
         <planeGeometry args={[1.2, 1.2]} />
         <meshStandardMaterial color={0xb9bdc6} roughness={0.9} />
       </mesh>
-      <Label text={text} position={[p.x, 1.6, p.z]} opts={{ size: 28, bg: 'rgba(52,58,70,0.8)', screenPx: 14 }} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[p.x, 0.03, p.z + 0.6 + (cw / card.aspect) / 2 + 0.1]} renderOrder={5} raycast={() => null} userData={{ declutterBlock: true }}>
+        <planeGeometry args={[cw, cw / card.aspect]} />
+        <meshBasicMaterial map={card.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+      </mesh>
       {arrived > 0 && (
         <mesh position={[p.x, 0.25, p.z]} castShadow>
           <boxGeometry args={[0.5, 0.5, 0.4]} />

@@ -12,6 +12,6 @@ describe('placeShortName', () => {
     expect(placeShortName('A-R1-03-1-01')).toBe('입고창고 보충재고 랙 03 · 1단 1칸');
     expect(placeShortName('C-R1-01-2-03')).toBe('냉장 보충재고 랙 01 · 2단 3칸');
     expect(placeShortName('F-R1-12-5-01')).toBe('냉동 보충재고 랙 12 · 5단 1칸');
-    expect(placeShortName('A-R2-07-1-01')).toBe('입고창고 대형 묶음 WB-07');
+    expect(placeShortName('A-R2-07-1-01')).toBe('입고창고 대형재고 WB-07');
   });
 });
