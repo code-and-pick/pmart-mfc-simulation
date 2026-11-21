@@ -274,11 +274,12 @@ function floorText(text: string): { tex: THREE.CanvasTexture; aspect: number } {
 // 상온 입고창고: 창고 전체를 한 판으로(바깥 선은 창고 구역 선), 뒤 입고재고 | 보충재고 랙 | 문 쪽 대형 묶음 을 가로 선으로.
 type Seg = [x0: number, z0: number, x1: number, z1: number];
 const LINE_W = 0.1;
-const coldArea = (q0: number, div: number, x1: number) => {
-  // q0 = 격리 구역 x1. 판 선 = q0 − 0.12 ~ x1 − 0.12, z 26.72 ~ 29.68(격리 선과 같음)
-  const L0 = q0 - 0.12, L1 = x1 - 0.12, T = 26.72, B = 29.68;
+const coldArea = (q0: number, rcvCx: number) => {
+  // q0 = 격리 구역 x1. 판 선 = q0 − 0.12 ~ L1, z 26.72 ~ 29.68(격리 선과 같음).
+  // 입고재고 칸은 팔레트 가운데(rcvCx = 서버 입고칸 x)에 맞춰 폭 1.7 m — 사용자 2026-11-21 "입고재고 팔레트가 왜 중앙에 있지않고 왼쪽으로 치우쳐져있니"
+  const L0 = q0 - 0.12, div = rcvCx - 0.85, L1 = rcvCx + 0.85, T = 26.72, B = 29.68;
   return {
-    floor: [L0, 26.6, x1, 29.8] as Seg,
+    floor: [L0, 26.6, L1 + 0.12, 29.8] as Seg,
     lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [div, T, div, B]] as Seg[],
     texts: [
       { t: '보충재고', x: (L0 + div) / 2, z: 26.1 },
@@ -287,8 +288,8 @@ const coldArea = (q0: number, div: number, x1: number) => {
   };
 };
 const STORE_AREAS = [
-  coldArea(3.8, 8.95, 10.95), // 냉동: 격리 x 0.2~3.8 → 보충재고 랙 → 입고재고 팔레트 AR-3·4
-  coldArea(16, 20.75, 22.75), // 냉장: 격리 x 12.4~16 → 보충재고 랙 → 입고재고 팔레트 BR-3·4
+  coldArea(3.8, 9.95), // 냉동: 격리 x 0.2~3.8 → 보충재고 랙(~x 8.5) → 입고재고 팔레트 AR-3·4(x 9.4~10.5, RCV-F-01)
+  coldArea(16, 21.55), // 냉장: 격리 x 12.4~16 → 보충재고 랙(~x 20.5) → 입고재고 팔레트 BR-3·4(x 21.0~22.1, RCV-C-01)
   {
     floor: [37.2, 0, 48, 16.5] as Seg,
     lines: [[37.32, 2.55, 47.88, 2.55], [37.32, 9.25, 47.88, 9.25]] as Seg[],
