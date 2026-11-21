@@ -4,9 +4,9 @@ import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
-import { SCENE, zoneBoxColor } from '../colors';
+import { SCENE, ZONE_FLOOR, zoneBoxColor } from '../colors';
 import { boxTexture, palletTexture } from '../sprites';
-import { Label } from './Facility';
+import { Label, SolidRect } from './Facility';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -226,15 +226,7 @@ export function Reserves() {
 
   return (
     <>
-      {/* 입고재고(검수 전) 팔레트 자리 — 진회색 바닥(보충재고 팔레트와 구분, 사용자 2026-11-21 "노랑말고 하양으로" → "흰색말고 진회색으로" → "너무 진한데" 중간 회색) */}
-      {L.reserves
-        .filter((r) => r.role === 'RECEIVING')
-        .map((r) => (
-          <mesh key={`rcv-${r.id}`} rotation={[-Math.PI / 2, 0, 0]} position={[(r.rect.x0 + r.rect.x1) / 2, 0.008, (r.rect.z0 + r.rect.z1) / 2]} receiveShadow>
-            <planeGeometry args={[r.rect.x1 - r.rect.x0 + 0.3, r.rect.z1 - r.rect.z0 + 0.3]} />
-            <meshStandardMaterial color={0x9aa0ab} roughness={0.9} />
-          </mesh>
-        ))}
+      {/* 입고재고 자리 바닥은 ReserveFloors(격리 구역과 같은 바닥·흰 실선) */}
       <instancedMesh ref={base} args={[undefined, undefined, L.reserves.length]} receiveShadow>
         <boxGeometry args={[1.1, 0.14, 1.1]} />
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
@@ -248,6 +240,74 @@ export function Reserves() {
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.8} map={boxTexture()} />
       </instancedMesh>
+    </>
+  );
+}
+
+/** 바닥 글자 판(눕힌 글) — 보충재고·입고재고 구역 표시용, 격리 이름표와 같은 남색 글 */
+function floorText(text: string): { tex: THREE.CanvasTexture; aspect: number } {
+  const S = 64;
+  const c = document.createElement('canvas');
+  const g = c.getContext('2d')!;
+  const f = `900 ${S}px "Noto Sans KR", "Malgun Gothic", sans-serif`;
+  g.font = f;
+  c.width = Math.ceil(g.measureText(text).width + S);
+  c.height = Math.ceil(S * 1.5);
+  g.font = f;
+  g.fillStyle = '#44528a';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillText(text, c.width / 2, c.height / 2 + 2);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return { tex, aspect: c.width / c.height };
+}
+
+/**
+ * 보충재고 랙·입고재고 팔레트 구역 바닥 — 격리 구역과 같은 바닥색 + 흰 실선 + 바닥 글.
+ * (사용자 2026-11-21 "보충재고랑 바로 픽업하는 적재구역 랙이 구분이 안 가 바닥에 표시라도 해둬"
+ *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
+ */
+// 구역 판(화면 전용) — 격리 구역처럼 남쪽 벽을 따라 격리 | 보충재고 | 입고재고 를 같은 높이로 겹치지 않게 이어 붙인다
+// (사용자 2026-11-21 "이따구로 구역나눠놓는게 맞아?" — 테두리가 겹치고 높이가 제각각이던 것). 저온은 격리(z 26.6~29.8)와 같은 줄.
+// textAt: 글자 놓을 z(판 밖 통로 쪽, 또는 판 안 빈 곳)
+const STORE_AREAS: { key: string; label: string; x0: number; z0: number; x1: number; z1: number; textAt: number }[] = [
+  { key: 'F-R', label: '보충재고', x0: 3.8, z0: 26.6, x1: 8.95, z1: 29.8, textAt: 26.1 },
+  { key: 'F-P', label: '입고재고', x0: 8.95, z0: 26.6, x1: 10.95, z1: 29.8, textAt: 26.1 },
+  { key: 'C-R', label: '보충재고', x0: 16, z0: 26.6, x1: 20.75, z1: 29.8, textAt: 26.1 },
+  { key: 'C-P', label: '입고재고', x0: 20.75, z0: 26.6, x1: 22.75, z1: 29.8, textAt: 26.1 },
+  { key: 'A-P', label: '입고재고', x0: 37.4, z0: 0.2, x1: 47.8, z1: 2.9, textAt: 2.5 },
+  { key: 'A-R', label: '보충재고', x0: 37.4, z0: 3.1, x1: 47.8, z1: 8.1, textAt: 8.6 },
+];
+
+/**
+ * 보충재고 랙·입고재고 팔레트 구역 바닥 — 격리 구역과 같은 바닥색 + 흰 실선 + 바닥 글.
+ * (사용자 2026-11-21 "보충재고랑 바로 픽업하는 적재구역 랙이 구분이 안 가 바닥에 표시라도 해둬"
+ *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
+ */
+export function ReserveFloors() {
+  const texts = useMemo(() => new Map(['보충재고', '입고재고'].map((t) => [t, floorText(t)])), []);
+  return (
+    <>
+      {STORE_AREAS.map((a) => {
+        const w = a.x1 - a.x0;
+        const d = a.z1 - a.z0;
+        const text = texts.get(a.label)!;
+        const th = Math.min(0.55, (w * 0.85) / text.aspect);
+        return (
+          <group key={a.key}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(a.x0 + a.x1) / 2, 0.008, (a.z0 + a.z1) / 2]} receiveShadow raycast={() => null}>
+              <planeGeometry args={[w, d]} />
+              <meshStandardMaterial color={ZONE_FLOOR.QUARANTINE} roughness={0.95} />
+            </mesh>
+            <SolidRect x0={a.x0 + 0.12} z0={a.z0 + 0.12} x1={a.x1 - 0.12} z1={a.z1 - 0.12} width={0.1} />
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(a.x0 + a.x1) / 2, 0.012, a.textAt]} renderOrder={4} raycast={() => null}>
+              <planeGeometry args={[th * text.aspect, th]} />
+              <meshBasicMaterial map={text.tex} transparent depthWrite={false} toneMapped={false} />
+            </mesh>
+          </group>
+        );
+      })}
     </>
   );
 }

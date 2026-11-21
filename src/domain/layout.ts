@@ -425,8 +425,8 @@ export function buildLayout(): Layout {
     // 상온 입고창고: 뒤 줄(입고재고 팔레트) 앞, 등 맞댄 3쌍 × 7 = 42랙
     ...reserveRacks('AMBIENT', { x0: 38.4, z0: 3.6, x1: 47.6, z1: 7.7 }, 'x', 'RRA'),
     // 냉동 A·냉장 B: 저온실 남쪽(피킹 랙 뒤), 출입문 앞 통로는 비움 — 각 3쌍 × 2 = 12랙
-    ...reserveRacks('FROZEN', { x0: 4.4, z0: 26.4, x1: 8.6, z1: 29.0 }, 'z', 'RRF'),
-    ...reserveRacks('CHILLED', { x0: 16.4, z0: 26.4, x1: 20.6, z1: 29.0 }, 'z', 'RRC'),
+    ...reserveRacks('FROZEN', { x0: 4.4, z0: 26.8, x1: 8.6, z1: 29.4 }, 'z', 'RRF'),
+    ...reserveRacks('CHILLED', { x0: 16.4, z0: 26.8, x1: 20.6, z1: 29.4 }, 'z', 'RRC'),
   );
 
   // ── 로케이션 ─────────────────────────────────────────

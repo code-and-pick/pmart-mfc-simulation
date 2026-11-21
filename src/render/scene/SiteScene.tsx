@@ -11,7 +11,7 @@ import { SCENE } from '../colors';
 import { Declutter, Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
 import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { ScanMarker } from './Marker';
-import { Goods, Reserves } from './Stock';
+import { Goods, Reserves, ReserveFloors } from './Stock';
 
 export function SiteScene({ app }: { app: AppCtx }) {
   return (
@@ -24,6 +24,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <Facility />
         <Goods />
         <Reserves />
+        <ReserveFloors />
         <Dock />
         <Staged />
         <TargetMarkers />
