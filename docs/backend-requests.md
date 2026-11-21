@@ -57,6 +57,7 @@
 - 요청: `docs/layout-export/location-positions.json`(15,534칸: 선반 14,559·보충재고 랙 900·대형재고 16·바닥 자리 59 — RCV·PAK·DSP·CRT·QRT)의 xM·zM 으로 mfc-location 위치를 바꿔 주기. 코드 추가·삭제 없음. 선반·랙 칸 = 작업자 서는 지점, 바닥 자리 = 시뮬레이터 그 자리 가운데.
 - RTN-A-01 은 넣지 않음(서버 좌표는 예전 결정대로 그대로).
 - **회신(11-21 밤, PC 3)**: PR #333 — `mfc_layout.py r34` 단계(파일의 모든 칸 위치만 PUT, 코드·치수·reserveStock·상태 그대로, 닫힌 칸도 위치 맞춤), register·support·r33 도 이 파일 좌표 사용. 예상: 15,534 모두 바꿈(ACTIVE 15,434 + CLOSED 100), 실패 0, PUT 15,534번이라 30~40분. RTN-A-01 은 (38.6, 22.0) 그대로. #330·#331 은 이미 병합·LAN 실행됨(R1 ACTIVE 900·CLOSED 90, R2 ACTIVE 16·CLOSED 4, RCV-A-02 (44.0, 6.05), QRT-A-01 (46.1, 14.9)). **PC 1 병합·`python -I deploy/lan/seed/mfc_layout.py r34` 실행 대기** — PC 3 는 push 권한 없음·LAN 쓰기는 그 PC 사용자 승인. 회신 문서 `docs/handoff/simulator/mfc/2026-11-21-simulator-reply-r34-relayout.md`.
+- **정정(11-21 밤, 사용자 "장바구니 거치대가 상온 앞 남쪽에"·"상온구역 랙도 왼쪽으로 치우쳐졌잖아")**: 상온 선반 7,034칸 x +0.475(구역 가운데로), CRT-A-01~40 → (34.2, 30.4)(상온 남쪽 앞). 다른 칸은 그대로. 같은 파일(`location-positions.json`)을 다시 뽑음 — PR #333 사본을 바꿔 달라고 PC 3 에 보냄.
 
 ### R-33 보충재고 랙 칸 990개 등록 + R-32 정정 — 높음 (2026-11-21 추가, "mfc 백엔드 4 pc3" 에 보냄)
 - 사용자 2026-11-21: "보충재고는 팔레트가 아니라 랙으로 하자" → 랙 수 상온 42·냉동 12·냉장 12 로 확정("2,3번은 mfc 백엔드 세션에 바로 보내").
