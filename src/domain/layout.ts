@@ -81,6 +81,12 @@ export interface ReserveSpot {
   rect: Rect;
   /** 작업자가 서는 지점 */
   stand: { x: number; z: number };
+  /**
+   * 쓰임 — RESERVE = 보충재고(검수 끝, 바로 적치 가능·선반 넘침), RECEIVING = 입고재고(들여왔지만 검수 전).
+   * 둘 다 그 온도대의 입고 공간에 두되 자리로 구분한다(사용자 2026-11-21 "다 입고구역에 둬야하는데 둘이 구분이 가능해야 해",
+   * "냉장냉동 보충재고랑 입고재고는 다 각각 냉장냉동 구역 안에 … 지금 팔레트 4개씩 있는 게 그 공간") — 저온 팔레트 4개 = 보충 2 + 입고 2 [가정]
+   */
+  role: 'RESERVE' | 'RECEIVING';
 }
 
 /** 입고·검수 구역의 하차 적치 칸 (롤테이너·박스) */
@@ -433,14 +439,15 @@ export function buildLayout(): Layout {
   const obstacles: Obstacle[] = [];
   const reserves: ReserveSpot[] = [];
   const P = 1.1; // 팔레트 1.1×1.1m [가정] (MFC 5-1)
-  const addReserve = (id: string, temp: TemperatureZone, x0: number, z0: number, stand: { x: number; z: number }) => {
+  const addReserve = (id: string, temp: TemperatureZone, x0: number, z0: number, stand: { x: number; z: number }, role: ReserveSpot['role'] = 'RESERVE') => {
     const rect = { x0, z0, x1: x0 + P, z1: z0 + P };
-    reserves.push({ id, temp, rect, stand });
+    reserves.push({ id, temp, rect, stand, role });
     obstacles.push({ rect, height: 0.15, kind: 'RESERVE' });
   };
   // 냉동·냉장 보충재고: 저온실 안 랙 뒤 (MFC 4-3 "온도대별 보충재고"), 앞줄 통로에서 꺼낸다
-  [7.8, 9.4].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${i * 2 + j + 1}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 })));
-  [19.4, 21.0].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${i * 2 + j + 1}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 })));
+  // 왼쪽 줄(1·2) = 보충재고, 오른쪽 줄(3·4) = 입고재고(검수 전) — 서버 입고칸 RCV-F-01·RCV-C-01(R-31)
+  [7.8, 9.4].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${i * 2 + j + 1}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 }, i ? 'RECEIVING' : 'RESERVE')));
+  [19.4, 21.0].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${i * 2 + j + 1}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 }, i ? 'RECEIVING' : 'RESERVE')));
   // 입고창고 상온 보충재고: 6열 × 4줄 = 바닥 24자리 (MFC 5-1 예시 "약 24개 바닥 위치")
   let wi = 0;
   for (const z0 of [1.0, 3.7, 6.4, 9.1]) {

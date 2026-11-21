@@ -112,7 +112,7 @@ export function buildCatalog(layout: Layout, count: Record<TemperatureZone, numb
       used.add(found.code);
       return found;
     };
-    const reserves = layout.reserves.filter((r) => r.temp === t);
+    const reserves = layout.reserves.filter((r) => r.temp === t && r.role === 'RESERVE'); // 입고재고 자리(검수 전)는 보충재고로 쓰지 않음
     for (let i = 0; i < n; i++) {
       const [base, w] = rng.pick(NAMES[t]);
       const isB = rng.next() < 0.12;

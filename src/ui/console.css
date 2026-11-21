@@ -1106,3 +1106,11 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 /* 재고 탭 상품 찾기 */
 .stk-q { width: 100%; box-sizing: border-box; margin: 2px 0 8px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--soft); color: var(--text); font: inherit; font-size: 13px; }
 .stk-q:focus { outline: none; border-color: var(--accent); }
+
+/* 입고재고(검수 전) · 보충재고 나눔 */
+.zst-split { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 4px 0 10px; }
+.zst-split > * { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; text-align: left; }
+.zst-split > * span { font-size: 11px; color: var(--muted); }
+.zst-split > * b { font-size: 18px; }
+.zst-split .in { border-color: #d9a441; cursor: pointer; }
+.zst-split .in b { color: #d9a441; }

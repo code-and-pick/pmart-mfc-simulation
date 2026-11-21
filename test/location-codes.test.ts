@@ -62,7 +62,12 @@ describe('위치 코드 대응 (SIM-6)', () => {
 
   it('선반 밖 자리: 팔레트·패킹대·대기 지점·격리·입고·회수·출하대기·카트', () => {
     expect(m.toBackend('AR-1')).toBe('F-R1-01-1-01');
-    expect(m.toBackend('BR-4')).toBe('C-R1-04-1-01');
+    expect(m.toBackend('BR-2')).toBe('C-R1-02-1-01');
+    // 저온 오른쪽 줄 팔레트 = 입고재고(검수 전) 입고칸(R-31) — 둘이 한 칸, 거꾸로는 첫 팔레트
+    expect(m.toBackend('BR-3')).toBe('RCV-C-01');
+    expect(m.toBackend('BR-4')).toBe('RCV-C-01');
+    expect(m.toBackend('AR-4')).toBe('RCV-F-01');
+    expect(m.toSim('RCV-C-01')).toBe('BR-3');
     expect(m.toBackend('WR-24')).toBe('A-R1-24-1-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');
     expect(m.toBackend('PS-8')).toBe('PAK-A-08');

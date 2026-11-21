@@ -4,6 +4,8 @@ import { RETURN_TABLE } from './Decor';
 import { RESERVE_CODE, placeShortName, reserveName, WORK_SHORT } from '../../domain/placeName';
 
 /** 팔레트 번호 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 … 크기도 전처럼") */
+/** 입고재고(검수 전) 상자색 — 누런 골판지(온도색 상자와 구분) */
+const PENDING_BOX = 0xd9a441;
 const PALLET_LABEL = { size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 };
 import { orderText } from '../../ui/OrderNo';
 import { useFrame } from '@react-three/fiber';
@@ -218,7 +220,7 @@ export function RealStock() {
 
     const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number }>();
     cellOf.current = [];
-    const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number>; tz: Map<string, number> }>();
+    const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number>; tz: Map<string, number>; pending: number }>();
     // 상품 보관 온도대(SKU → 냉동·냉장·상온) — 재고 줄의 temperatureZone, 없으면 그 상품이 놓인 선반 칸의 온도대.
     // 입고칸·탁자 상자도 선반과 같은 구역색으로(사용자 2026-11-20 "입고되는 곳에는 다 같은 색의 상자들이 … 실제 재고 상품박스색대로")
     const skuTemp = new Map<string, TemperatureZone>();
@@ -242,7 +244,7 @@ export function RealStock() {
           if (take <= 0) continue;
           bySku.set(u.sku, (bySku.get(u.sku) ?? 0) - take);
           rackGuess.set(rk, (rackGuess.get(rk) ?? 0) + take);
-          const g = points.get(rk) ?? { x: rp!.x, z: rp!.z, table: true, by: new Map(), tz: new Map() };
+          const g = points.get(rk) ?? { x: rp!.x, z: rp!.z, table: true, by: new Map(), tz: new Map(), pending: 0 };
           g.by.set('PACKED', (g.by.get('PACKED') ?? 0) + take);
           points.set(rk, g);
           u = { ...u, qty: u.qty - take };
@@ -270,13 +272,15 @@ export function RealStock() {
       const g =
         points.get(key) ??
         (crt
-          ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map(), tz: new Map() }
+          ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map(), tz: new Map(), pending: 0 }
           : // 인계 랙: 서버 점은 랙의 첫 칸(왼쪽 끝) — 봉투는 랙 가운데 아래 칸에
-            { x: key.startsWith('DSP-') ? p.x + 0.45 : p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map() });
+            { x: key.startsWith('DSP-') ? p.x + 0.45 : p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map(), pending: 0 });
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);
       // 인계 랙(DSP-)에 남은 것은 포장된 봉투째(취소 주문의 재진열 대기 포함) — 상자로 그리지 않는다(사용자 2026-11-21 "인계랙 옆에 상자는 … 비닐봉투 포장으로")
       if (u.workState !== 'PACKED' && !key.startsWith('DSP-')) {
-        const tk = skuTemp.get(u.sku) ?? '?';
+        // 입고재고(검수 전 — 품질 판정 전)는 온도색 대신 검수 전 상자색(사용자 2026-11-21 입고재고·보충재고 구분)
+        if (u.qualityState === 'PENDING_INSPECTION') g.pending += u.qty;
+        const tk = u.qualityState === 'PENDING_INSPECTION' ? 'PENDING' : (skuTemp.get(u.sku) ?? '?');
         g.tz.set(tk, (g.tz.get(tk) ?? 0) + u.qty);
       }
       points.set(key, g);
@@ -335,7 +339,7 @@ export function RealStock() {
         }
       }
       // 상자 = 상품 온도대별 구역색(선반과 같은 zoneBoxColor) — 냉동·냉장·상온 순으로 쌓는다. 온도대를 모르면 골판지 기본색
-      for (const tk of ['FROZEN', 'CHILLED', 'AMBIENT', '?'] as const) {
+      for (const tk of ['PENDING', 'FROZEN', 'CHILLED', 'AMBIENT', '?'] as const) {
         const qty = g.tz.get(tk) ?? 0;
         if (qty <= 0) continue;
         const cartons = Math.max(1, Math.ceil(qty / CARTON_UNITS));
@@ -345,7 +349,7 @@ export function RealStock() {
           const l = Math.floor(i / 9);
           mtx.compose(new THREE.Vector3(g.x + (c - 1) * (S + 0.03), baseY + S / 2 + l * (S + 0.01), g.z + (r - 1) * (S + 0.03)), quat, sc.set(S, S, S));
           m.setMatrixAt(n, mtx);
-          m.setColorAt(n, isTemp(tk) ? zoneBoxColor(tk, col) : col.setHex(SCENE.box));
+          m.setColorAt(n, isTemp(tk) ? zoneBoxColor(tk, col) : col.setHex(tk === 'PENDING' ? PENDING_BOX : SCENE.box));
           n++;
         }
       }
@@ -371,7 +375,14 @@ export function RealStock() {
       const text =
         rackGuess.get(code)
           ? `${code} 포장 ${rackGuess.get(code)} — 추정(서버 위치는 패킹대, PDA 랙 스캔 미전송 R20)`
-          : code.startsWith('CRT-') || code.startsWith('RCV-')
+          : code.startsWith('RCV-')
+            ? // 입고칸: 입고재고(검수 전) / 보충재고(검수 끝, 적치 대기) — 사용자 2026-11-21 "둘이 구분이 가능해야 해"
+              (() => {
+                const all = [...g.by.values()].reduce((a, q) => a + q, 0);
+                const parts = [g.pending ? `입고재고 ${g.pending.toLocaleString()}개` : '', all - g.pending ? `보충재고 ${(all - g.pending).toLocaleString()}개` : ''].filter(Boolean);
+                return parts.join(' · ');
+              })()
+            : code.startsWith('CRT-')
             ? // 장바구니 옆 탁자 — 자리 이름(장바구니1) 대신 무엇인지(사용자 2026-11-20 "장바구니1은 테이블에 왜 있는데")
               [...g.by].map(([ws, q]) => `${WORK_SHORT[ws] ?? WORK_KO[ws]} ${q}개`).join(' · ')
             : RESERVE_CODE.test(code)
@@ -400,10 +411,16 @@ export function RealStock() {
       labels.add(s);
     }
     // 빈 팔레트: 번호만 팔레트 바로 위에
+    const rcvLabeled = new Set<string>();
     for (const rs of sim.layout.reserves) {
       const code = sim.reserveCode(rs);
       if (!code || points.has(code)) continue;
-      const s = makeLabel(reserveName(code) ?? rs.id, PALLET_LABEL);
+      // 입고재고 팔레트 2개(한 입고칸)는 이름표 하나
+      if (rs.role === 'RECEIVING') {
+        if (rcvLabeled.has(code)) continue;
+        rcvLabeled.add(code);
+      }
+      const s = makeLabel(rs.role === 'RECEIVING' ? '입고재고 (검수 전)' : (reserveName(code) ?? rs.id), PALLET_LABEL);
       s.center.set(0.5, 0);
       s.userData.noNudge = true;
       s.userData.shrinkFar = true;

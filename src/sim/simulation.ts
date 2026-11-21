@@ -1686,6 +1686,13 @@ export class Simulation {
     if (simCode === SIM_POINT.receiving) return P.truckDoor;
     if (simCode === SIM_POINT.returnIntake) return { x: BACKEND_FACTS.returnIntake.x, z: BACKEND_FACTS.returnIntake.z };
     const rs = this.reserveMap.get(simCode);
+    if (rs?.role === 'RECEIVING') {
+      // 저온 입고칸(RCV-C-01·RCV-F-01) = 입고재고 팔레트 2개 — 둘 사이 가운데에 쌓아 그린다
+      const all = this.layout.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === rs.temp);
+      const x0 = Math.min(...all.map((r) => r.rect.x0)), x1 = Math.max(...all.map((r) => r.rect.x1));
+      const z0 = Math.min(...all.map((r) => r.rect.z0)), z1 = Math.max(...all.map((r) => r.rect.z1));
+      return { x: (x0 + x1) / 2, z: (z0 + z1) / 2 };
+    }
     if (rs) return { x: (rs.rect.x0 + rs.rect.x1) / 2, z: (rs.rect.z0 + rs.rect.z1) / 2 };
     const rack = /^SHIP-RACK-(\d+)$/.exec(simCode);
     if (rack) {

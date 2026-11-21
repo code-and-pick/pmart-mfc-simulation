@@ -216,6 +216,15 @@ export function Reserves() {
 
   return (
     <>
+      {/* 입고재고(검수 전) 팔레트 자리 — 노란 바닥(보충재고 팔레트와 구분, 사용자 2026-11-21) */}
+      {L.reserves
+        .filter((r) => r.role === 'RECEIVING')
+        .map((r) => (
+          <mesh key={`rcv-${r.id}`} rotation={[-Math.PI / 2, 0, 0]} position={[(r.rect.x0 + r.rect.x1) / 2, 0.008, (r.rect.z0 + r.rect.z1) / 2]} receiveShadow>
+            <planeGeometry args={[r.rect.x1 - r.rect.x0 + 0.3, r.rect.z1 - r.rect.z0 + 0.3]} />
+            <meshStandardMaterial color={0xf2c94c} roughness={0.9} transparent opacity={0.55} />
+          </mesh>
+        ))}
       <instancedMesh ref={base} args={[undefined, undefined, L.reserves.length]} receiveShadow>
         <boxGeometry args={[1.1, 0.14, 1.1]} />
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}

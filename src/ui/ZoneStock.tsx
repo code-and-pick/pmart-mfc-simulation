@@ -2,12 +2,12 @@
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
 import { WORK_SHORT, placeShortName, reserveName } from '../domain/placeName';
 
-const placeShortNameSafe = (code: string) => (reserveName(code) ? placeShortName(code) : '');
+const placeShortNameSafe = (code: string) => placeShortName(code);
 import { useEffect, useState } from 'react';
 import { useApp, useView } from '../app/context';
 import type { TemperatureZone } from '../domain/contract';
 
-const QUALITY_KO: Record<string, string> = { NORMAL: '정상', QUARANTINED: '격리', PENDING: '판정 전' };
+const QUALITY_KO: Record<string, string> = { NORMAL: '정상', QUARANTINED: '격리', PENDING_INSPECTION: '검수 전', PENDING: '판정 전' };
 const WORK_KO: Record<string, string> = WORK_SHORT;
 
 /** 3D 에서 누른 칸 — 칸 코드·위치(랙·단) + 상품마다 이름·SKU·LOT·기한·상태·수량. 보충재고 팔레트도 같은 카드 */
@@ -192,19 +192,58 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
 }
 
 /** 보충재고 팔레트 목록 — 자리마다 상품 종류·수량, 누르면 그 팔레트 카드(사용자 2026-11-21 "BR-1 WR-16 이런 애들은 클릭해도 수량도 안나오고") */
+/**
+ * 그 온도대 입고재고·보충재고 수(사용자 2026-11-21 정의):
+ * 입고재고 = 들여왔지만 검수 전(품질 PENDING_INSPECTION, 입고칸 RCV-), 보충재고 = 검수 끝·바로 적치 가능(입고칸의 정상 적치 전) + 보충재고 칸 보관.
+ * 상품 온도대는 재고 줄 값, 없으면 그 상품이 놓인 선반 칸의 온도대.
+ */
+export function inboundSplit(sim: ReturnType<typeof useApp>['sim'], temp: TemperatureZone): { incoming: number; reserve: number } {
+  const real = sim.board!;
+  const skuTemp = new Map<string, TemperatureZone>();
+  for (const u of real.fullStock) {
+    const z = u.temperatureZone;
+    const t = (z === 'AMBIENT' || z === 'CHILLED' || z === 'FROZEN' ? z : null) ?? sim.backendLocation(u.locationCode)?.temp ?? sim.backendReserve(u.locationCode)?.temp;
+    if (t && !skuTemp.has(u.sku)) skuTemp.set(u.sku, t);
+  }
+  let incoming = 0;
+  let reserve = 0;
+  for (const u of real.fullStock) {
+    if (u.qty <= 0 || skuTemp.get(u.sku) !== temp) continue;
+    if (u.locationCode.startsWith('RCV-') && u.workState === 'UNSTOWED') {
+      if (u.qualityState === 'PENDING_INSPECTION') incoming += u.qty;
+      else if (u.qualityState === 'NORMAL') reserve += u.qty;
+    } else if (u.workState === 'STORED' && sim.backendReserve(u.locationCode)?.role === 'RESERVE') reserve += u.qty;
+  }
+  return { incoming, reserve };
+}
+
 export function ReservePallets({ temp }: { temp: TemperatureZone }) {
   const { sim, controller } = useApp();
   const view = useView();
   const real = sim.board!;
-  const spots = sim.layout.reserves.filter((r) => r.temp === temp);
+  const split = inboundSplit(sim, temp);
+  const spots = sim.layout.reserves.filter((r) => r.temp === temp && r.role === 'RESERVE');
   const rows = spots.map((rs) => {
     const code = sim.reserveCode(rs) ?? rs.id;
     const units = real.fullStock.filter((u) => u.locationCode === code && u.qty > 0);
     return { code, qty: units.reduce((a, u) => a + u.qty, 0), skus: new Set(units.map((u) => u.sku)).size };
   });
   const used = rows.filter((r) => r.qty > 0);
+  const rcv = sim.layout.reserves.find((r) => r.temp === temp && r.role === 'RECEIVING');
+  const rcvCode = rcv ? sim.reserveCode(rcv) : temp === 'AMBIENT' ? 'RCV-A-01' : null;
   return (
     <>
+      {/* 입고재고(검수 전) · 보충재고(검수 끝·적치 대기 + 보충재고 칸) — 누르면 입고칸 카드 */}
+      <div className="zst-split">
+        <button className="in" onClick={() => (rcv && rcvCode ? controller.clickCell(rcvCode, 0) : rcvCode && controller.focusBackendCode(rcvCode))} title={rcvCode ?? ''} disabled={!rcvCode}>
+          <span>입고재고 · 검수 전</span>
+          <b>{split.incoming.toLocaleString()}</b>
+        </button>
+        <div className="rs">
+          <span>보충재고 · 검수 끝</span>
+          <b>{split.reserve.toLocaleString()}</b>
+        </div>
+      </div>
       <div className="zst-h">
         <span>{temp === 'AMBIENT' ? '입고창고 팔레트' : '보충재고 팔레트'}</span>
         <span>
