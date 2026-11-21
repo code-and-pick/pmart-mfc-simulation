@@ -387,6 +387,7 @@ export function RealStock() {
       const layers = Math.ceil(Math.min(cartons, PER_POINT_CAP) / 9);
       if (pallet) {
         s.userData.noNudge = true;
+        s.userData.shrinkFar = true;
         s.userData.prio = 2; // 수량 있는 팔레트가 빈 팔레트(0)보다 먼저 자리 잡음
         // 팔레트는 상자 더미 바로 위에 붙여(아래 끝 = 더미 꼭대기) — 높이 띄우면 뒤 랙을 가렸다(사용자 2026-11-21 "BR1 식별값이랑 갯수가 박스보다 너무 위쪽에")
         s.center.set(0.5, 0);
@@ -401,6 +402,7 @@ export function RealStock() {
       const s = makeLabel(reserveName(code) ?? rs.id, PALLET_LABEL);
       s.center.set(0.5, 0);
       s.userData.noNudge = true;
+      s.userData.shrinkFar = true;
       s.userData.prio = 0;
       s.position.set((rs.rect.x0 + rs.rect.x1) / 2, 0.22, (rs.rect.z0 + rs.rect.z1) / 2);
       labels.add(s);

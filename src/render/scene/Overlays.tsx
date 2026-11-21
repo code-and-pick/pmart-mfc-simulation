@@ -174,6 +174,10 @@ export function LocationLabelsLayer() {
  * 자리를 잡는다. 이미 잡힌 것과 겹치면 숨긴다(투명). 멀리서는 낮은 것부터 숨긴다 — 40 m 넘으면 1(참고), 65 m 넘으면 2(패킹대·랙·차량).
  * 보이고 숨기는 것만 바꾸고(투명도), 다른 코드가 정한 visible 은 건드리지 않는다.
  */
+/** shrinkFar 이름표: 이 거리(m) 안은 원래 크기, 멀수록 줄여 최소 이 비율 [시뮬] */
+const SHRINK_NEAR = 16;
+const SHRINK_MIN = 0.45;
+
 export function Declutter() {
   const { camera, scene, size } = useThree();
   const t = useRef(0);
@@ -216,6 +220,13 @@ export function Declutter() {
       if (!shown(s)) return;
       s.getWorldPosition(v);
       const d = camera.position.distanceTo(v);
+      // shrinkFar(팔레트 번호·수량 등): 화면 고정 크기라 멀리서 보면 혼자 커 보인다 — SHRINK_NEAR m 안은 그대로, 멀수록 줄여 최소 SHRINK_MIN
+      // (사용자 2026-11-21 "멀리서 쳐다볼 때 입고창고에 있는 갯수가 너무 크게 보여")
+      if (s.userData.shrinkFar) {
+        const base = (s.userData.baseScale as THREE.Vector2 | undefined) ?? (s.userData.baseScale = new THREE.Vector2(s.scale.x, s.scale.y));
+        const k = Math.max(SHRINK_MIN, Math.min(1, SHRINK_NEAR / Math.max(1, d)));
+        s.scale.set(base.x * k, base.y * k, 1);
+      }
       v.project(camera);
       if (v.z > 1 || Math.abs(v.x) > 1.2 || Math.abs(v.y) > 1.2) return;
       const hp = s.scale.y * 2.414 * (H / 2);

@@ -40,7 +40,10 @@ export function Box({
 export function Label({ text, position, opts, noNudge }: { text: string; position: Vec3; opts: Parameters<typeof makeLabel>[1]; noNudge?: boolean }) {
   const sprite = useMemo(() => {
     const s = makeLabel(text, opts);
-    if (noNudge) s.userData.noNudge = true; // 겹치면 비키지 말고 숨김(Declutter)
+    if (noNudge) {
+      s.userData.noNudge = true; // 겹치면 비키지 말고 숨김(Declutter)
+      s.userData.shrinkFar = true; // 멀면 작게
+    }
     return s;
   }, [text]);
   return <primitive object={sprite} position={position} />;
