@@ -386,40 +386,41 @@ export function StartMark({ x, z }: { x: number; z: number }) {
   if (!startTex) {
     // 표지판: 짙은 남회색 판 + 위 가는 하늘색 띠 + 흰 글(사용자 2026-11-21 "보라색 배경 말고 좀 더 세련되게") — 장면 이름표(남색 카드)와 같은 계열
     const c = document.createElement('canvas');
-    c.width = 512;
-    c.height = 192;
+    // 사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아? 글자 크기가 좀 작아서 안 보여" — 따로 있던 "장바구니 거치대" 이름표를 합치고 판을 넓게
+    c.width = 1280;
+    c.height = 224;
     const g = c.getContext('2d')!;
-    const grd = g.createLinearGradient(0, 0, 0, 192);
+    const grd = g.createLinearGradient(0, 0, 0, 224);
     grd.addColorStop(0, '#2a3346');
     grd.addColorStop(1, '#1b2231');
     g.fillStyle = grd;
     g.beginPath();
-    g.roundRect(4, 4, 504, 184, 22);
+    g.roundRect(4, 4, 1272, 216, 26);
     g.fill();
     g.strokeStyle = 'rgba(255,255,255,0.18)';
     g.lineWidth = 3;
     g.stroke();
     g.fillStyle = '#5ec8f2';
-    g.fillRect(40, 30, 432, 8);
+    g.fillRect(48, 30, 1184, 9);
     g.fillStyle = '#ffffff';
-    g.font = '800 96px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    g.font = '800 124px "Noto Sans KR", "Malgun Gothic", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText('시작점', 256, 112);
+    g.fillText('장바구니 거치대 시작점', 640, 130);
     startTex = new THREE.CanvasTexture(c);
     startTex.colorSpace = THREE.SRGBColorSpace;
     startTex.anisotropy = 4;
   }
   return (
     <group position={[x, 0, z + 0.4]}>
-      {[-0.55, 0.55].map((dx) => (
+      {[-1.45, 1.45].map((dx) => (
         <mesh key={dx} position={[dx, 0.6, -0.02]}>
           <boxGeometry args={[0.03, 1.2, 0.03]} />
           <meshStandardMaterial color={0x9aa3b0} metalness={0.3} roughness={0.5} />
         </mesh>
       ))}
       <mesh position={[0, 1.18, 0]} raycast={() => null} userData={{ declutterBlock: true }}>
-        <planeGeometry args={[1.2, 0.45]} />
+        <planeGeometry args={[3.2, 0.56]} />
         <meshBasicMaterial map={startTex} transparent toneMapped={false} side={THREE.DoubleSide} />
       </mesh>
     </group>
