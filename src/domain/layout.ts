@@ -313,7 +313,7 @@ export function buildLayout(): Layout {
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 25, z0: 20.5, x1: 35, z1: 28.5 }, docPyeong: 24 },
     { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 0.2, z0: 26.6, x1: 3.8, z1: 29.8 }, docPyeong: 4 },
     { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 12.4, z0: 26.6, x1: 16, z1: 29.8 }, docPyeong: 4 },
-    { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 44.4, z0: 12.9, x1: 47.8, z1: 16.3 }, docPyeong: 4 },
+    { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 44.4, z0: 13.4, x1: 47.8, z1: 16.4 }, docPyeong: 4 }, // 11-21 보충재고 랙 남쪽 통로 때문에 0.5 m 남쪽으로 좁힘
     { id: 'SHIP', kind: 'SHIPPING', label: '외부 출하대기', rect: { x0: 27, z0: 32.4, x1: 33, z1: 35 }, docPyeong: 3 },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: { x0: 24, z0: 36.5, x1: 36, z1: 39.6 } },
   ];
@@ -350,7 +350,7 @@ export function buildLayout(): Layout {
   vWall(23.1, 0, 30.1, [[17, 19]]);
   // 상온 ↔ 입고창고 (보충 통로)
   vWall(37.1, 0, 16.6, [[11.8, 14.2]]);
-  hWall(16.6, 37.1, W, [[40, 42]]);
+  hWall(16.6, 37.1, W, [[37.5, 40.5]]); // 입고·검수 → 입고창고 문 3 m — 지게차(11-21 "여기는 지게차로 입고시키니까")
   vWall(37.1, 16.6, 28.7, [[18.4, 20.6]]);
   hWall(23.1, 37.1, W, [[44, 45.5]]);
   hWall(28.7, 37.1, W, [[40, 41.6]]);
@@ -425,9 +425,11 @@ export function buildLayout(): Layout {
     return rs;
   };
   racks.push(
-    // 상온 입고창고: 뒤 줄(입고재고 팔레트) 앞, 등 맞댄 3쌍 × 7 = 42랙 — 통로 1.2 m(상자 운반, MFC 5-1 운반 통로 10평) [가정]
-    // (사용자 2026-11-21 "공간이 너무 많이 남는데?" → 문서 비율로: 입고재고 5 · 보충랙 18평 · 대형 묶음 22평)
-    ...reserveRacks('AMBIENT', { x0: 38.4, z0: 2.9, x1: 47.6, z1: 8.0 }, 'x', 'RRA', 1.2),
+    // 상온 입고창고 — 안쪽(북쪽 벽)부터 대형 묶음 → 입고재고 → 보충재고(문 쪽)
+    // (사용자 2026-11-21 "대형묶음이 제일 안쪽에 있어야지. 여기는 지게차로 입고시키니까 이동통로 생각해서 배치하고 보충재고가 제일 밖에 있어야지").
+    // 지게차 길: 남쪽 문(x 37.5~40.5) → 서쪽 세로 통로 x 37.3~40.3 → 대형 묶음 앞 가로 통로 z 2.55~5.5(3 m) [가정].
+    // 보충재고 랙: 세로 통로 동쪽, 등 맞댄 3쌍 × 6 = 36랙, 사람 통로 1.0 m [가정] — 42 는 지게차 통로 때문에 안 들어감
+    ...reserveRacks('AMBIENT', { x0: 40.35, z0: 7.6, x1: 47.86, z1: 12.3 }, 'x', 'RRA', 1.0),
     // 냉동 A·냉장 B: 저온실 남쪽(피킹 랙 뒤), 출입문 앞 통로는 비움 — 각 3쌍 × 2 = 12랙
     ...reserveRacks('FROZEN', { x0: 4.4, z0: 26.8, x1: 8.6, z1: 29.4 }, 'z', 'RRF'),
     ...reserveRacks('CHILLED', { x0: 16.4, z0: 26.8, x1: 20.6, z1: 29.4 }, 'z', 'RRC'),
@@ -484,19 +486,18 @@ export function buildLayout(): Layout {
   // 상온 5자리 = 문서 6-5 "상온 5자리의 여유"(1회 입고 9팔레트 상당 중 상온 약 4.5)
   [9.4].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${j + 3}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
   [21.0].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${j + 3}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
+  // 상온 입고재고 5자리(문서 6-5 "상온 5자리") — 지게차 가로 통로 남쪽 줄, 사람은 남쪽 통로(z 6.6~7.6)에서 검수
   for (let c = 0; c < 5; c++) {
-    const x0 = 39.05 + c * 1.5;
-    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 0.5, { x: x0 + P / 2, z: 0.5 + P + 0.55 }, 'RECEIVING');
+    const x0 = 40.45 + c * 1.5;
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 5.5, { x: x0 + P / 2, z: 7.1 }, 'RECEIVING');
   }
-  // 대형 묶음 바닥 팔레트(MFC 5-1 대형 적재 22평 — 이론 24자리, 문 쪽) 20자리 [가정]. 남쪽 문(x 40~42) 통로 x 39.8~42.2 와
-  // 서쪽 문(z 11.8~14.2) 통로는 비우고, 상온 격리(x 44.4~, z 12.9~)는 피한다. 피치 1.2 m.
+  // 대형 묶음 바닥 팔레트(MFC 5-1 대형 적재 22평) — 북쪽 벽에 2겹 × 8열 = 16자리 [가정]. 한 열(2겹) = 한 상품, 지게차가 가로 통로에서 넣고 뺀다
   {
-    const bulk: [number, number, { x: number; z: number }][] = [];
-    for (const z0 of [9.4, 10.6]) for (const x0 of [37.5, 38.7]) bulk.push([x0, z0, { x: 40.35, z: z0 + P / 2 }]);
-    for (const x0 of [37.5, 38.7]) bulk.push([x0, 14.4, { x: 40.35, z: 14.4 + P / 2 }]);
-    for (const z0 of [9.4, 10.6, 11.8]) for (const x0 of [42.4, 43.6, 44.8, 46.0]) bulk.push([x0, z0, z0 === 9.4 ? { x: x0 + P / 2, z: 8.75 } : { x: 41.65, z: z0 + P / 2 }]);
-    for (const z0 of [13.2, 14.4]) bulk.push([42.6, z0, { x: 41.65, z: z0 + P / 2 }]);
-    bulk.forEach(([x0, z0, st], i) => addReserve(`WB-${String(i + 1).padStart(2, '0')}`, 'AMBIENT', x0, z0, st, 'BULK'));
+    let n = 0;
+    for (let c = 0; c < 8; c++) {
+      const x0 = 37.45 + c * 1.25;
+      for (const z0 of [0.3, 1.45]) addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: 3.2 }, 'BULK');
+    }
   }
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다
   const dockSlots: DockSlot[] = [];

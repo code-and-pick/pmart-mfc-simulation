@@ -27,13 +27,13 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect(seen.size).toBe(14559);
   });
 
-  // 보충재고 랙(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로") — 상온 42·냉동 12·냉장 12랙 × 5단 × 3칸 [가정], 서버 칸 {T}-R1-NN-단-칸(R-33)
-  it('보충재고 랙 칸 990개 — R1 코드로 오가며, 예전 보충재고 칸 {T}-R1-01-1-01 은 랙 01 1단 1칸', () => {
+  // 보충재고 랙(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로") — 상온 36(11-21 지게차 통로로 42→36)·냉동 12·냉장 12랙 × 5단 × 3칸 [가정], 서버 칸 {T}-R1-NN-단-칸(R-33)
+  it('보충재고 랙 칸 900개 — R1 코드로 오가며, 예전 보충재고 칸 {T}-R1-01-1-01 은 랙 01 1단 1칸', () => {
     const res = L.locations.filter((l) => l.reserve);
-    expect(res.length).toBe(990);
+    expect(res.length).toBe(900);
     const by = { AMBIENT: 0, CHILLED: 0, FROZEN: 0 };
     for (const r of L.racks.filter((k) => k.reserve)) by[r.temp]++;
-    expect(by).toEqual({ AMBIENT: 42, CHILLED: 12, FROZEN: 12 });
+    expect(by).toEqual({ AMBIENT: 36, CHILLED: 12, FROZEN: 12 });
     const seen = new Set<string>();
     for (const loc of res) {
       const b = m.toBackend(loc.code)!;
@@ -41,8 +41,8 @@ describe('위치 코드 대응 (SIM-6)', () => {
       expect(m.toSim(b)).toBe(loc.code);
       seen.add(b);
     }
-    expect(seen.size).toBe(990);
-    expect(m.shelfCount).toBe(14559 + 990);
+    expect(seen.size).toBe(900);
+    expect(m.shelfCount).toBe(14559 + 900);
     for (const c of ['A-R1-01-1-01', 'C-R1-01-1-01', 'F-R1-01-1-01']) expect(m.toSim(c)).toBeTruthy();
   });
 
@@ -87,10 +87,11 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect(m.toSim('RCV-C-01')).toBe('BR-3');
     expect(m.toBackend('WR-05')).toBe('RCV-A-02');
     expect(m.toBackend('WR-06')).toBeNull();
-    // 대형 묶음 바닥 팔레트 20자리 → A-R2-01~20-1-01(R-33 정정)
+    // 대형 묶음 바닥 팔레트 16자리 → A-R2-01~16-1-01(R-33 정정)
     expect(m.toBackend('WB-01')).toBe('A-R2-01-1-01');
-    expect(m.toBackend('WB-20')).toBe('A-R2-20-1-01');
-    expect(m.toSim('A-R2-20-1-01')).toBe('WB-20');
+    expect(m.toBackend('WB-16')).toBe('A-R2-16-1-01');
+    expect(m.toSim('A-R2-16-1-01')).toBe('WB-16');
+    expect(m.toBackend('WB-17')).toBeNull();
     expect(m.toSim('RCV-A-02')).toBe('WR-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');
     expect(m.toBackend('PS-8')).toBe('PAK-A-08');

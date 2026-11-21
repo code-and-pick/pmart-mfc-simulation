@@ -303,11 +303,16 @@ function Obstacles({ L }: { L: Layout }) {
         .filter((z) => z.kind === 'QUARANTINE')
         .flatMap((z) =>
           [0, 1].map((i) => {
-            const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
-            // 냉동·냉장 격리는 벽 쪽(남쪽)에, 단 격리 구역 안에 — 흰 실선(구역 끝 −0.12, 두께 0.1) 안쪽에 붙인다
-            // (사용자 2026-11-21 "냉장냉동 격리 랙 벽에 붙쳐" → "격리구역 벗어나게 해서 벽에 붙여버렸잖아": 벽면 30.0 에 붙여 실선 밖으로 나갔던 것). 상온은 구역 뒤쪽 그대로
+            // 냉동·냉장 격리는 오른쪽(동쪽) 선 쪽에 세로로 돌려(긴 쪽이 남북) 위아래로 2개 — 흰 실선(구역 끝 −0.12) 안쪽
+            // (사용자 2026-11-21 "냉동냉장 격리 랙을 오른쪽 벽에 방향을 세로로 돌려서 붙이라고 지금을 앞을 보고 있잖아 옆으로 돌리라고"). 상온은 구역 뒤쪽 그대로
             const cold = z.id === 'AQ' || z.id === 'BQ';
-            const z0 = cold ? z.rect.z1 - 0.2 - RACK_DEPTH : z.rect.z0 + 0.15;
+            if (cold) {
+              const x1 = z.rect.x1 - 0.2;
+              const z0 = z.rect.z0 + 0.3 + i * (RACK_LEN + 0.15);
+              return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0: x1 - RACK_DEPTH, z0, x1, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
+            }
+            const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
+            const z0 = z.rect.z0 + 0.15;
             return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_LEN, z1: z0 + RACK_DEPTH }} h={RACK_HEIGHT} />;
           }),
         )}
@@ -365,9 +370,10 @@ function ShipRack({ r, h, grey = false }: { r: { x0: number; z0: number; x1: num
             <boxGeometry args={[W - 0.04, 0.025, D - 0.04]} />
             <meshStandardMaterial color={deck} roughness={0.6} />
           </mesh>
+          {/* 가로대는 긴 쪽을 따라(세로로 세운 랙이면 z 방향) */}
           {[-1, 1].map((sz) => (
-            <mesh key={sz} position={[0, y - 0.05, (sz * (D - 0.05)) / 2]} castShadow>
-              <boxGeometry args={[W, 0.07, 0.05]} />
+            <mesh key={sz} position={D > W ? [(sz * (W - 0.05)) / 2, y - 0.05, 0] : [0, y - 0.05, (sz * (D - 0.05)) / 2]} castShadow>
+              <boxGeometry args={D > W ? [0.05, 0.07, D] : [W, 0.07, 0.05]} />
               <meshStandardMaterial color={beam} roughness={0.35} />
             </mesh>
           ))}
