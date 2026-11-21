@@ -276,13 +276,13 @@ function RollContainer({ x, z, rot = 0 }: { x: number; z: number; rot?: number }
   const W = 0.8;
   const D = 0.6;
   const H = 1.7;
-  const frame = 0xb8bec8;
+  const frame = 0x2f6fd6; // 파랑(사용자 2026-11-21 "롤테이너 색은 파랑이야")
   return (
     <group position={[x, 0, z]} rotation={[0, rot, 0]}>
       {/* 바닥판 */}
       <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
         <boxGeometry args={[W, 0.04, D]} />
-        <meshStandardMaterial color={0x8d949f} metalness={0.4} roughness={0.5} />
+        <meshStandardMaterial color={0x24569f} metalness={0.3} roughness={0.5} />
       </mesh>
       {/* 바퀴 4개 */}
       {[-1, 1].flatMap((sx) =>
