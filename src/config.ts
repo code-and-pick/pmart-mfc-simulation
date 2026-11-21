@@ -341,6 +341,11 @@ export const TEST_INBOUND = {
   readMax: 30,
   /** 수령 위치(입고·검수 구역, mfc-location) — locationCodes SIM_POINT.receiving [확정] */
   receivingLocation: 'RCV-A-01',
+  /**
+   * 온도대별 수령 위치 — 저온 상품은 그 저온구역 입고칸(입고재고 자리)에서 받는다 [확정](PC 3 R-31 회신 2026-11-21, (가) 수령 위치를 요청으로 —
+   * 초기 보유 수령은 수령 하나에 칸 하나라 온도대마다 입고 예정을 따로). 저온 칸이 아직 없으면(PC 1 LAN 등록 전) 상온 칸으로 받는다
+   */
+  receivingByTemp: { AMBIENT: 'RCV-A-01', CHILLED: 'RCV-C-01', FROZEN: 'RCV-F-01' } as const,
 };
 
 /** "확인할 일" 띠(pmart-rider-simulation IssueBar 참고) 기준 — 업무 문서에 없는 화면 알림 기준 [시뮬] */

@@ -316,7 +316,7 @@ export function TestInboundControls() {
             </tbody>
           </table>
           <div className="ask-warn">
-            ⚠ 실서버 재고가 바뀝니다 — {TEST_INBOUND.receivingLocation} 에 수령까지 하고,{' '}
+            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 수령까지 하고,{' '}
             {plan.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
           </div>
           <div className="ask-acts">

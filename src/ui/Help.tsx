@@ -2,7 +2,7 @@
 // 한 줄 = 굵은 낱말 + 짧은 설명, 줄 사이를 띄운다("왼쪽표에 글 다 다닥다닥").
 import type { ReactNode } from 'react';
 import { useApp } from '../app/context';
-import { REAL_LINK, TEST_INBOUND } from '../config';
+import { REAL_LINK } from '../config';
 import { INBOUND_COLOR, STATE_COLOR, TEMP_COLOR, hex } from '../render/colors';
 import type { InboundState } from '../sim/inbound';
 import type { WorkerState } from '../sim/worker';
@@ -137,7 +137,7 @@ export function Help() {
             <Item k="읽기">{REAL_LINK.pollSec}초마다 서버를 읽어 그림. 시계는 실제 시각</Item>
             <Item k="바뀌는 때">가상 작업자를 켜거나, 주문·입고 버튼을 눌렀을 때만 실서버가 바뀜</Item>
             <Item k="실제 주문">내 계정으로 주문 + 시험 결제. 배차까지 그대로 흐름</Item>
-            <Item k="재고 채우기">재고 적은 상품을 {TEST_INBOUND.receivingLocation} 에 수령까지. 검사·적치는 PDA 나 가상 작업자</Item>
+            <Item k="재고 채우기">재고 적은 상품을 온도대별 입고칸(검수 전 입고재고 자리)에 수령까지. 검사·적치는 PDA 나 가상 작업자</Item>
             <Item k="가상 작업자">mfcw-pp-01~10. 끊긴 작업 계정부터 켜고, PDA 가 쓰는 계정은 건너뜀</Item>
             <Item k="출하대기 랙">PDA 가 랙을 찍으면 서버 랙, 아니면 {REAL_LINK.rackAutoSec}초 뒤 "추정"</Item>
             <Item k="토큰">개발 서버가 받아 줌 — 비밀번호·고객 토큰은 브라우저로 안 옴</Item>

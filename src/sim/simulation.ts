@@ -645,14 +645,44 @@ export class Simulation {
       }
     };
     const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const load = await again(() => h.createDevInitialStockLoad(this.params.mfcId, lines.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}`));
-    await again(() =>
-      h.receiveInitialStock(load.receiptId, TEST_INBOUND.receivingLocation, lines.map((l) => ({ sku: l.sku, receivedQty: l.qty })), `sim-inb-rcv:${load.receiptId}`),
-    );
+    // 온도대마다 입고 예정을 따로 만들어 그 온도대 입고칸(입고재고 자리)에서 받는다(R-31, PC 3 회신 (가) — 초기 보유 수령은 수령 하나에 칸 하나).
+    // 상품 온도대 = 센터 재고 줄 값, 없으면 그 상품이 놓인 선반 칸의 온도대, 모르면 상온
+    const tempOf = (sku: string): TemperatureZone => {
+      for (const u of this.real?.fullStock ?? []) {
+        if (u.sku !== sku) continue;
+        const z = u.temperatureZone;
+        if (z === 'AMBIENT' || z === 'CHILLED' || z === 'FROZEN') return z;
+        const t = this.backendLocation(u.locationCode)?.temp;
+        if (t) return t;
+      }
+      return 'AMBIENT';
+    };
+    const groups = new Map<TemperatureZone, InboundPlanLine[]>();
+    for (const l of lines) {
+      const t = tempOf(l.sku);
+      groups.set(t, [...(groups.get(t) ?? []), l]);
+    }
+    const receipts: string[] = [];
+    for (const [temp, ls] of groups) {
+      const load = await again(() => h.createDevInitialStockLoad(this.params.mfcId, ls.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}:${temp}`));
+      const body = ls.map((l) => ({ sku: l.sku, receivedQty: l.qty }));
+      let at: string = TEST_INBOUND.receivingByTemp[temp];
+      try {
+        await again(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}`));
+      } catch (e) {
+        // 저온 입고칸이 아직 없으면(PC 1 LAN 등록 전) 상온 입고칸으로 — 서버 확정 거절(4xx)일 때만, 결과 불명은 위에서 같은 키로 다시 보냄
+        if (at === TEST_INBOUND.receivingLocation || e instanceof ResultUnknown) throw e;
+        this.log(`시험 입고 ${load.receiptId} ${at} 수령 거절(${e instanceof Error ? e.message : e}) → ${TEST_INBOUND.receivingLocation} 로`);
+        at = TEST_INBOUND.receivingLocation;
+        await again(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}:${at}`));
+      }
+      receipts.push(load.receiptId);
+      this.log(`시험 입고 ${load.receiptId} — ${({ AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const)[temp]} ${ls.length}품목 ${ls.reduce((a, l) => a + l.qty, 0)}개 수령(${at}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
+    }
+    const load = { receiptId: receipts.join(', ') };
     const units = lines.reduce((a, l) => a + l.qty, 0);
-    this.log(`시험 입고 ${load.receiptId} — ${lines.length}품목 ${units}개 수령(${TEST_INBOUND.receivingLocation}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
     // 실서버엔 차량이 없다 — 입고가 서버에 들어가면 그림 차량이 도로에서 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아"). 수령은 서버가 이미 끝냄
-    this.trucks.push({ trfId: `입고 ${load.receiptId.slice(-6)}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: 80, unloaded: lines.length, scheduledAt: this.time });
+    this.trucks.push({ trfId: `입고 ${receipts[0]?.slice(-6) ?? ''}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: 80, unloaded: lines.length, scheduledAt: this.time });
     // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없어 아무도 못 받았다(사용자 2026-11-20)
     if (withVirtual) this.ensureInboundVirtual();
     return { receiptId: load.receiptId, units };
