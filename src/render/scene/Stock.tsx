@@ -232,7 +232,7 @@ export function Reserves() {
       </instancedMesh>
       {/* 팔레트 번호(WR-16·BR-1·AR-1) — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
       {sim.mode !== 'http' && L.reserves.map((r) => (
-        <Label key={r.id} text={r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
+        <Label key={r.id} text={r.role === 'RECEIVING' ? `입고재고 ${r.id}` : r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
         <boxGeometry args={[0.255, 0.22, 0.255]} />

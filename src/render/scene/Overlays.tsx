@@ -24,7 +24,10 @@ export function Dock() {
     for (const it of sim.dockItems) {
       if (it.state === 'TAKEN' || n >= 96) continue;
       const p = it.slot?.pos ?? it.floorPos;
-      mtx.makeTranslation(p.x, 0.53, p.z);
+      // 저온 입고재고 팔레트(2×2) 위는 작은 상자로 — 롤테이너 크기면 서로 겹친다
+      const small = !it.slot && it.temp !== 'AMBIENT' && p.z > 25;
+      if (small) mtx.compose(new THREE.Vector3(p.x, 0.14 + 0.21, p.z), new THREE.Quaternion(), new THREE.Vector3(0.7, 0.4, 0.75));
+      else mtx.makeTranslation(p.x, 0.53, p.z);
       m.setMatrixAt(n, mtx);
       // 그림처럼 불투명 골판지 상자 — 온도대는 옅은 빛깔로만(상온 갈색·냉장 연두빛 흰색·냉동 하늘빛 흰색)
       col.setHex(BOX_TINT[it.temp]);

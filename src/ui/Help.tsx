@@ -28,22 +28,28 @@ function Item({ k, children }: { k: string; children: ReactNode }) {
   );
 }
 
-/** 조작 한 줄 — 누를 것(여러 개면 "또는") → 일어나는 일 */
-function Ctl({ keys, children }: { keys: string[][]; children: ReactNode }) {
+/** 조작 한 줄 — 하는 일 + 입력 칩(마우스·키) */
+function Ctl({ k, keys }: { k: string; keys: string[] }) {
   return (
     <div className="ctl">
-      <div className="ctl-k">
-        {keys.map((k, i) => (
-          <span key={i}>
-            {i > 0 && <i>또는</i>}
-            <kbd>
-              {k.length > 1 && <small>{k[0]}</small>}
-              {k[k.length - 1]}
-            </kbd>
-          </span>
+      <b>{k}</b>
+      <span className="ctl-k">
+        {keys.map((x) => (
+          <kbd key={x} className={/끌기|휠/.test(x) ? 'mouse' : ''}>
+            {x}
+          </kbd>
         ))}
-      </div>
-      <div className="ctl-v">{children}</div>
+      </span>
+    </div>
+  );
+}
+
+/** 눌러 보기·화면 표시 한 줄 — 대상 → 결과 */
+function Tap({ on, children }: { on: ReactNode; children: ReactNode }) {
+  return (
+    <div className={`ctl tap ${typeof on === 'string' ? '' : 'sw'}`}>
+      <b>{on}</b>
+      <span>{children}</span>
     </div>
   );
 }
@@ -104,28 +110,30 @@ export function Help() {
   const real = sim.mode === 'http';
   return (
     <>
-      {/* 조작 — 왼쪽에 누를 것(키·마우스 모양), 오른쪽에 일어나는 일. 사용자 2026-11-21 "도움말에 조작 탭 좀 더 직관적이게" */}
+      {/* 조작 — 한 줄 = 하는 일(굵게) + 쓰는 입력(작은 칩, 한 줄로). 누르는 대상은 키 모양이 아니라 글로.
+          (사용자 2026-11-21 "도움말에 조작 알려주는 UI가 이게 맞아?" — 키 모양 칩이 "또는"과 함께 세로로 쌓여 어지러웠다) */}
       <Part title="조작">
         <div className="ctl-g">
           <em>화면 움직이기</em>
-          <Ctl keys={[['🖱', '왼쪽 끌기'], ['W A S D'], ['← ↑ → ↓']]}>옆으로 옮기기</Ctl>
-          <Ctl keys={[['🖱', '오른쪽 끌기']]}>돌려 보기</Ctl>
-          <Ctl keys={[['🖱', '휠']]}>확대·축소</Ctl>
-          <Ctl keys={[['Esc']]}>처음 시야로</Ctl>
+          <Ctl k="옮기기" keys={['왼쪽 끌기', 'WASD', '방향키']} />
+          <Ctl k="돌려 보기" keys={['오른쪽 끌기']} />
+          <Ctl k="확대·축소" keys={['휠']} />
+          <Ctl k="처음 시야로" keys={['Esc']} />
         </div>
         <div className="ctl-g">
-          <em>누르면</em>
-          <Ctl keys={[['구역 바닥'], ['위 구역 칩']]}>그 구역으로 확대</Ctl>
-          <Ctl keys={[['선반 칸']]}>칸에 든 상품·수량</Ctl>
-          <Ctl keys={[['작업자']]}>하는 일·따라가기</Ctl>
-          <Ctl keys={[['패킹대'], ['출하대기 랙']]}>그 자리 주문</Ctl>
-          <Ctl keys={[['빈 바닥'], ['건물 밖']]}>나가기</Ctl>
+          <em>눌러 보기</em>
+          <Tap on="구역 바닥 · 위 구역 칩">그 구역으로 확대</Tap>
+          <Tap on="선반 칸 · 팔레트">든 상품·수량</Tap>
+          <Tap on="작업자">하는 일, 따라가기</Tap>
+          <Tap on="패킹대 · 인계 랙">그 자리 주문</Tap>
+          <Tap on="빈 바닥 · 건물 밖">나가기</Tap>
         </div>
         <div className="ctl-g">
-          <em>화면에 보이는 것</em>
-          <Ctl keys={[['노란 판']]}>랙 번호 · 가까이 칸 번호</Ctl>
-          <Ctl keys={[['말풍선']]}>작업자가 지금 찍을 것</Ctl>
-          <Ctl keys={[['회색 칩']]}>화면이 짐작한 값</Ctl>
+          <em>화면 표시</em>
+          <Tap on={<span className="ctl-sw plate">B01-01</span>}>랙 번호(가까이 가면 칸 번호)</Tap>
+          <Tap on={<span className="ctl-sw bubble">말풍선</span>}>작업자가 지금 찍을 것</Tap>
+          <Tap on={<span className="ctl-sw guess">추정</span>}>서버 값이 아니라 화면이 짐작한 값</Tap>
+          <Tap on={<span className="ctl-sw pending">노란 바닥</span>}>입고재고(검수 전) 자리</Tap>
         </div>
       </Part>
       <Part title="색 구분">

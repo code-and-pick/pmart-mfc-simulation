@@ -1082,17 +1082,23 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .zst-cat .k { opacity: 0.6; text-align: right; }
 .zst-cat b { text-align: right; font-variant-numeric: tabular-nums; }
 
-/* 도움말 조작: 왼쪽 키·마우스 모양, 오른쪽 하는 일 */
-.ctl-g { display: flex; flex-direction: column; gap: 7px; }
+/* 도움말 조작 — 하는 일 | 입력 칩 한 줄 */
+.ctl-g { display: flex; flex-direction: column; gap: 6px; }
 .ctl-g + .ctl-g { margin-top: 14px; }
-.ctl-g > em { font-style: normal; font-size: 11px; font-weight: 700; letter-spacing: 0.02em; color: var(--muted); text-transform: none; }
-.ctl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 8px; align-items: center; }
-.ctl-k { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
-.ctl-k > span { display: inline-flex; align-items: center; gap: 4px; }
-.ctl-k i { font-style: normal; font-size: 10.5px; color: var(--muted); }
-.ctl-k kbd { display: inline-flex; align-items: center; gap: 4px; font-family: inherit; font-size: 12px; font-weight: 600; color: var(--text); padding: 2px 7px; border-radius: 6px; border: 1px solid var(--line-strong); border-bottom-width: 2px; background: var(--soft); white-space: nowrap; }
-.ctl-k kbd small { font-size: 11px; }
-.ctl-v { font-size: 12.5px; color: var(--text); line-height: 1.4; }
+.ctl-g > em { font-style: normal; font-size: 11px; font-weight: 700; color: var(--muted); }
+.ctl { display: grid; grid-template-columns: 82px minmax(0, 1fr); gap: 8px; align-items: center; font-size: 12.5px; line-height: 1.4; }
+.ctl > b { font-weight: 700; color: var(--text); }
+.ctl.tap { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); align-items: start; }
+.ctl.tap > span { color: var(--muted); }
+.ctl.tap.sw { grid-template-columns: 76px minmax(0, 1fr); align-items: center; }
+.ctl-k { display: flex; flex-wrap: wrap; gap: 4px; }
+.ctl-k kbd { font-family: inherit; font-size: 11.5px; font-weight: 600; color: var(--text); padding: 1px 7px; border-radius: 5px; border: 1px solid var(--line-strong); border-bottom-width: 2px; background: var(--soft); white-space: nowrap; }
+.ctl-k kbd.mouse::before { content: '🖱 '; font-size: 10px; }
+.ctl-sw { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 4px; }
+.ctl-sw.plate { background: #1f63d8; color: #fff; }
+.ctl-sw.bubble { background: #fff; color: #24304f; border: 1px solid #cfd5e2; border-radius: 9px; }
+.ctl-sw.guess { background: #8a8f99; color: #fff; border-radius: 9px; }
+.ctl-sw.pending { background: rgba(242, 201, 76, 0.55); color: #5a4300; }
 
 /* 보충재고 팔레트 격자 — 자리 번호·수량·종 */
 .zst-pallets { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 5px; margin-bottom: 10px; }

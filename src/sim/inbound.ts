@@ -12,6 +12,12 @@ import type { NavGrid, P } from '../domain/navgrid';
 import { Agent } from './agent';
 import type { Metrics } from './metrics';
 
+/** 내려놓은 자리에 다가설 점 — 하차 칸은 통로 쪽(z 19.75 기준), 저온 입고재고 팔레트는 그 앞 통로(z 26.25) */
+function approach(spot: { x: number; z: number }, it: { temp: string; slot: unknown }): { x: number; z: number } {
+  if (!it.slot && it.temp !== 'AMBIENT' && spot.z > 25) return { x: spot.x, z: 26.25 };
+  return { x: spot.x, z: spot.z < 19.75 ? spot.z + 0.55 : spot.z - 0.55 };
+}
+
 export type InboundState = 'IDLE' | 'RECEIVING' | 'PUTAWAY' | 'REPLENISH' | 'RETURNING' | 'ERROR';
 
 export interface Truck {
@@ -158,7 +164,7 @@ export class InboundWorker extends Agent {
       };
       ctx.placeOnDock(item);
       const spot = item.slot?.pos ?? item.floorPos;
-      await this.walkTo({ x: spot.x, z: spot.z < 19.75 ? spot.z + 0.55 : spot.z - 0.55 });
+      await this.walkTo(approach(spot, item));
       await this.wait(2);
       this.carrying = [];
       truck.unloaded = i + 1;
@@ -194,8 +200,8 @@ export class InboundWorker extends Agent {
     this.pda = { title: `적치 ${TEMP_KO[temp]} ${items.length}품목`, rows: [], step: '하차 칸에서 집기' };
     for (const it of items) {
       const spot = it.slot?.pos ?? it.floorPos;
-      this.activity = `적치 — 하차 칸 ${it.slot?.id ?? '바닥'}`;
-      await this.walkTo({ x: spot.x, z: spot.z < 19.75 ? spot.z + 0.55 : spot.z - 0.55 });
+      this.activity = it.slot ? `적치 — 하차 칸 ${it.slot.id}` : it.temp !== 'AMBIENT' ? `적치 — ${TEMP_KO[it.temp]} 입고재고 자리` : '적치 — 하차 칸 바닥';
+      await this.walkTo(approach(spot, it));
       await this.wait(3);
       it.state = 'TAKEN';
       ctx.releaseDock(it);
