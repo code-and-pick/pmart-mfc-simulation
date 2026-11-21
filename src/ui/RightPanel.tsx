@@ -185,10 +185,13 @@ function LogBody({ tab }: { tab: Tab }): ReactNode {
   }
   if (tab === 'events') {
     return s.events.slice(-150).map((e, i) => (
-      <div className="row wrap" key={i}>
-        <span className="t">{fmtClock(e.at)}</span>
-        <span className="ev">{e.type}</span>
-        <span>{e.summary}</span>
+      // 시각·사건 이름 한 줄, 내용은 그 아래 한 줄(넘치면 … — 전체는 마우스를 올리면). 사용자 2026-11-21
+      <div className="evrow" key={i} title={e.summary}>
+        <div className="evh">
+          <span className="t">{fmtClock(e.at)}</span>
+          <span className="ev">{e.type}</span>
+        </div>
+        <div className="evs">{e.summary}</div>
       </div>
     ));
   }

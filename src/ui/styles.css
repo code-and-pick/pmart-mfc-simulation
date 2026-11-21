@@ -303,6 +303,22 @@ button.btn.ghost {
 .log .wrap {
   white-space: normal;
 }
+/* 이벤트 탭: 시각·사건 이름 / 아래 내용 한 줄 */
+.log .evrow {
+  padding: 2px 0 3px;
+  border-bottom: 1px solid var(--line);
+}
+.log .evh {
+  display: flex;
+  gap: 6px;
+  white-space: nowrap;
+}
+.log .evs {
+  padding-left: 62px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 table.inv {
   width: 100%;
   border-collapse: collapse;

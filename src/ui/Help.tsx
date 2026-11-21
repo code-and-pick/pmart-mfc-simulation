@@ -28,6 +28,26 @@ function Item({ k, children }: { k: string; children: ReactNode }) {
   );
 }
 
+/** 조작 한 줄 — 누를 것(여러 개면 "또는") → 일어나는 일 */
+function Ctl({ keys, children }: { keys: string[][]; children: ReactNode }) {
+  return (
+    <div className="ctl">
+      <div className="ctl-k">
+        {keys.map((k, i) => (
+          <span key={i}>
+            {i > 0 && <i>또는</i>}
+            <kbd>
+              {k.length > 1 && <small>{k[0]}</small>}
+              {k[k.length - 1]}
+            </kbd>
+          </span>
+        ))}
+      </div>
+      <div className="ctl-v">{children}</div>
+    </div>
+  );
+}
+
 const WORKER: WorkerState[] = ['IDLE', 'TO_CART', 'PICKING', 'WAIT_STATION', 'PACKING', 'TO_SHIP', 'ERROR'];
 const INBOUND: InboundState[] = ['RECEIVING', 'PUTAWAY', 'REPLENISH'];
 
@@ -84,18 +104,29 @@ export function Help() {
   const real = sim.mode === 'http';
   return (
     <>
+      {/* 조작 — 왼쪽에 누를 것(키·마우스 모양), 오른쪽에 일어나는 일. 사용자 2026-11-21 "도움말에 조작 탭 좀 더 직관적이게" */}
       <Part title="조작">
-        <ul className="help-list">
-          <Item k="이동">왼쪽 끌기 · 화살표 / WASD</Item>
-          <Item k="돌리기">오른쪽 끌기(천천히)</Item>
-          <Item k="확대">휠 — 마우스가 가리킨 곳으로</Item>
-          <Item k="구역">위 구역 칩이나 바닥을 한 번 누르면 그 구역으로</Item>
-          <Item k="나가기">MFC 바깥·들어온 구역의 빈 바닥을 누르거나 Esc — 고른 것을 풀고 확대하기 전 시야로</Item>
-          <Item k="누르면">구역 → 그 구역으로, 선반 → 칸 정보, 작업자 → PDA 화면·따라가기</Item>
-          <Item k="번호판">랙 위 노란 판 = 랙 번호, 가까이 가면 칸 번호</Item>
-          <Item k="말풍선">작업자가 지금 찍을 것</Item>
-          <Item k="추정">회색 칩 = 서버 값이 아니라 화면이 짐작한 값</Item>
-        </ul>
+        <div className="ctl-g">
+          <em>화면 움직이기</em>
+          <Ctl keys={[['🖱', '왼쪽 끌기'], ['W A S D'], ['← ↑ → ↓']]}>옆으로 옮기기</Ctl>
+          <Ctl keys={[['🖱', '오른쪽 끌기']]}>돌려 보기</Ctl>
+          <Ctl keys={[['🖱', '휠']]}>확대·축소</Ctl>
+          <Ctl keys={[['Esc']]}>처음 시야로</Ctl>
+        </div>
+        <div className="ctl-g">
+          <em>누르면</em>
+          <Ctl keys={[['구역 바닥'], ['위 구역 칩']]}>그 구역으로 확대</Ctl>
+          <Ctl keys={[['선반 칸']]}>칸에 든 상품·수량</Ctl>
+          <Ctl keys={[['작업자']]}>하는 일·따라가기</Ctl>
+          <Ctl keys={[['패킹대'], ['출하대기 랙']]}>그 자리 주문</Ctl>
+          <Ctl keys={[['빈 바닥'], ['건물 밖']]}>나가기</Ctl>
+        </div>
+        <div className="ctl-g">
+          <em>화면에 보이는 것</em>
+          <Ctl keys={[['노란 판']]}>랙 번호 · 가까이 칸 번호</Ctl>
+          <Ctl keys={[['말풍선']]}>작업자가 지금 찍을 것</Ctl>
+          <Ctl keys={[['회색 칩']]}>화면이 짐작한 값</Ctl>
+        </div>
       </Part>
       <Part title="색 구분">
         <Colors />
