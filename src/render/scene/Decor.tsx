@@ -11,11 +11,12 @@ import { SCENE } from '../colors';
 
 /** 통로 가운데 선(점선 + 화살표). [x0, z0, x1, z1] — 배치의 빈 띠(벽 사이)에서 */
 function walkways(L: Layout): [number, number, number, number][] {
-  const W = L.width;
+  void L;
+  // 2026-11-21 재배치: 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
   return [
-    [1.2, 31.05, W - 1.2, 31.05], // 남쪽 큰 통로(냉동·냉장 문 → 패킹·출하)
-    [24.05, 16.2, 24.05, 30.2], // 냉장 벽 ↔ 패킹실
-    [36.05, 16.2, 36.05, 30.2], // 패킹실 ↔ 입고 쪽 벽
+    [1.2, 0.8, 22.6, 0.8],
+    [23.65, 1.2, 23.65, 32.4],
+    [1.2, 32.85, 38.0, 32.85],
   ];
 }
 
@@ -339,8 +340,8 @@ function RollContainer({ x, z, rot = 0 }: { x: number; z: number; rot?: number }
 export function InboundDecor() {
   return (
     <>
-      {[37.9, 38.8, 39.7].map((x) => (
-        <RollContainer key={x} x={x} z={22.25} />
+      {[25.1, 26.0, 26.9].map((x) => (
+        <RollContainer key={x} x={x} z={5.55} />
       ))}
     </>
   );
@@ -476,7 +477,7 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 }
 
 /** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
-export const OFFICE_TABLE = { x: 42.6, z: 25.9, w: 3.6, d: 0.8, h: 0.74 };
+export const OFFICE_TABLE = { x: 43.6, z: 2.7, w: 3.6, d: 0.8, h: 0.74 }; // 휴게·사무 가운데(2026-11-21 재배치)
 function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
   // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
   const seat = 0x2b3240;

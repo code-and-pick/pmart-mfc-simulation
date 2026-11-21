@@ -15,7 +15,7 @@ import type { Metrics } from './metrics';
 /** 내려놓은 자리에 다가설 점 — 하차 칸은 통로 쪽(z 19.75 기준), 입고재고 팔레트는 그 팔레트 앞 */
 function approach(spot: { x: number; z: number }, it: { slot: unknown; stand?: { x: number; z: number } }): { x: number; z: number } {
   if (!it.slot && it.stand) return it.stand;
-  return { x: spot.x, z: spot.z < 19.75 ? spot.z + 0.55 : spot.z - 0.55 };
+  return { x: spot.x, z: spot.z < 3.05 ? spot.z + 0.55 : spot.z - 0.55 }; // 하차 칸 두 블록 사이 통로 z 3.05(2026-11-21 재배치, 전 19.75)
 }
 
 export type InboundState = 'IDLE' | 'RECEIVING' | 'PUTAWAY' | 'REPLENISH' | 'RETURNING' | 'ERROR';
@@ -161,7 +161,7 @@ export class InboundWorker extends Agent {
         qty: l.qty,
         temp: sku.temp,
         slot: null,
-        floorPos: { x: 46, z: 19.75 },
+        floorPos: { x: 33.2, z: 3.05 },
         state: 'ON_DOCK',
       };
       ctx.placeOnDock(item);
@@ -176,7 +176,7 @@ export class InboundWorker extends Agent {
 
     this.activity = '수량·바코드·유통기한 검수';
     this.pda.step = '검수';
-    await this.walkTo({ x: 43.5, z: 19.75 });
+    await this.walkTo({ x: 30.7, z: 3.05 });
     await this.wait(2 * truck.lines.length);
     this.pda.step = '수령 등록 (TIN)';
     await ctx.mock.recordReceipt(

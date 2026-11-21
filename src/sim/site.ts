@@ -75,7 +75,7 @@ export class ShippingRack {
       const staged: StagedPackage = {
         pkg,
         shipmentId,
-        slot: slot ?? { id: `FLOOR-${pkg.packageId}`, rackIndex: -1, pos: { x: 30 + (Math.random() - 0.5) * 3, y: 0.15, z: 32.7 } },
+        slot: slot ?? { id: `FLOOR-${pkg.packageId}`, rackIndex: -1, pos: { x: 43.6 + (Math.random() - 0.5) * 3, y: 0.15, z: 34.5 } }, // 출하대기 앞(2026-11-21 재배치)
       };
       this.used.set(staged.slot.id, staged);
       out.push(staged);

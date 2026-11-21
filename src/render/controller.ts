@@ -26,9 +26,11 @@ export function zoneViews(L: Layout): ZoneView[] {
     { key: 'B', label: '냉장 B', zoneId: 'B', rect: z('B') },
     { key: 'C-H', label: '상온 C~H', zoneId: 'C-H', rect: z('C-H') },
     { key: 'WH', label: '입고창고', zoneId: 'WH', rect: z('WH') },
-    { key: 'RCV', label: '입고·검수', zoneId: 'RCV', rect: { ...z('RCV'), x1: 57 } },
+    // 입고·검수는 북쪽 차량문 밖 트럭 자리까지(2026-11-21 재배치 — 전엔 동쪽 x 57 까지)
+    { key: 'RCV', label: '입고·검수', zoneId: 'RCV', rect: { ...z('RCV'), z0: -5.5 } },
     { key: 'PK', label: '패킹', zoneId: 'PK', rect: z('PK') },
-    { key: 'SHIP', label: '출하대기', zoneId: 'SHIP', rect: { x0: 24, z0: 31, x1: 36, z1: 40 } },
+    // 출하대기 + 라이더 앞마당(남쪽 밖) — 구역에서 계산(2026-11-21 재배치)
+    { key: 'SHIP', label: '출하대기', zoneId: 'SHIP', rect: { x0: z('PARK').x0, z0: L.buildingDepth - 1, x1: z('PARK').x1, z1: L.depth } },
   ];
 }
 

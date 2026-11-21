@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS, DECOR } from '../../config';
-import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
+import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -64,12 +64,13 @@ function Ground({ L }: { L: Layout }) {
         <meshStandardMaterial color={SCENE.floor} roughness={0.95} />
       </mesh>
       {/* 남쪽 앞마당(라이더), 동쪽 입고 차량 진입로 — 그림의 회색 도크처럼 */}
-      <mesh rotation={flat} position={[30, -0.015, 36]} receiveShadow>
-        <planeGeometry args={[19.7, 8]} />
+      <mesh rotation={flat} position={[(YARD_X[0] + YARD_X[1]) / 2, -0.015, (L.buildingDepth + L.depth) / 2]} receiveShadow>
+        <planeGeometry args={[YARD_X[1] - YARD_X[0], L.depth - L.buildingDepth]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
-      <mesh rotation={flat} position={[68, -0.015, L.points.truckDock.z]} receiveShadow>
-        <planeGeometry args={[40, 5]} />
+      {/* 입고 차량 길: 북쪽 차량문 앞에서 동쪽으로(2026-11-21 재배치 — 전엔 동쪽 벽) */}
+      <mesh rotation={flat} position={[(L.points.truckDock.x - 4 + 90) / 2, -0.015, L.points.truckDock.z]} receiveShadow>
+        <planeGeometry args={[90 - (L.points.truckDock.x - 4), 5]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
     </>
@@ -595,7 +596,7 @@ export function Facility() {
       <OfficeDecor />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
-      <Label text="입고 차량문" position={[L.width + 0.4, 3.4, L.points.truckDoor.z]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
+      <Label text="입고 차량문" position={[L.points.truckDoor.x, 3.4, -0.4]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
     </>
   );
 }

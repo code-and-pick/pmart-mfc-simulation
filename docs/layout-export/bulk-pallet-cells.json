@@ -6,12 +6,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38,
-   "zM": 3.2
+   "xM": 39,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 38,
-   "zM": 0.85
+   "xM": 39,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -26,12 +26,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38,
-   "zM": 3.2
+   "xM": 39,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 38,
-   "zM": 2
+   "xM": 39,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -46,12 +46,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 39.25,
-   "zM": 3.2
+   "xM": 40.25,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 39.25,
-   "zM": 0.85
+   "xM": 40.25,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -66,12 +66,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 39.25,
-   "zM": 3.2
+   "xM": 40.25,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 39.25,
-   "zM": 2
+   "xM": 40.25,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -86,12 +86,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 40.5,
-   "zM": 3.2
+   "xM": 41.5,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 40.5,
-   "zM": 0.85
+   "xM": 41.5,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -106,12 +106,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 40.5,
-   "zM": 3.2
+   "xM": 41.5,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 40.5,
-   "zM": 2
+   "xM": 41.5,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -126,12 +126,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.75,
-   "zM": 3.2
+   "xM": 42.75,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 41.75,
-   "zM": 0.85
+   "xM": 42.75,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -146,12 +146,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.75,
-   "zM": 3.2
+   "xM": 42.75,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 41.75,
-   "zM": 2
+   "xM": 42.75,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -166,12 +166,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43,
-   "zM": 3.2
+   "xM": 44,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 43,
-   "zM": 0.85
+   "xM": 44,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -186,12 +186,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43,
-   "zM": 3.2
+   "xM": 44,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 43,
-   "zM": 2
+   "xM": 44,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -206,12 +206,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.25,
-   "zM": 3.2
+   "xM": 45.25,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 44.25,
-   "zM": 0.85
+   "xM": 45.25,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -226,12 +226,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.25,
-   "zM": 3.2
+   "xM": 45.25,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 44.25,
-   "zM": 2
+   "xM": 45.25,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -246,12 +246,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 45.5,
-   "zM": 3.2
+   "xM": 46.5,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 45.5,
-   "zM": 0.85
+   "xM": 46.5,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -266,12 +266,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 45.5,
-   "zM": 3.2
+   "xM": 46.5,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 45.5,
-   "zM": 2
+   "xM": 46.5,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
@@ -286,12 +286,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46.75,
-   "zM": 3.2
+   "xM": 47.75,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 46.75,
-   "zM": 0.85
+   "xM": 47.75,
+   "zM": 6.45
   },
   "dimMm": {
    "w": 1100,
@@ -306,12 +306,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46.75,
-   "zM": 3.2
+   "xM": 47.75,
+   "zM": 8.8
   },
   "palletCenter": {
-   "xM": 46.75,
-   "zM": 2
+   "xM": 47.75,
+   "zM": 7.6
   },
   "dimMm": {
    "w": 1100,
