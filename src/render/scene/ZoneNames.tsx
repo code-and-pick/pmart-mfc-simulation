@@ -153,7 +153,9 @@ const WALL_CARD_Y = 2.95;
 /** 냉동·냉장·상온·입고창고만 더 크게·더 위에(사용자 2026-11-20 "냉동, 냉장. 상온, 입고창고 구역카드들만 조금 더 위쪽으로 위치 올리고 사이즈 키워서") */
 const WALL_CARD_H_BIG = 2.35;
 const WALL_CARD_Y_BIG = 4.3;
-const BIG_KINDS: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE'];
+const BIG_KINDS: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE', 'RECEIVING', 'OFFICE'];
+/** 냉동과 같은 크기 — 문 때문에 벽 조각이 짧아도 줄이지 않고 구역 폭 안에서(사용자 2026-11-21 "휴게사무, 입고검수, 냉장 구역카드 크기 냉동이랑 같게 맞춰") */
+const SAME_AS_FROZEN: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'RECEIVING', 'OFFICE'];
 
 interface Tag {
   id: string;
@@ -179,14 +181,18 @@ export function zoneTags(L: Layout): Tag[] {
     if (wall) {
       const big = BIG_KINDS.includes(z.kind);
       // 휴게·사무는 작게(사용자 2026-11-20 "휴게사무는 구역카드 사이즈 줄여")
-      let h = big ? WALL_CARD_H_BIG : z.kind === 'OFFICE' ? WALL_CARD_H * 0.65 : WALL_CARD_H;
+      // (2026-11-21: 휴게·사무도 냉동과 같은 크기로 — 전엔 작게 "휴게사무는 구역카드 사이즈 줄여")
+      let h = big ? WALL_CARD_H_BIG : WALL_CARD_H;
       let w = h * aspect;
-      const room = (wall.x1 - wall.x0) * 0.9;
+      const same = SAME_AS_FROZEN.includes(z.kind);
+      // 냉동과 같은 무리: 벽 조각이 아니라 구역 폭 기준·구역 가운데(문 위로 걸쳐도 카드는 벽 위에 떠 있다)
+      const room = same ? (r.x1 - r.x0) * 0.95 : (wall.x1 - wall.x0) * 0.9;
       if (w > room) {
         w = room;
         h = w / aspect;
       }
-      out.push({ id: z.id, tex, pos: [(wall.x0 + wall.x1) / 2, big ? WALL_CARD_Y_BIG + (h - WALL_CARD_H_BIG) / 2 : WALL_CARD_Y, wall.face], rotX: 0, w, h });
+      const cx = same ? (r.x0 + r.x1) / 2 : (wall.x0 + wall.x1) / 2;
+      out.push({ id: z.id, tex, pos: [cx, big ? WALL_CARD_Y_BIG + (h - WALL_CARD_H_BIG) / 2 : WALL_CARD_Y, wall.face], rotX: 0, w, h });
     } else {
       // 바닥에 눕힘 — 격리는 작게, 패킹은 크게(벽을 뺀 뒤 바닥 카드, 사용자 2026-11-21 "바닥에 붙은 패킹구역카드 사이즈 좀 키워줘")
       let h = dim ? 0.55 : z.kind === 'PACKING' ? 1.8 : 0.9;

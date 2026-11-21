@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
-import { RACK_DEPTH } from '../../domain/layout';
+import { COLD_BAND, RACK_DEPTH } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR, zoneBoxColor } from '../colors';
 import { boxTexture, palletTexture } from '../sprites';
 import { Label } from './Facility';
@@ -257,23 +257,23 @@ function floorText(text: string): { tex: THREE.CanvasTexture; aspect: number } {
 // 상온 입고창고: 창고 전체를 한 판으로(바깥 선은 창고 구역 선), 뒤 입고재고 | 보충재고 랙 | 문 쪽 대형 묶음 을 가로 선으로.
 type Seg = [x0: number, z0: number, x1: number, z1: number];
 const LINE_W = 0.1;
-const coldArea = (q0: number, rcvCx: number, dz = 1.8) => {
-  // q0 = 격리 구역 x1. 판 선 = q0 − 0.12 ~ L1, z 26.72 ~ 29.68(격리 선과 같음).
-  // 입고재고 칸은 팔레트 가운데(rcvCx = 서버 입고칸 x)에 맞춰 폭 1.7 m — 사용자 2026-11-21 "입고재고 팔레트가 왜 중앙에 있지않고 왼쪽으로 치우쳐져있니"
-  // dz: 2026-11-21 재배치로 저온실이 1.8 m 남쪽으로
-  const L0 = q0 - 0.12, div = rcvCx - 0.85, L1 = rcvCx + 0.85, T = 26.72 + dz, B = 29.68 + dz;
+// 냉동·냉장: 서쪽 벽 띠(COLD_BAND) 하나 — 남쪽부터 격리 | 입고재고 | 보충재고, 가로 실선으로 나눔. 띠 바깥 선은 격리 선과 같은 자리(띠 끝 ± 0.12)
+// (사용자 2026-11-21 "왼쪽 벽면으로 다 옮겨 버려" → "냉장냉동에서 옮겼으면 바닥 표시도 옮겨야지")
+const coldArea = (X0: number) => {
+  const X1 = X0 + COLD_BAND.width;
+  const L0 = X0 + 0.12, L1 = X1 - 0.12, T = COLD_BAND.z0 + 0.12, B = COLD_BAND.z1 - 0.12, DIV = 24.9;
   return {
-    floor: [L0, 26.6 + dz, L1 + 0.12, 29.8 + dz] as Seg,
-    lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [div, T, div, B]] as Seg[],
+    floor: [X0, COLD_BAND.z0, X1, COLD_BAND.z1] as Seg,
+    lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [L0, DIV, L1, DIV]] as Seg[],
     texts: [
-      { t: '보충재고', x: (L0 + div) / 2, z: 26.1 + dz },
-      { t: '입고재고', x: (div + L1) / 2, z: 26.1 + dz },
+      { t: '보충재고', x: (X0 + X1) / 2, z: COLD_BAND.z0 + 0.65 },
+      { t: '입고재고', x: (X0 + X1) / 2, z: 27.2 },
     ],
   };
 };
 const STORE_AREAS = [
-  coldArea(14.8, 20.95), // 냉동: 격리 x 11.2~14.8 → 보충재고 랙 → 입고재고 팔레트 AR-3·4(x 20.4~21.5, RCV-F-01) — 2026-11-21 재배치 좌표
-  coldArea(3.8, 9.35), // 냉장: 격리 x 0.2~3.8 → 보충재고 랙 → 입고재고 팔레트 BR-3·4(x 8.8~9.9, RCV-C-01)
+  coldArea(COLD_BAND.FROZEN), // 냉동 서쪽 벽 띠
+  coldArea(COLD_BAND.CHILLED), // 냉장 서쪽 벽 띠
   {
     // 상온 입고창고: 안쪽 대형 묶음(+지게차 가로 통로) | 입고재고 | 문 쪽 보충재고. 서쪽 세로 지게차 통로 x 37.3~40.3
     // 2026-11-21 재배치: 입고창고 x +1.0, z +5.6

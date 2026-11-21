@@ -308,8 +308,8 @@ function Obstacles({ L }: { L: Layout }) {
             // (사용자 2026-11-21 "…방향을 세로로 돌려서 붙이라고 … 옆으로 돌리라고" → "격리구역 랙 오른쪽이 아니라 왼 쪽으로"). 상온은 구역 뒤쪽 그대로
             const cold = z.id === 'AQ' || z.id === 'BQ';
             if (cold) {
-              const x0 = z.rect.x0 + 0.2;
-              const z0 = z.rect.z0 + 0.3 + i * (RACK_LEN + 0.15);
+              const x0 = z.rect.x0 + 0.25;
+              const z0 = z.rect.z0 + 0.35 + i * (RACK_LEN + 0.15);
               return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_DEPTH, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
             }
             // 상온 격리는 오른쪽(동쪽) 벽 쪽 실선 안에 세로로 위아래 2개(사용자 2026-11-21 "상온 격리 랙 2개는 오른쪽 벽에 붙여") — 구역 깊이 3.0 m 라 간격 0.05
