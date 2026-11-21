@@ -343,8 +343,14 @@ export class ViewController extends Emitter {
     if (!p) return false;
     this.nearCut = 0;
     this.follow = null;
-    const t = new THREE.Vector3(p.x, 0.5, p.z);
-    this.cameraRequest = { pos: t.clone().add(new THREE.Vector3(0, 8, 8)), target: t, animate: true };
+    // 선반 밖 자리(패킹대·인계 랙·입고칸 등): 그 구역 보기로(구역 버튼과 같은 거리) + 노란 표시 — 11 m 위에서 붙으면 너무 가까웠다
+    // (사용자 2026-11-21 "재고탭에서 패킹이랑 출하대기 클릭하니까 그 구역에 너무 가까이 간다")
+    const v = this.views.find((x) => x.key !== 'ALL' && p.x >= x.rect.x0 && p.x <= x.rect.x1 && p.z >= x.rect.z0 && p.z <= x.rect.z1);
+    if (v) this.focusZone(v.key);
+    else {
+      const t = new THREE.Vector3(p.x, 0.5, p.z);
+      this.cameraRequest = { pos: t.clone().add(new THREE.Vector3(0, 14, 14)), target: t, animate: true };
+    }
     this.marker = { x: p.x, y: 0, z: p.z, until: performance.now() + 8000 };
     this.emit();
     return true;
