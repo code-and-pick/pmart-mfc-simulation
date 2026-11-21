@@ -268,174 +268,80 @@ export function WorkingCells() {
 }
 
 /** 지게차(장식, 사용자 2026-11-20 참고 그림 "입고구역 UI도 똑같이") — 노란 몸통·검정 마스트·포크. 통행·작업과 무관 */
-/** 옆모습 단면(u = 앞뒤 z, v = 높이 y)을 좌우 폭만큼 밀어낸 모양 — 둥근 뒤판·비스듬한 덮개 */
-function sideProfile(pts: (shape: THREE.Shape) => void, width: number): THREE.ExtrudeGeometry {
-  const sh = new THREE.Shape();
-  pts(sh);
-  const g = new THREE.ExtrudeGeometry(sh, { depth: width, bevelEnabled: true, bevelSize: 0.025, bevelThickness: 0.025, bevelSegments: 2, curveSegments: 10 });
-  g.translate(0, 0, -width / 2);
-  g.rotateY(-Math.PI / 2); // 단면 u → z, 밀어낸 방향 → x
-  return g;
-}
-let forkliftGeo: { body: THREE.ExtrudeGeometry; weight: THREE.ExtrudeGeometry } | null = null;
-
 /**
- * 지게차(카운터밸런스형) — 앞(+z)에 마스트·포크. 노란 몸체(비스듬한 덮개), 짙은 회색 둥근 평형추, 안전 지붕(헤드가드)·좌석·핸들,
- * 앞바퀴 크게·뒷바퀴 작게, 지붕 경광등(사용자 2026-11-21 "지게차 못생겼어" — 전엔 상자 몇 개)
+ * 롤테이너(롤 컨테이너) — 바퀴 달린 철망 짐수레 0.8×0.6×1.7 m [시뮬]. 입고 상품은 지게차가 아니라 롤테이너로 옮긴다
+ * (사용자 2026-11-21 "지게차 없애. 롤테이너로 옮기니까" — 전엔 지게차 장식)
  */
-function Forklift({ x, z, rot }: { x: number; z: number; rot: number }) {
-  const Y = 0xf2b705;
-  const K = 0x2a2f38;
-  const M = 0x5b6270;
-  if (!forkliftGeo) {
-    forkliftGeo = {
-      body: sideProfile((p) => {
-        p.moveTo(-0.55, 0.22);
-        p.lineTo(0.42, 0.22);
-        p.lineTo(0.42, 0.62);
-        p.quadraticCurveTo(0.4, 0.74, 0.22, 0.76);
-        p.lineTo(-0.2, 0.8);
-        p.lineTo(-0.55, 0.8);
-        p.lineTo(-0.55, 0.22);
-      }, 0.9),
-      weight: sideProfile((p) => {
-        p.moveTo(-0.55, 0.16);
-        p.lineTo(-0.9, 0.16);
-        p.quadraticCurveTo(-1.02, 0.18, -1.02, 0.42);
-        p.quadraticCurveTo(-1.0, 0.84, -0.7, 0.86);
-        p.lineTo(-0.55, 0.86);
-        p.lineTo(-0.55, 0.16);
-      }, 0.94),
-    };
-  }
-  const wheel = (wx: number, wz: number, r: number, w: number) => (
-    <group key={`w${wx}${wz}`} position={[wx, r, wz]} rotation={[0, 0, Math.PI / 2]}>
-      <mesh castShadow>
-        <cylinderGeometry args={[r, r, w, 20]} />
-        <meshStandardMaterial color={0x1b1e24} roughness={0.85} />
-      </mesh>
-      <mesh>
-        <cylinderGeometry args={[r * 0.55, r * 0.55, w + 0.012, 16]} />
-        <meshStandardMaterial color={0xc9ced6} metalness={0.4} roughness={0.4} />
-      </mesh>
-    </group>
-  );
+function RollContainer({ x, z, rot = 0 }: { x: number; z: number; rot?: number }) {
+  const W = 0.8;
+  const D = 0.6;
+  const H = 1.7;
+  const frame = 0xb8bec8;
   return (
     <group position={[x, 0, z]} rotation={[0, rot, 0]}>
-      {/* 몸체·평형추 */}
-      <mesh geometry={forkliftGeo.body} castShadow receiveShadow>
-        <meshStandardMaterial color={Y} roughness={0.4} metalness={0.05} />
+      {/* 바닥판 */}
+      <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
+        <boxGeometry args={[W, 0.04, D]} />
+        <meshStandardMaterial color={0x8d949f} metalness={0.4} roughness={0.5} />
       </mesh>
-      <mesh geometry={forkliftGeo.weight} castShadow>
-        <meshStandardMaterial color={K} roughness={0.55} />
-      </mesh>
-      {/* 아래 틀 */}
-      <mesh position={[0, 0.2, -0.1]}>
-        <boxGeometry args={[0.8, 0.12, 1.3]} />
-        <meshStandardMaterial color={K} roughness={0.7} />
-      </mesh>
-      {/* 바퀴: 앞 큰 것, 뒤 작은 것 */}
-      {[-0.43, 0.43].map((wx) => wheel(wx, 0.3, 0.25, 0.2))}
-      {[-0.43, 0.43].map((wx) => wheel(wx, -0.72, 0.19, 0.16))}
-      {/* 좌석·핸들 */}
-      <mesh position={[0, 0.9, -0.3]} castShadow>
-        <boxGeometry args={[0.46, 0.1, 0.42]} />
-        <meshStandardMaterial color={0x15181d} roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 1.12, -0.5]} rotation={[-0.15, 0, 0]} castShadow>
-        <boxGeometry args={[0.46, 0.42, 0.08]} />
-        <meshStandardMaterial color={0x15181d} roughness={0.8} />
-      </mesh>
-      <mesh position={[0, 1.0, 0.18]} rotation={[0.5, 0, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
-        <meshStandardMaterial color={K} />
-      </mesh>
-      <mesh position={[0, 1.17, 0.08]} rotation={[-1.05, 0, 0]}>
-        <torusGeometry args={[0.15, 0.02, 8, 24]} />
-        <meshStandardMaterial color={0x15181d} />
-      </mesh>
-      {/* 안전 지붕: 앞기둥은 비스듬히, 뒤기둥은 곧게, 지붕 살 */}
-      {[-0.4, 0.4].map((sx) => (
-        <group key={`g${sx}`}>
-          <mesh position={[sx, 1.38, 0.3]} rotation={[0.08, 0, 0]} castShadow>
-            <boxGeometry args={[0.05, 1.2, 0.06]} />
-            <meshStandardMaterial color={K} roughness={0.5} />
+      {/* 바퀴 4개 */}
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`w${sx}${sz}`} position={[sx * (W / 2 - 0.07), 0.06, sz * (D / 2 - 0.07)]} rotation={[0, 0, Math.PI / 2]}>
+            <cylinderGeometry args={[0.06, 0.06, 0.04, 12]} />
+            <meshStandardMaterial color={0x1f2229} />
           </mesh>
-          <mesh position={[sx, 1.4, -0.6]} castShadow>
-            <boxGeometry args={[0.05, 1.12, 0.06]} />
-            <meshStandardMaterial color={K} roughness={0.5} />
+        )),
+      )}
+      {/* 기둥 4개 */}
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`p${sx}${sz}`} position={[sx * (W / 2 - 0.015), 0.18 + (H - 0.18) / 2, sz * (D / 2 - 0.015)]} castShadow>
+            <boxGeometry args={[0.03, H - 0.18, 0.03]} />
+            <meshStandardMaterial color={frame} metalness={0.5} roughness={0.35} />
           </mesh>
-        </group>
-      ))}
-      <mesh position={[0, 1.98, -0.13]} castShadow>
-        <boxGeometry args={[0.88, 0.04, 1.02]} />
-        <meshStandardMaterial color={K} roughness={0.5} />
-      </mesh>
-      {[-0.3, -0.15, 0, 0.15, 0.3].map((sx) => (
-        <mesh key={`s${sx}`} position={[sx, 2.01, -0.13]}>
-          <boxGeometry args={[0.04, 0.03, 0.98]} />
-          <meshStandardMaterial color={M} />
+        )),
+      )}
+      {/* 철망 옆판 3면(앞은 열림): 가로 살 */}
+      {[0.45, 0.75, 1.05, 1.35, 1.65].flatMap((y) => [
+        <mesh key={`b${y}`} position={[0, y, -D / 2 + 0.015]}>
+          <boxGeometry args={[W, 0.02, 0.015]} />
+          <meshStandardMaterial color={frame} metalness={0.5} roughness={0.35} />
+        </mesh>,
+        ...[-1, 1].map((sx) => (
+          <mesh key={`s${y}${sx}`} position={[sx * (W / 2 - 0.015), y, 0]}>
+            <boxGeometry args={[0.015, 0.02, D]} />
+            <meshStandardMaterial color={frame} metalness={0.5} roughness={0.35} />
+          </mesh>
+        )),
+      ])}
+      {/* 세로 살(뒤판) */}
+      {[-0.25, -0.08, 0.08, 0.25].map((dx) => (
+        <mesh key={`v${dx}`} position={[dx, 0.18 + (H - 0.18) / 2, -D / 2 + 0.015]}>
+          <boxGeometry args={[0.012, H - 0.18, 0.012]} />
+          <meshStandardMaterial color={frame} metalness={0.5} roughness={0.35} />
         </mesh>
       ))}
-      {/* 경광등 */}
-      <mesh position={[0.3, 2.08, -0.55]}>
-        <cylinderGeometry args={[0.05, 0.06, 0.1, 12]} />
-        <meshStandardMaterial color={0xff9d1a} emissive={0xff7a00} emissiveIntensity={0.8} />
+      {/* 상자 몇 개 */}
+      <mesh position={[-0.15, 0.36, 0]} castShadow>
+        <boxGeometry args={[0.36, 0.36, 0.5]} />
+        <meshStandardMaterial color={0xd2a679} roughness={0.85} />
       </mesh>
-      {/* 마스트(바깥 기둥 2개·위 가로대)·캐리지·뒤받이·포크 */}
-      {[-0.3, 0.3].map((sx) => (
-        <mesh key={`m${sx}`} position={[sx, 1.1, 0.58]} castShadow>
-          <boxGeometry args={[0.08, 2.0, 0.1]} />
-          <meshStandardMaterial color={M} metalness={0.35} roughness={0.45} />
-        </mesh>
-      ))}
-      <mesh position={[0, 2.06, 0.58]}>
-        <boxGeometry args={[0.68, 0.08, 0.1]} />
-        <meshStandardMaterial color={M} metalness={0.35} roughness={0.45} />
+      <mesh position={[0.2, 0.33, 0.02]} castShadow>
+        <boxGeometry args={[0.3, 0.3, 0.44]} />
+        <meshStandardMaterial color={0xc99a6b} roughness={0.85} />
       </mesh>
-      <mesh position={[0, 0.4, 0.66]} castShadow>
-        <boxGeometry args={[0.8, 0.32, 0.05]} />
-        <meshStandardMaterial color={K} roughness={0.5} />
-      </mesh>
-      {[-0.36, -0.18, 0, 0.18, 0.36].map((sx) => (
-        <mesh key={`b${sx}`} position={[sx, 0.85, 0.66]}>
-          <boxGeometry args={[0.03, 0.6, 0.03]} />
-          <meshStandardMaterial color={K} />
-        </mesh>
-      ))}
-      <mesh position={[0, 1.15, 0.66]}>
-        <boxGeometry args={[0.8, 0.04, 0.04]} />
-        <meshStandardMaterial color={K} />
-      </mesh>
-      {[-0.22, 0.22].map((sx) => (
-        <group key={`f${sx}`}>
-          <mesh position={[sx, 0.32, 0.7]} castShadow>
-            <boxGeometry args={[0.1, 0.5, 0.04]} />
-            <meshStandardMaterial color={0x3d434e} metalness={0.4} roughness={0.4} />
-          </mesh>
-          <mesh position={[sx, 0.09, 1.2]} castShadow>
-            <boxGeometry args={[0.1, 0.035, 1.0]} />
-            <meshStandardMaterial color={0x3d434e} metalness={0.4} roughness={0.4} />
-          </mesh>
-        </group>
-      ))}
-      {/* 앞등 */}
-      {[-0.4, 0.4].map((sx) => (
-        <mesh key={`l${sx}`} position={[sx, 1.75, 0.36]}>
-          <boxGeometry args={[0.07, 0.06, 0.04]} />
-          <meshStandardMaterial color={0xffffff} emissive={0xfff4d0} emissiveIntensity={0.6} />
-        </mesh>
-      ))}
     </group>
   );
 }
 
-/** 입고창고·입고/검수 지게차 자리(빈 구석) */
+/** 입고·검수 하차 자리 장식 — 롤테이너 3대(지게차 대신, 사용자 2026-11-21 "지게차 없애. 롤테이너로 옮기니까") */
 export function InboundDecor() {
   return (
     <>
-      {/* 입고창고 안 지게차는 뺌(사용자 2026-11-20 "입고 창고 안에 있는 지게차는 없애고") — 입고·검수 하차 자리 1대만(장식, 서버 작업 없음) */}
-      <Forklift x={38.4} z={22.1} rot={Math.PI / 2} />
+      {[37.9, 38.8, 39.7].map((x) => (
+        <RollContainer key={x} x={x} z={22.25} />
+      ))}
     </>
   );
 }
