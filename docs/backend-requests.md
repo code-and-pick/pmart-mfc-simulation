@@ -58,6 +58,8 @@
 - 시뮬레이터 지금 처리: 선반에 들어가는 만큼만 적치, 남은 양은 입고칸(RCV-A-01, UNSTOWED)에 그대로 두고 그 작업은 5분마다 다시 시도(`REAL_WORKERS.overflowRetrySec` [시뮬]). 적치 예외 BLOCKED(분실 조사 보류)로는 빼지 않는다(사용자 결정). 이 작업을 든 가상 작업자는 그동안 다른 작업을 받지 못한다(배정 반납 공개 API 없음).
 - **전달(11-21)**: 사용자 "응"(보내도 된다) → "PC1 백엔드" 세션에 메시지. 읽음 확인 없음, 회신 대기.
 - **회신(11-21, "PC1 백엔드")**: 받음. mfc-location·mfc-inventory·적치 추천은 mfc 영역(PC 3)이라 "mfc 백엔드" 세션에 그대로 넘김. 안·일정·계약 변경은 그쪽이 직접 회신. PC 1 계약 변경 없음.
+- **회신(11-21, "mfc 백엔드" PC 3, 초안)**: 새 구역 없이 STORAGE 칸에 `reserveStock: true` 표시(mfc-location 칸 속성·MfcLocationStateChanged 필드). LAN 팔레트 32칸 `{A|C|F}-R1-NN-1-01` 에 표시. inventory: 보충재고 칸은 SKU_ALREADY_SHELVED·SKU_SPLIT_NOT_ALLOWED 제외(선반 판정에도 안 셈), 용량은 칸 전체 상품 부피·무게 합, 기타 칸 추천에서 빠짐, 출하 부적격 LOT 불가. 적치 추천: `suggestedToLocations` 유지 + 새 `suggestedPlacements[{locationCode, qty}]`(주 선반 남은 용량 → 기타 칸 → 보충재고, 같은 상품 있는 칸 먼저), placement-suggestions 도 같은 모양. 보충은 보충재고 → 주 선반 REPLENISH — 일반 선반 보충 기준값(언제·얼마나)은 사용자 결정 대기. 일정: 결정 뒤 같은 날 PR(location·inventory·inbound), LAN 은 PC 1 병합·배포 뒤. 이미 분실 조사 보류로 빠진 양은 관리자 holdResolutions(foundQty) → HOLD_FOUND 적치 작업(수량 크면 422 APPROVAL_REQUIRED). 정식 회신은 백엔드 `docs/handoff/simulator/mfc/` R-30.
+- 시뮬레이터 후속(계약 반영 뒤): 적치 도착지를 `suggestedPlacements` 수량대로 나눠 적치(없으면 지금 방식), `reserveStock` 칸을 입고창고 팔레트로 그림, 입고칸에 남겨 둔 작업은 다음 재시도에서 보충재고로.
 
 ### R-28 재포장·재구성 뒤 배차·배송 수행이 옛 포장을 계속 기다려 픽업 완료가 안 됨 — 높음 (2026-11-20 추가)
 - 사용자 2026-11-20: "QR코드 말고 번호로 픽업하니까 시뮬 쪽에선 인식하고 라이더가 인계완료후 출발해버렸는데 라이더앱은 인식이 안 돼서 계속 QR코드 픽업 예정 상태야. 배송 시뮬 쪽은 가게 도착이라고만 떴어. 배차 취소하려고 하니까 이미 픽업해서 취소 안 된다는 대환장파티".
