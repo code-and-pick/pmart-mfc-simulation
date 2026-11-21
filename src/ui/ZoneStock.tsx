@@ -1,6 +1,6 @@
 // 실서버 구역 재고 — 구역 → 랙 → 단 → 칸(상품·수량). 센터 전체 재고(inventory 0.33.0 stock-units, R-15)를 평면 칸에 맞춰 센다.
 // 사용자 2026-11-20 "구역별 랙갯수랑 적치 상품 갯수랑 랙별 상품 갯수랑 단별 적치 제품 및 갯수를 어디서 볼 수 있니"
-import { WORK_SHORT, placeShortName, reserveName } from '../domain/placeName';
+import { WORK_SHORT, placeShortName } from '../domain/placeName';
 
 const placeShortNameSafe = (code: string) => placeShortName(code);
 import { useEffect, useState } from 'react';
@@ -61,7 +61,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   }, [focusRack, view.cellFocus]);
   // 3D 노란 번호판과 같은 이름(C02-01)으로, 그 순서대로
   const label = (r: { group: string; rackNo: number }) => `${r.group}-${String(r.rackNo).padStart(2, '0')}`;
-  const racks = sim.layout.racks.filter((r) => r.temp === temp).sort((a, b) => label(a).localeCompare(label(b)));
+  const racks = sim.layout.racks.filter((r) => r.temp === temp && !r.reserve).sort((a, b) => label(a).localeCompare(label(b)));
   const cells = sim.layout.locationsByTemp[temp].length;
   const byRack = sim.rackStock();
   let qty = 0;
@@ -99,7 +99,7 @@ export function RealZoneStock({ temp }: { temp: TemperatureZone }) {
   ];
   return (
     <div className="zst">
-      {view.cellFocus && (sim.backendLocation(view.cellFocus) ?? sim.backendReserve(view.cellFocus))?.temp === temp && <CellCard code={view.cellFocus} />}
+      {view.cellFocus && (sim.backendLocation(view.cellFocus) ?? sim.backendReserve(view.cellFocus))?.temp === temp && !(temp === 'AMBIENT' && (sim.backendLocation(view.cellFocus)?.reserve || sim.backendReserve(view.cellFocus))) && <CellCard code={view.cellFocus} />}
       <div className="stats four">
         {stats.map(([k, v]) => (
           <div key={k} className="stat">
@@ -212,7 +212,7 @@ export function inboundSplit(sim: ReturnType<typeof useApp>['sim'], temp: Temper
     if (u.locationCode.startsWith('RCV-') && u.workState === 'UNSTOWED') {
       if (u.qualityState === 'PENDING_INSPECTION') incoming += u.qty;
       else if (u.qualityState === 'NORMAL') reserve += u.qty;
-    } else if (u.workState === 'STORED' && !u.locationCode.startsWith('RCV-') && sim.backendReserve(u.locationCode)) reserve += u.qty; // 보충재고 칸(옮기기 전 남은 예전 칸 포함)
+    } else if (u.workState === 'STORED' && sim.backendLocation(u.locationCode)?.reserve) reserve += u.qty; // 보충재고 랙 칸
   }
   return { incoming, reserve };
 }
@@ -222,13 +222,17 @@ export function ReservePallets({ temp }: { temp: TemperatureZone }) {
   const view = useView();
   const real = sim.board!;
   const split = inboundSplit(sim, temp);
-  const spots = sim.layout.reserves.filter((r) => r.temp === temp && r.role === 'RESERVE');
-  const rows = spots.map((rs) => {
-    const code = sim.reserveCode(rs) ?? rs.id;
-    const units = real.fullStock.filter((u) => u.locationCode === code && u.qty > 0);
-    return { code, qty: units.reduce((a, u) => a + u.qty, 0), skus: new Set(units.map((u) => u.sku)).size };
-  });
+  // 보충재고 랙마다 상품 종류·수량(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로")
+  const byRack = sim.rackStock();
+  const rows = sim.layout.racks
+    .filter((r) => r.temp === temp && r.reserve)
+    .map((r) => {
+      const st = byRack.get(r.id);
+      const first = sim.layout.locations.find((l) => l.rackId === r.id);
+      return { id: r.id, name: `R${String(r.rackNo).padStart(2, '0')}`, code: first ? (sim.codes.toBackend(first.code) ?? '') : '', qty: st?.qty ?? 0, skus: st?.skus.size ?? 0 };
+    });
   const used = rows.filter((r) => r.qty > 0);
+  void real;
   const rcv = sim.layout.reserves.find((r) => r.temp === temp && r.role === 'RECEIVING');
   const rcvCode = rcv ? sim.reserveCode(rcv) : temp === 'AMBIENT' ? 'RCV-A-01' : null;
   return (
@@ -245,20 +249,20 @@ export function ReservePallets({ temp }: { temp: TemperatureZone }) {
         </div>
       </div>
       <div className="zst-h">
-        <span>{temp === 'AMBIENT' ? '입고창고 팔레트' : '보충재고 팔레트'}</span>
+        <span>보충재고 랙</span>
         <span>
-          {used.length}/{rows.length}자리 · {used.reduce((a, r) => a + r.qty, 0).toLocaleString()}개
+          {used.length}/{rows.length}랙 · {used.reduce((a, r) => a + r.qty, 0).toLocaleString()}개
         </span>
       </div>
       <div className="zst-pallets">
         {rows.map((r) => (
           <button
-            key={r.code}
-            className={`zst-pal ${r.qty ? '' : 'empty'} ${view.cellFocus === r.code ? 'on' : ''}`}
-            onClick={() => controller.clickCell(r.code, 0)}
+            key={r.id}
+            className={`zst-pal ${r.qty ? '' : 'empty'} ${sim.backendLocation(view.cellFocus ?? '')?.rackId === r.id ? 'on' : ''}`}
+            onClick={() => r.code && controller.clickCell(r.code, 0)}
             title={r.code}
           >
-            <span className="nm">{reserveName(r.code) ?? r.code}</span>
+            <span className="nm">{r.name}</span>
             <b>{r.qty ? r.qty.toLocaleString() : '—'}</b>
             {r.qty > 0 && <span className="k">{r.skus}종</span>}
           </button>
@@ -272,7 +276,8 @@ export function ReservePallets({ temp }: { temp: TemperatureZone }) {
 export function RealReserveStore() {
   const { sim } = useApp();
   const view = useView();
-  const focused = view.cellFocus && sim.backendReserve(view.cellFocus)?.temp === 'AMBIENT' ? view.cellFocus : null;
+  const fl = view.cellFocus ? sim.backendLocation(view.cellFocus) : null;
+  const focused = view.cellFocus && ((fl?.reserve && fl.temp === 'AMBIENT') || sim.backendReserve(view.cellFocus)?.temp === 'AMBIENT') ? view.cellFocus : null;
   return (
     <div className="zst">
       {focused && <CellCard code={focused} />}

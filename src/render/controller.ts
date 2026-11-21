@@ -137,7 +137,7 @@ export class ViewController extends Emitter {
       // 보충재고 팔레트: 냉동·냉장은 그 저온 구역, 상온은 입고창고(사용자 2026-11-21 "냉장냉동 입고창고는 눌러도 수량이 안 나와")
       const rs = loc ? null : this.sim.backendReserve(code);
       const temp = loc?.temp ?? rs?.temp;
-      const key = !temp ? null : temp === 'FROZEN' ? 'A' : temp === 'CHILLED' ? 'B' : rs ? 'WH' : 'C-H';
+      const key = !temp ? null : temp === 'FROZEN' ? 'A' : temp === 'CHILLED' ? 'B' : rs || loc?.reserve ? 'WH' : 'C-H';
       if (key) this.focusedZone = key;
       this.leftView = 'zone';
     }

@@ -298,6 +298,15 @@ function Obstacles({ L }: { L: Layout }) {
       {ship.map((o, i) => (
         <ShipRack key={`srk${i}`} r={o.rect} h={o.height} />
       ))}
+      {/* 냉동·냉장·상온 격리 구역마다 흰 랙 2개(인계 랙과 같은 모양) — 뒤쪽 벽을 따라(사용자 2026-11-21 "각각 격리 구역에도 하얀랙으로") */}
+      {L.zones
+        .filter((z) => z.kind === 'QUARANTINE')
+        .flatMap((z) =>
+          [0, 1].map((i) => {
+            const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
+            return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0: z.rect.z0 + 0.15, x1: x0 + RACK_LEN, z1: z.rect.z0 + 0.15 + RACK_DEPTH }} h={RACK_HEIGHT} />;
+          }),
+        )}
       {L.obstacles
         .filter((o) => o.kind === 'MATERIAL')
         .map((o, i) => (

@@ -45,6 +45,8 @@ export interface Rack {
   face: 1 | -1;
   levels: number;
   slotsPerLevel: number;
+  /** 보충재고 랙(입고창고·저온 보충재고 — 적치 랙과 같은 제품, 그룹 R01 → 서버 {A|C|F}-R1-NN-단-칸, reserveStock). 피킹 랙 수·칸 목록에서 뺀다 */
+  reserve?: boolean;
 }
 
 export interface Location {
@@ -72,6 +74,8 @@ export interface Location {
   span?: { slots: number; levels: number };
   /** 합쳐져 닫힌 칸(백엔드 CLOSED) — 재고·안내·라벨에서 뺀다 */
   closed?: boolean;
+  /** 보충재고 랙 칸(Rack.reserve) */
+  reserve?: boolean;
 }
 
 /** 보충재고 팔레트 자리 (입고창고 = 상온, 저온실 안 = 냉장·냉동). MFC 4-3, 5-1 */
@@ -87,6 +91,8 @@ export interface ReserveSpot {
    * "냉장냉동 보충재고랑 입고재고는 다 각각 냉장냉동 구역 안에 … 지금 팔레트 4개씩 있는 게 그 공간") — 저온 팔레트 4개 = 보충 2 + 입고 2 [가정]
    */
   role: 'RESERVE' | 'RECEIVING';
+  /** 보충재고 랙이면 그 랙(MOCK 보충재고 자리 — 팔레트가 아니라 랙 칸에 그린다) */
+  rack?: Rack;
 }
 
 /** 입고·검수 구역의 하차 적치 칸 (롤테이너·박스) */
@@ -135,7 +141,10 @@ export interface Layout {
   obstacles: Obstacle[];
   stations: PackingStation[];
   shippingSlots: ShippingSlot[];
+  /** 입고재고(검수 전) 팔레트 자리 */
   reserves: ReserveSpot[];
+  /** 보충재고 랙마다 한 자리(MOCK 보충재고 — 상품마다 하나 배정). 실서버는 랙 칸(locations, reserve)으로 본다 */
+  reserveRackSpots: ReserveSpot[];
   dockSlots: DockSlot[];
   points: {
     /** 입고 차량문 안쪽(하차·검수 작업자 위치) */
@@ -157,6 +166,8 @@ export const RACK_LEN = 1.25;
 export const RACK_DEPTH = 0.45;
 export const RACK_HEIGHT = 2.1;
 const AISLE = 0.7;
+/** 보충재고 랙 단·칸 — 보충 상자는 피킹 낱개보다 커서 칸을 적게 [가정] */
+export const RESERVE_SLOTS: readonly [levels: number, slots: number] = [5, 3];
 
 const W = 48;
 const BD = 32; // 건물 깊이
@@ -400,6 +411,24 @@ export function buildLayout(): Layout {
   const racks = [...frozen, ...chilled, ...ambient];
   for (const r of racks) Object.assign(r, dims(r.group[0]));
 
+  // 보충재고 랙 — 팔레트 대신 적치 랙과 같은 제품(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로 하자", 앞서 "랙 규격은 모든 구역에서 쓰는 적치 랙이랑 같은 제품").
+  // 그룹 R01·랙 번호는 온도대마다 1부터 → 서버 칸 {A|C|F}-R1-NN-단-칸(지금 보충재고 칸 {T}-R1-NN-1-01 문법 그대로). 단·칸 RESERVE_SLOTS [가정]
+  const reserveRacks = (temp: TemperatureZone, area: Rect, along: 'x' | 'z', prefix: string): Rack[] => {
+    const rs = fillRacks({ temp, area, along, target: 999, levels: RESERVE_SLOTS[0], slotsPerLevel: RESERVE_SLOTS[1], groupOf: () => 'R01', idPrefix: prefix });
+    rs.forEach((r, i) => {
+      r.rackNo = i + 1;
+      r.reserve = true;
+    });
+    return rs;
+  };
+  racks.push(
+    // 상온 입고창고: 뒤 줄(입고재고 팔레트) 앞, 등 맞댄 3쌍 × 7 = 42랙
+    ...reserveRacks('AMBIENT', { x0: 38.4, z0: 3.6, x1: 47.6, z1: 7.7 }, 'x', 'RRA'),
+    // 냉동 A·냉장 B: 저온실 남쪽(피킹 랙 뒤), 출입문 앞 통로는 비움 — 각 3쌍 × 2 = 12랙
+    ...reserveRacks('FROZEN', { x0: 4.4, z0: 26.4, x1: 8.6, z1: 29.0 }, 'z', 'RRF'),
+    ...reserveRacks('CHILLED', { x0: 16.4, z0: 26.4, x1: 20.6, z1: 29.0 }, 'z', 'RRC'),
+  );
+
   // ── 로케이션 ─────────────────────────────────────────
   const locations: Location[] = [];
   const locationsByTemp: Record<TemperatureZone, Location[]> = { AMBIENT: [], CHILLED: [], FROZEN: [] };
@@ -416,7 +445,8 @@ export function buildLayout(): Layout {
             ? { x: r.cx + (r.face * RACK_DEPTH) / 4, y: shelfY, z: r.cz + t * RACK_LEN * 0.9 }
             : { x: r.cx + t * RACK_LEN * 0.9, y: shelfY, z: r.cz + (r.face * RACK_DEPTH) / 4 };
         const loc: Location = {
-          code: `${r.group}-${String(r.rackNo).padStart(2, '0')}-${lv}${String(s).padStart(2, '0')}`,
+          // 보충재고 랙은 온도대마다 R01 이라 화면 코드 앞에 온도대 글자(AR01·CR01·FR01) — 서버 코드는 {T}-R1-…
+          code: `${r.reserve ? { AMBIENT: 'A', CHILLED: 'C', FROZEN: 'F' }[r.temp] : ''}${r.group}-${String(r.rackNo).padStart(2, '0')}-${lv}${String(s).padStart(2, '0')}`,
           rackId: r.id,
           temp: r.temp,
           level: lv,
@@ -429,8 +459,9 @@ export function buildLayout(): Layout {
           levelH: (RACK_HEIGHT - 0.25) / r.levels,
           dimMm: { w: roundHalfEven((RACK_LEN * 900) / r.slotsPerLevel), d: Math.round(RACK_DEPTH * 1000), h: roundHalfEven((RACK_HEIGHT * 1000) / r.levels) },
         };
+        if (r.reserve) loc.reserve = true;
         locations.push(loc);
-        locationsByTemp[r.temp].push(loc);
+        if (!r.reserve) locationsByTemp[r.temp].push(loc);
       }
     }
   }
@@ -444,20 +475,13 @@ export function buildLayout(): Layout {
     reserves.push({ id, temp, rect, stand, role });
     obstacles.push({ rect, height: 0.15, kind: 'RESERVE' });
   };
-  // 냉동·냉장 보충재고: 저온실 안 랙 뒤 (MFC 4-3 "온도대별 보충재고"), 앞줄 통로에서 꺼낸다
-  // 왼쪽 줄(1·2) = 보충재고, 오른쪽 줄(3·4) = 입고재고(검수 전) — 서버 입고칸 RCV-F-01·RCV-C-01(R-31)
-  [7.8, 9.4].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${i * 2 + j + 1}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 }, i ? 'RECEIVING' : 'RESERVE')));
-  [19.4, 21.0].forEach((x, i) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${i * 2 + j + 1}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 }, i ? 'RECEIVING' : 'RESERVE')));
-  // 입고창고 상온 보충재고: 6열 × 4줄 = 바닥 24자리 (MFC 5-1 예시 "약 24개 바닥 위치")
-  let wi = 0;
-  for (const z0 of [1.0, 3.7, 6.4, 9.1]) {
-    for (let c = 0; c < 6; c++) {
-      const x0 = 38.6 + c * 1.5;
-      wi += 1;
-      // 뒤 줄(북쪽, WR-01~06) = 상온 입고재고(검수 전) 자리, 앞 3줄(WR-07~24) = 보충재고(사용자 2026-11-21 "입고창고는 보충재고랑 입고재고 차이가 구별이 안나" →
-      // "상온입고창고에 보충재고가 앞에 있고 입고재고가 뒤에 있어야") [가정]
-      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 }, wi <= 6 ? 'RECEIVING' : 'RESERVE');
-    }
+  // 입고재고(검수 전) 팔레트 자리만 팔레트로 남는다 — 보충재고는 랙(위 reserveRacks).
+  // 냉동·냉장: 저온실 남쪽 보충재고 랙 옆 2자리 → 서버 입고칸 RCV-F-01·RCV-C-01(R-31). 상온: 입고창고 뒤 줄 6자리 → RCV-A-02(R-32)
+  [9.4].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${j + 3}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
+  [21.0].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${j + 3}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
+  for (let c = 0; c < 6; c++) {
+    const x0 = 38.6 + c * 1.5;
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 1.0, { x: x0 + P / 2, z: 1.0 + P + 0.55 }, 'RECEIVING');
   }
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다
   const dockSlots: DockSlot[] = [];
@@ -515,6 +539,15 @@ export function buildLayout(): Layout {
     stations,
     shippingSlots,
     reserves,
+    reserveRackSpots: racks
+      .filter((r) => r.reserve)
+      .map((r) => {
+        const hx = r.along === 'x' ? RACK_LEN / 2 : RACK_DEPTH / 2;
+        const hz = r.along === 'x' ? RACK_DEPTH / 2 : RACK_LEN / 2;
+        const off = RACK_DEPTH / 2 + AISLE / 2;
+        const stand = r.along === 'z' ? { x: r.cx + r.face * off, z: r.cz } : { x: r.cx, z: r.cz + r.face * off };
+        return { id: r.id, temp: r.temp, rect: { x0: r.cx - hx, z0: r.cz - hz, x1: r.cx + hx, z1: r.cz + hz }, stand, role: 'RESERVE' as const, rack: r };
+      }),
     dockSlots,
     points: {
       truckDoor: { x: 47.2, z: 19.75 },

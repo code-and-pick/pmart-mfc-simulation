@@ -62,24 +62,14 @@ export function buildLocationCodeMap(L: Layout): LocationCodeMap {
   }
   const shelfCount = toB.size;
 
-  // 보충재고 팔레트: 온도대별 평면 순서대로 R1-01, R1-02 … (자리 번호 = 서버 칸 번호, 쓰임이 바뀌어도 번호는 자리를 따른다)
-  // 입고재고 팔레트(검수 전) = 그 온도대 입고칸 하나 — 저온 2개 RCV-C-01·RCV-F-01(R-31), 상온 입고창고 뒤 줄 6개 RCV-A-02(R-32).
-  // 그 자리의 예전 보충재고 칸 코드는 거꾸로만 남긴다 — 서버가 닫거나 재고를 옮기기 전 남은 재고(예: A-R1-01)도 제자리에 그려지게
-  const nByTemp: Partial<Record<TemperatureZone, number>> = {};
+  // 보충재고 랙 칸은 위 선반 규칙 그대로(그룹 R01 → {A|C|F}-R1-NN-단-칸).
+  // 입고재고 팔레트(검수 전) = 그 온도대 입고칸 하나 — 저온 2개 RCV-C-01·RCV-F-01(R-31), 상온 입고창고 뒤 줄 6개 RCV-A-02(R-32)
   const rcvSeen = new Set<string>();
   for (const rs of L.reserves) {
-    const n = (nByTemp[rs.temp] ?? 0) + 1;
-    nByTemp[rs.temp] = n;
-    const r1 = `${TEMP_LETTER[rs.temp]}-R1-${pad2(n)}-1-01`;
-    if (rs.role === 'RECEIVING') {
-      // 상온은 입고·검수 구역 RCV-A-01 이 이미 있어 입고창고 입고재고 줄은 RCV-A-02(R-32)
-      const code = rs.temp === 'AMBIENT' ? 'RCV-A-02' : `RCV-${TEMP_LETTER[rs.temp]}-01`;
-      pair(rs.id, code, !rcvSeen.has(code));
-      rcvSeen.add(code);
-      toS.set(r1, rs.id);
-      continue;
-    }
-    pair(rs.id, r1);
+    // 상온은 입고·검수 구역 RCV-A-01 이 이미 있어 입고창고 입고재고 줄은 RCV-A-02
+    const code = rs.temp === 'AMBIENT' ? 'RCV-A-02' : `RCV-${TEMP_LETTER[rs.temp]}-01`;
+    pair(rs.id, code, !rcvSeen.has(code));
+    rcvSeen.add(code);
   }
 
   for (const st of L.stations) pair(st.id, `PAK-A-${pad2(Number(st.id.split('-')[1]))}`);

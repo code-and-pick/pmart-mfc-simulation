@@ -126,7 +126,8 @@ function makePill(title: string, sub: string | null, icon: string | null, bg: st
 
 function rackCount(L: Layout, z: Zone): number {
   const r = z.rect;
-  return L.racks.filter((k) => k.cx >= r.x0 && k.cx <= r.x1 && k.cz >= r.z0 && k.cz <= r.z1).length;
+  // 구역 카드의 랙 수 = 피킹 랙(보충재고 랙은 입고창고 카드에만)
+  return L.racks.filter((k) => k.cx >= r.x0 && k.cx <= r.x1 && k.cz >= r.z0 && k.cz <= r.z1 && (!k.reserve || z.kind === 'INBOUND_STORE')).length;
 }
 
 /** 구역 뒤(z0) 벽 조각 중 문을 뺀 가장 긴 것 — 높이 2.5 m 이상(울타리 제외), 구역 폭 안. 판은 그 벽의 남쪽(구역 안쪽) 면 */

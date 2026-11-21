@@ -157,14 +157,21 @@ export function Goods() {
   );
 }
 
-const CARTONS_PER_RESERVE = 96;
+/** MOCK 보충재고 상자 1개 ≈ 8유닛 [시뮬] — 보충재고 랙 칸마다 상자 1개까지 */
+const UNITS_PER_CARTON = 8;
 
-/** 보충재고 팔레트: 나무 받침 + 박스 더미(보충재고 수량만큼 쌓임). */
+/** 입고재고 팔레트(나무 받침·회색 바닥) + MOCK 보충재고(보충재고 랙 칸 위 상자, 보충재고 수량만큼). 실서버 보충재고는 Real 이 랙 칸에 그린다 */
 export function Reserves() {
   const { sim } = useApp();
   const L = sim.layout;
   const base = useRef<THREE.InstancedMesh>(null!);
   const cartons = useRef<THREE.InstancedMesh>(null!);
+  // MOCK 보충재고 자리(랙)마다 그 랙의 칸(아래 단부터)
+  const rackCells = useMemo(
+    () => L.reserveRackSpots.map((sp) => L.locations.filter((l) => l.rackId === sp.id).sort((a, b) => a.level - b.level || a.slot - b.slot)),
+    [L],
+  );
+  const cellMax = Math.max(1, ...rackCells.map((c) => c.length));
 
   useLayoutEffect(() => {
     const mtx = new THREE.Matrix4();
@@ -173,14 +180,16 @@ export function Reserves() {
     L.reserves.forEach((r, i) => {
       mtx.makeTranslation((r.rect.x0 + r.rect.x1) / 2, 0.07, (r.rect.z0 + r.rect.z1) / 2);
       base.current.setMatrixAt(i, mtx);
-      for (let j = 0; j < CARTONS_PER_RESERVE; j++) {
-        cartons.current.setColorAt(i * CARTONS_PER_RESERVE + j, (r.temp === 'AMBIENT' ? col.setHex(0xffffff) : zoneBoxColor(r.temp, col)).offsetHSL(0, 0, ((j * 7) % 5) / 60));
-        cartons.current.setMatrixAt(i * CARTONS_PER_RESERVE + j, zero);
-      }
     });
     base.current.instanceMatrix.needsUpdate = true;
     base.current.computeBoundingSphere();
-  }, [L]);
+    L.reserveRackSpots.forEach((r, i) => {
+      for (let j = 0; j < cellMax; j++) {
+        cartons.current.setColorAt(i * cellMax + j, (r.temp === 'AMBIENT' ? col.setHex(0xffffff) : zoneBoxColor(r.temp, col)).offsetHSL(0, 0, ((j * 7) % 5) / 60));
+        cartons.current.setMatrixAt(i * cellMax + j, zero);
+      }
+    });
+  }, [L, cellMax]);
 
   const timer = useRef(0);
   useFrame((_, dt) => {
@@ -195,19 +204,20 @@ export function Reserves() {
       if (r > 0) totals.set(s.reserveId, (totals.get(s.reserveId) ?? 0) + r);
     }
     const mtx = new THREE.Matrix4();
-    L.reserves.forEach((r, i) => {
-      const units = totals.get(r.id) ?? 0;
-      const n = Math.min(CARTONS_PER_RESERVE, Math.ceil(units / 8)); // 박스 1개 ≈ 8유닛 [시뮬]
-      const cx = (r.rect.x0 + r.rect.x1) / 2;
-      const cz = (r.rect.z0 + r.rect.z1) / 2;
-      for (let j = 0; j < CARTONS_PER_RESERVE; j++) {
-        if (j < n) {
-          const layer = Math.floor(j / 16);
-          const gx = j % 4;
-          const gz = Math.floor((j % 16) / 4);
-          mtx.makeTranslation(cx + (gx - 1.5) * 0.265, 0.14 + 0.11 + layer * 0.225, cz + (gz - 1.5) * 0.265);
+    const q = new THREE.Quaternion();
+    const sc = new THREE.Vector3();
+    L.reserveRackSpots.forEach((r, i) => {
+      const cells = rackCells[i];
+      const n = Math.min(cells.length, Math.ceil((totals.get(r.id) ?? 0) / UNITS_PER_CARTON));
+      for (let j = 0; j < cellMax; j++) {
+        const c = cells[j];
+        if (c && j < n) {
+          const h = Math.min(0.3, c.levelH - 0.08);
+          const w = c.slotW * 0.85;
+          sc.set(c.along === 'z' ? RACK_DEPTH * 0.8 : w, h, c.along === 'z' ? w : RACK_DEPTH * 0.8);
+          mtx.compose(new THREE.Vector3(c.along === 'z' ? c.shelf.x - (c.face * RACK_DEPTH) / 4 : c.shelf.x, c.shelf.y - 0.035 + h / 2, c.along === 'z' ? c.shelf.z : c.shelf.z - (c.face * RACK_DEPTH) / 4), q, sc);
         } else mtx.makeScale(0, 0, 0);
-        cartons.current.setMatrixAt(i * CARTONS_PER_RESERVE + j, mtx);
+        cartons.current.setMatrixAt(i * cellMax + j, mtx);
       }
     });
     cartons.current.instanceMatrix.needsUpdate = true;
@@ -230,12 +240,12 @@ export function Reserves() {
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
         <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
       </instancedMesh>
-      {/* 팔레트 번호(WR-16·BR-1·AR-1) — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
+      {/* 입고재고 팔레트 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
       {sim.mode !== 'http' && L.reserves.map((r) => (
-        <Label key={r.id} text={r.role === 'RECEIVING' ? `입고재고 ${r.id}` : r.id} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
+        <Label key={r.id} text={`입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
       ))}
-      <instancedMesh ref={cartons} args={[undefined, undefined, L.reserves.length * CARTONS_PER_RESERVE]} castShadow frustumCulled={false}>
-        <boxGeometry args={[0.255, 0.22, 0.255]} />
+      <instancedMesh ref={cartons} args={[undefined, undefined, Math.max(1, L.reserveRackSpots.length * cellMax)]} castShadow frustumCulled={false}>
+        <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.8} map={boxTexture()} />
       </instancedMesh>
     </>

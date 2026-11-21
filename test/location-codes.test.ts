@@ -15,16 +15,35 @@ describe('위치 코드 대응 (SIM-6)', () => {
   const m = buildLocationCodeMap(L);
 
   it('선반 칸 14,559개가 모두 서로 다른 백엔드 코드로 오가며 돌아온다', () => {
-    expect(L.locations.length).toBe(14559);
-    expect(m.shelfCount).toBe(14559);
+    const picking = L.locations.filter((l) => !l.reserve);
+    expect(picking.length).toBe(14559);
     const seen = new Set<string>();
-    for (const loc of L.locations) {
+    for (const loc of picking) {
       const b = m.toBackend(loc.code)!;
       expect(b).toMatch(/^[ACF]-[A-H]\d+-\d{2}-\d-\d{2}$/);
       expect(m.toSim(b)).toBe(loc.code);
       seen.add(b);
     }
     expect(seen.size).toBe(14559);
+  });
+
+  // 보충재고 랙(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로") — 상온 42·냉동 12·냉장 12랙 × 5단 × 3칸 [가정], 서버 칸 {T}-R1-NN-단-칸(R-33)
+  it('보충재고 랙 칸 990개 — R1 코드로 오가며, 예전 보충재고 칸 {T}-R1-01-1-01 은 랙 01 1단 1칸', () => {
+    const res = L.locations.filter((l) => l.reserve);
+    expect(res.length).toBe(990);
+    const by = { AMBIENT: 0, CHILLED: 0, FROZEN: 0 };
+    for (const r of L.racks.filter((k) => k.reserve)) by[r.temp]++;
+    expect(by).toEqual({ AMBIENT: 42, CHILLED: 12, FROZEN: 12 });
+    const seen = new Set<string>();
+    for (const loc of res) {
+      const b = m.toBackend(loc.code)!;
+      expect(b).toMatch(/^[ACF]-R1-\d{2}-[1-5]-0[1-3]$/);
+      expect(m.toSim(b)).toBe(loc.code);
+      seen.add(b);
+    }
+    expect(seen.size).toBe(990);
+    expect(m.shelfCount).toBe(14559 + 990);
+    for (const c of ['A-R1-01-1-01', 'C-R1-01-1-01', 'F-R1-01-1-01']) expect(m.toSim(c)).toBeTruthy();
   });
 
   // 백엔드 mfc_layout_v2.py plan(): layout.json 의 랙(그룹·랙 번호·온도) × DESIGN 표 = 등록한 선반 칸(2026-11-16 칸 설계 공지)
@@ -44,7 +63,7 @@ describe('위치 코드 대응 (SIM-6)', () => {
         for (let sl = 1; sl <= slots; sl++) want.add(`${T[r.temp]}-${area}-${String(r.rackNo).padStart(2, '0')}-${lv}-${String(sl).padStart(2, '0')}`);
     }
     expect(want.size).toBe(14559);
-    const mine = new Set(L.locations.map((l) => m.toBackend(l.code)!));
+    const mine = new Set(L.locations.filter((l) => !l.reserve).map((l) => m.toBackend(l.code)!));
     expect([...want].filter((c) => !mine.has(c))).toEqual([]);
     expect([...mine].filter((c) => !want.has(c))).toEqual([]);
   });
@@ -61,18 +80,13 @@ describe('위치 코드 대응 (SIM-6)', () => {
   });
 
   it('선반 밖 자리: 팔레트·패킹대·대기 지점·격리·입고·회수·출하대기·카트', () => {
-    expect(m.toBackend('AR-1')).toBe('F-R1-01-1-01');
-    expect(m.toBackend('BR-2')).toBe('C-R1-02-1-01');
-    // 저온 오른쪽 줄 팔레트 = 입고재고(검수 전) 입고칸(R-31) — 둘이 한 칸, 거꾸로는 첫 팔레트
+    // 입고재고(검수 전) 팔레트 = 그 온도대 입고칸 — 저온 2개 한 칸(R-31), 상온 입고창고 뒤 줄 6개 RCV-A-02(R-32). 거꾸로는 첫 팔레트
     expect(m.toBackend('BR-3')).toBe('RCV-C-01');
     expect(m.toBackend('BR-4')).toBe('RCV-C-01');
     expect(m.toBackend('AR-4')).toBe('RCV-F-01');
     expect(m.toSim('RCV-C-01')).toBe('BR-3');
-    expect(m.toBackend('WR-24')).toBe('A-R1-24-1-01');
-    // 입고창고 뒤 줄 WR-01~06 = 상온 입고재고(검수 전) 입고칸 RCV-A-02(R-32), 예전 칸 코드는 거꾸로만(남은 재고를 제자리에)
-    expect(m.toBackend('WR-01')).toBe('RCV-A-02');
+    expect(m.toBackend('WR-06')).toBe('RCV-A-02');
     expect(m.toSim('RCV-A-02')).toBe('WR-01');
-    expect(m.toSim('A-R1-01-1-01')).toBe('WR-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');
     expect(m.toBackend('PS-8')).toBe('PAK-A-08');
     expect(m.toBackend(SIM_POINT.packQueue)).toBe('PAK-C-01');
