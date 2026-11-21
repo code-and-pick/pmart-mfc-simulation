@@ -358,3 +358,9 @@ export const ISSUES = {
   /** 한 번에 보이는 카드 수 — 넘으면 "n건 더" [시뮬] */
   shown: 4,
 };
+
+/** 화면 장식 수치 */
+export const DECOR = {
+  /** 장바구니 거치대에 그리는 카트 수 [시뮬] — 서버 카트는 40대(BACKEND_FACTS.cartLocations), 그림은 우선 20대(사용자 2026-11-21 "우선 20대로 늘려봐", 전엔 6) */
+  cartDepotDrawn: 20,
+} as const;

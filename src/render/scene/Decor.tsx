@@ -364,13 +364,14 @@ function PickCart({ x, z }: { x: number; z: number }) {
 
 /**
  * 장바구니 거치대 — 카트를 한 줄로 바짝 붙여 세워 둔 모습(사용자 2026-11-20 "장바구니 적치된 것처럼 만들어봐").
- * 대수는 그림(서버 카트 수와 무관). 카트 사이 0.28 m(앞 카트에 겹쳐 밀어 넣은 모양).
+ * 대수는 그림(서버 카트 40대와 무관, config DECOR.cartDepotDrawn). 카트 사이 0.28 m(앞 카트에 겹쳐 밀어 넣은 모양).
  */
 export function CartDepot({ x, z, count = 6 }: { x: number; z: number; count?: number }) {
+  // x = 줄의 동쪽 끝 카트 가운데(시작점·반납 탁자 쪽). 대수가 늘면 서쪽(통로 따라)으로 길어진다
   return (
     <group position={[x, 0, z]}>
       {Array.from({ length: count }, (_, i) => (
-        <PickCart key={i} x={(i - (count - 1) / 2) * 0.28} z={0} />
+        <PickCart key={i} x={-i * 0.28} z={0} />
       ))}
     </group>
   );

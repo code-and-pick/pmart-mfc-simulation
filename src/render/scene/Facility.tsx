@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
-import { BACKEND_FACTS } from '../../config';
+import { BACKEND_FACTS, DECOR } from '../../config';
 import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
@@ -582,7 +582,8 @@ export function Facility() {
       <WorkingCells />
       <Obstacles L={L} />
       <Stations L={L} />
-      <CartDepot x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
+      {/* 동쪽 끝 카트를 예전 6대 줄의 동쪽 끝(x +0.7)에 두고 서쪽으로 늘어놓는다 — 반납 탁자(x +1.7)와 겹치지 않게 */}
+      <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
       <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* 옆 "재진열 대기" 이름표와 같은 크기·높이, 오른쪽 끝을 거치대 가운데 조금 오른쪽에 — 재진열 대기는 탁자에서 오른쪽으로 펼쳐져 서로 겹치지 않는다
