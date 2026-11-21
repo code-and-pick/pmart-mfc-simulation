@@ -293,7 +293,7 @@ export function buildLayout(): Layout {
     { id: 'A', kind: 'FROZEN', label: '냉동 A', rect: { x0: 0, z0: 0, x1: 12, z1: 30 }, docPyeong: 109 },
     { id: 'B', kind: 'CHILLED', label: '냉장 B', rect: { x0: 12.2, z0: 0, x1: 23, z1: 30 }, docPyeong: 100 },
     { id: 'C-H', kind: 'AMBIENT', label: '상온 C~H', rect: { x0: 23.2, z0: 0, x1: 37, z1: 15.4 }, docPyeong: 65 },
-    { id: 'WH', kind: 'INBOUND_STORE', label: '입고창고', rect: { x0: 37.2, z0: 0, x1: 48, z1: 16.5 }, docPyeong: 55 },
+    { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: { x0: 37.2, z0: 0, x1: 48, z1: 16.5 }, docPyeong: 55 },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: { x0: 37.2, z0: 16.7, x1: 48, z1: 23 }, docPyeong: 22 },
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 37.2, z0: 23.2, x1: 48, z1: 28.6 }, docPyeong: 18 },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 25, z0: 20.5, x1: 35, z1: 28.5 }, docPyeong: 24 },
@@ -454,8 +454,9 @@ export function buildLayout(): Layout {
     for (let c = 0; c < 6; c++) {
       const x0 = 38.6 + c * 1.5;
       wi += 1;
-      // 입고·검수 구역 문(남쪽)에 가장 가까운 줄(WR-19~24) = 상온 입고재고(검수 전) 자리, 나머지 18자리 = 보충재고(사용자 2026-11-21 "입고창고는 보충재고랑 입고재고 차이가 구별이 안나") [가정]
-      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 }, wi > 18 ? 'RECEIVING' : 'RESERVE');
+      // 뒤 줄(북쪽, WR-01~06) = 상온 입고재고(검수 전) 자리, 앞 3줄(WR-07~24) = 보충재고(사용자 2026-11-21 "입고창고는 보충재고랑 입고재고 차이가 구별이 안나" →
+      // "상온입고창고에 보충재고가 앞에 있고 입고재고가 뒤에 있어야") [가정]
+      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 }, wi <= 6 ? 'RECEIVING' : 'RESERVE');
     }
   }
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다

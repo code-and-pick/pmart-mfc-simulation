@@ -68,10 +68,11 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect(m.toBackend('BR-4')).toBe('RCV-C-01');
     expect(m.toBackend('AR-4')).toBe('RCV-F-01');
     expect(m.toSim('RCV-C-01')).toBe('BR-3');
-    expect(m.toBackend('WR-18')).toBe('A-R1-18-1-01');
-    // 입고창고 남쪽 줄 WR-19~24 = 상온 입고재고(검수 전) 입고칸 RCV-A-02(R-32)
-    expect(m.toBackend('WR-24')).toBe('RCV-A-02');
-    expect(m.toSim('RCV-A-02')).toBe('WR-19');
+    expect(m.toBackend('WR-24')).toBe('A-R1-24-1-01');
+    // 입고창고 뒤 줄 WR-01~06 = 상온 입고재고(검수 전) 입고칸 RCV-A-02(R-32), 예전 칸 코드는 거꾸로만(남은 재고를 제자리에)
+    expect(m.toBackend('WR-01')).toBe('RCV-A-02');
+    expect(m.toSim('RCV-A-02')).toBe('WR-01');
+    expect(m.toSim('A-R1-01-1-01')).toBe('WR-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');
     expect(m.toBackend('PS-8')).toBe('PAK-A-08');
     expect(m.toBackend(SIM_POINT.packQueue)).toBe('PAK-C-01');

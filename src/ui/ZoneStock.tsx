@@ -212,7 +212,7 @@ export function inboundSplit(sim: ReturnType<typeof useApp>['sim'], temp: Temper
     if (u.locationCode.startsWith('RCV-') && u.workState === 'UNSTOWED') {
       if (u.qualityState === 'PENDING_INSPECTION') incoming += u.qty;
       else if (u.qualityState === 'NORMAL') reserve += u.qty;
-    } else if (u.workState === 'STORED' && sim.backendReserve(u.locationCode)?.role === 'RESERVE') reserve += u.qty;
+    } else if (u.workState === 'STORED' && !u.locationCode.startsWith('RCV-') && sim.backendReserve(u.locationCode)) reserve += u.qty; // 보충재고 칸(옮기기 전 남은 예전 칸 포함)
   }
   return { incoming, reserve };
 }
