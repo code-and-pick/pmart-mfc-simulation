@@ -77,7 +77,7 @@ function Ground({ L }: { L: Layout }) {
 }
 
 /** 바닥 흰 실선 사각형(구역 경계) — 빛을 받지 않는 흰색이라 옅은 바닥 위에서 또렷하다 */
-export function SolidRect({ x0, z0, x1, z1, width }: { x0: number; z0: number; x1: number; z1: number; width: number }) {
+function SolidRect({ x0, z0, x1, z1, width }: { x0: number; z0: number; x1: number; z1: number; width: number }) {
   const w = x1 - x0;
   const d = z1 - z0;
   const y = 0.013;

@@ -89,8 +89,9 @@ export interface ReserveSpot {
    * 쓰임 — RESERVE = 보충재고(검수 끝, 바로 적치 가능·선반 넘침), RECEIVING = 입고재고(들여왔지만 검수 전).
    * 둘 다 그 온도대의 입고 공간에 두되 자리로 구분한다(사용자 2026-11-21 "다 입고구역에 둬야하는데 둘이 구분이 가능해야 해",
    * "냉장냉동 보충재고랑 입고재고는 다 각각 냉장냉동 구역 안에 … 지금 팔레트 4개씩 있는 게 그 공간") — 저온 팔레트 4개 = 보충 2 + 입고 2 [가정]
+   * BULK = 상온 입고창고 대형 묶음(생수·음료·주류) 바닥 팔레트 — 보충재고(검수 끝)의 한 종류, 서버 칸 A-R2-NN-1-01(R-33 정정, MFC 5-1 대형 적재 22평)
    */
-  role: 'RESERVE' | 'RECEIVING';
+  role: 'RESERVE' | 'RECEIVING' | 'BULK';
   /** 보충재고 랙이면 그 랙(MOCK 보충재고 자리 — 팔레트가 아니라 랙 칸에 그린다) */
   rack?: Rack;
 }
@@ -178,6 +179,8 @@ function fillRacks(opts: {
   temp: TemperatureZone;
   area: Rect;
   along: 'x' | 'z';
+  /** 줄 사이 통로 폭(m). 없으면 AISLE(0.7) */
+  aisle?: number;
   /** along 축으로 이 위치에 횡단 통로(폭 1.4m)를 둔다 */
   crossAisleAt?: number;
   target: number;
@@ -201,7 +204,7 @@ function fillRacks(opts: {
   while (c + 2 * RACK_DEPTH <= crossMax + 1e-6) {
     rows.push({ c: c + RACK_DEPTH / 2, face: -1 });
     rows.push({ c: c + RACK_DEPTH * 1.5, face: 1 });
-    c += 2 * RACK_DEPTH + AISLE;
+    c += 2 * RACK_DEPTH + (opts.aisle ?? AISLE);
   }
   // along 방향 랙 위치
   const slotsAlong: number[] = [];
@@ -413,8 +416,8 @@ export function buildLayout(): Layout {
 
   // 보충재고 랙 — 팔레트 대신 적치 랙과 같은 제품(사용자 2026-11-21 "보충재고는 팔레트가 아니라 랙으로 하자", 앞서 "랙 규격은 모든 구역에서 쓰는 적치 랙이랑 같은 제품").
   // 그룹 R01·랙 번호는 온도대마다 1부터 → 서버 칸 {A|C|F}-R1-NN-단-칸(지금 보충재고 칸 {T}-R1-NN-1-01 문법 그대로). 단·칸 RESERVE_SLOTS [가정]
-  const reserveRacks = (temp: TemperatureZone, area: Rect, along: 'x' | 'z', prefix: string): Rack[] => {
-    const rs = fillRacks({ temp, area, along, target: 999, levels: RESERVE_SLOTS[0], slotsPerLevel: RESERVE_SLOTS[1], groupOf: () => 'R01', idPrefix: prefix });
+  const reserveRacks = (temp: TemperatureZone, area: Rect, along: 'x' | 'z', prefix: string, aisle?: number): Rack[] => {
+    const rs = fillRacks({ temp, area, along, aisle, target: 999, levels: RESERVE_SLOTS[0], slotsPerLevel: RESERVE_SLOTS[1], groupOf: () => 'R01', idPrefix: prefix });
     rs.forEach((r, i) => {
       r.rackNo = i + 1;
       r.reserve = true;
@@ -422,8 +425,9 @@ export function buildLayout(): Layout {
     return rs;
   };
   racks.push(
-    // 상온 입고창고: 뒤 줄(입고재고 팔레트) 앞, 등 맞댄 3쌍 × 7 = 42랙
-    ...reserveRacks('AMBIENT', { x0: 38.4, z0: 3.6, x1: 47.6, z1: 7.7 }, 'x', 'RRA'),
+    // 상온 입고창고: 뒤 줄(입고재고 팔레트) 앞, 등 맞댄 3쌍 × 7 = 42랙 — 통로 1.2 m(상자 운반, MFC 5-1 운반 통로 10평) [가정]
+    // (사용자 2026-11-21 "공간이 너무 많이 남는데?" → 문서 비율로: 입고재고 5 · 보충랙 18평 · 대형 묶음 22평)
+    ...reserveRacks('AMBIENT', { x0: 38.4, z0: 2.9, x1: 47.6, z1: 8.0 }, 'x', 'RRA', 1.2),
     // 냉동 A·냉장 B: 저온실 남쪽(피킹 랙 뒤), 출입문 앞 통로는 비움 — 각 3쌍 × 2 = 12랙
     ...reserveRacks('FROZEN', { x0: 4.4, z0: 26.8, x1: 8.6, z1: 29.4 }, 'z', 'RRF'),
     ...reserveRacks('CHILLED', { x0: 16.4, z0: 26.8, x1: 20.6, z1: 29.4 }, 'z', 'RRC'),
@@ -476,12 +480,23 @@ export function buildLayout(): Layout {
     obstacles.push({ rect, height: 0.15, kind: 'RESERVE' });
   };
   // 입고재고(검수 전) 팔레트 자리만 팔레트로 남는다 — 보충재고는 랙(위 reserveRacks).
-  // 냉동·냉장: 저온실 남쪽 보충재고 랙 옆 2자리 → 서버 입고칸 RCV-F-01·RCV-C-01(R-31). 상온: 입고창고 뒤 줄 6자리 → RCV-A-02(R-32)
+  // 냉동·냉장: 저온실 남쪽 보충재고 랙 옆 2자리 → 서버 입고칸 RCV-F-01·RCV-C-01(R-31). 상온: 입고창고 뒤 줄 5자리 → RCV-A-02(R-32·R-33)
+  // 상온 5자리 = 문서 6-5 "상온 5자리의 여유"(1회 입고 9팔레트 상당 중 상온 약 4.5)
   [9.4].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`AR-${j + 3}`, 'FROZEN', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
   [21.0].forEach((x) => [26.8, 28.3].forEach((z, j) => addReserve(`BR-${j + 3}`, 'CHILLED', x, z, { x: x + P / 2, z: 26.25 }, 'RECEIVING')));
-  for (let c = 0; c < 6; c++) {
-    const x0 = 38.6 + c * 1.5;
-    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 1.0, { x: x0 + P / 2, z: 1.0 + P + 0.55 }, 'RECEIVING');
+  for (let c = 0; c < 5; c++) {
+    const x0 = 39.05 + c * 1.5;
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 0.5, { x: x0 + P / 2, z: 0.5 + P + 0.55 }, 'RECEIVING');
+  }
+  // 대형 묶음 바닥 팔레트(MFC 5-1 대형 적재 22평 — 이론 24자리, 문 쪽) 20자리 [가정]. 남쪽 문(x 40~42) 통로 x 39.8~42.2 와
+  // 서쪽 문(z 11.8~14.2) 통로는 비우고, 상온 격리(x 44.4~, z 12.9~)는 피한다. 피치 1.2 m.
+  {
+    const bulk: [number, number, { x: number; z: number }][] = [];
+    for (const z0 of [9.4, 10.6]) for (const x0 of [37.5, 38.7]) bulk.push([x0, z0, { x: 40.35, z: z0 + P / 2 }]);
+    for (const x0 of [37.5, 38.7]) bulk.push([x0, 14.4, { x: 40.35, z: 14.4 + P / 2 }]);
+    for (const z0 of [9.4, 10.6, 11.8]) for (const x0 of [42.4, 43.6, 44.8, 46.0]) bulk.push([x0, z0, z0 === 9.4 ? { x: x0 + P / 2, z: 8.75 } : { x: 41.65, z: z0 + P / 2 }]);
+    for (const z0 of [13.2, 14.4]) bulk.push([42.6, z0, { x: 41.65, z: z0 + P / 2 }]);
+    bulk.forEach(([x0, z0, st], i) => addReserve(`WB-${String(i + 1).padStart(2, '0')}`, 'AMBIENT', x0, z0, st, 'BULK'));
   }
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다
   const dockSlots: DockSlot[] = [];

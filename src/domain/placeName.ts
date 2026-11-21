@@ -16,6 +16,9 @@ export function placeShortName(code: string): string {
   if (code === 'RCV-DOCK') return '하차장';
   const r = reserveName(code);
   if (r) return `${reservePlace(code)} ${r}`;
+  // 보충재고 랙 칸 {A|C|F}-R1-NN-단-칸 → "냉장 보충재고 랙 01 · 1단 1칸"(상온은 "입고창고 보충재고 랙 …")
+  const rr = /^([ACF])-R1-(\d{2})-(\d)-0*(\d+)$/.exec(code);
+  if (rr) return `${rr[1] === 'A' ? '입고창고 ' : TEMP[rr[1]]}보충재고 랙 ${rr[2]} · ${rr[3]}단 ${rr[4]}칸`;
   const m = /^([A-Z]{3})-([ACF])(?:-0*(\d+))?$/.exec(code);
   if (!m || !PLACE[m[1]]) return code;
   return `${TEMP[m[2]]}${PLACE[m[1]]}${m[3] ?? ''}`;
@@ -30,21 +33,17 @@ export const WORK_SHORT: Record<string, string> = {
   UNSTOWED: '적치 전',
 };
 
-/** 보충재고 팔레트 칸(`{A|C|F}-R1-NN-1-01`, mfc-location 0.9.0 reserveStock) — 상온은 입고창고 바닥, 냉장·냉동은 저온실 안 */
-export const RESERVE_CODE = /^([ACF])-R1-(\d+)-1-01$/;
+/** 대형 묶음 바닥 팔레트 칸(`A-R2-NN-1-01`, 상온 입고창고 문 쪽, R-33 정정) — 보충재고 랙 칸(`{T}-R1-NN-단-칸`)은 선반처럼 따로 다룬다 */
+export const RESERVE_CODE = /^A-R2-(\d+)-1-01$/;
 
-/** 보충재고 칸 → 팔레트 번호(평면·번호판과 같은 이름): A-R1-16-1-01 → WR-16(입고창고), C-R1-01-1-01 → BR-1(냉장), F-R1-01-1-01 → AR-1(냉동).
- *  번호는 온도대별 평면 순서(locationCodes.ts 대응과 같음). 보충재고 칸이 아니면 null
+/** 대형 묶음 팔레트 칸 → 팔레트 번호(평면·번호판과 같은 이름): A-R2-03-1-01 → WB-03. 아니면 null
  *  (사용자 2026-11-21 "팔레트에는 렉처럼 식별값WR-16이 붙어있어야") */
 export function reserveName(code: string): string | null {
   const m = RESERVE_CODE.exec(code);
-  if (!m) return null;
-  const n = Number(m[2]);
-  return m[1] === 'A' ? `WR-${String(n).padStart(2, '0')}` : `${m[1] === 'C' ? 'BR' : 'AR'}-${n}`;
+  return m ? `WB-${String(Number(m[1])).padStart(2, '0')}` : null;
 }
 
-/** 보충재고 칸이 있는 곳 — 입고창고 팔레트·냉장 보충재고·냉동 보충재고 */
+/** 대형 묶음 팔레트 칸이 있는 곳 */
 export function reservePlace(code: string): string | null {
-  const m = RESERVE_CODE.exec(code);
-  return !m ? null : m[1] === 'A' ? '입고창고 팔레트' : m[1] === 'C' ? '냉장 보충재고' : '냉동 보충재고';
+  return RESERVE_CODE.test(code) ? '입고창고 대형 묶음' : null;
 }

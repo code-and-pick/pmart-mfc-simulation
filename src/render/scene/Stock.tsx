@@ -6,7 +6,7 @@ import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR, zoneBoxColor } from '../colors';
 import { boxTexture, palletTexture } from '../sprites';
-import { Label, SolidRect } from './Facility';
+import { Label } from './Facility';
 
 /** 선반 위 상품: SKU 마다 칸 한도만큼 인스턴스를 만들어 두고 수량만큼 보인다 (뒤→앞 순으로 채워 앞에서부터 빠진다). */
 export function Goods() {
@@ -234,7 +234,7 @@ export function Reserves() {
       </instancedMesh>
       {/* 입고재고 팔레트 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 해주고 크기도 전처럼"), MOCK 만 — 실서버는 Real 이 상자 더미 바로 위에 번호·수량 */}
       {sim.mode !== 'http' && L.reserves.map((r) => (
-        <Label key={r.id} text={`입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
+        <Label key={r.id} text={r.role === 'BULK' ? `대형 묶음 ${r.id}` : `입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
       ))}
       <instancedMesh ref={cartons} args={[undefined, undefined, Math.max(1, L.reserveRackSpots.length * cellMax)]} castShadow frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
@@ -268,43 +268,71 @@ function floorText(text: string): { tex: THREE.CanvasTexture; aspect: number } {
  * (사용자 2026-11-21 "보충재고랑 바로 픽업하는 적재구역 랙이 구분이 안 가 바닥에 표시라도 해둬"
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
-// 구역 판(화면 전용) — 격리 구역처럼 남쪽 벽을 따라 격리 | 보충재고 | 입고재고 를 같은 높이로 겹치지 않게 이어 붙인다
-// (사용자 2026-11-21 "이따구로 구역나눠놓는게 맞아?" — 테두리가 겹치고 높이가 제각각이던 것). 저온은 격리(z 26.6~29.8)와 같은 줄.
-// textAt: 글자 놓을 z(판 밖 통로 쪽, 또는 판 안 빈 곳)
-const STORE_AREAS: { key: string; label: string; x0: number; z0: number; x1: number; z1: number; textAt: number }[] = [
-  { key: 'F-R', label: '보충재고', x0: 3.8, z0: 26.6, x1: 8.95, z1: 29.8, textAt: 26.1 },
-  { key: 'F-P', label: '입고재고', x0: 8.95, z0: 26.6, x1: 10.95, z1: 29.8, textAt: 26.1 },
-  { key: 'C-R', label: '보충재고', x0: 16, z0: 26.6, x1: 20.75, z1: 29.8, textAt: 26.1 },
-  { key: 'C-P', label: '입고재고', x0: 20.75, z0: 26.6, x1: 22.75, z1: 29.8, textAt: 26.1 },
-  { key: 'A-P', label: '입고재고', x0: 37.4, z0: 0.2, x1: 47.8, z1: 2.9, textAt: 2.5 },
-  { key: 'A-R', label: '보충재고', x0: 37.4, z0: 3.1, x1: 47.8, z1: 8.1, textAt: 8.6 },
+// 보관 구역 판(화면 전용) — 격리 구역과 같은 바닥색·흰 실선. 한 판 안에서 실선 한 줄로 나눈다
+// (사용자 2026-11-21 "이따구로 구역나눠놓는게 맞아?" → "여기 그냥 공간 합치고 실선 한 줄로 구분하게 하자").
+// 저온: 격리 | 보충재고 | 입고재고 — 판 왼쪽 선이 격리 오른쪽 선과 같은 자리(격리 끝 −0.12)라 한 줄로 보인다, 위·아래 선도 격리와 같은 z.
+// 상온 입고창고: 창고 전체를 한 판으로(바깥 선은 창고 구역 선), 뒤 입고재고 | 보충재고 랙 | 문 쪽 대형 묶음 을 가로 선으로.
+type Seg = [x0: number, z0: number, x1: number, z1: number];
+const LINE_W = 0.1;
+const coldArea = (q0: number, div: number, x1: number) => {
+  // q0 = 격리 구역 x1. 판 선 = q0 − 0.12 ~ x1 − 0.12, z 26.72 ~ 29.68(격리 선과 같음)
+  const L0 = q0 - 0.12, L1 = x1 - 0.12, T = 26.72, B = 29.68;
+  return {
+    floor: [L0, 26.6, x1, 29.8] as Seg,
+    lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [div, T, div, B]] as Seg[],
+    texts: [
+      { t: '보충재고', x: (L0 + div) / 2, z: 26.1 },
+      { t: '입고재고', x: (div + L1) / 2, z: 26.1 },
+    ],
+  };
+};
+const STORE_AREAS = [
+  coldArea(3.8, 8.95, 10.95), // 냉동: 격리 x 0.2~3.8 → 보충재고 랙 → 입고재고 팔레트 AR-3·4
+  coldArea(16, 20.75, 22.75), // 냉장: 격리 x 12.4~16 → 보충재고 랙 → 입고재고 팔레트 BR-3·4
+  {
+    floor: [37.2, 0, 48, 16.5] as Seg,
+    lines: [[37.32, 2.55, 47.88, 2.55], [37.32, 9.25, 47.88, 9.25]] as Seg[],
+    texts: [
+      { t: '입고재고', x: 38.25, z: 1.05 },
+      { t: '보충재고', x: 39.3, z: 8.62 },
+      { t: '대형 묶음', x: 41.0, z: 12.4 },
+    ],
+  },
 ];
 
 /**
- * 보충재고 랙·입고재고 팔레트 구역 바닥 — 격리 구역과 같은 바닥색 + 흰 실선 + 바닥 글.
+ * 보충재고 랙·입고재고 팔레트·대형 묶음 구역 바닥 — 격리 구역과 같은 바닥색 + 흰 실선 + 바닥 글.
  * (사용자 2026-11-21 "보충재고랑 바로 픽업하는 적재구역 랙이 구분이 안 가 바닥에 표시라도 해둬"
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
 export function ReserveFloors() {
-  const texts = useMemo(() => new Map(['보충재고', '입고재고'].map((t) => [t, floorText(t)])), []);
+  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형 묶음'].map((t) => [t, floorText(t)])), []);
   return (
     <>
-      {STORE_AREAS.map((a) => {
-        const w = a.x1 - a.x0;
-        const d = a.z1 - a.z0;
-        const text = texts.get(a.label)!;
-        const th = Math.min(0.55, (w * 0.85) / text.aspect);
+      {STORE_AREAS.map((a, k) => {
+        const [fx0, fz0, fx1, fz1] = a.floor;
         return (
-          <group key={a.key}>
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(a.x0 + a.x1) / 2, 0.008, (a.z0 + a.z1) / 2]} receiveShadow raycast={() => null}>
-              <planeGeometry args={[w, d]} />
+          <group key={k}>
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(fx0 + fx1) / 2, 0.0065, (fz0 + fz1) / 2]} receiveShadow raycast={() => null}>
+              <planeGeometry args={[fx1 - fx0, fz1 - fz0]} />
               <meshStandardMaterial color={ZONE_FLOOR.QUARANTINE} roughness={0.95} />
             </mesh>
-            <SolidRect x0={a.x0 + 0.12} z0={a.z0 + 0.12} x1={a.x1 - 0.12} z1={a.z1 - 0.12} width={0.1} />
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(a.x0 + a.x1) / 2, 0.012, a.textAt]} renderOrder={4} raycast={() => null}>
-              <planeGeometry args={[th * text.aspect, th]} />
-              <meshBasicMaterial map={text.tex} transparent depthWrite={false} toneMapped={false} />
-            </mesh>
+            {a.lines.map(([x0, z0, x1, z1], i) => (
+              <mesh key={i} position={[(x0 + x1) / 2, 0.013, (z0 + z1) / 2]} raycast={() => null}>
+                <boxGeometry args={[Math.abs(x1 - x0) + LINE_W, 0.004, Math.abs(z1 - z0) + LINE_W]} />
+                <meshBasicMaterial color={0xffffff} />
+              </mesh>
+            ))}
+            {a.texts.map((t) => {
+              const tx = texts.get(t.t)!;
+              const th = 0.42;
+              return (
+                <mesh key={t.t} rotation={[-Math.PI / 2, 0, 0]} position={[t.x, 0.012, t.z]} renderOrder={4} raycast={() => null}>
+                  <planeGeometry args={[th * tx.aspect, th]} />
+                  <meshBasicMaterial map={tx.tex} transparent depthWrite={false} toneMapped={false} />
+                </mesh>
+              );
+            })}
           </group>
         );
       })}

@@ -80,12 +80,17 @@ describe('위치 코드 대응 (SIM-6)', () => {
   });
 
   it('선반 밖 자리: 팔레트·패킹대·대기 지점·격리·입고·회수·출하대기·카트', () => {
-    // 입고재고(검수 전) 팔레트 = 그 온도대 입고칸 — 저온 2개 한 칸(R-31), 상온 입고창고 뒤 줄 6개 RCV-A-02(R-32). 거꾸로는 첫 팔레트
+    // 입고재고(검수 전) 팔레트 = 그 온도대 입고칸 — 저온 2개 한 칸(R-31), 상온 입고창고 뒤 줄 5개 RCV-A-02(R-32·R-33). 거꾸로는 첫 팔레트
     expect(m.toBackend('BR-3')).toBe('RCV-C-01');
     expect(m.toBackend('BR-4')).toBe('RCV-C-01');
     expect(m.toBackend('AR-4')).toBe('RCV-F-01');
     expect(m.toSim('RCV-C-01')).toBe('BR-3');
-    expect(m.toBackend('WR-06')).toBe('RCV-A-02');
+    expect(m.toBackend('WR-05')).toBe('RCV-A-02');
+    expect(m.toBackend('WR-06')).toBeNull();
+    // 대형 묶음 바닥 팔레트 20자리 → A-R2-01~20-1-01(R-33 정정)
+    expect(m.toBackend('WB-01')).toBe('A-R2-01-1-01');
+    expect(m.toBackend('WB-20')).toBe('A-R2-20-1-01');
+    expect(m.toSim('A-R2-20-1-01')).toBe('WB-20');
     expect(m.toSim('RCV-A-02')).toBe('WR-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');
     expect(m.toBackend('PS-8')).toBe('PAK-A-08');

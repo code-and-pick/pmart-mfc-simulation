@@ -1,0 +1,402 @@
+[
+ {
+  "locationCode": "A-R2-01-1-01",
+  "sim": "WB-01",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 9.95
+  },
+  "palletCenter": {
+   "xM": 38.05,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-02-1-01",
+  "sim": "WB-02",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 9.95
+  },
+  "palletCenter": {
+   "xM": 39.25,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-03-1-01",
+  "sim": "WB-03",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 38.05,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-04-1-01",
+  "sim": "WB-04",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 39.25,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-05-1-01",
+  "sim": "WB-05",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 14.95
+  },
+  "palletCenter": {
+   "xM": 38.05,
+   "zM": 14.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-06-1-01",
+  "sim": "WB-06",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 40.35,
+   "zM": 14.95
+  },
+  "palletCenter": {
+   "xM": 39.25,
+   "zM": 14.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-07-1-01",
+  "sim": "WB-07",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 42.95,
+   "zM": 8.75
+  },
+  "palletCenter": {
+   "xM": 42.95,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-08-1-01",
+  "sim": "WB-08",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 44.15,
+   "zM": 8.75
+  },
+  "palletCenter": {
+   "xM": 44.15,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-09-1-01",
+  "sim": "WB-09",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 45.35,
+   "zM": 8.75
+  },
+  "palletCenter": {
+   "xM": 45.35,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-10-1-01",
+  "sim": "WB-10",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 46.55,
+   "zM": 8.75
+  },
+  "palletCenter": {
+   "xM": 46.55,
+   "zM": 9.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-11-1-01",
+  "sim": "WB-11",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 42.95,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-12-1-01",
+  "sim": "WB-12",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 44.15,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-13-1-01",
+  "sim": "WB-13",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 45.35,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-14-1-01",
+  "sim": "WB-14",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 11.15
+  },
+  "palletCenter": {
+   "xM": 46.55,
+   "zM": 11.15
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-15-1-01",
+  "sim": "WB-15",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 12.35
+  },
+  "palletCenter": {
+   "xM": 42.95,
+   "zM": 12.35
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-16-1-01",
+  "sim": "WB-16",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 12.35
+  },
+  "palletCenter": {
+   "xM": 44.15,
+   "zM": 12.35
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-17-1-01",
+  "sim": "WB-17",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 12.35
+  },
+  "palletCenter": {
+   "xM": 45.35,
+   "zM": 12.35
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-18-1-01",
+  "sim": "WB-18",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 12.35
+  },
+  "palletCenter": {
+   "xM": 46.55,
+   "zM": 12.35
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-19-1-01",
+  "sim": "WB-19",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 13.75
+  },
+  "palletCenter": {
+   "xM": 43.15,
+   "zM": 13.75
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ },
+ {
+  "locationCode": "A-R2-20-1-01",
+  "sim": "WB-20",
+  "temperatureZone": "AMBIENT",
+  "zone": "STORAGE",
+  "reserveStock": true,
+  "position": {
+   "xM": 41.65,
+   "zM": 14.95
+  },
+  "palletCenter": {
+   "xM": 43.15,
+   "zM": 14.95
+  },
+  "dimMm": {
+   "w": 1100,
+   "d": 1100,
+   "h": 1500
+  }
+ }
+]

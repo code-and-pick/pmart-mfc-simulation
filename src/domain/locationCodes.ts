@@ -63,9 +63,15 @@ export function buildLocationCodeMap(L: Layout): LocationCodeMap {
   const shelfCount = toB.size;
 
   // 보충재고 랙 칸은 위 선반 규칙 그대로(그룹 R01 → {A|C|F}-R1-NN-단-칸).
-  // 입고재고 팔레트(검수 전) = 그 온도대 입고칸 하나 — 저온 2개 RCV-C-01·RCV-F-01(R-31), 상온 입고창고 뒤 줄 6개 RCV-A-02(R-32)
+  // 입고재고 팔레트(검수 전) = 그 온도대 입고칸 하나 — 저온 2개 RCV-C-01·RCV-F-01(R-31), 상온 입고창고 뒤 줄 5개 RCV-A-02(R-32)
   const rcvSeen = new Set<string>();
+  let bulkNo = 0;
   for (const rs of L.reserves) {
+    // 대형 묶음 바닥 팔레트 → A-R2-NN-1-01(보충재고 칸, R-33 정정)
+    if (rs.role === 'BULK') {
+      pair(rs.id, `A-R2-${pad2(++bulkNo)}-1-01`);
+      continue;
+    }
     // 상온은 입고·검수 구역 RCV-A-01 이 이미 있어 입고창고 입고재고 줄은 RCV-A-02
     const code = rs.temp === 'AMBIENT' ? 'RCV-A-02' : `RCV-${TEMP_LETTER[rs.temp]}-01`;
     pair(rs.id, code, !rcvSeen.has(code));
