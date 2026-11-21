@@ -774,12 +774,14 @@ export class RealWorker extends Agent {
     // 선반 가득으로 입고칸에 남긴 작업 — 선반에 자리가 날 때까지 잠깐씩 기다렸다 다시(R-30, 서버에 입고창고 보충재고 자리가 생기면 거기로)
     const ov = this.overflow.get(t.taskId);
     if (ov && Date.now() - ov.at < REAL_WORKERS.overflowRetrySec * 1000) {
-      this.pda = this.inboundView(t, 'PUTAWAY', `선반 가득 — ${qty}개 입고칸에 둠(입고창고 자리 없음)`, qty);
-      this.activity = `${t.sku} 선반 가득 — 입고칸에 둠, 자리 나면 다시`;
+      this.pda = this.inboundView(t, 'PUTAWAY', `둘 자리 없음 — ${qty}개 입고칸에 둠`, qty);
+      this.activity = `${t.sku} 둘 자리 없음 — 입고칸에 둠, 자리 나면 다시`;
       await this.wait(30);
       return;
     }
     this.overflow.delete(t.taskId);
+    // 서버가 나눠 넣기를 주면(inbound 0.19.0, R-30 — 선반 남은 만큼 → 기타 칸 → 입고창고 보충재고) 그대로 칸마다 적치
+    if (t.suggestedPlacements?.length) return this.putawaySplit(t, qty);
     this.pda = this.inboundView(t, 'PUTAWAY', '적치 후보 조회', qty);
     // 놓을 선반(사용자 2026-11-20 "계속 적치 거절 된다고"): 재고 서버가 진열 규칙(칸 분류 = 상품 분류 CATEGORY_MISMATCH, 한 상품 한 선반
     // SKU_ALREADY_SHELVED — mfc-inventory MoveRules)으로 판정한다. 위치 후보(mfc-location)는 그 규칙을 몰라 첫 칸이 거절되곤 했다.
@@ -882,6 +884,74 @@ export class RealWorker extends Agent {
     this.pda.pickedQty = qty;
     this.pda.step = '적치 반영됨';
     ctx.log(`${this.account} 적치 ${t.taskId} ${t.sku} ${qty} → ${to}`);
+  }
+
+  /** 서버 나눠 넣기(suggestedPlacements)대로 칸마다 한 번씩 putaways. 다 못 넣은 양(suggestedUnplacedQty)은 입고칸에 두고 작업을 열어 둔다
+   *  (적치 예외 보고 안 함 — 백엔드 회신 2026-11-21 R-30). 한 칸이 거절되면 거기서 멈추고 남은 양도 입고칸에(다음 재시도 때 서버가 다시 나눔) */
+  private async putawaySplit(t: InboundTask, qty: number) {
+    const { ctx, be } = this;
+    const plan: { code: string; qty: number }[] = [];
+    let left = qty;
+    for (const p of t.suggestedPlacements ?? []) {
+      const n = Math.min(left, p.qty);
+      if (n <= 0 || !p.locationCode || p.locationCode === t.locationCode) continue;
+      plan.push({ code: p.locationCode, qty: n });
+      left -= n;
+    }
+    const first = plan[0];
+    if (!first) return;
+    const temp = tempOfCode(first.code);
+    this.state = 'PICKING';
+    this.activity = `적치 → ${t.locationCode}`;
+    this.pda = this.inboundView(t, 'PUTAWAY', `${t.locationCode} 스캔 → 상품 싣기`, qty);
+    this.pda.location = t.locationCode;
+    this.pda.nextLocation = first.code;
+    this.pda.temp = temp ? TEMP_KO[temp] : null;
+    const carry = qty - left;
+    await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * carry);
+    this.hasCart = true;
+    for (let i = 0; i < Math.min(4, Math.ceil(carry / 6)); i++) this.carrying.push(temp ?? 'AMBIENT');
+    let done = 0;
+    let stopped: string | null = null;
+    for (const [i, p] of plan.entries()) {
+      const loc = ctx.location(p.code);
+      this.currentTarget = loc;
+      this.activity = `적치 ${t.sku} ${p.qty} → ${p.code}${plan.length > 1 ? ` (${i + 1}/${plan.length})` : ''}`;
+      this.pda.location = p.code;
+      this.pda.nextLocation = plan[i + 1]?.code ?? null;
+      this.pda.step = '칸 스캔 → 내려놓기';
+      if (loc) {
+        await this.walkTo(loc.pick);
+        this.heading = Math.atan2(loc.shelf.x - this.pos.x, loc.shelf.z - this.pos.z);
+      }
+      await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * p.qty);
+      try {
+        await this.applied(`적치(${p.code})`, this.key('putaway', t.taskId, `:${p.code}:${p.qty}`), (k) => be.putawayInboundTask(t.taskId, { toLocationCode: p.code, qty: p.qty }, k));
+        done += p.qty;
+        ctx.log(`${this.account} 적치 ${t.taskId} ${t.sku} ${p.qty} → ${p.code}`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (!/^적치\(.*\) 거절/.test(msg)) throw e;
+        stopped = `${p.code} 거절`;
+        ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} ${p.code} ${msg} — 남은 양 입고칸에, 다음에 다시 나눠 받음`);
+        break;
+      }
+    }
+    this.carrying = [];
+    this.hasCart = false;
+    this.currentTarget = null;
+    this.pda.pickedQty = done;
+    const rest = qty - done;
+    if (rest > 0) {
+      this.overflow.set(t.taskId, { sku: t.sku, rest, at: Date.now() });
+      this.pda.step = `${done}개 적치, ${rest}개 입고칸에 둠`;
+      this.activity = `${t.sku} ${stopped ?? '들어갈 자리 없음'} — 남은 ${rest}개 입고칸에`;
+      ctx.log(`${this.account} PUTAWAY ${t.taskId} ${t.sku} — ${done}개 적치, ${rest}개 입고칸에(${stopped ?? `서버 suggestedUnplacedQty ${t.suggestedUnplacedQty ?? 0}`})`);
+    } else {
+      this.pda.step = '적치 반영됨';
+    }
+    this.lastProblem = null;
   }
 
   // ── 보충(REPLENISH)·이동(MOVE) — mfc-inbound 이동 지시: 카트 → 출발 칸에서 싣기(pickups) → 도착 칸에 내려놓기(drops) ──

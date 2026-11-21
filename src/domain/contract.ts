@@ -682,6 +682,10 @@ export interface InboundTask {
   storageType?: TemperatureZone | null;
   /** (inbound 0.15.0) 적치 단건 — mfc-inventory placement-suggestions 추천 칸(참고값, 실패하면 빈 목록) */
   suggestedToLocations?: string[];
+  /** (inbound 0.19.0, R-30 — 백엔드 PR #318) 나눠 넣기: 칸마다 넣을 양(앞이 우선) — 그 상품 선반 남은 용량 → 기타 칸 → 보충재고 칸. 옛 서버는 없음 */
+  suggestedPlacements?: { locationCode: string; qty: number }[];
+  /** (inbound 0.19.0) suggestedPlacements 로 다 못 넣은 양 — 입고칸에 두고 작업을 열어 둔다(적치 예외 아님). 안 채운 응답은 null */
+  suggestedUnplacedQty?: number | null;
   /** (0.11.0) 정상 판정 최소 잔여일 — 상품 보장, 없으면 보관 유형 기본값. 둘 다 없으면 null(0·무제한 아님 — PDA 는 기준 미설정으로 막음) */
   minRemainingDays?: number | null;
   /** (0.11.0) 제조 후 최대 경과일 — 있으면 제조일 필수 */
