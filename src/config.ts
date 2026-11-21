@@ -157,6 +157,10 @@ export const REAL_WORKERS = {
   putawayTries: 3,
   /** 선반 가득으로 입고칸에 남긴 적치를 다시 시도하는 간격(초) — 그사이 피킹으로 선반에 자리가 날 수 있다 [시뮬] */
   overflowRetrySec: 300,
+  /** 프레임이 늦게 오면(창 가려짐·뒤 탭) 가상 작업자·라이더가 한 번에 따라잡는 최대 초 — 넘는 시간은 버린다(오래 잠든 뒤 한꺼번에 몰리지 않게) [시뮬] */
+  catchUpSec: 60,
+  /** 화면이 안 그려질 때(뒤 탭은 프레임이 멈춤) 대신 진행시키는 간격(초) — 브라우저가 뒤 탭 타이머를 1초 이상으로 늦춘다 [시뮬] */
+  backgroundTickSec: 1,
   /** RETURN 실적 뒤 서버 반영(pendingQty)을 기다리는 최대 초 [시뮬] */
   returnConfirmWaitSec: 30,
   /**

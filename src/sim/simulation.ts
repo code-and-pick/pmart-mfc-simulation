@@ -1228,15 +1228,22 @@ export class Simulation {
       void this.real.tick();
       this.syncRealRiders();
       this.syncObservedWorkers();
-      if (this.trucks.length) this.realTruckTick(Math.max(0, Math.min(this.time - prev, 0.25)));
+      // 입고 차량도 흐른 만큼(0.25초씩, 상한 REAL_WORKERS.catchUpSec)
+      for (let t = Math.max(0, Math.min(this.time - prev, REAL_WORKERS.catchUpSec)); this.trucks.length && t > 0; t -= 0.25) this.realTruckTick(Math.min(t, 0.25));
       if (this.virtualWorkers.length || this.riders.length || this.observedWorkers.length) {
-        // 가상 작업자·앞마당 라이더는 실제 시간으로 걷고 기다린다(1×)
-        const dt = Math.max(0, Math.min(this.time - prev, 0.25));
-        for (const w of this.virtualWorkers) w.tick(dt);
-        for (const r of this.riders) r.tick(dt);
-        for (const w of this.observedWorkers) w.tick(dt);
-        this.stations.tick(dt);
-        for (let i = 0; i < 40; i++) await Promise.resolve();
+        // 가상 작업자·앞마당 라이더는 실제 시간으로 걷고 기다린다(1×). 지난 프레임부터 흐른 시간을 0.25초씩 나눠 모두 진행한다 —
+        // 창이 가려지거나 탭이 뒤로 가면 프레임이 초당 1번(또는 그 밑)으로 줄어, 한 번에 0.25초만 흘리면 작업이 4배 넘게 느려졌다
+        // (사용자 2026-11-21 "브라우저창 가려지면 느려지는 거 고쳐"). 따라잡기 상한 REAL_WORKERS.catchUpSec [시뮬]
+        let left = Math.max(0, Math.min(this.time - prev, REAL_WORKERS.catchUpSec));
+        do {
+          const dt = Math.min(left, 0.25);
+          left -= dt;
+          for (const w of this.virtualWorkers) w.tick(dt);
+          for (const r of this.riders) r.tick(dt);
+          for (const w of this.observedWorkers) w.tick(dt);
+          this.stations.tick(dt);
+          for (let i = 0; i < 40; i++) await Promise.resolve();
+        } while (left > 0);
         this.riders = this.riders.filter((r) => !r.done);
       }
       return;

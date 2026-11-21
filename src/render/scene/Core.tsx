@@ -6,20 +6,33 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RACK_DEPTH } from '../../domain/layout';
 import { useApp } from '../../app/context';
 import { cameraTap } from '../cameraTap';
+import { REAL_WORKERS } from '../../config';
 
 /** 매 프레임 시뮬레이션을 진행하고, 약 4Hz 로 패널 갱신 박자를 보낸다. */
 export function SimDriver() {
   const { sim, ticker } = useApp();
-  const st = useRef({ advancing: false, ui: 0 });
+  const st = useRef({ advancing: false, ui: 0, lastFrame: 0 });
+  const step = (dt: number) => {
+    if (st.current.advancing) return;
+    st.current.advancing = true;
+    sim
+      .advance(dt)
+      .catch((e) => console.error(e))
+      .finally(() => (st.current.advancing = false));
+  };
+  // 뒤 탭·최소화면 프레임이 멈춘다 — 실서버 가상 작업자가 멈추지 않게 타이머로 대신 진행(실서버 모드는 벽시계로 흐른 만큼 따라잡는다).
+  // 사용자 2026-11-21 "브라우저창 가려지면 느려지는 거 고쳐"
+  useEffect(() => {
+    const ms = REAL_WORKERS.backgroundTickSec * 1000;
+    const id = setInterval(() => {
+      if (performance.now() - st.current.lastFrame > ms) step(0.1);
+    }, ms);
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim]);
   useFrame((_, delta) => {
-    const dt = Math.min(0.1, delta);
-    if (!st.current.advancing) {
-      st.current.advancing = true;
-      sim
-        .advance(dt)
-        .catch((e) => console.error(e))
-        .finally(() => (st.current.advancing = false));
-    }
+    st.current.lastFrame = performance.now();
+    step(Math.min(0.1, delta));
     st.current.ui += delta;
     if (st.current.ui > 0.25) {
       st.current.ui = 0;

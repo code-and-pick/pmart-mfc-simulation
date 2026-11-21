@@ -60,6 +60,9 @@ export interface HttpOptions {
   timeoutMs: number;
 }
 
+/** mfc-inventory StockHold(0.38.0) 중 쓰는 칸 */
+export type StockHold = { sku: string; lotId: string; locationCode: string; heldQty: number; resolution: 'CORRECTION' | 'COUNT'; productName?: string | null };
+
 export class HttpBackend implements FulfillmentPort {
   readonly mode = 'http' as const;
   private readonly listeners: ApiListener[] = [];
@@ -445,6 +448,35 @@ export class HttpBackend implements FulfillmentPort {
     idempotencyKey: string,
   ): Promise<{ exceptionId: string; applyStatus?: string; rejectReason?: string | null }> {
     return this.request('POST', `/inbound-tasks/${enc(taskId)}/exceptions`, { body, idempotencyKey });
+  }
+
+  /** mfc-inventory listStockHolds(0.38.0) — 열린 분실 조사 보류. resolution CORRECTION(적치 전 UNSTOWED)은 정정 holdResolutions 한 줄과 1:1 */
+  async listStockHolds(
+    mfcId: string,
+    q: { workState?: 'STORED' | 'UNSTOWED'; locationCode?: string } = {},
+  ): Promise<StockHold[]> {
+    const out: StockHold[] = [];
+    let cursor: string | null = null;
+    for (let page = 0; page < 20; page++) {
+      const p = new URLSearchParams({ size: '200' });
+      if (q.workState) p.set('workState', q.workState);
+      if (q.locationCode) p.set('locationCode', q.locationCode);
+      if (cursor) p.set('cursor', cursor);
+      const r: { items?: StockHold[]; nextCursor?: string | null } = await this.request('GET', `/mfcs/${enc(mfcId)}/stock-holds?${p}`);
+      out.push(...(r.items ?? []));
+      cursor = r.nextCursor ?? null;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
+  /** mfc-inventory correctStock — 센터 관리자(MFC_SUPERVISOR) 정정. holdResolutions = 적치 전 보류를 찾음/못 찾음으로(foundQty + lostQty = 열린 보류 합) */
+  correctStock(
+    mfcId: string,
+    body: { reason: string; approvalRef?: string; holdResolutions?: { sku: string; lotId: string; locationCode: string; foundQty: number; lostQty: number }[] },
+    idempotencyKey: string,
+  ): Promise<{ resultId?: string; applyStatus?: string }> {
+    return this.request('POST', `/mfcs/${enc(mfcId)}/stock-corrections`, { body, idempotencyKey });
   }
 
   /** mfc-inbound listInboundTasks — 센터 입고 작업(품질검사·적치) 목록. 상품 이름 포함(withLabels 기본 true) */
