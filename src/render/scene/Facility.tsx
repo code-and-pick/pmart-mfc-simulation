@@ -304,9 +304,10 @@ function Obstacles({ L }: { L: Layout }) {
         .flatMap((z) =>
           [0, 1].map((i) => {
             const x0 = z.rect.x0 + 0.3 + i * (RACK_LEN + 0.15);
-            // 냉동·냉장 격리는 저온실 남쪽 벽(z 30.1, 두께 0.2 → 안쪽 면 30.0)에 붙인다(사용자 2026-11-21 "냉장냉동 격리 랙 벽에 붙쳐"). 상온은 구역 뒤쪽 그대로
+            // 냉동·냉장 격리는 벽 쪽(남쪽)에, 단 격리 구역 안에 — 흰 실선(구역 끝 −0.12, 두께 0.1) 안쪽에 붙인다
+            // (사용자 2026-11-21 "냉장냉동 격리 랙 벽에 붙쳐" → "격리구역 벗어나게 해서 벽에 붙여버렸잖아": 벽면 30.0 에 붙여 실선 밖으로 나갔던 것). 상온은 구역 뒤쪽 그대로
             const cold = z.id === 'AQ' || z.id === 'BQ';
-            const z0 = cold ? 30.0 - RACK_DEPTH - 0.02 : z.rect.z0 + 0.15;
+            const z0 = cold ? z.rect.z1 - 0.2 - RACK_DEPTH : z.rect.z0 + 0.15;
             return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_LEN, z1: z0 + RACK_DEPTH }} h={RACK_HEIGHT} />;
           }),
         )}
