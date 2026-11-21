@@ -1098,7 +1098,7 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .ctl-sw.plate { background: #1f63d8; color: #fff; }
 .ctl-sw.bubble { background: #fff; color: #24304f; border: 1px solid #cfd5e2; border-radius: 9px; }
 .ctl-sw.guess { background: #8a8f99; color: #fff; border-radius: 9px; }
-.ctl-sw.pending { background: rgba(242, 201, 76, 0.55); color: #5a4300; }
+.ctl-sw.pending { background: #fff; color: #24304f; border: 1px solid #cfd5e2; }
 
 /* 보충재고 팔레트 격자 — 자리 번호·수량·종 */
 .zst-pallets { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 5px; margin-bottom: 10px; }

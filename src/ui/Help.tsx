@@ -133,7 +133,7 @@ export function Help() {
           <Tap on={<span className="ctl-sw plate">B01-01</span>}>랙 번호(가까이 가면 칸 번호)</Tap>
           <Tap on={<span className="ctl-sw bubble">말풍선</span>}>작업자가 지금 찍을 것</Tap>
           <Tap on={<span className="ctl-sw guess">추정</span>}>서버 값이 아니라 화면이 짐작한 값</Tap>
-          <Tap on={<span className="ctl-sw pending">노란 바닥</span>}>입고재고(검수 전) 자리</Tap>
+          <Tap on={<span className="ctl-sw pending">흰 바닥</span>}>입고재고(검수 전) 자리</Tap>
         </div>
       </Part>
       <Part title="색 구분">

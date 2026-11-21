@@ -1653,14 +1653,16 @@ export class Simulation {
   }
 
   private placeOnDock(it: DockItem) {
-    // 냉장·냉동은 그 저온구역 입고재고 자리(오른쪽 팔레트 2개)에 — 실서버 RCV-C-01·RCV-F-01 과 같은 곳(사용자 2026-11-21 "냉장냉동 보충재고랑 입고재고는 다 각각 냉장냉동 구역 안에")
-    if (it.temp !== 'AMBIENT') {
+    // 입고재고 자리(검수 전)에 — 냉장·냉동은 그 저온구역 오른쪽 팔레트 2개(실서버 RCV-C-01·RCV-F-01, 사용자 2026-11-21 "냉장냉동 보충재고랑 입고재고는 다 각각 냉장냉동 구역 안에"),
+    // 상온은 입고창고 입고재고 줄(WR-19~24) — 입고재고(검수 전)와 보충재고를 자리로 구분(사용자 2026-11-21)
+    {
       const spots = this.layout.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === it.temp);
-      if (spots.length) {
-        const k = this.dockItems.filter((d) => d.temp === it.temp && !d.slot).length;
+      const k = this.dockItems.filter((d) => d.temp === it.temp && d.stand).length;
+      if (spots.length && k < spots.length * 4) {
         const rs = spots[k % spots.length];
         const j = Math.floor(k / spots.length) % 4; // 팔레트 하나에 2×2
         it.floorPos = { x: (rs.rect.x0 + rs.rect.x1) / 2 + (j % 2 ? 0.25 : -0.25), z: (rs.rect.z0 + rs.rect.z1) / 2 + (j < 2 ? -0.25 : 0.25) };
+        it.stand = rs.stand;
         this.dockItems.push(it);
         return;
       }

@@ -422,10 +422,12 @@ export function RealStock() {
       }
       const s = makeLabel(rs.role === 'RECEIVING' ? '입고재고 (검수 전)' : (reserveName(code) ?? rs.id), PALLET_LABEL);
       s.center.set(0.5, 0);
+      // 입고재고 이름표는 그 자리 팔레트들 가운데(입고창고 6개·저온 2개)
+      const mid = rs.role === 'RECEIVING' ? sim.backendPoint(code) : null;
       s.userData.noNudge = true;
       s.userData.shrinkFar = true;
       s.userData.prio = 0;
-      s.position.set((rs.rect.x0 + rs.rect.x1) / 2, 0.22, (rs.rect.z0 + rs.rect.z1) / 2);
+      s.position.set(mid?.x ?? (rs.rect.x0 + rs.rect.x1) / 2, 0.22, mid?.z ?? (rs.rect.z0 + rs.rect.z1) / 2);
       labels.add(s);
     }
   });

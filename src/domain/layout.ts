@@ -454,7 +454,8 @@ export function buildLayout(): Layout {
     for (let c = 0; c < 6; c++) {
       const x0 = 38.6 + c * 1.5;
       wi += 1;
-      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 });
+      // 입고·검수 구역 문(남쪽)에 가장 가까운 줄(WR-19~24) = 상온 입고재고(검수 전) 자리, 나머지 18자리 = 보충재고(사용자 2026-11-21 "입고창고는 보충재고랑 입고재고 차이가 구별이 안나") [가정]
+      addReserve(`WR-${String(wi).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.55 }, wi > 18 ? 'RECEIVING' : 'RESERVE');
     }
   }
   // 하차 칸: 입고·검수 구역 북·남 두 블록, 가운데는 통로로 비운다

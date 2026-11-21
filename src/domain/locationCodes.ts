@@ -64,11 +64,12 @@ export function buildLocationCodeMap(L: Layout): LocationCodeMap {
 
   // 보충재고 팔레트: 온도대별 평면 순서대로 R1-01, R1-02 …
   const nByTemp: Partial<Record<TemperatureZone, number>> = {};
-  // 저온 입고재고 팔레트(검수 전) 2개 = 그 온도대 입고칸 하나(RCV-C-01·RCV-F-01, R-31 — 서버 등록 전)
+  // 입고재고 팔레트(검수 전) = 그 온도대 입고칸 하나 — 저온 2개 RCV-C-01·RCV-F-01(R-31), 입고창고 6개 RCV-A-02(R-32)
   const rcvSeen = new Set<string>();
   for (const rs of L.reserves) {
     if (rs.role === 'RECEIVING') {
-      const code = `RCV-${TEMP_LETTER[rs.temp]}-01`;
+      // 상온은 입고·검수 구역 RCV-A-01 이 이미 있어 입고창고 입고재고 줄은 RCV-A-02(R-32)
+      const code = rs.temp === 'AMBIENT' ? 'RCV-A-02' : `RCV-${TEMP_LETTER[rs.temp]}-01`;
       pair(rs.id, code, !rcvSeen.has(code));
       rcvSeen.add(code);
       continue;
