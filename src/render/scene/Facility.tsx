@@ -584,7 +584,8 @@ export function Facility() {
       <Stations L={L} />
       {/* 동쪽 끝 카트를 예전 6대 줄의 동쪽 끝(x +0.7)에 두고 서쪽으로 늘어놓는다 — 반납 탁자(x +1.7)와 겹치지 않게 */}
       <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
-      <StartMark x={L.points.cartDepot.x} z={L.points.cartDepot.z - 0.6} />
+      {/* 시작점 표지판은 카트 줄 가운데(사용자 2026-11-21 "장바구니 중앙으로") */}
+      <StartMark x={L.points.cartDepot.x + 0.7 - ((DECOR.cartDepotDrawn - 1) * 0.28) / 2} z={L.points.cartDepot.z - 0.6} />
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* 옆 "재진열 대기" 이름표와 같은 크기·높이, 오른쪽 끝을 거치대 가운데 조금 오른쪽에 — 재진열 대기는 탁자에서 오른쪽으로 펼쳐져 서로 겹치지 않는다
           (사용자 2026-11-21 "옆에 재진열대기는 가만히 있는데 장바구니 거치대 카드는 작고 계속 움직이잖아") */}

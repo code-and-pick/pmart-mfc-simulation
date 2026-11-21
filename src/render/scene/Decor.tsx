@@ -384,22 +384,28 @@ let startTex: THREE.CanvasTexture | null = null;
  */
 export function StartMark({ x, z }: { x: number; z: number }) {
   if (!startTex) {
+    // 표지판: 짙은 남회색 판 + 위 가는 하늘색 띠 + 흰 글(사용자 2026-11-21 "보라색 배경 말고 좀 더 세련되게") — 장면 이름표(남색 카드)와 같은 계열
     const c = document.createElement('canvas');
     c.width = 512;
     c.height = 192;
     const g = c.getContext('2d')!;
     const grd = g.createLinearGradient(0, 0, 0, 192);
-    grd.addColorStop(0, '#7a62ee');
-    grd.addColorStop(1, '#5b4fd6');
+    grd.addColorStop(0, '#2a3346');
+    grd.addColorStop(1, '#1b2231');
     g.fillStyle = grd;
     g.beginPath();
-    g.roundRect(4, 4, 504, 184, 40);
+    g.roundRect(4, 4, 504, 184, 22);
     g.fill();
+    g.strokeStyle = 'rgba(255,255,255,0.18)';
+    g.lineWidth = 3;
+    g.stroke();
+    g.fillStyle = '#5ec8f2';
+    g.fillRect(40, 30, 432, 8);
     g.fillStyle = '#ffffff';
-    g.font = '900 112px "Noto Sans KR", "Malgun Gothic", sans-serif';
+    g.font = '800 96px "Noto Sans KR", "Malgun Gothic", sans-serif';
     g.textAlign = 'center';
     g.textBaseline = 'middle';
-    g.fillText('시작점', 256, 102);
+    g.fillText('시작점', 256, 112);
     startTex = new THREE.CanvasTexture(c);
     startTex.colorSpace = THREE.SRGBColorSpace;
     startTex.anisotropy = 4;
