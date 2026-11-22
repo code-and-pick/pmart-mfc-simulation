@@ -453,6 +453,10 @@ export interface SkuBarcodes {
   barcodes?: string[];
   /** (product) 이 SKU 의 상품 — 카테고리 찾기 */
   productId?: string;
+  /** (product 0.2.0, 2026-11-16) SKU 실물 치수(mm) — 실서버 3D 선반 상자 크기에 씀. 없으면 칸 크기 상자 */
+  dimensions?: { widthMm: number; depthMm: number; heightMm: number } | null;
+  /** (product 0.2.0) 치수 출처 MEASURED(실측) / ESTIMATED(추정) */
+  dimensionsSource?: string | null;
 }
 
 /** product GET /categories/tree 의 노드(필요한 것만) */

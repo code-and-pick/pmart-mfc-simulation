@@ -19,6 +19,28 @@ function loadSkuProducts(): Map<string, string | null> {
     return new Map();
   }
 }
+/** SKU 실물 치수(m) 캐시 — 없는 SKU 는 null(조회했지만 치수 없음). sessionStorage(토큰 아님) */
+const SKU_DIMS_KEY = 'pmart-sim:sku-dims';
+export interface SkuDims {
+  w: number;
+  d: number;
+  h: number;
+}
+function loadSkuDims(): Map<string, SkuDims | null> {
+  try {
+    const raw = typeof sessionStorage !== 'undefined' ? sessionStorage.getItem(SKU_DIMS_KEY) : null;
+    return new Map(raw ? (JSON.parse(raw) as [string, SkuDims | null][]) : []);
+  } catch {
+    return new Map();
+  }
+}
+function saveSkuDims(m: Map<string, SkuDims | null>): void {
+  try {
+    if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SKU_DIMS_KEY, JSON.stringify([...m]));
+  } catch {
+    /* 저장 못 하면 다음에 다시 묻는다 */
+  }
+}
 function saveSkuProducts(m: Map<string, string | null>): void {
   try {
     if (typeof sessionStorage !== 'undefined') sessionStorage.setItem(SKU_PRODUCT_KEY, JSON.stringify([...m]));
@@ -439,6 +461,20 @@ export class RealBoard {
   private catTree = new Map<string, CategoryNode>();
   private productCat = new Map<string, string>();
   private skuProduct = loadSkuProducts();
+  /**
+   * SKU → 실물 치수(m, product GET /skus/{sku} 의 dimensions) — 실서버 3D 선반 상자를 상품 크기로(사용자 2026-11-22 "쌀 같이 무거운 건 상품 박스 크기도 커?" → 서버 치수로).
+   * null = 조회했지만 치수 없음(칸 크기 상자). 카테고리와 같은 조회 줄·속도 제한을 쓴다
+   */
+  skuDims = loadSkuDims();
+  skuDimsVersion = 0;
+  private noteDims(sku: string, d: SkuBarcodes): void {
+    const x = d.dimensions;
+    const v = x && x.widthMm > 0 && x.depthMm > 0 && x.heightMm > 0 ? { w: x.widthMm / 1000, d: x.depthMm / 1000, h: x.heightMm / 1000 } : null;
+    const old = this.skuDims.get(sku);
+    if (this.skuDims.has(sku) && JSON.stringify(old) === JSON.stringify(v)) return;
+    this.skuDims.set(sku, v);
+    this.skuDimsVersion++;
+  }
 
   private topName(categoryId: string): string {
     const n = this.catTree.get(categoryId);
@@ -452,7 +488,8 @@ export class RealBoard {
   private async refreshCategories(now: number) {
     if (this.catBusy || !this.reader.getCategoryTree || !this.reader.listProductCategories || !this.fullStock.length) return;
     const fresh = now - this.catReadMs > 600_000;
-    const unknown = [...new Set(this.fullStock.map((u) => u.sku))].filter((k) => !this.skuProduct.has(k));
+    // 상품 ID 나 치수(skuDims)를 아직 모르는 SKU — 치수 캐시가 없던 예전 세션의 SKU 도 한 번 다시 읽는다
+    const unknown = [...new Set(this.fullStock.map((u) => u.sku))].filter((k) => !this.skuProduct.has(k) || !this.skuDims.has(k));
     if (!fresh && (!unknown.length || now < this.catBackoffUntil)) return;
     this.catBusy = true;
     try {
@@ -479,6 +516,7 @@ export class RealBoard {
       }
       if (limited) this.catBackoffUntil = now + CAT_BACKOFF_MS;
       saveSkuProducts(this.skuProduct);
+      saveSkuDims(this.skuDims);
       for (const [sku, pid] of this.skuProduct) {
         const c = pid ? this.productCat.get(pid) : undefined;
         this.skuCategory.set(sku, c ? this.topName(c) : '기타');
@@ -629,6 +667,7 @@ export class RealBoard {
     try {
       const d = await this.reader.getSku(sku);
       this.skuProduct.set(sku, d.productId ?? null);
+      this.noteDims(sku, d);
       return d;
     } catch (e) {
       if (/^429/.test(e instanceof Error ? e.message : '')) this.skuPauseUntil = Date.now() + CAT_BACKOFF_MS;

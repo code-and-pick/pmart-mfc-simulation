@@ -1,6 +1,7 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
 import { RETURN_TABLE } from './Decor';
+import { unitBoxes } from '../unitBoxes';
 import { RESERVE_CODE, placeShortName, reserveName, WORK_SHORT } from '../../domain/placeName';
 
 /** 팔레트 번호 이름표 — 예전 흰 이름표 그대로(사용자 2026-11-21 "저번처럼 그냥 하양으로 … 크기도 전처럼") */
@@ -175,6 +176,35 @@ const WORK_KO: Record<StockWorkState, string> = {
 /** 선반 상자 하나가 나타내는 낱개 수 — 칸 수량을 상자 수로(그림) [시뮬] */
 const CARTON_UNITS = 6;
 
+/** 칸 하나에 상품 크기(서버 dimensions) 상자를 낱개로(자리는 unitBoxes). 정상 먼저, 보류분은 붉은 상자 */
+function drawUnits(
+  m: THREE.InstancedMesh,
+  cellOf: (string | null)[],
+  n0: number,
+  loc: Location,
+  code: string,
+  dims: { w: number; d: number; h: number },
+  normal: number,
+  held: number,
+  col: THREE.Color,
+  mtx: THREE.Matrix4,
+  sc: THREE.Vector3,
+  quat: THREE.Quaternion,
+): number {
+  let n = n0;
+  const v = new THREE.Vector3();
+  unitBoxes(loc, dims, normal + held).forEach((u, k) => {
+    if (n >= MAX_BOXES) return;
+    sc.set(u.sx, u.sy, u.sz);
+    mtx.compose(v.set(u.x, u.y, u.z), quat, sc);
+    m.setMatrixAt(n, mtx);
+    m.setColorAt(n, k < normal ? zoneBoxColor(loc.temp, col) : col.setHex(0xd9826f));
+    cellOf[n] = code;
+    n++;
+  });
+  return n;
+}
+
 export function RealStock() {
   const { sim, registry } = useApp();
   const mesh = useRef<THREE.InstancedMesh>(null!);
@@ -194,7 +224,7 @@ export function RealStock() {
     if (!real) return;
     const held = sim.heldCarts();
     const racked = real.shipments().filter((r) => r.info?.state === 'READY' && sim.onRack(r.shipmentId)).map((r) => r.shipmentId);
-    const sig = `${real.stockVersion}|${real.deliveryVersion}|${[...held].sort().join(',')}|${racked.map((id) => `${id}@${sim.rackFor(id)}`).join(',')}`;
+    const sig = `${real.stockVersion}|${real.deliveryVersion}|${real.skuDimsVersion}|${[...held].sort().join(',')}|${racked.map((id) => `${id}@${sim.rackFor(id)}`).join(',')}`;
     if (sig === ver.current) return;
     ver.current = sig;
     // 출하 대기 출고의 밀봉 포장 내용(랙 → SKU → 수량) — 그만큼의 PACKED 를 그 출고의 랙(화면에서 고른 랙, 모르면 랙 1)에
@@ -218,7 +248,7 @@ export function RealStock() {
     const bm = bagMesh.current;
     let b = 0;
 
-    const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number }>();
+    const shelf = new Map<string, { loc: Location; code: string; normal: number; held: number; sku: string }>();
     cellOf.current = [];
     const points = new Map<string, { x: number; z: number; table: boolean; by: Map<StockWorkState, number>; tz: Map<string, number>; pending: number }>();
     // 상품 보관 온도대(SKU → 냉동·냉장·상온) — 재고 줄의 temperatureZone, 없으면 그 상품이 놓인 선반 칸의 온도대.
@@ -254,7 +284,7 @@ export function RealStock() {
       }
       const loc = u.workState === 'STORED' ? sim.backendLocation(u.locationCode) : null;
       if (loc) {
-        const g = shelf.get(loc.code) ?? { loc, code: u.locationCode, normal: 0, held: 0 };
+        const g = shelf.get(loc.code) ?? { loc, code: u.locationCode, normal: 0, held: 0, sku: u.sku };
         if (u.qualityState === 'NORMAL') g.normal += u.qty;
         else g.held += u.qty;
         shelf.set(loc.code, g);
@@ -290,7 +320,13 @@ export function RealStock() {
     // 상자 수 = 칸 수량 ÷ CARTON_UNITS(올림, 있으면 최소 1), 칸에 들어가는 만큼(가로 cols × 단 layers)까지. 품질 보류분은 붉은 상자
     const sc = new THREE.Vector3();
     const quat = new THREE.Quaternion();
-    for (const { loc, code, normal, held } of shelf.values()) {
+    for (const { loc, code, normal, held, sku } of shelf.values()) {
+      // 서버가 SKU 실물 치수를 주면 상품 크기 상자를 낱개로(칸에 보이는 만큼까지) — 쌀처럼 큰 상품은 크게(사용자 2026-11-22). 치수 없으면 아래 칸 크기 상자
+      const dims = real.skuDims.get(sku);
+      if (dims) {
+        n = drawUnits(m, cellOf.current, n, loc, code, dims, normal, held, col, mtx, sc, quat);
+        continue;
+      }
       const cols = Math.max(1, Math.min(3, Math.floor((loc.slotW * 0.92) / 0.3)));
       const layers = loc.levelH > 0.5 ? 2 : 1;
       const cw = (loc.slotW * 0.92) / cols - 0.02;
