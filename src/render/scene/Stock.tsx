@@ -262,12 +262,12 @@ const LINE_W = 0.1;
 const coldArea = (X0: number) => {
   const X1 = X0 + COLD_BAND.width;
   // 북쪽부터 입고재고 | 보충재고 | 격리(격리 구역 선이 보충재고와의 경계) — 띠가 북쪽 끝으로(사용자 2026-11-21 "북쪽으로 밀어")
-  const L0 = X0 + 0.12, L1 = X1 - 0.12, T = COLD_BAND.z0 + 0.12, B = COLD_BAND.z1 - 0.12, DIV = 4.9;
+  const L0 = X0 + 0.12, L1 = X1 - 0.12, T = COLD_BAND.z0 + 0.12, B = COLD_BAND.z1 - 0.12, DIV = 5.3;
   return {
     floor: [X0, COLD_BAND.z0, X1, COLD_BAND.z1] as Seg,
     lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [L0, DIV, L1, DIV]] as Seg[],
     texts: [
-      { t: '입고재고', x: X0 + 2.45, z: 4.3 }, // 팔레트가 서쪽 벽에 세로로 서서 카드는 동쪽 빈 바닥에
+      { t: '입고재고', x: (X0 + X1) / 2, z: 4.8 }, // 띠가 좁아져(2.4 m) 카드는 세로 팔레트 2개 바로 남쪽에
       { t: '보충재고', x: (X0 + X1) / 2, z: 13.5 },
     ],
   };

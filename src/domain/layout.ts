@@ -180,7 +180,8 @@ const OLD_W = 48; // 예전 평면 폭(옮기기 전 좌표계)
 export const YARD_X: readonly [number, number] = [33.75, 53.45];
 /** 냉동·냉장 서쪽 벽 띠(격리·입고재고·보충재고) — 띠 서쪽 끝 x, 폭. 새 평면 좌표 */
 // 띠는 방 북쪽 끝(북쪽 벽 z 1.7 아래) — 사용자 2026-11-21 "입고랑보충이랑 격리재고 남쪽말고 북쪽으로 밀어". 북쪽부터 입고재고 → 보충재고 → 격리
-export const COLD_BAND = { FROZEN: 11.0, CHILLED: 0.1, width: 3.65, z0: 1.8, z1: 17.9 } as const;
+// 폭 3.65 → 2.4 m(사용자 2026-11-22 "바닥에 입고,보충, 격리재고 구역 표시해 놓은 거 너무 넓으니까 가로 길이 줄여") — 보충재고 랙 등 맞댄 2줄(x +0.7~1.6) + 동쪽 통로 0.8 m 가 들어가는 폭
+export const COLD_BAND = { FROZEN: 11.0, CHILLED: 0.1, width: 2.4, z0: 1.8, z1: 17.9 } as const;
 
 /** 예전 평면 좌표 → 새 평면 좌표. 구역마다 평행 이동(모양·랙 배치는 그대로) */
 function moveOf(x: number, z: number): { dx: number; dz: number } {
@@ -342,8 +343,8 @@ export function buildLayout(): Layout {
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 38.2, z0: 0, x1: 49.0, z1: 5.4 }, docPyeong: 18 },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 38.6, z0: 23.5, x1: 48.6, z1: 31.5 }, docPyeong: 24 },
     // 냉동·냉장 격리: 서쪽 벽 띠 남쪽 끝(남쪽 문 앞을 비움, 사용자 2026-11-21)
-    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 13.9, x1: 14.65, z1: 17.9 }, docPyeong: 4 },
-    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 13.9, x1: 3.75, z1: 17.9 }, docPyeong: 4 },
+    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 13.9, x1: 13.4, z1: 17.9 }, docPyeong: 4 },
+    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 13.9, x1: 2.5, z1: 17.9 }, docPyeong: 4 },
     { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 45.4, z0: 19.0, x1: 48.8, z1: 22.0 }, docPyeong: 4 }, // 입고창고 안 남동쪽("상온 격리는 입고 창고 안이야")
     { id: 'SHIP', kind: 'SHIPPING', label: '외부 출하대기', rect: { x0: 40.6, z0: 34.2, x1: 46.6, z1: 36.8 }, docPyeong: 3 },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: { x0: 37.6, z0: 38.3, x1: 49.6, z1: 41.4 } },
@@ -621,14 +622,14 @@ export function buildLayout(): Layout {
   for (const sl of shippingSlots) sl.pos = { ...sl.pos, ...mv({ x: sl.pos.x, z: sl.pos.z }) };
   for (const d of dockSlots) d.pos = mv(d.pos);
 
-  // 냉동·냉장 서쪽 벽 띠(COLD_BAND, 폭 3.65 m, 방 북쪽 끝): 북쪽부터 입고재고 팔레트 2(북쪽 문 가까이) → 보충재고 랙 12(등 맞댄 2줄 × 6) → 격리(구역 AQ·BQ)
+  // 냉동·냉장 서쪽 벽 띠(COLD_BAND, 폭 2.4 m, 방 북쪽 끝): 북쪽부터 입고재고 팔레트 2(북쪽 문 가까이) → 보충재고 랙 12(등 맞댄 2줄 × 6) → 격리(구역 AQ·BQ)
   // (사용자 2026-11-21 "냉장냉동구역에 격리랑 입고재고랑 보충고가 남쪽문을 막고있잖아. 왼쪽 벽면으로 다 옮겨 버려") — 남북 문 앞을 비운다
   for (const [temp, X0, prefix, rid] of [['FROZEN', COLD_BAND.FROZEN, 'RRF', 'AR'], ['CHILLED', COLD_BAND.CHILLED, 'RRC', 'BR']] as const) {
     const rs = reserveRacks(temp, { x0: X0 + 0.7, z0: 5.6, x1: X0 + 1.6, z1: 13.11 }, 'z', prefix);
     racks.push(...rs);
     addLocations(rs);
     // 입고재고 팔레트 2개는 서쪽 벽을 따라 세로(남북)로(사용자 2026-11-22 "냉동냉장 입고재고 팔레트 2개 가로로 놓아져있는거 세로로 돌려"), 사람은 동쪽에서
-    [2.05, 3.45].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.25, z0, { x: X0 + 1.95, z: 3.3 }, 'RECEIVING'));
+    [1.95, 3.2].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.25, z0, { x: X0 + 1.85, z: 3.15 }, 'RECEIVING'));
   }
 
   // 장바구니 거치대(시작점)·작업자 대기는 상온 C~H 남쪽 앞(상온 z 28.4 ~ 남쪽 통로) — 예전 자리(상온 아래 통로)에서 +1.0, +11.8

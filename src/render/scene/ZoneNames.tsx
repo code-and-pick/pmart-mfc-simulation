@@ -171,7 +171,6 @@ export function zoneTags(L: Layout): Tag[] {
   for (const z of L.zones) {
     if (z.kind === 'SHIPPING') continue; // 라이더 대기와 같은 곳 — 인계 랙 번호판으로 충분
     const r = z.rect;
-    const cx = (r.x0 + r.x1) / 2;
     const dim = z.kind === 'QUARANTINE';
     const racks = rackCount(L, z);
     const sub = dim ? (z.docPyeong ? `${z.docPyeong}평` : null) : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
@@ -197,12 +196,14 @@ export function zoneTags(L: Layout): Tag[] {
       // 바닥에 눕힘 — 격리는 작게, 패킹은 크게(벽을 뺀 뒤 바닥 카드, 사용자 2026-11-21 "바닥에 붙은 패킹구역카드 사이즈 좀 키워줘")
       let h = dim ? 0.55 : z.kind === 'PACKING' ? 1.8 : 0.9;
       let w = h * aspect;
-      const room = (r.x1 - r.x0) * 0.85;
+      // 냉동·냉장 격리는 서쪽 벽에 흰 랙(x0+0.25~0.7)이 서 있어 그 동쪽 바닥에만(띠 폭 2.4 m, 사용자 2026-11-22 "가로 길이 줄여")
+      const fx0 = z.id === 'AQ' || z.id === 'BQ' ? r.x0 + 0.8 : r.x0;
+      const room = (r.x1 - fx0) * 0.85;
       if (w > room) {
         w = room;
         h = w / aspect;
       }
-      out.push({ id: z.id, tex, pos: [cx, 0.03, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
+      out.push({ id: z.id, tex, pos: [(fx0 + r.x1) / 2, 0.03, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
     }
   }
   return out;
