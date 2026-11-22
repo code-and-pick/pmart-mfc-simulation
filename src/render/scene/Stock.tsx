@@ -268,8 +268,8 @@ const coldArea = (X0: number, color?: number) => {
     color,
     lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [L0, DIV, L1, DIV]] as Seg[],
     texts: [
-      { t: '입고재고', x: (X0 + X1) / 2, z: 4.8 }, // 띠가 좁아져(2.2 m) 카드는 세로 팔레트 2개 바로 남쪽에
-      { t: '보충재고', x: X0 + 1.35, z: 13.1 }, // 서쪽 벽 한 줄 랙(z 5.6~20.6) 앞 통로 가운데
+      { t: '입고', x: (X0 + X1) / 2, z: 4.8 }, // 냉장·냉동 카드는 짧게(사용자 2026-11-22 "보충재고 -> 보충, 입고재고 -> 입고") // 띠가 좁아져(2.2 m) 카드는 세로 팔레트 2개 바로 남쪽에
+      { t: '보충', x: X0 + 1.35, z: 13.1 }, // 서쪽 벽 한 줄 랙(z 5.6~20.6) 앞 통로 가운데
     ],
   };
 };
@@ -299,7 +299,7 @@ const STORE_AREAS = [
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
 export function ReserveFloors() {
-  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형재고'].map((t) => [t, floorText(t)])), []);
+  const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형재고', '보충', '입고'].map((t) => [t, floorText(t)])), []);
   return (
     <>
       {STORE_AREAS.map((a, k) => {

@@ -176,7 +176,8 @@ export function zoneTags(L: Layout): Tag[] {
     // 격리 카드는 보충재고 바닥 카드와 같은 모양·크기(글만, 높이 0.7 m — 사용자 2026-11-22 "격리 구역 카드 보충재고 카드 크기랑 똑같게 맞춰")
     const sub = dim ? null : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
     const [pbg, ptop] = PILL[z.kind] ?? [SCENE.pill, SCENE.pillTop];
-    const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
+    // 냉장·냉동 격리 바닥 카드는 '격리' 만(사용자 2026-11-22 "냉장격리 -> 격리 … 냉동구역카드도") — 구역 이름(목록 등)은 그대로
+    const { tex, aspect } = makePill(z.id === 'AQ' || z.id === 'BQ' ? '격리' : z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
     // 상온 C~H 는 벽이 없어("상온구역은 벽이 없어도 돼") 바닥에 눕던 카드를 구역 북쪽 끝에 세워 띄운다 — 다른 구역 카드처럼(사용자 2026-11-22 "상온구역카드는 왜 바닥에 붙어 있니")
     const wall = dim || z.kind === 'PARKING' ? null : (backWall(L, z) ?? (z.kind === 'AMBIENT' ? { x0: r.x0, x1: r.x1, face: r.z0 } : null));
     if (wall) {
