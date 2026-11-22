@@ -312,10 +312,11 @@ function Obstacles({ L }: { L: Layout }) {
               const z0 = z.rect.z0 + 0.35 + i * (RACK_LEN + 0.15);
               return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0, x1: x0 + RACK_DEPTH, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
             }
-            // 상온 격리는 오른쪽(동쪽) 벽 쪽 실선 안에 세로로 위아래 2개(사용자 2026-11-21 "상온 격리 랙 2개는 오른쪽 벽에 붙여") — 구역 깊이 3.0 m 라 간격 0.05
-            const x1 = z.rect.x1 - 0.2;
-            const z0 = z.rect.z0 + 0.2 + i * (RACK_LEN + 0.05);
-            return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0: x1 - RACK_DEPTH, z0, x1, z1: z0 + RACK_LEN }} h={RACK_HEIGHT} />;
+            // 상온 격리는 가로로 돌려(긴 쪽이 동서) 남쪽 벽 쪽 실선 안에 나란히 2개, 구역 가운데(사용자 2026-11-22 "상온 격리 랙을 가로로 방향을 돌리고 남쪽에 붙인 후에")
+            const cx = (z.rect.x0 + z.rect.x1) / 2;
+            const x0 = cx - RACK_LEN - 0.025 + i * (RACK_LEN + 0.05);
+            const z1 = z.rect.z1 - 0.2;
+            return <ShipRack key={`qr-${z.id}-${i}`} r={{ x0, z0: z1 - RACK_DEPTH, x1: x0 + RACK_LEN, z1 }} h={RACK_HEIGHT} />;
           }),
         )}
       {L.obstacles

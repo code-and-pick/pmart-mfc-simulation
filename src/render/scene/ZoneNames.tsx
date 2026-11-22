@@ -198,16 +198,16 @@ export function zoneTags(L: Layout): Tag[] {
       // 바닥에 눕힘 — 격리는 작게, 패킹은 크게(벽을 뺀 뒤 바닥 카드, 사용자 2026-11-21 "바닥에 붙은 패킹구역카드 사이즈 좀 키워줘")
       let h = dim ? 0.7 : z.kind === 'PACKING' ? 1.8 : 0.9;
       let w = h * aspect;
-      // 냉동·냉장 격리: 서쪽 벽 흰 랙 2개(z0+0.35~3.0) 남쪽 빈 바닥, 구역 가운데 / 상온 격리: 동쪽 벽 랙(x1-0.65~) 서쪽 바닥 가운데
+      // 냉동·냉장 격리: 서쪽 벽 흰 랙 2개(z0+0.35~3.0) 남쪽 빈 바닥, 구역 가운데 / 상온 격리: 남쪽 벽 랙(z1-0.65~) 북쪽 바닥 가운데
       const coldQ = z.id === 'AQ' || z.id === 'BQ';
       const fx0 = r.x0;
-      const fx1 = z.id === 'CQ' ? r.x1 - 0.65 : r.x1;
+      const fx1 = r.x1;
       const room = (fx1 - fx0) * (dim ? 0.95 : 0.85);
       if (w > room) {
         w = room;
         h = w / aspect;
       }
-      const pz = coldQ ? r.z1 - 0.5 : (r.z0 + r.z1) / 2;
+      const pz = coldQ ? r.z1 - 0.5 : z.id === 'CQ' ? (r.z0 + r.z1 - 0.65) / 2 : (r.z0 + r.z1) / 2;
       out.push({ id: z.id, tex, pos: [(fx0 + fx1) / 2, 0.03, pz], rotX: -Math.PI / 2, w, h });
     }
   }

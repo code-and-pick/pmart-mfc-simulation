@@ -347,7 +347,7 @@ export function buildLayout(): Layout {
     // 냉동·냉장 격리: 서쪽 벽 띠 남쪽 끝(남쪽 문 앞을 비움, 사용자 2026-11-21)
     { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 21.1, x1: 13.2, z1: 25.1 }, docPyeong: 4 },
     { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 21.1, x1: 2.3, z1: 25.1 }, docPyeong: 4 },
-    { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 45.4, z0: 19.0, x1: 48.8, z1: 22.0 }, docPyeong: 4 }, // 입고창고 안 남동쪽("상온 격리는 입고 창고 안이야")
+    { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 43.0, z0: 19.9, x1: 49.0, z1: 22.1 }, docPyeong: 4 }, // 남쪽 벽에 붙은 가로로 긴 6.0 × 2.2 m(사용자 2026-11-22 "정사각형 … 직사각형으로 늘려서 구역 자체가 벽에 가깝게") // 입고창고 안 남동쪽("상온 격리는 입고 창고 안이야")
     { id: 'SHIP', kind: 'SHIPPING', label: '외부 출하대기', rect: { x0: 40.6, z0: 34.2, x1: 46.6, z1: 36.8 }, docPyeong: 3 },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: { x0: 37.6, z0: 38.3, x1: 49.6, z1: 41.4 } },
   ];
