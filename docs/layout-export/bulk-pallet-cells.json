@@ -6,11 +6,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.3,
-   "zM": 5.4
+   "xM": 41.15,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 41.3,
+   "xM": 41.15,
    "zM": 4.25
   },
   "dimMm": {
@@ -26,12 +26,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.3,
-   "zM": 7.55
+   "xM": 41.15,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 41.3,
-   "zM": 6.55
+   "xM": 41.15,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
@@ -46,11 +46,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.5,
-   "zM": 5.4
+   "xM": 42.35,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 42.5,
+   "xM": 42.35,
    "zM": 4.25
   },
   "dimMm": {
@@ -66,12 +66,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.5,
-   "zM": 7.55
+   "xM": 42.35,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 42.5,
-   "zM": 6.55
+   "xM": 42.35,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
@@ -86,11 +86,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.8,
-   "zM": 5.4
+   "xM": 43.55,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 44.8,
+   "xM": 43.55,
    "zM": 4.25
   },
   "dimMm": {
@@ -106,12 +106,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.8,
-   "zM": 7.55
+   "xM": 43.55,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 44.8,
-   "zM": 6.55
+   "xM": 43.55,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
@@ -126,11 +126,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46,
-   "zM": 5.4
+   "xM": 45.85,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 46,
+   "xM": 45.85,
    "zM": 4.25
   },
   "dimMm": {
@@ -146,12 +146,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46,
-   "zM": 7.55
+   "xM": 45.85,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 46,
-   "zM": 6.55
+   "xM": 45.85,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
@@ -166,11 +166,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 47.2,
-   "zM": 5.4
+   "xM": 47.05,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 47.2,
+   "xM": 47.05,
    "zM": 4.25
   },
   "dimMm": {
@@ -186,12 +186,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 47.2,
-   "zM": 7.55
+   "xM": 47.05,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 47.2,
-   "zM": 6.55
+   "xM": 47.05,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
@@ -206,11 +206,11 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 48.4,
-   "zM": 5.4
+   "xM": 48.25,
+   "zM": 5.5
   },
   "palletCenter": {
-   "xM": 48.4,
+   "xM": 48.25,
    "zM": 4.25
   },
   "dimMm": {
@@ -226,12 +226,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 48.4,
-   "zM": 7.55
+   "xM": 48.25,
+   "zM": 7.75
   },
   "palletCenter": {
-   "xM": 48.4,
-   "zM": 6.55
+   "xM": 48.25,
+   "zM": 6.75
   },
   "dimMm": {
    "w": 1100,
