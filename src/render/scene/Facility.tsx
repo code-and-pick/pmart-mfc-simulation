@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS, DECOR } from '../../config';
-import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
+import { FREIGHT_LIFTS, LIFT_Z0, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -69,11 +69,7 @@ function Ground({ L }: { L: Layout }) {
         <planeGeometry args={[YARD_X[1] - YARD_X[0], L.depth - L.buildingDepth]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
-      {/* 입고 차량 길: 북쪽 차량문 앞에서 동쪽으로(2026-11-21 재배치 — 전엔 동쪽 벽) */}
-      <mesh rotation={flat} position={[(L.points.truckDock.x - 4 + 90) / 2, -0.015, L.points.truckDock.z]} receiveShadow>
-        <planeGeometry args={[90 - (L.points.truckDock.x - 4), 5]} />
-        <meshStandardMaterial color={SCENE.yard} roughness={1} />
-      </mesh>
+      {/* MFC 는 2층(2026-11-22) — 북쪽 입고 차량 길 대신 화물 승강기 2대(FreightLifts). 인계 돌출부 바닥은 인계 구역 바닥이 덮음 */}
     </>
   );
 }
@@ -608,7 +604,70 @@ export function Facility() {
       </StaticMerge>
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
-      <Label text="입고 차량문" position={[L.points.truckDoor.x, 3.4, -0.4]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
+      <FreightLifts />
+    </>
+  );
+}
+
+/**
+ * 화물 승강기 2대(2026-11-22 사용자 "2층이었어 … 입고검수 문 달린 곳에 mfc 외부지만 건물 내부에 화물 승강기 2대" → "응") — MFC 북쪽 외벽 바깥 승강로,
+ * 문은 입고·검수로 바로 열린다. 1층 입고 차량이 오면(DOCKED·UNLOADING) 카가 2층에 와 있어 문이 열린다. 승강로는 MFC 넓이에 넣지 않음. [가정 — 2~3 t 화물용]
+ */
+function FreightLifts() {
+  const { sim } = useApp();
+  const doors = useRef<THREE.Group[]>([]);
+  const open = useRef(0);
+  useFrame((_, dt) => {
+    const want = sim.trucks.some((t) => t.state === 'DOCKED' || t.state === 'UNLOADING') ? 1 : 0;
+    open.current += Math.sign(want - open.current) * Math.min(Math.abs(want - open.current), dt * 0.8);
+    doors.current.forEach((g, i) => {
+      if (!g) return;
+      const half = i % 2 === 0 ? -1 : 1;
+      g.position.x = half * open.current * 0.42;
+    });
+  });
+  const tags = useMemo(() => FREIGHT_LIFTS.map((_, i) => makeLabel(`화물 승강기 ${i + 1}`, { size: 26, bg: 'rgba(31,42,68,0.85)', screenPx: 14 })), []);
+  const H = 3.0;
+  const T = 0.15;
+  return (
+    <>
+      {FREIGHT_LIFTS.map((l, i) => {
+        const w = l.x1 - l.x0;
+        const d = -LIFT_Z0;
+        const cx = (l.x0 + l.x1) / 2;
+        const dc = (l.door[0] + l.door[1]) / 2;
+        const dw = l.door[1] - l.door[0];
+        return (
+          <group key={i}>
+            {/* 승강로 벽(뒤·옆) */}
+            <mesh position={[cx, H / 2, LIFT_Z0 + T / 2]} castShadow>
+              <boxGeometry args={[w, H, T]} />
+              <meshStandardMaterial color={0xb8c0cc} roughness={0.7} />
+            </mesh>
+            {[l.x0 + T / 2, l.x1 - T / 2].map((x) => (
+              <mesh key={x} position={[x, H / 2, LIFT_Z0 / 2]} castShadow>
+                <boxGeometry args={[T, H, d]} />
+                <meshStandardMaterial color={0xb8c0cc} roughness={0.7} />
+              </mesh>
+            ))}
+            {/* 카 바닥 */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0.01, LIFT_Z0 / 2]} receiveShadow>
+              <planeGeometry args={[w - 2 * T, d - T]} />
+              <meshStandardMaterial color={0x8a929e} roughness={0.6} metalness={0.3} />
+            </mesh>
+            {/* 문 두 짝(가운데에서 양옆으로 열림) */}
+            {[0, 1].map((k) => (
+              <group key={k} ref={(g) => { if (g) doors.current[i * 2 + k] = g; }}>
+                <mesh position={[dc + (k === 0 ? -dw / 4 : dw / 4), 1.1, -0.06]}>
+                  <boxGeometry args={[dw / 2, 2.2, 0.05]} />
+                  <meshStandardMaterial color={0xd7dde6} metalness={0.6} roughness={0.3} />
+                </mesh>
+              </group>
+            ))}
+            <primitive object={tags[i]} position={[cx, 3.4, LIFT_Z0 / 2]} />
+          </group>
+        );
+      })}
     </>
   );
 }

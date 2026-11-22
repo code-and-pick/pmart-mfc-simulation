@@ -1672,7 +1672,7 @@ export class Simulation {
       this.dockUsed.add(slot.id);
       it.slot = slot;
     } else {
-      it.floorPos = { x: 38.4 + (this.dockItems.length % 6) * 0.5, z: 21.8 };
+      it.floorPos = { x: 36.4 + (this.dockItems.length % 6) * 0.5, z: 21.6 }; // 2026-11-22 474.55평 맞춤
     }
     this.dockItems.push(it);
   }

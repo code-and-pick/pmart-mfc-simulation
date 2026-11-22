@@ -14,7 +14,9 @@ describe('Simulation (mock, 화면 없이)', () => {
     for (const st of sim.layout.stations) expect(sim.nav.findPath(depot, st.stand)).not.toBeNull();
     for (const r of sim.layout.reserves) expect(sim.nav.findPath(sim.layout.points.truckDoor, r.stand), r.id).not.toBeNull();
     for (const d of sim.layout.dockSlots) expect(sim.nav.findPath(sim.layout.points.truckDoor, d.pos), d.id).not.toBeNull();
-    expect(sim.nav.findPath(sim.layout.points.shipDrop, sim.layout.points.riderPickup)).not.toBeNull();
+    // 2026-11-22 MFC 2층·인계 창: 점원은 안에서 출하대기(shipDrop)까지, 라이더는 밖에서 인계 창(riderPickup)까지 — 둘 사이는 창(낮은 벽)으로 나뉨
+    expect(sim.nav.findPath(depot, sim.layout.points.shipDrop)).not.toBeNull();
+    expect(sim.nav.findPath(sim.layout.points.shipDrop, sim.layout.points.riderPickup)).toBeNull();
     expect(sim.nav.findPath(sim.layout.points.riderEntry, sim.layout.points.riderPickup)).not.toBeNull();
     // MOCK 상품 수 = 백엔드 LAN 시험 상품 규모(온도대별), 한 칸에 한 SKU, 온도대 칸에만
     const c = DEFAULT_PARAMS.mockSkuCount;

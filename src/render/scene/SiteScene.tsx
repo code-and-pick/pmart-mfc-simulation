@@ -4,7 +4,7 @@ import { lazy, Suspense, useEffect } from 'react';
 import * as THREE from 'three';
 import { useView } from '../../app/context';
 import { AppContext, type AppCtx } from '../../app/context';
-import { People, Riders, Trucks } from './Agents';
+import { People, Riders } from './Agents';
 import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
 import { SCENE } from '../colors';
@@ -37,7 +37,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <ScanMarker />
         <People />
         <Riders />
-        <Trucks />
+        {/* 입고 차량은 1층(MFC 는 2층, 2026-11-22) — 그리지 않고 화물 승강기(Facility FreightLifts) 문이 열린다 */}
         <PathLine />
         <Highlight />
         <CameraRig />

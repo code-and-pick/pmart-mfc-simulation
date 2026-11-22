@@ -6,12 +6,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.15,
-   "zM": 5.5
+   "xM": 38.735,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 41.15,
-   "zM": 4.25
+   "xM": 38.735,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -26,12 +26,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.15,
-   "zM": 7.75
+   "xM": 38.735,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 41.15,
-   "zM": 6.75
+   "xM": 38.735,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,
@@ -46,12 +46,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.35,
-   "zM": 5.5
+   "xM": 39.935,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 42.35,
-   "zM": 4.25
+   "xM": 39.935,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -66,12 +66,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.35,
-   "zM": 7.75
+   "xM": 39.935,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 42.35,
-   "zM": 6.75
+   "xM": 39.935,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,
@@ -86,12 +86,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43.55,
-   "zM": 5.5
+   "xM": 41.135,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 43.55,
-   "zM": 4.25
+   "xM": 41.135,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -106,12 +106,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43.55,
-   "zM": 7.75
+   "xM": 41.135,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 43.55,
-   "zM": 6.75
+   "xM": 41.135,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,
@@ -126,12 +126,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 45.85,
-   "zM": 5.5
+   "xM": 43.435,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 45.85,
-   "zM": 4.25
+   "xM": 43.435,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -146,12 +146,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 45.85,
-   "zM": 7.75
+   "xM": 43.435,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 45.85,
-   "zM": 6.75
+   "xM": 43.435,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,
@@ -166,12 +166,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 47.05,
-   "zM": 5.5
+   "xM": 44.635,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 47.05,
-   "zM": 4.25
+   "xM": 44.635,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -186,12 +186,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 47.05,
-   "zM": 7.75
+   "xM": 44.635,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 47.05,
-   "zM": 6.75
+   "xM": 44.635,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,
@@ -206,12 +206,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 48.25,
-   "zM": 5.5
+   "xM": 45.835,
+   "zM": 5.447
   },
   "palletCenter": {
-   "xM": 48.25,
-   "zM": 4.25
+   "xM": 45.835,
+   "zM": 4.197
   },
   "dimMm": {
    "w": 1100,
@@ -226,12 +226,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 48.25,
-   "zM": 7.75
+   "xM": 45.835,
+   "zM": 7.697
   },
   "palletCenter": {
-   "xM": 48.25,
-   "zM": 6.75
+   "xM": 45.835,
+   "zM": 6.697
   },
   "dimMm": {
    "w": 1100,

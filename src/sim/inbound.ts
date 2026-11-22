@@ -163,7 +163,7 @@ export class InboundWorker extends Agent {
         qty: l.qty,
         temp: sku.temp,
         slot: null,
-        floorPos: { x: 34.6, z: 3.05 },
+        floorPos: { x: 33.2, z: 2.965 }, // 2026-11-22 474.55평 맞춤
         state: 'ON_DOCK',
       };
       ctx.placeOnDock(item);
@@ -178,7 +178,7 @@ export class InboundWorker extends Agent {
 
     this.activity = '수량·바코드·유통기한 검수';
     this.pda.step = '검수';
-    await this.walkTo({ x: 32.1, z: 3.05 });
+    await this.walkTo({ x: 30.7, z: 2.965 });
     await this.wait(2 * truck.lines.length);
     this.pda.step = '수령 등록 (TIN)';
     await ctx.mock.recordReceipt(
