@@ -823,20 +823,23 @@ function compact474(o: {
     const rs = o.reserves.find((q) => Math.abs(q.rect.x0 - ob.rect.x0) < 1e-6 && Math.abs(q.rect.z0 - ob.rect.z0) < 1e-6);
     if (rs) resOf.set(ob, rs);
   }
-  // 대형재고 5 / 5(2026-11-22 사용자 "대형재고 팔레트 5 / 5" → "사이 통로도 좁힘"): 한 줄 5개(1.1 m, 사이 0.15 m) 창고 가운데, 양 끝 약 1.3 m 로 두 줄 사이 통로에 들어감.
+  // 대형재고 5 / 5(2026-11-22 사용자 "대형재고 팔레트 5 / 5" → "사이 통로도 좁힘"): 한 줄 5개, 열은 입고재고 팔레트와 같은 x(간격 1.5 m), 양 끝으로 두 줄 사이 통로에 들어감.
   // 벽 줄 z 3.013~4.113 | 사이 통로 1.0 m | 앞 줄 5.113~6.213 | 앞 통로 1.0 m | 입고재고 선 7.213. 번호는 열마다 벽 쪽 → 앞(WB-01~10)
   const BULK_X0 = (R.WH.x0 + R.WH.x1) / 2 - (5 * 1.1 + 4 * 0.15) / 2;
   for (const rs of o.reserves) {
     const { r, dx, dz } = shiftRect(rs.rect);
     rs.rect = r;
     rs.stand = { x: rs.stand.x + dx, z: rs.stand.z + dz };
-    if (rs.role === 'BULK') {
-      const n = Number(rs.id.slice(3)) - 1;
-      const x0 = BULK_X0 + Math.floor(n / 2) * 1.25;
-      const z0 = n % 2 === 0 ? R.WH.z0 + 0.15 : R.WH.z0 + 0.15 + 1.1 + 1.0;
-      rs.rect = { x0, z0, x1: x0 + 1.1, z1: z0 + 1.1 };
-      rs.stand = { x: x0 + 0.55, z: z0 + 1.1 + 0.5 };
-    }
+  }
+  // 대형재고 열 x = 입고재고 팔레트 x(간격 1.5 m 로 같게, 사용자 2026-11-22 "대형재고 팔레트 5개 간격 입고재고 팔레트 간격이랑 맞게")
+  const wrX = o.reserves.filter((q) => q.id.startsWith('WR-')).sort((p, q) => p.id.localeCompare(q.id)).map((q) => q.rect.x0);
+  for (const rs of o.reserves) {
+    if (rs.role !== 'BULK') continue;
+    const n = Number(rs.id.slice(3)) - 1;
+    const x0 = wrX[Math.floor(n / 2)] ?? BULK_X0 + Math.floor(n / 2) * 1.25;
+    const z0 = n % 2 === 0 ? R.WH.z0 + 0.15 : R.WH.z0 + 0.15 + 1.1 + 1.0;
+    rs.rect = { x0, z0, x1: x0 + 1.1, z1: z0 + 1.1 };
+    rs.stand = { x: x0 + 0.55, z: z0 + 1.1 + 0.5 };
   }
   // 패킹대: 두 줄을 새 패킹 구역 위·아래로(가운데 통로), 가로 자리는 서쪽으로 2.0
   const oldTableX = o.stations.map((st) => st.table.x);
