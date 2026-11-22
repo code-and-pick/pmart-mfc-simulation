@@ -412,28 +412,31 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 }
 
 /** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
-// 휴게·사무 바 테이블 — 북쪽 벽을 따라 한 줄 6자리, 혼자 앉는 높은 의자(사용자 2026-11-22 "휴게사무에 테이블 말고 6인용인데 혼자 앉는 바테이블로 바꿔줘").
-// 구역 x 36.729~45.418 · z 0~2.663 의 가운데 x, 벽(z 0.1) 쪽. 3.6 × 0.5 m · 높이 1.05 m [시뮬]. PC 1대는 서쪽 끝 자리
-export const OFFICE_TABLE = { x: 41.074, z: 0.4, w: 3.6, d: 0.5, h: 1.05 };
+// 휴게·사무 바 테이블 — 북쪽 벽을 따라 한 줄 6자리, 혼자 앉는 자리(사용자 2026-11-22 "휴게사무에 테이블 말고 6인용인데 혼자 앉는 바테이블로 바꿔줘").
+// 구역 x 36.729~45.418 · z 0~2.663 의 가운데 x, 벽(z 0.1) 쪽. 3.6 × 0.5 m [시뮬]. PC 1대는 서쪽 끝 자리
+// 의자는 일반 의자(등받이), 그래서 상판 높이 1.05 → 0.74 m(사용자 2026-11-22 "바 테이블은 맞는데 의자는 일반 의자로")
+export const OFFICE_TABLE = { x: 41.074, z: 0.4, w: 3.6, d: 0.5, h: 0.74 };
 const BAR_SEATS = 6;
-function BarStool({ x, z }: { x: number; z: number }) {
+function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
+  // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
+  const seat = 0x2b3240;
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, 0.02, 0]}>
-        <cylinderGeometry args={[0.2, 0.22, 0.03, 16]} />
-        <meshStandardMaterial color={0x3a4150} roughness={0.5} metalness={0.3} />
+      <mesh position={[0, 0.25, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
+        <meshStandardMaterial color={0x9aa3b0} metalness={0.5} roughness={0.4} />
       </mesh>
-      <mesh position={[0, 0.38, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.7, 8]} />
-        <meshStandardMaterial color={0xaab2be} metalness={0.6} roughness={0.3} />
+      <mesh position={[0, 0.04, 0]}>
+        <cylinderGeometry args={[0.24, 0.24, 0.04, 16]} />
+        <meshStandardMaterial color={0x3a4150} roughness={0.6} />
       </mesh>
-      <mesh position={[0, 0.3, 0]} rotation={[Math.PI / 2, 0, 0]}>
-        <torusGeometry args={[0.15, 0.012, 6, 16]} />
-        <meshStandardMaterial color={0xaab2be} metalness={0.6} roughness={0.3} />
+      <mesh position={[0, 0.47, 0]} castShadow>
+        <boxGeometry args={[0.44, 0.07, 0.42]} />
+        <meshStandardMaterial color={seat} roughness={0.7} />
       </mesh>
-      <mesh position={[0, 0.76, 0]} castShadow>
-        <cylinderGeometry args={[0.18, 0.18, 0.06, 18]} />
-        <meshStandardMaterial color={0x2b3240} roughness={0.7} />
+      <mesh position={[0, 0.78, -face * 0.2]} castShadow>
+        <boxGeometry args={[0.42, 0.52, 0.05]} />
+        <meshStandardMaterial color={seat} roughness={0.7} />
       </mesh>
     </group>
   );
@@ -459,9 +462,9 @@ export function OfficeDecor() {
           <meshStandardMaterial color={0x4a5160} roughness={0.6} />
         </mesh>
       ))}
-      {/* 의자 6개: 남쪽에 한 줄(벽을 보고 혼자 앉음) */}
+      {/* 일반 의자 6개: 남쪽에 한 줄(벽을 보고 혼자 앉음, 등받이는 남쪽) */}
       {Array.from({ length: BAR_SEATS }, (_, k) => (
-        <BarStool key={k} x={seatX(k)} z={T.z + T.d / 2 + 0.3} />
+        <OfficeChair key={k} x={seatX(k)} z={T.z + T.d / 2 + 0.32} face={-1} />
       ))}
       {/* PC: 서쪽 끝 자리 — 모니터(받침·화면, 남쪽을 봄)·키보드 */}
       <group position={[seatX(0), T.h, T.z]}>
