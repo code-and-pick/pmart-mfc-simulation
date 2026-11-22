@@ -1,6 +1,6 @@
 // 3D 가상 현장 (react-three-fiber). useFrame 은 등록 순서대로 돈다: 시뮬 진행 → 장면 갱신 → 카메라 → 번호 라벨.
 import { Canvas, useThree } from '@react-three/fiber';
-import { useEffect } from 'react';
+import { lazy, Suspense, useEffect } from 'react';
 import * as THREE from 'three';
 import { useView } from '../../app/context';
 import { AppContext, type AppCtx } from '../../app/context';
@@ -12,6 +12,9 @@ import { Declutter, Dock, Highlight, LocationLabelsLayer, PathLine, Staged, Targ
 import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { ScanMarker } from './Marker';
 import { Goods, Reserves, ReserveFloors } from './Stock';
+
+// 개발용 성능 측정기(Canvas 안) — npm run dev 에서만, 운영 빌드에서는 빠진다(src/dev/perf.tsx)
+const PerfProbe = import.meta.env.DEV ? lazy(() => import('../../dev/perf').then((m) => ({ default: m.PerfProbe }))) : null;
 
 export function SiteScene({ app }: { app: AppCtx }) {
   return (
@@ -42,6 +45,11 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <LocationLabelsLayer />
         <Declutter />
         <Picker />
+        {PerfProbe && (
+          <Suspense fallback={null}>
+            <PerfProbe />
+          </Suspense>
+        )}
       </AppContext.Provider>
     </Canvas>
   );

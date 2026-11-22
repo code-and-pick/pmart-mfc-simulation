@@ -433,11 +433,11 @@ export function RealStock() {
   });
   return (
     <>
-      <instancedMesh ref={mesh} args={[undefined, undefined, MAX_BOXES]} count={0} frustumCulled={false}>
+      <instancedMesh name="real-boxes" ref={mesh} args={[undefined, undefined, MAX_BOXES]} count={0} frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.65} map={boxTexture()} />
       </instancedMesh>
-      <instancedMesh ref={bagMesh} args={[bagGeometry(), undefined, MAX_BAGS]} count={0} frustumCulled={false}>
+      <instancedMesh name="real-bags" ref={bagMesh} args={[bagGeometry(), undefined, MAX_BAGS]} count={0} frustumCulled={false}>
         <meshStandardMaterial roughness={0.35} metalness={0.05} />
       </instancedMesh>
       <primitive object={labels} />

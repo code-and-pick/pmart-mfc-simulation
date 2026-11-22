@@ -151,7 +151,7 @@ export function Goods() {
   });
 
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, total]} receiveShadow frustumCulled={false}>
+    <instancedMesh name="goods" ref={mesh} args={[undefined, undefined, total]} receiveShadow frustumCulled={false}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial roughness={0.7} map={boxTexture()} />
     </instancedMesh>
@@ -228,7 +228,7 @@ export function Reserves() {
   return (
     <>
       {/* 입고재고 자리 바닥은 ReserveFloors(격리 구역과 같은 바닥·흰 실선) */}
-      <instancedMesh ref={base} args={[undefined, undefined, L.reserves.length]} receiveShadow>
+      <instancedMesh name="reserve-pallets" ref={base} args={[undefined, undefined, L.reserves.length]} receiveShadow>
         <boxGeometry args={[1.1, 0.14, 1.1]} />
         {/* 그림처럼 밝은 나무 팔레트(사용자 2026-11-20 "입고구역 UI도 똑같이") */}
         <meshStandardMaterial color={0xd9b98a} roughness={0.85} map={palletTexture()} />
@@ -237,7 +237,7 @@ export function Reserves() {
       {sim.mode !== 'http' && L.reserves.map((r) => (
         <Label key={r.id} text={r.role === 'BULK' ? `대형재고 ${r.id}` : `입고재고 ${r.id}`} position={[(r.rect.x0 + r.rect.x1) / 2, 2.0, (r.rect.z0 + r.rect.z1) / 2]} opts={{ size: 40, bg: 'rgba(255,255,255,0.96)', color: '#24304f', screenPx: 18 }} noNudge />
       ))}
-      <instancedMesh ref={cartons} args={[undefined, undefined, Math.max(1, L.reserveRackSpots.length * cellMax)]} castShadow frustumCulled={false}>
+      <instancedMesh name="reserve-cartons" ref={cartons} args={[undefined, undefined, Math.max(1, L.reserveRackSpots.length * cellMax)]} castShadow frustumCulled={false}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial roughness={0.8} map={boxTexture()} />
       </instancedMesh>

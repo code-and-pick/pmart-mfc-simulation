@@ -37,7 +37,7 @@ export function Dock() {
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
   return (
-    <instancedMesh ref={mesh} args={[undefined, undefined, 96]} count={0} castShadow frustumCulled={false}>
+    <instancedMesh name="dock-boxes" ref={mesh} args={[undefined, undefined, 96]} count={0} castShadow frustumCulled={false}>
       <boxGeometry args={[0.62, 1.05, 0.6]} />
       <meshStandardMaterial roughness={0.7} map={boxTexture()} />
     </instancedMesh>
@@ -66,7 +66,7 @@ export function Staged() {
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
   return (
-    <instancedMesh ref={mesh} args={[bagGeometry(), undefined, 96]} count={0} frustumCulled={false}>
+    <instancedMesh name="staged-bags" ref={mesh} args={[bagGeometry(), undefined, 96]} count={0} frustumCulled={false}>
       <meshStandardMaterial roughness={0.35} metalness={0.05} />
     </instancedMesh>
   );

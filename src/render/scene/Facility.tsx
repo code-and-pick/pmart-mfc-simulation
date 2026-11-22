@@ -263,23 +263,23 @@ function Racks({ L }: { L: Layout }) {
   }, [L, bays]);
   return (
     <>
-      <instancedMesh ref={posts} args={[undefined, undefined, postCount]} castShadow>
+      <instancedMesh name="rack-posts" ref={posts} args={[undefined, undefined, postCount]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackPost} metalness={0.2} roughness={0.45} />
       </instancedMesh>
-      <instancedMesh ref={braces} args={[undefined, undefined, L.racks.length * 2 * BRACES]}>
+      <instancedMesh name="rack-braces" ref={braces} args={[undefined, undefined, L.racks.length * 2 * BRACES]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackPost} metalness={0.2} roughness={0.5} />
       </instancedMesh>
-      <instancedMesh ref={beams} args={[undefined, undefined, shelfCount * 2]} castShadow>
+      <instancedMesh name="rack-beams" ref={beams} args={[undefined, undefined, shelfCount * 2]} castShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackBeam} roughness={0.5} />
       </instancedMesh>
-      <instancedMesh ref={shelves} args={[undefined, undefined, shelfCount]} castShadow receiveShadow>
+      <instancedMesh name="rack-shelves" ref={shelves} args={[undefined, undefined, shelfCount]} castShadow receiveShadow>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackDeck} roughness={0.7} />
       </instancedMesh>
-      <instancedMesh ref={dividers} args={[undefined, undefined, dividerCount]}>
+      <instancedMesh name="rack-dividers" ref={dividers} args={[undefined, undefined, dividerCount]}>
         <boxGeometry args={[1, 1, 1]} />
         <meshStandardMaterial color={SCENE.rackDivider} roughness={0.6} />
       </instancedMesh>
