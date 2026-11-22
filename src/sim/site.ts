@@ -47,7 +47,8 @@ export class StationPool {
 
   private drain() {
     while (this.queue.length > 0) {
-      const free = this.all.slice(0, this.active).find((s) => !this.busy.has(s.id));
+      // 가동 패킹대 먼저, 다 차면 나머지 패킹대도 언제든 쓴다(사용자 2026-11-22 "패킹대는 다 차면 다른 패킹대도 언제든 사용 가능")
+      const free = this.all.slice(0, this.active).find((s) => !this.busy.has(s.id)) ?? this.all.find((s) => !this.busy.has(s.id));
       if (!free) return;
       const next = this.queue.shift()!;
       this.busy.set(free.id, next.workerId);

@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS, DECOR } from '../../config';
-import { FREIGHT_LIFTS, LIFT_ANNEX, LIFT_Z0, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
+import { FREIGHT_LIFTS, LIFT_ANNEX, LIFT_Z0, PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -515,9 +515,10 @@ function Stations({ L }: { L: Layout }) {
     L.stations.forEach((st, i) => {
       const active = sim.stations.isActive(i);
       const busy = !!sim.stations.occupant(st.id);
+      // 꺼진 패킹대도 넘쳐서 쓰는 중이면 사용 중 색(가동 패킹대가 다 차면 나머지도 씀)
       tags[i].free.visible = active && !busy;
-      tags[i].busy.visible = active && busy;
-      tags[i].off.visible = !active;
+      tags[i].busy.visible = busy;
+      tags[i].off.visible = !active && !busy;
     });
   });
   const frame = 0xc9d0da;
@@ -529,35 +530,35 @@ function Stations({ L }: { L: Layout }) {
           <group key={st.id}>
             {/* 상판(흰) + 앞 모서리 띠 */}
             <mesh position={[x, 0.86, z]} castShadow receiveShadow>
-              <boxGeometry args={[1.6, 0.05, 0.8]} />
+              <boxGeometry args={[PACK_TABLE_W, 0.05, 0.8]} />
               <meshStandardMaterial color={0xffffff} roughness={0.45} />
             </mesh>
             <mesh position={[x, 0.82, z]}>
-              <boxGeometry args={[1.62, 0.04, 0.82]} />
+              <boxGeometry args={[PACK_TABLE_W + 0.02, 0.04, 0.82]} />
               <meshStandardMaterial color={frame} roughness={0.5} />
             </mesh>
             {/* 다리·아래 선반 */}
             {[-1, 1].flatMap((sx) =>
               [-1, 1].map((sz) => (
-                <mesh key={`${sx}${sz}`} position={[x + sx * 0.76, 0.41, z + sz * 0.36]} castShadow>
+                <mesh key={`${sx}${sz}`} position={[x + sx * (PACK_TABLE_W / 2 - 0.04), 0.41, z + sz * 0.36]} castShadow>
                   <boxGeometry args={[0.045, 0.82, 0.045]} />
                   <meshStandardMaterial color={frame} metalness={0.2} roughness={0.5} />
                 </mesh>
               )),
             )}
             <mesh position={[x, 0.16, z]} receiveShadow>
-              <boxGeometry args={[1.52, 0.03, 0.72]} />
+              <boxGeometry args={[PACK_TABLE_W - 0.08, 0.03, 0.72]} />
               <meshStandardMaterial color={0xe9edf2} roughness={0.7} />
             </mesh>
             {/* 아래 파란 바구니 2개 */}
-            {[-0.38, 0.38].map((dx) => (
+            {[-PACK_TABLE_W * 0.24, PACK_TABLE_W * 0.24].map((dx) => (
               <mesh key={dx} position={[x + dx, 0.32, z]} castShadow>
                 <boxGeometry args={[0.6, 0.28, 0.5]} />
                 <meshStandardMaterial color={0x2f80ed} roughness={0.55} />
               </mesh>
             ))}
             {/* 위: 접어 둔 봉투 묶음(흰 비닐·은색 보냉) + 라벨 프린터(회색) — 포장은 봉투(사용자 2026-11-20 "박스가 아니라 비닐봉투") */}
-            <mesh position={[x - 0.45, 0.9, z - 0.12]} castShadow>
+            <mesh position={[x - PACK_TABLE_W * 0.28, 0.9, z - 0.12]} castShadow>
               <boxGeometry args={[0.4, 0.06, 0.3]} />
               <meshStandardMaterial color={0xf7f8fa} roughness={0.35} />
             </mesh>
@@ -565,7 +566,7 @@ function Stations({ L }: { L: Layout }) {
               <boxGeometry args={[0.36, 0.05, 0.28]} />
               <meshStandardMaterial color={0xc9d3de} roughness={0.3} metalness={0.2} />
             </mesh>
-            <mesh position={[x + 0.55, 0.93, z + 0.1]} castShadow>
+            <mesh position={[x + PACK_TABLE_W * 0.34, 0.93, z + 0.1]} castShadow>
               <boxGeometry args={[0.18, 0.1, 0.1]} />
               <meshStandardMaterial color={0x7b8494} roughness={0.5} />
             </mesh>

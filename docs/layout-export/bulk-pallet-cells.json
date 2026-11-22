@@ -6,12 +6,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38.735,
-   "zM": 5.447
+   "xM": 38.573,
+   "zM": 4.613
   },
   "palletCenter": {
-   "xM": 38.735,
-   "zM": 4.197
+   "xM": 38.573,
+   "zM": 3.563
   },
   "dimMm": {
    "w": 1100,
@@ -26,12 +26,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38.735,
-   "zM": 7.697
+   "xM": 38.573,
+   "zM": 6.713
   },
   "palletCenter": {
-   "xM": 38.735,
-   "zM": 6.697
+   "xM": 38.573,
+   "zM": 5.663
   },
   "dimMm": {
    "w": 1100,
@@ -46,12 +46,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 39.935,
-   "zM": 5.447
+   "xM": 39.823,
+   "zM": 4.613
   },
   "palletCenter": {
-   "xM": 39.935,
-   "zM": 4.197
+   "xM": 39.823,
+   "zM": 3.563
   },
   "dimMm": {
    "w": 1100,
@@ -66,12 +66,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 39.935,
-   "zM": 7.697
+   "xM": 39.823,
+   "zM": 6.713
   },
   "palletCenter": {
-   "xM": 39.935,
-   "zM": 6.697
+   "xM": 39.823,
+   "zM": 5.663
   },
   "dimMm": {
    "w": 1100,
@@ -86,12 +86,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.135,
-   "zM": 5.447
+   "xM": 41.073,
+   "zM": 4.613
   },
   "palletCenter": {
-   "xM": 41.135,
-   "zM": 4.197
+   "xM": 41.073,
+   "zM": 3.563
   },
   "dimMm": {
    "w": 1100,
@@ -106,12 +106,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.135,
-   "zM": 7.697
+   "xM": 41.073,
+   "zM": 6.713
   },
   "palletCenter": {
-   "xM": 41.135,
-   "zM": 6.697
+   "xM": 41.073,
+   "zM": 5.663
   },
   "dimMm": {
    "w": 1100,
@@ -126,12 +126,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43.435,
-   "zM": 5.447
+   "xM": 42.323,
+   "zM": 4.613
   },
   "palletCenter": {
-   "xM": 43.435,
-   "zM": 4.197
+   "xM": 42.323,
+   "zM": 3.563
   },
   "dimMm": {
    "w": 1100,
@@ -146,12 +146,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 43.435,
-   "zM": 7.697
+   "xM": 42.323,
+   "zM": 6.713
   },
   "palletCenter": {
-   "xM": 43.435,
-   "zM": 6.697
+   "xM": 42.323,
+   "zM": 5.663
   },
   "dimMm": {
    "w": 1100,
@@ -166,12 +166,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.635,
-   "zM": 5.447
+   "xM": 43.573,
+   "zM": 4.613
   },
   "palletCenter": {
-   "xM": 44.635,
-   "zM": 4.197
+   "xM": 43.573,
+   "zM": 3.563
   },
   "dimMm": {
    "w": 1100,
@@ -186,52 +186,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.635,
-   "zM": 7.697
+   "xM": 43.573,
+   "zM": 6.713
   },
   "palletCenter": {
-   "xM": 44.635,
-   "zM": 6.697
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-11-1-01",
-  "sim": "WB-11",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
-   "xM": 45.835,
-   "zM": 5.447
-  },
-  "palletCenter": {
-   "xM": 45.835,
-   "zM": 4.197
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-12-1-01",
-  "sim": "WB-12",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
-   "xM": 45.835,
-   "zM": 7.697
-  },
-  "palletCenter": {
-   "xM": 45.835,
-   "zM": 6.697
+   "xM": 43.573,
+   "zM": 5.663
   },
   "dimMm": {
    "w": 1100,

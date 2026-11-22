@@ -412,82 +412,80 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 }
 
 /** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
-// 4인용 1.6 × 0.8 m, 휴게·사무 가운데(사용자 2026-11-22 "휴게사무 테이블은 4인용으로 줄이고 위치도 중앙으로") — 구역 x 36.729~45.418, z 0~2.663
-export const OFFICE_TABLE = { x: 41.074, z: 1.33, w: 1.6, d: 0.8, h: 0.74 }; // 휴게·사무 가운데(2026-11-22 휴게·사무가 z 0~3.35 로 얕아져 1.0 m 북쪽)
-function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
-  // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
-  const seat = 0x2b3240;
+// 휴게·사무 바 테이블 — 북쪽 벽을 따라 한 줄 6자리, 혼자 앉는 높은 의자(사용자 2026-11-22 "휴게사무에 테이블 말고 6인용인데 혼자 앉는 바테이블로 바꿔줘").
+// 구역 x 36.729~45.418 · z 0~2.663 의 가운데 x, 벽(z 0.1) 쪽. 3.6 × 0.5 m · 높이 1.05 m [시뮬]. PC 1대는 서쪽 끝 자리
+export const OFFICE_TABLE = { x: 41.074, z: 0.4, w: 3.6, d: 0.5, h: 1.05 };
+const BAR_SEATS = 6;
+function BarStool({ x, z }: { x: number; z: number }) {
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, 0.25, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
-        <meshStandardMaterial color={0x9aa3b0} metalness={0.5} roughness={0.4} />
+      <mesh position={[0, 0.02, 0]}>
+        <cylinderGeometry args={[0.2, 0.22, 0.03, 16]} />
+        <meshStandardMaterial color={0x3a4150} roughness={0.5} metalness={0.3} />
       </mesh>
-      <mesh position={[0, 0.04, 0]}>
-        <cylinderGeometry args={[0.26, 0.26, 0.04, 16]} />
-        <meshStandardMaterial color={0x3a4150} roughness={0.6} />
+      <mesh position={[0, 0.38, 0]}>
+        <cylinderGeometry args={[0.025, 0.025, 0.7, 8]} />
+        <meshStandardMaterial color={0xaab2be} metalness={0.6} roughness={0.3} />
       </mesh>
-      <mesh position={[0, 0.47, 0]} castShadow>
-        <boxGeometry args={[0.46, 0.07, 0.44]} />
-        <meshStandardMaterial color={seat} roughness={0.7} />
+      <mesh position={[0, 0.3, 0]} rotation={[Math.PI / 2, 0, 0]}>
+        <torusGeometry args={[0.15, 0.012, 6, 16]} />
+        <meshStandardMaterial color={0xaab2be} metalness={0.6} roughness={0.3} />
       </mesh>
-      <mesh position={[0, 0.78, -face * 0.21]} castShadow>
-        <boxGeometry args={[0.44, 0.52, 0.05]} />
-        <meshStandardMaterial color={seat} roughness={0.7} />
+      <mesh position={[0, 0.76, 0]} castShadow>
+        <cylinderGeometry args={[0.18, 0.18, 0.06, 18]} />
+        <meshStandardMaterial color={0x2b3240} roughness={0.7} />
       </mesh>
     </group>
   );
 }
 export function OfficeDecor() {
   const T = OFFICE_TABLE;
-  const pcSeat = { x: T.x - 0.4, z: T.z - T.d / 2 }; // PC 는 북쪽 왼쪽 자리 앞
+  const pitch = T.w / BAR_SEATS;
+  const seatX = (k: number) => T.x - T.w / 2 + pitch * (k + 0.5);
   return (
     <group>
-      {/* 상판·다리 */}
-      <mesh position={[T.x, T.h - 0.02, T.z]} castShadow receiveShadow>
-        <boxGeometry args={[T.w, 0.04, T.d]} />
-        <meshStandardMaterial color={0xe9e4da} roughness={0.55} />
+      {/* 상판(밝은 나무) + 벽 쪽 받침판 + 양 끝 옆판 */}
+      <mesh position={[T.x, T.h - 0.025, T.z]} castShadow receiveShadow>
+        <boxGeometry args={[T.w, 0.05, T.d]} />
+        <meshStandardMaterial color={0xe2d3b8} roughness={0.5} />
       </mesh>
-      {[-1, 1].flatMap((sx) =>
-        [-1, 1].map((sz) => (
-          <mesh key={`${sx}${sz}`} position={[T.x + sx * (T.w / 2 - 0.08), (T.h - 0.04) / 2, T.z + sz * (T.d / 2 - 0.08)]}>
-            <boxGeometry args={[0.05, T.h - 0.04, 0.05]} />
-            <meshStandardMaterial color={0x4a5160} metalness={0.3} roughness={0.5} />
-          </mesh>
-        )),
-      )}
-      {/* 의자: 북쪽 2개(남쪽을 봄)·남쪽 2개(북쪽을 봄) — 4인용 */}
-      {[-0.4, 0.4].flatMap((dx) => [
-        <OfficeChair key={`n${dx}`} x={T.x + dx} z={T.z - T.d / 2 - 0.35} face={1} />,
-        <OfficeChair key={`s${dx}`} x={T.x + dx} z={T.z + T.d / 2 + 0.35} face={-1} />,
-      ])}
-      {/* PC: 모니터(받침·화면)·키보드·본체(상판 아래) */}
-      <group position={[pcSeat.x, T.h, pcSeat.z + 0.32]}>
-        <mesh position={[0, 0.06, 0.1]}>
+      <mesh position={[T.x, (T.h - 0.05) / 2, T.z - T.d / 2 + 0.04]} castShadow>
+        <boxGeometry args={[T.w - 0.04, T.h - 0.05, 0.04]} />
+        <meshStandardMaterial color={0x4a5160} roughness={0.6} />
+      </mesh>
+      {[-1, 1].map((sx) => (
+        <mesh key={sx} position={[T.x + sx * (T.w / 2 - 0.03), (T.h - 0.05) / 2, T.z]}>
+          <boxGeometry args={[0.05, T.h - 0.05, T.d - 0.04]} />
+          <meshStandardMaterial color={0x4a5160} roughness={0.6} />
+        </mesh>
+      ))}
+      {/* 의자 6개: 남쪽에 한 줄(벽을 보고 혼자 앉음) */}
+      {Array.from({ length: BAR_SEATS }, (_, k) => (
+        <BarStool key={k} x={seatX(k)} z={T.z + T.d / 2 + 0.3} />
+      ))}
+      {/* PC: 서쪽 끝 자리 — 모니터(받침·화면, 남쪽을 봄)·키보드 */}
+      <group position={[seatX(0), T.h, T.z]}>
+        <mesh position={[0, 0.06, -0.12]}>
           <boxGeometry args={[0.04, 0.12, 0.04]} />
           <meshStandardMaterial color={0x1f2430} />
         </mesh>
-        <mesh position={[0, 0.005, 0.1]}>
+        <mesh position={[0, 0.005, -0.12]}>
           <boxGeometry args={[0.2, 0.01, 0.14]} />
           <meshStandardMaterial color={0x1f2430} />
         </mesh>
-        <mesh position={[0, 0.3, 0.1]} castShadow>
-          <boxGeometry args={[0.6, 0.36, 0.03]} />
+        <mesh position={[0, 0.3, -0.12]} castShadow>
+          <boxGeometry args={[0.5, 0.3, 0.03]} />
           <meshStandardMaterial color={0x161a22} roughness={0.4} />
         </mesh>
-        <mesh position={[0, 0.3, 0.084]}>
-          <planeGeometry args={[0.56, 0.32]} />
+        <mesh position={[0, 0.3, -0.104]}>
+          <planeGeometry args={[0.46, 0.26]} />
           <meshBasicMaterial color={0x3b6fb6} side={THREE.DoubleSide} />
         </mesh>
-        <mesh position={[0, 0.012, -0.12]}>
-          <boxGeometry args={[0.44, 0.02, 0.14]} />
+        <mesh position={[0, 0.012, 0.1]}>
+          <boxGeometry args={[0.4, 0.02, 0.13]} />
           <meshStandardMaterial color={0x2a2f3a} />
         </mesh>
       </group>
-      <mesh position={[pcSeat.x + 0.45, 0.22, T.z]} castShadow>
-        <boxGeometry args={[0.2, 0.44, 0.42]} />
-        <meshStandardMaterial color={0x232833} roughness={0.5} />
-      </mesh>
     </group>
   );
 }

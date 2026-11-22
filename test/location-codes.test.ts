@@ -89,8 +89,8 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect(m.toBackend('WR-06')).toBeNull();
     // 대형 묶음 바닥 팔레트 16자리 → A-R2-01~16-1-01(R-33 정정)
     expect(m.toBackend('WB-01')).toBe('A-R2-01-1-01');
-    expect(m.toBackend('WB-12')).toBe('A-R2-12-1-01');
-    expect(m.toSim('A-R2-12-1-01')).toBe('WB-12');
+    expect(m.toBackend('WB-10')).toBe('A-R2-10-1-01');
+    expect(m.toSim('A-R2-10-1-01')).toBe('WB-10');
     expect(m.toBackend('WB-17')).toBeNull();
     expect(m.toSim('RCV-A-02')).toBe('WR-01');
     expect(m.toBackend('PS-1')).toBe('PAK-A-01');

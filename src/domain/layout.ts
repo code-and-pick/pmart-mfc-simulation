@@ -167,6 +167,8 @@ export const RACK_LEN = 1.25;
 export const RACK_DEPTH = 0.45;
 export const RACK_HEIGHT = 2.1;
 const AISLE = 0.7;
+/** 패킹대 상판 길이(m) — 1.6 → 1.8(사용자 2026-11-22 "패킹대 공간 넓어진 만큼 패킹대 길이도 좀 길게") [시뮬] */
+export const PACK_TABLE_W = 1.8;
 /** 보충재고 랙 단·칸 — 보충 상자는 피킹 낱개보다 커서 칸을 적게 [가정] */
 export const RESERVE_SLOTS: readonly [levels: number, slots: number] = [5, 3];
 
@@ -572,7 +574,8 @@ export function buildLayout(): Layout {
   // 번호는 열마다 벽 쪽 → 앞, 서쪽 열부터(WB-01~12) — 서버 A-R2-13~16 은 쓰지 않음(R-37)
   {
     let n = 0;
-    for (const xNew of [40.6, 41.8, 43.0, 45.3, 46.5, 47.7]) {
+    // 2026-11-22 5 / 5 = 10자리(사용자 "대형재고 팔레트 5 / 5 이렇게 해서 평수 줄인다음에") — 자리는 compact474 에서 다시 놓음
+    for (const xNew of [40.6, 41.8, 43.0, 45.3, 46.5]) {
       const x0 = xNew - 1.0;
       addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', x0, 3.7 - 5.6, { x: x0 + P / 2, z: 5.5 - 5.6 }, 'BULK');
       addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', x0, 6.2 - 5.6, { x: x0 + P / 2, z: 7.75 - 5.6 }, 'BULK');
@@ -750,11 +753,12 @@ function c474(x: number, z: number): { x: number; z: number } {
   }
   if (z < 21.2) {
     // 휴게·사무·상온 입고창고: 동쪽 벽에 붙여(−2.415). 휴게·사무 깊이 3.35 → 3.297, 창고 북쪽 −0.053, 보충재고 랙 쪽 −0.2
-    const nz = z < 3.45 ? z * (2.663 / 3.35) : z < 12.6 ? z - 0.687 : z - 0.2;
+    // 2026-11-22 대형재고 5/5·통로 좁힘으로 대형재고 구역 5.2 → 4.35 m — 그 남쪽(입고재고·보충재고·격리)을 0.85 m 북쪽으로
+    const nz = z < 3.45 ? z * (2.663 / 3.35) : z < 12.6 ? z - 1.537 : z - 1.05;
     return { x: x - 3.582, z: nz };
   }
   // 패킹 줄: 서쪽으로 2.0, 깊이 8.0 → 5.959 m
-  const nz = z < 23.0 ? 20.844 + (z - 21.2) * ((22.67 - 20.844) / 1.8) : 22.67 + (z - 23.0) * (5.309 / 8.0);
+  const nz = z < 23.0 ? 19.994 + (z - 21.2) * ((22.071 - 19.994) / 1.8) : 22.071 + (z - 23.0) * (6.159 / 8.0);
   return { x: x - 2.522, z: nz };
 }
 
@@ -775,16 +779,16 @@ function compact474(o: {
     A: { x0: COLD_BAND.FROZEN, z0: 1.8, x1: 21.578, z1: 31.8 }, // 97평 = 냉동 95 + 격리 2
     B: { x0: 0, z0: 1.8, x1: 10.689, z1: 31.8 }, // 97평 = 냉장 95 + 격리 2
     'C-H': { x0: 22.278, z0: 11.7, x1: 36.078, z1: 28.23 }, // 69평
-    WH: { x0: 36.729, z0: 2.863, x1: 45.418, z1: 20.744 }, // 47평 = 입고창고 45 + 상온 격리 2
+    WH: { x0: 36.729, z0: 2.863, x1: 45.418, z1: 19.894 }, // 약 44.8평 = 입고창고 약 42.8 + 상온 격리 2(대형재고 5/5·통로 좁힘 −0.85 m, 사용자 2026-11-22)
     RCV: { x0: 23.878, z0: 0, x1: 34.678, z1: 6.122 }, // 20평
     OFF: { x0: 36.729, z0: 0, x1: 45.418, z1: 2.663 }, // 7평
-    PK: { x0: 36.078, z0: 22.67, x1: 45.418, z1: 27.979 }, // 15평
+    PK: { x0: 36.078, z0: 22.071, x1: 45.418, z1: 28.23 }, // 남쪽 선을 상온 남쪽 선(z 28.23)과 같게(사용자 2026-11-22 "하얀실선으로 구역 표시해 놓은 거 상온이랑 같게 패킹구역 남쪽으로 밀어봐") // 약 17.4평 = 15 + 대형재고에서 줄인 만큼("대형재고에서 줄인 만큼 패킹구역 평수 늘려줘")
     AQ: { x0: COLD_BAND.FROZEN, z0: 21.1, x1: COLD_BAND.FROZEN + COLD_BAND.mark, z1: COLD_BAND.z1 }, // 2평
     BQ: { x0: COLD_BAND.CHILLED, z0: 21.1, x1: COLD_BAND.CHILLED + COLD_BAND.mark, z1: COLD_BAND.z1 }, // 2평
-    CQ: { x0: 42.418, z0: 18.54, x1: 45.418, z1: 20.744 }, // 2평
+    CQ: { x0: 42.418, z0: 17.69, x1: 45.418, z1: 19.894 }, // 2평
     SHIP: { x0: 37.018, z0: BD2 + 0.1, x1: 43.018, z1: SHIP_BUMP.z1 - 0.1 }, // 3평(인계, 건물 안 돌출부)
   };
-  const PY: Record<string, number> = { A: 95, B: 95, 'C-H': 69, WH: 45, RCV: 20, OFF: 7, PK: 15, AQ: 2, BQ: 2, CQ: 2, SHIP: 3 };
+  const PY: Record<string, number> = { A: 95, B: 95, 'C-H': 69, WH: 42.8, RCV: 20, OFF: 7, PK: 17.4, AQ: 2, BQ: 2, CQ: 2, SHIP: 3 };
   for (const z of o.zones) {
     if (R[z.id]) {
       z.rect = R[z.id];
@@ -819,17 +823,19 @@ function compact474(o: {
     const rs = o.reserves.find((q) => Math.abs(q.rect.x0 - ob.rect.x0) < 1e-6 && Math.abs(q.rect.z0 - ob.rect.z0) < 1e-6);
     if (rs) resOf.set(ob, rs);
   }
-  // 대형재고 열(창고가 8.7 m 로 좁아져 열 간격 1.2 → 1.15 m, 동쪽 벽 쪽에 붙임 — 3 | 틈 1.2 | 3, 서쪽 끝 약 0.54 m)
-  const BULK_X = [37.268, 38.418, 39.568, 41.868, 43.018, 44.168];
+  // 대형재고 5 / 5(2026-11-22 사용자 "대형재고 팔레트 5 / 5" → "사이 통로도 좁힘"): 한 줄 5개(1.1 m, 사이 0.15 m) 창고 가운데, 양 끝 약 1.3 m 로 두 줄 사이 통로에 들어감.
+  // 벽 줄 z 3.013~4.113 | 사이 통로 1.0 m | 앞 줄 5.113~6.213 | 앞 통로 1.0 m | 입고재고 선 7.213. 번호는 열마다 벽 쪽 → 앞(WB-01~10)
+  const BULK_X0 = (R.WH.x0 + R.WH.x1) / 2 - (5 * 1.1 + 4 * 0.15) / 2;
   for (const rs of o.reserves) {
     const { r, dx, dz } = shiftRect(rs.rect);
     rs.rect = r;
     rs.stand = { x: rs.stand.x + dx, z: rs.stand.z + dz };
     if (rs.role === 'BULK') {
-      const col = Math.floor((Number(rs.id.slice(3)) - 1) / 2);
-      const ex = BULK_X[col] - rs.rect.x0;
-      rs.rect = { ...rs.rect, x0: rs.rect.x0 + ex, x1: rs.rect.x1 + ex };
-      rs.stand = { ...rs.stand, x: rs.stand.x + ex };
+      const n = Number(rs.id.slice(3)) - 1;
+      const x0 = BULK_X0 + Math.floor(n / 2) * 1.25;
+      const z0 = n % 2 === 0 ? R.WH.z0 + 0.15 : R.WH.z0 + 0.15 + 1.1 + 1.0;
+      rs.rect = { x0, z0, x1: x0 + 1.1, z1: z0 + 1.1 };
+      rs.stand = { x: x0 + 0.55, z: z0 + 1.1 + 0.5 };
     }
   }
   // 패킹대: 두 줄을 새 패킹 구역 위·아래로(가운데 통로), 가로 자리는 서쪽으로 2.0
@@ -839,8 +845,8 @@ function compact474(o: {
     const tz = top ? R.PK.z0 + 0.65 : R.PK.z1 - 0.65;
     // 포장재 랙 장식을 뺀 자리만큼 패킹대 사이를 벌림(사용자 2026-11-22 "패킹구역에 랙장식 없애주고 … 패킹대 사이사이에 공간 조금씩") — 양 끝 0.3 m, 사이 같게
     const col = st.index % 4;
-    const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 4 * 1.6) / 3;
-    const tx = R.PK.x0 + 0.3 + 0.8 + col * (1.6 + gap);
+    const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 4 * PACK_TABLE_W) / 3;
+    const tx = R.PK.x0 + 0.3 + PACK_TABLE_W / 2 + col * (PACK_TABLE_W + gap);
     st.table = { x: tx, z: tz };
     st.stand = { x: tx, z: top ? tz + 1.2 : tz - 1.2 };
   }
@@ -852,14 +858,14 @@ function compact474(o: {
     if (ob.kind === 'RESERVE' && resOf.has(ob)) {
       ob.rect = { ...resOf.get(ob)!.rect }; // 팔레트 자리 장애물은 위 팔레트 자리와 같은 자리로
     } else if (ob.kind === 'TABLE' && cx >= 38.3 && cz < 3.45) {
-      // 휴게·사무 4인용 탁자 + 의자(Decor OFFICE_TABLE 41.074, 1.33 · 1.6 × 0.8 m)
-      ob.rect = { x0: 41.074 - 0.8, z0: 1.33 - 0.95, x1: 41.074 + 0.8, z1: 1.33 + 0.95 };
+      // 휴게·사무 바 테이블(Decor OFFICE_TABLE) + 의자 6
+      ob.rect = { x0: 41.074 - 1.8, z0: 0.1, x1: 41.074 + 1.8, z1: 1.35 }; // 바 테이블(북쪽 벽 쪽 3.6 × 0.5) + 의자 한 줄
     } else if (ob.kind === 'TABLE' && cx >= 38.3 && cz >= 21.2) {
       // 패킹대 탁자 — 같은 열(예전 x)·같은 줄(위·아래)의 패킹대 자리로
       const top = cz < 27;
       const i = o.stations.findIndex((s, k) => Math.abs(oldTableX[k] - cx) < 0.05 && s.index < 4 === top);
       const t = o.stations[i];
-      ob.rect = { x0: t.table.x - 0.8, z0: t.table.z - 0.4, x1: t.table.x + 0.8, z1: t.table.z + 0.4 };
+      ob.rect = { x0: t.table.x - PACK_TABLE_W / 2, z0: t.table.z - 0.4, x1: t.table.x + PACK_TABLE_W / 2, z1: t.table.z + 0.4 };
     } else if (ob.kind === 'MATERIAL') {
       ob.rect = { x0: 0, z0: 0, x1: 0, z1: 0 }; // 아래에서 뺌(포장재 랙 장식 없앰)
     } else if (ob.kind === 'SHIP_RACK') {
@@ -929,9 +935,9 @@ function compact474(o: {
   hWall(LIFT_ANNEX.z0, LIFT_ANNEX.x0, LIFT_ANNEX.x1);
   vWall(LIFT_ANNEX.x1, LIFT_ANNEX.z0, 0, [LIFT_ANNEX.truckDoor]);
   // 휴게·사무·상온 입고창고(서쪽 벽 한 줄, 문: 휴게·사무 / 대형재고 앞 통로 / 보충재고 남쪽 통로)
-  vWall(36.629, 0, 20.844, [[0.6, 2.1], [6.7, 8.8], [16.7, 18.5]]);
+  vWall(36.629, 0, 19.994, [[0.6, 2.1], [6.1, 8.2], [15.85, 17.65]]);
   hWall(2.763, 36.629, W2);
-  hWall(20.844, 36.629, W2);
+  hWall(19.994, 36.629, W2);
   // 바깥 앞마당 울타리(라이더 대기)
   const fence = 1.0;
   o.walls.push({ rect: { x0: YARD_X[0] - 0.15, z0: BD2, x1: YARD_X[0], z1: D }, height: fence });
