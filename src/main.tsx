@@ -1,7 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './app/App';
 import type { AppCtx, PersistedSettings } from './app/context';
-import { DEFAULT_PARAMS } from './config';
+import { DEFAULT_PARAMS, setActiveSite } from './config';
 import { SceneRegistry, Ticker, ViewController } from './render/controller';
 import { Simulation } from './sim/simulation';
 import './ui/styles.css';
@@ -15,7 +15,7 @@ function load(): PersistedSettings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return fallback;
     const s = JSON.parse(raw) as Partial<PersistedSettings>;
-    return { mode: s.mode === 'http' ? 'http' : 'mock', http: { baseUrl: s.http?.baseUrl || fallback.http.baseUrl } };
+    return { mode: s.mode === 'http' ? 'http' : 'mock', http: { baseUrl: s.http?.baseUrl || fallback.http.baseUrl }, mfcId: typeof s.mfcId === 'string' ? s.mfcId : undefined };
   } catch {
     return fallback;
   }
@@ -24,7 +24,7 @@ function load(): PersistedSettings {
 function save(s: PersistedSettings) {
   try {
     // 토큰은 어디에도 저장하지 않는다 — 실서버 모드는 개발 서버가 시험 계정 토큰을 그때그때 준다(SIM-11)
-    localStorage.setItem(KEY, JSON.stringify({ mode: s.mode, http: { baseUrl: s.http.baseUrl } }));
+    localStorage.setItem(KEY, JSON.stringify({ mode: s.mode, http: { baseUrl: s.http.baseUrl }, mfcId: s.mfcId }));
   } catch {
     /* 저장소를 못 쓰면 기본값으로 다시 시작한다 */
   }
@@ -38,7 +38,9 @@ try {
 }
 
 // 시뮬레이션·화면 상태는 React 바깥에서 한 번만 만든다 (렌더가 다시 돌아도 새로 만들지 않게)
-const sim = new Simulation({ ...DEFAULT_PARAMS }, settings.mode, settings.http);
+// 지점(1호점·2호점 목포) — 평면·랙·상품 수는 같고 센터 ID·계정·MOCK 동네만 다르다(config MFC_SITES)
+const site = setActiveSite(settings.mfcId);
+const sim = new Simulation({ ...DEFAULT_PARAMS, mfcId: site.id }, settings.mode, settings.http);
 const app: AppCtx = {
   sim,
   controller: new ViewController(sim),

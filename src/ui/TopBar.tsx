@@ -2,7 +2,7 @@
 // 3D 보기 조작(구역·번호판·벽)은 3D 위 떠 있는 칩 줄 ViewBar 로(2026-11-20 — 머리줄에서 두 줄로 깨지던 것).
 import { useState } from 'react';
 import { useApp, useTick, useView } from '../app/context';
-import { SPEEDS } from '../config';
+import { MFC_SITES, SPEEDS } from '../config';
 import type { LabelMode, RightView } from '../render/controller';
 import { fmtClock } from '../sim/metrics';
 
@@ -32,6 +32,7 @@ export function TopBar() {
         <span className="chip" title={`센터 ${sim.params.mfcId}`}>
           {sim.centerLabel}
         </span>
+        <SiteSwitch />
         <ModeSwitch />
         <span className="stat" title={mock ? '작업 중 / 전체 작업자' : '작업 중 / 화면의 작업자(실제 PDA + 가상)'}>
           작업자 <b>{busy}</b>/{people.length}
@@ -94,6 +95,35 @@ export function ViewBar() {
  * MOCK ↔ 실서버 — 머리줄에서 바로 바꾼다(사용자 2026-11-20 "상단바에서 터치로 바꿀 수 있게"). 바꾸면 설정을 저장하고 화면을 다시 연다.
  * 가상 작업자가 돌고 있으면 한 번 더 눌러야 바뀐다(다시 열면 멈춤 — 서버에 남은 작업은 "끊긴 작업"으로 이어 하기).
  */
+/**
+ * 지점 전환(사용자 2026-11-22 "MFC 전환가능하도록 버튼 만들어주고") — 1호점 부산 · 2호점 목포. 평면·랙·상품 수는 같고 센터 ID·계정·MOCK 동네가 바뀐다.
+ * 화면을 다시 연다(시뮬레이터를 새로 만듦). 실서버 가상 작업자가 돌고 있으면 한 번 더 눌러야 바뀐다(모드 전환과 같음)
+ */
+function SiteSwitch() {
+  const { sim, settings, restart } = useApp();
+  const [arm, setArm] = useState<string | null>(null);
+  const running = sim.virtualWorkers.filter((w) => !w.left).length;
+  const go = (id: string) => {
+    if (id === sim.params.mfcId) return;
+    if (running && arm !== id) {
+      setArm(id);
+      setTimeout(() => setArm(null), 4000);
+      return;
+    }
+    restart({ ...settings, mfcId: id });
+  };
+  return (
+    <span className="mode-sw" title="MFC 지점 — 평면·랙·상품 수는 같고 센터·계정이 다름">
+      {MFC_SITES.map((s) => (
+        <button key={s.id} className={sim.params.mfcId === s.id ? 'on mock' : ''} onClick={() => go(s.id)} title={`${s.name} (${s.id})`}>
+          {s.short}
+        </button>
+      ))}
+      {arm && <span className="mode-warn">가상 작업자 {running}명이 멈춥니다 — 한 번 더 누르면 지점 전환</span>}
+    </span>
+  );
+}
+
 function ModeSwitch() {
   const { sim, settings, restart } = useApp();
   const [arm, setArm] = useState<'mock' | 'http' | null>(null);
@@ -106,7 +136,7 @@ function ModeSwitch() {
       setTimeout(() => setArm(null), 4000);
       return;
     }
-    restart({ mode: m, http: settings.http });
+    restart({ ...settings, mode: m, http: settings.http });
   };
   return (
     <span className="mode-sw" title={mock ? '가상(MOCK) — 시뮬레이터가 흉내 낸 값' : '실서버(LAN 백엔드)에서 읽은 값'}>

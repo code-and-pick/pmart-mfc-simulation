@@ -221,23 +221,76 @@ export const RIDER_VEHICLE = {
   mockMix: { MOTORCYCLE: 0.6, CAR: 0.15, E_BIKE: 0.1, BICYCLE: 0.05, KICKBOARD: 0.05, WALK: 0.05 } as Record<string, number>,
 };
 
+/**
+ * MFC 지점(사용자 2026-11-22 "MFC2호점을 내고 싶은데 여기랑 평수, 구조, sku 수, 랙 갯수 등 완전 똑같이 해서 목포 MFC 만들어줘. MFC 전환가능하도록 버튼").
+ * 두 지점은 평면·구역·랙·칸·MOCK 상품 수가 완전히 같고, 센터 ID·이름·MOCK 배송 동네·실서버 가상 작업자 계정만 다르다.
+ * 목포 ID·계정은 백엔드에 요청한 값(R-39, 백엔드가 다르게 정하면 여기를 바꾼다) [가정].
+ */
+export interface MfcSite {
+  id: string;
+  /** 화면 이름 */
+  name: string;
+  /** 지점 고르기 단추 글 */
+  short: string;
+  /** MOCK 배송지 동네(화면용) */
+  mockAreas: readonly string[];
+  /** 실서버 가상 작업자 계정 앞부분 — {prefix}pp-01~10·qc-01~10·rcv-01~10 */
+  accountPrefix: string;
+  /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
+  supervisorAccount: string;
+}
+export const MFC_SITES: readonly MfcSite[] = [
+  {
+    id: 'MFC-SEED-01',
+    name: '1호점 (부산)',
+    short: '1호점 부산',
+    mockAreas: ['부산진구 부전동', '부산진구 전포동', '부산진구 범천동', '동래구 온천동', '연제구 연산동', '남구 대연동'],
+    accountPrefix: 'mfcw-',
+    supervisorAccount: 'claude-mfc-sup',
+  },
+  {
+    id: 'MFC-MOKPO-01',
+    name: '2호점 목포 MFC',
+    short: '2호점 목포',
+    mockAreas: ['목포시 상동', '목포시 하당동', '목포시 옥암동', '목포시 용해동', '목포시 산정동', '목포시 석현동'],
+    accountPrefix: 'mfcw-mk-',
+    supervisorAccount: 'claude-mfc-sup-mk',
+  },
+];
+let currentSite: MfcSite = MFC_SITES[0];
+/** 시작할 때 한 번(main.tsx — 저장한 지점). 지점을 바꾸면 화면을 다시 연다 */
+export function setActiveSite(id: string | undefined): MfcSite {
+  currentSite = MFC_SITES.find((s) => s.id === id) ?? MFC_SITES[0];
+  return currentSite;
+}
+export function activeSite(): MfcSite {
+  return currentSite;
+}
+
 export const REAL_LINK = {
   /** 실서버 읽기(작업 목록·상세·작업자 목록)에 쓰는 계정. 백엔드 문서의 "시뮬레이터 작업자" [확정] */
   observerAccount: 'claude-mfc-wrk',
-  /** 관리 탭 쓰기(재배정·내놓기·인계 확인) 계정 — 그 센터 MFC_SUPERVISOR(lan-test-accounts.md). 사용자 허락 2026-11-20 [확정] */
-  supervisorAccount: 'claude-mfc-sup',
+  /** 관리 탭 쓰기(재배정·내놓기·인계 확인) 계정 — 그 센터 MFC_SUPERVISOR(lan-test-accounts.md). 사용자 허락 2026-11-20 [확정]. 지점마다(MFC_SITES) */
+  get supervisorAccount(): string {
+    return activeSite().supervisorAccount;
+  },
   /** 관리 탭 지난 주문: 하루치 끝난 작업 목록 최대 쪽 수(쪽당 서버 기본) [시뮬] */
   historyMaxPages: 5,
   /** 가상 작업자 계정 — 앞에서부터 켠다(기본 0명, 화면에서 켬). 사용자 결정 2026-11-16 [확정] */
-  virtualAccounts: Array.from({ length: 10 }, (_, i) => `mfcw-pp-${String(i + 1).padStart(2, '0')}`),
+  get virtualAccounts(): string[] {
+    return Array.from({ length: 10 }, (_, i) => `${activeSite().accountPrefix}pp-${String(i + 1).padStart(2, '0')}`);
+  },
   /**
    * 입고 가상 작업자 — 시험 입고 "가상 작업자로" 때 켠다. 품질검사(INSPECT) mfcw-qc, 적치(PUTAWAY) mfcw-rcv
    * [확정 백엔드 docs/operations/lan-test-accounts.md — qc = INSPECT, rcv = RECEIVE·PUTAWAY] (피킹포장 mfcw-pp 는 입고 업무 권한이 없다)
    */
-  inboundAccounts: [
-    ...Array.from({ length: 10 }, (_, i) => `mfcw-qc-${String(i + 1).padStart(2, '0')}`),
-    ...Array.from({ length: 10 }, (_, i) => `mfcw-rcv-${String(i + 1).padStart(2, '0')}`),
-  ] as readonly string[],
+  get inboundAccounts(): readonly string[] {
+    const p = activeSite().accountPrefix;
+    return [
+      ...Array.from({ length: 10 }, (_, i) => `${p}qc-${String(i + 1).padStart(2, '0')}`),
+      ...Array.from({ length: 10 }, (_, i) => `${p}rcv-${String(i + 1).padStart(2, '0')}`),
+    ];
+  },
   /**
    * 이 PC(PC 1)와 똑같이 쓰는 다른 기기 — 토큰을 받고 가상 작업자·입고·주문 넣기·관리 조치까지(사용자 2026-11-20 "가상 작업자랑 입고 그걸 PC5에서 뜨게 하라고").
    * PC 5 = 192.168.0.101(D603-13, 백엔드 docs/operations/2026-11-15-ssh-hostname-resolution.md) [확정]. 그 밖의 기기는 조회만

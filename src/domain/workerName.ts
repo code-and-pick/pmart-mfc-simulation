@@ -19,12 +19,12 @@ export function assignInboundNumbers(active: readonly string[]): void {
     inboundNo.set(a, n);
   }
 }
-export const isInboundAccount = (id: string) => /^mfcw-(qc|rcv)-\d+$/.test(id);
+export const isInboundAccount = (id: string) => /^mfcw-(mk-)?(qc|rcv)-\d+$/.test(id); // mk- = 2호점 목포(2026-11-22)
 
 export function workerShortName(id: string): string {
   const no = inboundNo.get(id);
   if (no !== undefined) return `입고${no}`;
-  const m = /^mfcw-([a-z]+)-?0*(\d+)$/.exec(id);
+  const m = /^mfcw-(?:mk-)?([a-z]+)-?0*(\d+)$/.exec(id); // mk- = 2호점 목포 계정(같은 이름 규칙)
   if (m) return `${ROLE[m[1]] ?? m[1].toUpperCase()}${m[2]}`;
   // MOCK 작업자: W04 → 피킹4(피킹·패킹), IB2 → 입고2 — 실서버 이름과 같은 말(사용자 2026-11-21 "목업에는 … 픽업1 이런식으로 안 뜨고 W04 이렇게 떠")
   const mw = /^W0*(\d+)$/.exec(id);
@@ -37,7 +37,7 @@ export function workerShortName(id: string): string {
 
 /** 이름표 바탕색(역할별) — 피킹·포장 파랑, 입고 주황, 그 밖 검정 */
 export function workerTagColor(id: string): string {
-  if (/^mfcw-pp-/.test(id) || /^W\d+$/.test(id)) return 'rgba(31,99,216,0.9)';
+  if (/^mfcw-(mk-)?pp-/.test(id) || /^W\d+$/.test(id)) return 'rgba(31,99,216,0.9)';
   if (isInboundAccount(id) || /^IB\d+$/.test(id)) return 'rgba(214,110,20,0.92)'; // 입고(검사·적치 한 색)
   return 'rgba(0,0,0,0.7)';
 }

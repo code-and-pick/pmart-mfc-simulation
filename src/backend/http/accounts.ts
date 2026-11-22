@@ -22,6 +22,9 @@ export function passwordFileFor(account: string): string | null {
   if (/^mfcw-pp-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
   // 입고 가상 작업자(사용자 2026-11-20 "피패킹 권한만 있는 가상 작업자가 생겨서 아무도 입고작업을 못하잖아") — 같은 70명 공용 비밀번호(lan-test-accounts.md)
   if (/^mfcw-(qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
+  // 2호점 목포 MFC(사용자 2026-11-22) — 백엔드 R-39 로 요청한 계정(같은 공용 비밀번호 파일, 관리자는 따로) [가정]
+  if (/^mfcw-mk-(pp|qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
+  if (short === 'claude-mfc-sup-mk') return 'keycloak-claude-mfc-sup-mk-password';
   return null;
 }
 

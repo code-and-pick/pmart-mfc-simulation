@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, TEST_INBOUND, type SimParams } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
@@ -605,7 +605,7 @@ export class Simulation {
 
   /** 화면에 보일 센터 이름 — 실서버는 center-master 이름, 못 읽었으면 ID, MOCK 은 "가상 센터" (사용자 2026-11-20 "MFC 식별값 말고 이름으로") */
   get centerLabel(): string {
-    if (this.mode === 'mock') return `가상 센터 (${this.params.mfcId})`;
+    if (this.mode === 'mock') return `가상 ${MFC_SITES.find((s) => s.id === this.params.mfcId)?.name ?? '센터'} (${this.params.mfcId})`;
     return this.real?.centerName ?? this.params.mfcId;
   }
 

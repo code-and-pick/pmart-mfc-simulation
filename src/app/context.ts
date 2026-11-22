@@ -5,6 +5,8 @@ import type { HttpSettings, Simulation } from '../sim/simulation';
 export interface PersistedSettings {
   mode: 'mock' | 'http';
   http: HttpSettings;
+  /** 지점(MFC_SITES id) — 없으면 1호점 */
+  mfcId?: string;
 }
 
 export interface AppCtx {

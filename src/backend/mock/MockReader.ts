@@ -2,6 +2,7 @@
 // MockBackend 의 작업·출고를 그대로 읽고, MOCK 에 없는 것(주문번호·가격·배송지·요청사항·LOT·센터 이름·배송)은 [더미] 값을 만든다.
 // 실서버 동작을 대신하지 않는다 — 화면 확인용. 만든 값은 docs/backend-requests.md "시뮬레이터가 정한 값"에 적는다.
 import { workerShortName } from '../../domain/workerName';
+import { activeSite } from '../../config';
 import type { RealReader } from '../../sim/realBoard';
 import type {
   CapacityWorker,
@@ -39,7 +40,8 @@ const hash = (s: string) => {
 };
 /** [더미] 화면용 주문번호 8자리 — 주문 ID 에서 늘 같은 값 */
 export const mockOrderNumber = (orderId: string) => String(70000000 + (hash(orderId) % 9999999)).padStart(8, '0');
-const AREAS = ['부산진구 부전동', '부산진구 전포동', '부산진구 범천동', '동래구 온천동', '연제구 연산동', '남구 대연동'];
+// MOCK 배송지 동네 — 지점마다(config MFC_SITES, 2호점 목포는 목포 동네). 쓸 때 읽음(모듈이 지점 정하기 전에 불러와짐)
+const areas = () => activeSite().mockAreas;
 const NOTES = [null, '문 앞에 놓아 주세요', null, '벨 누르지 말아 주세요', '경비실에 맡겨 주세요', null];
 
 export class MockReader implements RealReader {
@@ -94,7 +96,7 @@ export class MockReader implements RealReader {
     // [더미] 랙에 올린 포장은 stagingLocation(서버 랙처럼), 포장마다 인계 번호는 MOCK 값 그대로
     const rack = this.world.rackOf(shipmentId);
     // [더미] 배송 전에도 주문 요약(품목·가격)을 읽게 배송 ID 자리를 채운다
-    return { ...s, ...({ dropAreaLabel: AREAS[hash(shipmentId) % AREAS.length] } as object), deliveryId: s.deliveryId ?? `MOCKDLV:${shipmentId}`, packages: s.packages.map((p) => ({ ...p, orderNumber: s.orderNumber, stagingLocation: rack })) };
+    return { ...s, ...({ dropAreaLabel: areas()[hash(shipmentId) % areas().length] } as object), deliveryId: s.deliveryId ?? `MOCKDLV:${shipmentId}`, packages: s.packages.map((p) => ({ ...p, orderNumber: s.orderNumber, stagingLocation: rack })) };
   }
   async searchDeliveries(): Promise<StaffDeliverySummary[]> {
     const now = new Date().toISOString();
@@ -124,7 +126,7 @@ export class MockReader implements RealReader {
       state: r && r.carrying > 0 ? 'PICKED_UP' : 'ASSIGNED',
       assignment: r ? { riderId: r.id, vehicleType: 'MOTORCYCLE', state: r.carrying > 0 ? 'PICKED_UP' : 'ASSIGNED' } : null,
       attempts: [],
-      dropAreaLabel: AREAS[hash(deliveryId) % AREAS.length],
+      dropAreaLabel: areas()[hash(deliveryId) % areas().length],
     };
   }
   async getSku(sku: string): Promise<SkuBarcodes> {
@@ -160,7 +162,7 @@ export class MockReader implements RealReader {
     return { items, itemAmount: items.reduce((a, i) => a + i.lineAmount, 0), deliveryNote: NOTES[hash(seed) % NOTES.length] };
   }
   async getCenterName(): Promise<string | null> {
-    return '가상 센터';
+    return activeSite().name;
   }
   async listAllStockUnits(): Promise<StockUnitRow[]> {
     return this.world.shelfStock().map((u) => ({
