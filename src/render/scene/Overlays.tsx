@@ -4,12 +4,9 @@ import { useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
 import { RACK_DEPTH } from '../../domain/layout';
-import { SCENE, STATE_COLOR } from '../colors';
+import { STATE_COLOR, zoneBoxColor } from '../colors';
 import { BAG_COLOR, bagGeometry, boxTexture } from '../sprites';
-import type { TemperatureZone } from '../../domain/contract';
 
-/** 상자 빛깔(사용자 2026-11-20 "입고구역 UI도 똑같이") — 골판지 무늬(boxTexture)와 곱해진다 */
-const BOX_TINT: Record<TemperatureZone, number> = { AMBIENT: SCENE.box, CHILLED: 0xe3f1dc, FROZEN: 0xdce9fb };
 import { LocationLabels } from '../locationLabels';
 
 /** 하차 롤테이너 (검수 전은 옅게). */
@@ -29,9 +26,9 @@ export function Dock() {
       if (small) mtx.compose(new THREE.Vector3(p.x, 0.14 + 0.21, p.z), new THREE.Quaternion(), new THREE.Vector3(0.7, 0.4, 0.75));
       else mtx.makeTranslation(p.x, 0.53, p.z);
       m.setMatrixAt(n, mtx);
-      // 그림처럼 불투명 골판지 상자 — 온도대는 옅은 빛깔로만(상온 갈색·냉장 연두빛 흰색·냉동 하늘빛 흰색)
-      col.setHex(BOX_TINT[it.temp]);
-      if (it.state === 'ON_DOCK') col.offsetHSL(0, -0.3, 0.1);
+      // 입고 상자 색 = 선반 상자와 같은 구역 바닥색(zoneBoxColor: 냉동 하늘·냉장 연두·상온 흰색, 사용자 2026-11-22 "입고재고 상품 색들이 왜 저래 각 구역 바닥색으로 하기로 했잖아").
+      // 전엔 골판지 빛깔(BOX_TINT)에 검수 전은 더 옅게 해서 구역색과 달라 보였다
+      zoneBoxColor(it.temp, col);
       m.setColorAt(n, col);
       n++;
     }
