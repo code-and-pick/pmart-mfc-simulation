@@ -267,7 +267,7 @@ const coldArea = (X0: number) => {
     floor: [X0, COLD_BAND.z0, X1, COLD_BAND.z1] as Seg,
     lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [L0, DIV, L1, DIV]] as Seg[],
     texts: [
-      { t: '입고재고', x: (X0 + X1) / 2, z: 4.3 },
+      { t: '입고재고', x: X0 + 2.45, z: 4.3 }, // 팔레트가 서쪽 벽에 세로로 서서 카드는 동쪽 빈 바닥에
       { t: '보충재고', x: (X0 + X1) / 2, z: 13.5 },
     ],
   };

@@ -627,7 +627,8 @@ export function buildLayout(): Layout {
     const rs = reserveRacks(temp, { x0: X0 + 0.7, z0: 5.6, x1: X0 + 1.6, z1: 13.11 }, 'z', prefix);
     racks.push(...rs);
     addLocations(rs);
-    [X0 + 0.45, X0 + 2.05].forEach((x, j) => addReserve(`${rid}-${j + 3}`, temp, x, 2.6, { x: X0 + 3.45, z: 2.3 }, 'RECEIVING'));
+    // 입고재고 팔레트 2개는 서쪽 벽을 따라 세로(남북)로(사용자 2026-11-22 "냉동냉장 입고재고 팔레트 2개 가로로 놓아져있는거 세로로 돌려"), 사람은 동쪽에서
+    [2.05, 3.45].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.25, z0, { x: X0 + 1.95, z: 3.3 }, 'RECEIVING'));
   }
 
   // 장바구니 거치대(시작점)·작업자 대기는 상온 C~H 남쪽 앞(상온 z 28.4 ~ 남쪽 통로) — 예전 자리(상온 아래 통로)에서 +1.0, +11.8
