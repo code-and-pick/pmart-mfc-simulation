@@ -274,7 +274,7 @@ export function WorkingCells() {
 export function InboundDecor() {
   return (
     <>
-      {[25.1, 26.0, 26.9].map((x) => (
+      {[26.5, 27.4, 28.3].map((x) => ( // 입고·검수 +1.4 m(2026-11-22)
         <RollContainer key={x} x={x} z={5.55} />
       ))}
     </>

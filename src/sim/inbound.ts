@@ -130,10 +130,11 @@ export class InboundWorker extends Agent {
         await this.wait(20);
       }
       this.carrying = [];
-      this.hasCart = false;
+      // 빈 롤테이너는 밀고 입고·검수(대기 자리)로 돌아와서 둔다 — 창고에 두고 오지 않음(사용자 2026-11-22 "롤테이너 창고에 버려두고 가는거니?")
       this.state = 'RETURNING';
-      this.activity = '대기 위치로';
+      this.activity = this.hasCart ? '빈 롤테이너 밀고 입고·검수로' : '대기 위치로';
       await this.walkTo(this.home);
+      this.hasCart = false;
     }
   }
 
@@ -146,6 +147,7 @@ export class InboundWorker extends Agent {
     await this.walkTo(ctx.layout.points.truckDoor);
     await ctx.mock.recordArrival(truck.trfId, { recordedBy: this.id }, `${ctx.runId}:arr:${truck.trfId}`);
     truck.state = 'UNLOADING';
+    this.hasCart = true; // 하차도 롤테이너로(차량문 ↔ 하차 칸)
 
     const items: DockItem[] = [];
     for (let i = 0; i < truck.lines.length; i++) {
@@ -161,7 +163,7 @@ export class InboundWorker extends Agent {
         qty: l.qty,
         temp: sku.temp,
         slot: null,
-        floorPos: { x: 33.2, z: 3.05 },
+        floorPos: { x: 34.6, z: 3.05 },
         state: 'ON_DOCK',
       };
       ctx.placeOnDock(item);
@@ -176,7 +178,7 @@ export class InboundWorker extends Agent {
 
     this.activity = '수량·바코드·유통기한 검수';
     this.pda.step = '검수';
-    await this.walkTo({ x: 30.7, z: 3.05 });
+    await this.walkTo({ x: 32.1, z: 3.05 });
     await this.wait(2 * truck.lines.length);
     this.pda.step = '수령 등록 (TIN)';
     await ctx.mock.recordReceipt(

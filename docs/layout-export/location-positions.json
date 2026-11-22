@@ -15474,7 +15474,7 @@
 {"locationCode":"A-R2-14-1-01","kind":"BULK_PALLET","xM":47.2,"zM":9.6},
 {"locationCode":"A-R2-15-1-01","kind":"BULK_PALLET","xM":48.4,"zM":7.45},
 {"locationCode":"A-R2-16-1-01","kind":"BULK_PALLET","xM":48.4,"zM":9.6},
-{"locationCode":"RCV-A-01","kind":"SUPPORT","xM":29.8,"zM":0.9},
+{"locationCode":"RCV-A-01","kind":"SUPPORT","xM":31.2,"zM":0.9},
 {"locationCode":"RCV-A-02","kind":"SUPPORT","xM":45,"zM":11.65},
 {"locationCode":"RCV-C-01","kind":"SUPPORT","xM":0.9,"zM":3.125},
 {"locationCode":"RCV-F-01","kind":"SUPPORT","xM":11.8,"zM":3.125},

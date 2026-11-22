@@ -194,7 +194,7 @@ function moveOf(x: number, z: number): { dx: number; dz: number } {
   // 상온 C~H: 랙 묶음(예전 x 24.0~35.25)을 구역(x 24.2~38.0) 가운데로 — dx 1.475(사용자 2026-11-21 "상온구역 랙도 왼쪽으로 치우쳐졌잖아")
   if (x < 37.1) return z < 15.5 ? { dx: 1.475, dz: 13.0 } : { dx: 13.6, dz: 3.0 }; // 상온 C~H / 패킹 쪽
   if (z < 16.6) return { dx: 1.0, dz: 5.6 }; // 상온 입고창고
-  if (z < 23.1) return { dx: -12.8, dz: -16.7 }; // 입고·검수
+  if (z < 23.1) return { dx: -11.4, dz: -16.7 }; // 입고·검수(2026-11-22 동쪽으로 1.4 m — 사용자 "입고검수 구역을 오른쪽으로 밀어서 … 북쪽통로 가는 공간을 확보해")
   return { dx: 1.0, dz: -23.2 }; // 휴게·사무
 }
 function mv<T extends { x: number; z: number }>(p: T): T {
@@ -341,7 +341,7 @@ export function buildLayout(): Layout {
     { id: 'B', kind: 'CHILLED', label: '냉장 B', rect: { x0: 0, z0: 1.8, x1: 10.8, z1: 31.8 }, docPyeong: 100 },
     { id: 'C-H', kind: 'AMBIENT', label: '상온 C~H', rect: { x0: 24.2, z0: 13.0, x1: 38.0, z1: 28.4 }, docPyeong: 65 },
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: { x0: 38.2, z0: 5.6, x1: 49.0, z1: 22.1 }, docPyeong: 55 },
-    { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: { x0: 24.4, z0: 0, x1: 35.2, z1: 6.3 }, docPyeong: 22 },
+    { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: { x0: 25.8, z0: 0, x1: 36.6, z1: 6.3 }, docPyeong: 22 },
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 38.2, z0: 0, x1: 49.0, z1: 5.4 }, docPyeong: 18 },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 38.6, z0: 23.5, x1: 48.6, z1: 31.5 }, docPyeong: 24 },
     // 냉동·냉장 격리: 서쪽 벽 띠 남쪽 끝(남쪽 문 앞을 비움, 사용자 2026-11-21)
@@ -374,7 +374,7 @@ export function buildLayout(): Layout {
   };
 
   // 외벽: 입고 차량문(북쪽, 입고·검수 앞), 출하 인계문(남쪽, 패킹 아래)
-  hWall(0, 0, W, [[27.3, 32.3]]);
+  hWall(0, 0, W, [[28.7, 33.7]]);
   hWall(BD, 0, W, [[42.4, 44.8]]);
   vWall(0, 0, BD);
   vWall(W, 0, BD);
@@ -384,9 +384,10 @@ export function buildLayout(): Layout {
   vWall(23.1, 1.7, 31.9);
   hWall(31.9, 0, 23.1, [[4.6, 6.6], [16.0, 18.0]]);
   // 입고·검수: 서쪽 문(세로 통로 → 북쪽 통로·냉장냉동), 남쪽 문(가운데 통로). 동쪽(휴게·사무 쪽) 문은 없음(사용자 2026-11-21 "입고검수에서 휴게사무쪽으로 난 문 없애고")
-  vWall(24.3, 0, 6.4, [[1.5, 4.5]]);
-  hWall(6.4, 24.3, 35.3, [[28.3, 33.3]]);
-  vWall(35.3, 0, 6.4);
+  // 입고·검수를 동쪽으로 1.4 m(2026-11-22): 서쪽(냉동 벽 x 23.1 ~ 입고 벽) 통로 1.2 → 2.6 m, 동쪽(입고 벽 ~ 휴게·사무 벽 x 38.1) 2.8 → 1.4 m
+  vWall(25.7, 0, 6.4, [[1.5, 4.5]]);
+  hWall(6.4, 25.7, 36.7, [[29.7, 34.7]]);
+  vWall(36.7, 0, 6.4);
   // 휴게·사무 / 상온 입고창고(서쪽 벽 문: 휴게·사무, 가운데 통로 → 창고 통로, 상온 보충) / 패킹(벽 없음)
   vWall(38.1, 0, 22.2, [[2.0, 3.5], [8.4, 11.0], [17.4, 19.8]]);
   hWall(5.5, 38.1, W);
@@ -671,9 +672,9 @@ export function buildLayout(): Layout {
       }),
     dockSlots,
     points: {
-      // 입고 차량: 북쪽 길에서 입고·검수 북쪽 차량문(x 27.3~32.3) 앞에 선다
-      truckDoor: { x: 29.8, z: 0.9 },
-      truckDock: { x: 29.8, z: -2.9 },
+      // 입고 차량: 북쪽 길에서 입고·검수 북쪽 차량문(x 28.7~33.7) 앞에 선다
+      truckDoor: { x: 31.2, z: 0.9 },
+      truckDock: { x: 31.2, z: -2.9 },
       inboundIdle: Array.from({ length: 8 }, (_, i) => mv({ x: 38.3 + (i % 4) * 0.8, z: 19.2 + Math.floor(i / 4) * 0.9 })),
       cartDepot: hub({ x: 33.2, z: 18.6 }),
       idle: Array.from({ length: 24 }, (_, i) => hub({ x: 24.2 + (i % 12) * 1.0, z: 16.4 + Math.floor(i / 12) * 0.8 })),
