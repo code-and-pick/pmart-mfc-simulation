@@ -411,7 +411,7 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 }
 
 /** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
-export const OFFICE_TABLE = { x: 43.6, z: 2.7, w: 3.6, d: 0.8, h: 0.74 }; // 휴게·사무 가운데(2026-11-21 재배치)
+export const OFFICE_TABLE = { x: 43.6, z: 1.7, w: 3.6, d: 0.8, h: 0.74 }; // 휴게·사무 가운데(2026-11-22 휴게·사무가 z 0~3.35 로 얕아져 1.0 m 북쪽)
 function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
   // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
   const seat = 0x2b3240;

@@ -6,12 +6,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38.9,
-   "zM": 7.45
+   "xM": 41.3,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 38.9,
-   "zM": 6.3
+   "xM": 41.3,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -26,12 +26,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 38.9,
-   "zM": 9.6
+   "xM": 41.3,
+   "zM": 7.55
   },
   "palletCenter": {
-   "xM": 38.9,
-   "zM": 8.6
+   "xM": 41.3,
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
@@ -46,12 +46,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 40.1,
-   "zM": 7.45
+   "xM": 42.5,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 40.1,
-   "zM": 6.3
+   "xM": 42.5,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -66,12 +66,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 40.1,
-   "zM": 9.6
+   "xM": 42.5,
+   "zM": 7.55
   },
   "palletCenter": {
-   "xM": 40.1,
-   "zM": 8.6
+   "xM": 42.5,
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
@@ -86,12 +86,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.3,
-   "zM": 7.45
+   "xM": 44.8,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 41.3,
-   "zM": 6.3
+   "xM": 44.8,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -106,12 +106,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 41.3,
-   "zM": 9.6
+   "xM": 44.8,
+   "zM": 7.55
   },
   "palletCenter": {
-   "xM": 41.3,
-   "zM": 8.6
+   "xM": 44.8,
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
@@ -126,12 +126,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.5,
-   "zM": 7.45
+   "xM": 46,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 42.5,
-   "zM": 6.3
+   "xM": 46,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -146,12 +146,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 42.5,
-   "zM": 9.6
+   "xM": 46,
+   "zM": 7.55
   },
   "palletCenter": {
-   "xM": 42.5,
-   "zM": 8.6
+   "xM": 46,
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
@@ -166,12 +166,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.8,
-   "zM": 7.45
+   "xM": 47.2,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 44.8,
-   "zM": 6.3
+   "xM": 47.2,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -186,12 +186,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 44.8,
-   "zM": 9.6
+   "xM": 47.2,
+   "zM": 7.55
   },
   "palletCenter": {
-   "xM": 44.8,
-   "zM": 8.6
+   "xM": 47.2,
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
@@ -206,12 +206,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46,
-   "zM": 7.45
+   "xM": 48.4,
+   "zM": 5.4
   },
   "palletCenter": {
-   "xM": 46,
-   "zM": 6.3
+   "xM": 48.4,
+   "zM": 4.25
   },
   "dimMm": {
    "w": 1100,
@@ -226,92 +226,12 @@
   "zone": "STORAGE",
   "reserveStock": true,
   "position": {
-   "xM": 46,
-   "zM": 9.6
-  },
-  "palletCenter": {
-   "xM": 46,
-   "zM": 8.6
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-13-1-01",
-  "sim": "WB-13",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
-   "xM": 47.2,
-   "zM": 7.45
-  },
-  "palletCenter": {
-   "xM": 47.2,
-   "zM": 6.3
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-14-1-01",
-  "sim": "WB-14",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
-   "xM": 47.2,
-   "zM": 9.6
-  },
-  "palletCenter": {
-   "xM": 47.2,
-   "zM": 8.6
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-15-1-01",
-  "sim": "WB-15",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
    "xM": 48.4,
-   "zM": 7.45
+   "zM": 7.55
   },
   "palletCenter": {
    "xM": 48.4,
-   "zM": 6.3
-  },
-  "dimMm": {
-   "w": 1100,
-   "d": 1100,
-   "h": 1500
-  }
- },
- {
-  "locationCode": "A-R2-16-1-01",
-  "sim": "WB-16",
-  "temperatureZone": "AMBIENT",
-  "zone": "STORAGE",
-  "reserveStock": true,
-  "position": {
-   "xM": 48.4,
-   "zM": 9.6
-  },
-  "palletCenter": {
-   "xM": 48.4,
-   "zM": 8.6
+   "zM": 6.55
   },
   "dimMm": {
    "w": 1100,
