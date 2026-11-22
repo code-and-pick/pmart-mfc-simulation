@@ -9,6 +9,7 @@ import { RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../do
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
+import { StaticMerge } from './StaticMerge';
 import { CartDepot, InboundDecor, OfficeDecor, RETURN_TABLE, ReturnTable, StartMark, ParkingDecor, Walkways, WorkingCells } from './Decor';
 
 type Vec3 = [number, number, number];
@@ -579,7 +580,10 @@ export function Facility() {
   return (
     <>
       <Ground L={L} />
-      <Zones L={L} />
+      {/* 성능(2026-11-22): 고정 시설은 StaticMerge 로 같은 재질끼리 합쳐 그린다 — 모양·색 그대로, 클릭 대상(구역 바닥 userData)·투명 재질은 합치지 않음 */}
+      <StaticMerge>
+        <Zones L={L} />
+      </StaticMerge>
       <Walls L={L} />
       <ZoneNames L={L} />
       <Racks L={L} />
@@ -589,13 +593,19 @@ export function Facility() {
       <ParkingDecor />
       <InboundDecor />
       <WorkingCells />
-      <Obstacles L={L} />
-      <Stations L={L} />
+      <StaticMerge>
+        <Obstacles L={L} />
+        <Stations L={L} />
+      </StaticMerge>
       {/* 동쪽 끝 카트를 예전 6대 줄의 동쪽 끝(x +0.7)에 두고 서쪽으로 늘어놓는다 — 반납 탁자(x +1.7)와 겹치지 않게 */}
-      <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
+      <StaticMerge>
+        <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
+      </StaticMerge>
       {/* 시작점 표지판은 카트 줄 가운데(사용자 2026-11-21 "장바구니 중앙으로") */}
       <StartMark x={L.points.cartDepot.x + 0.7 - ((DECOR.cartDepotDrawn - 1) * 0.28) / 2} z={L.points.cartDepot.z - 0.6} />
-      <OfficeDecor />
+      <StaticMerge>
+        <OfficeDecor />
+      </StaticMerge>
       <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
       <Label text="입고 차량문" position={[L.points.truckDoor.x, 3.4, -0.4]} opts={{ size: 28, bg: 'rgba(0,0,0,0.6)', screenPx: 15 }} />
