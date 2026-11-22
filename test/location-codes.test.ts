@@ -47,8 +47,7 @@ describe('위치 코드 대응 (SIM-6)', () => {
   });
 
   // 백엔드 mfc_layout_v2.py plan(): layout.json 의 랙(그룹·랙 번호·온도) × DESIGN 표 = 등록한 선반 칸(2026-11-16 칸 설계 공지)
-  // R-35(2026-11-22 냉동·냉장 줄 재구성: 냉동 6→5줄·냉장 7→6줄, 줄마다 21랙)는 백엔드 layout.json 이 바뀐 뒤(A6 줄이 없어진 뒤)에만 대조한다
-  it.runIf(fs.existsSync(BACKEND_LAYOUT) && !/"group":\s*"A06"/.test(fs.readFileSync(BACKEND_LAYOUT, 'utf-8')))('백엔드 칸 설계(랙 × 단·칸)와 칸 코드 집합이 같다', () => {
+  it.runIf(fs.existsSync(BACKEND_LAYOUT))('백엔드 칸 설계(랙 × 단·칸)와 칸 코드 집합이 같다', () => {
     const lj = JSON.parse(fs.readFileSync(BACKEND_LAYOUT, 'utf-8')) as {
       racks: { group: string; rackNo: number; temp: 'FROZEN' | 'CHILLED' | 'AMBIENT'; levels?: number; slotsPerLevel?: number }[];
     };

@@ -396,7 +396,7 @@ export function buildLayout(): Layout {
   // ── 랙 ──────────────────────────────────────────────
   // 냉동 A 105개, 냉장 B 125개, 상온 138개 (문서 4-2, 3-1 계획 배치 [산출·가정])
   // 냉동 A·냉장 B 피킹 랙은 새 평면에서 바로 만든다(옮기지 않음). 방 남쪽 끝까지 길게 써서 줄을 줄이고 통로를 넓힌다
-  // (사용자 2026-11-22 "비좁아 보이는데 냉동냉장 랙 배치를 꼭 이렇게 해야돼?" → 2안: 남쪽까지 늘려 줄 수 줄이기).
+  // (사용자 2026-11-22 "비좁아 보이는데 냉동냉장 랙 배치를 꼭 이렇게 해야돼?" → 남쪽까지 늘려 물리 줄 수를 줄이고 통로를 넓힘).
   // 한 줄 = 북쪽 11랙 + 가로 통로 1.4 m + 남쪽 10랙 = 21랙(z 2.95~30.6). 북쪽 통로 1.15 m·남쪽 통로 1.2 m 는 남북 문으로 이어진다.
   // 냉장 B(서쪽 띠 동쪽 x 3.85~10.7): 띠에 등 댄 홑줄 → 등 맞댄 2쌍 → 동쪽 벽에 등 댄 홑줄 = 6줄, 통로 3개 약 1.38 m. 125랙(마지막 줄 20).
   // 냉동 A(x 14.75~22.9): 띠에 등 댄 홑줄 → 등 맞댄 2쌍 = 5줄, 통로 3개 약 1.97 m. 105랙 = 5 × 21. [가정]
@@ -417,14 +417,17 @@ export function buildLayout(): Layout {
     ...Array.from({ length: 11 }, (_, i) => COLD_Z0 + RACK_LEN * (i + 0.5)),
     ...Array.from({ length: 10 }, (_, i) => COLD_Z0 + 11 * RACK_LEN + 1.4 + RACK_LEN * (i + 0.5)),
   ];
+  // 칸 코드(줄 그룹·랙 번호)는 예전 그대로 둔다(사용자 2026-11-22 "그 줄은 줄이지 말고 위치만 바꾸면 되잖아"):
+  // 물리 줄 i 의 북쪽부터 랙 1~18 = 그룹 i(A01~A05·B01~B06), 각 줄 남쪽 끝 3자리(19~21번 자리)에 마지막 그룹(A06 15랙·B07 17랙)을 줄 순서대로 둔다.
   const coldRacks = (temp: TemperatureZone, g: 'A' | 'B', rows: { c: number; face: 1 | -1 }[], target: number, prefix: string): Rack[] => {
+    const PER = 18;
+    const lastG = rows.length + 1;
     const out: Rack[] = [];
-    rows.forEach((row, ri) => {
-      coldAlong.forEach((z, k) => {
-        if (out.length >= target) return;
-        out.push({ id: `${prefix}-${out.length + 1}`, temp, group: `${g}${String(ri + 1).padStart(2, '0')}`, rackNo: k + 1, cx: row.c, cz: z, along: 'z', face: row.face, ...dims(g) });
-      });
-    });
+    const push = (gi: number, rackNo: number, row: { c: number; face: 1 | -1 }, z: number) =>
+      out.push({ id: `${prefix}-${out.length + 1}`, temp, group: `${g}${String(gi).padStart(2, '0')}`, rackNo, cx: row.c, cz: z, along: 'z', face: row.face, ...dims(g) });
+    rows.forEach((row, ri) => { for (let k = 0; k < PER; k++) push(ri + 1, k + 1, row, coldAlong[k]); });
+    let n = 0;
+    rows.forEach((row) => { for (let k = PER; k < coldAlong.length && out.length < target; k++) push(lastG, ++n, row, coldAlong[k]); });
     return out;
   };
   const frozen = coldRacks('FROZEN', 'A', coldRows(COLD_BAND.FROZEN + COLD_BAND.width + 0.1, 22.9, ['S+', 'P', 'P']), 105, 'RA');
