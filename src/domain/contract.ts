@@ -547,7 +547,7 @@ export interface StaffDeliverySummary {
   orderId: string | null;
   /** (execution, 2026-11-18) 화면용 주문번호 8자리 — 배정 사건이 실어 준 값(배정 전 null) */
   orderNumber?: string | null;
-  /** (execution 0.26.0, ADR-0070) 화면 배송 번호 = 주문번호-순번(예 74939255-1). 모르면 null */
+  /** (execution 0.26.0, ADR-0085) 화면 배송 번호 = D + 주문번호(예 D74939255), 같은 주문 두 번째부터 D74939255-2. 모르면 null */
   deliveryNumber?: string | null;
   mfcId: string | null;
   riderId: string | null;
@@ -865,7 +865,7 @@ export interface Claim {
   stopRequestId?: string | null;
 }
 
-/** rider-service 0.18.0 GET /riders/display-names — 라이더 번호 6자리·가린 이름만(ADR-0070) */
+/** rider-service 0.18.0 GET /riders/display-names — 라이더 번호(ADR-0085 R + 4자리, 드물게 5자리, 예 R4785)·가린 이름만 */
 export interface RiderDisplayName {
   riderId: string;
   riderNumber: string | null;

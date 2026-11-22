@@ -264,7 +264,7 @@ describe('RealBoard — 실서버 관찰(읽기 전용)', () => {
     (r as unknown as { listReturnHandovers: () => Promise<unknown[]> }).listReturnHandovers = async () => {
       n++;
       if (n === 2) throw new Error('503');
-      return [{ deliveryId: 'DLV-1', deliveryNumber: '74939255-2', purpose: 'CLAIM_RETURN', state: 'RETURN_PICKED_UP', code: '4821', failedAttempts: 0, locked: false, issuedAt: 'x' }];
+      return [{ deliveryId: 'DLV-1', deliveryNumber: 'D74939255-2', purpose: 'CLAIM_RETURN', state: 'RETURN_PICKED_UP', code: '4821', failedAttempts: 0, locked: false, issuedAt: 'x' }];
     };
     const now = { ms: 0 };
     const b = new RealBoard(r, 'MFC-SEED-01', { pollSec: 3, workerRefreshSec: 60, recentKeepSec: 600, openStates: OPEN, stockRefreshSec: 30, maxStockPerPoll: 10, shipmentRefreshSec: 3, maxShipmentPerPoll: 5, handoverKeepSec: 3600, returnPickupRefreshSec: 15 }, () => now.ms);

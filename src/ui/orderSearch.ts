@@ -3,7 +3,7 @@
 import type { Simulation } from '../sim/simulation';
 import { dispatchView, type RealShipment, type RealTask } from '../sim/realBoard';
 
-// 라이더: 번호 6자리·가린 이름·ID
+// 라이더: 번호(R4785, ADR-0085)·가린 이름·ID — 배송: D74939255(-2). 부분 일치·대소문자 무시라 "4785"·"r4785"·"74939255" 모두 맞음
 export type HitKind = '주문번호' | '배송번호' | '점원' | '라이더' | '시스템 ID';
 
 export interface SearchField {
@@ -51,7 +51,7 @@ export function searchFields(sim: Simulation, r: RealShipment): SearchField[] {
   }
   const rider = dispatchView(r).riderId;
   // 라이더 번호·가린 이름(ADR-0070, rider 0.18.0)으로도 찾는다 — 화면엔 번호 표기, ID 는 비교에만
-  if (rider) out.push({ kind: '라이더', text: real.riderLabel(rider) ?? rider, extra: [rider, real.riderNames.get(rider)?.riderNumber ?? ''].filter(Boolean) });
+  if (rider) out.push({ kind: '라이더', text: real.riderLabel(rider) ?? rider, extra: [rider, real.riderNames.get(rider)?.riderNumber ?? '', real.riderNames.get(rider)?.nameMasked ?? ''].filter(Boolean) });
   out.push({ kind: '시스템 ID', text: r.shipmentId, extra: [r.fulfillmentId, r.delivery?.deliveryId ?? '', r.delivery?.orderId ?? ''].filter(Boolean) });
   return out;
 }

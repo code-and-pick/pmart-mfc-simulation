@@ -920,12 +920,13 @@ export class RealBoard {
     }
   }
 
-  /** 화면 라이더 표기 "김*수 · 148281"(ADR-0070, 라이더 시뮬과 같은 꼴) — 모르면 null(부르는 쪽이 대체) */
+  /**
+   * 화면 라이더 표기 — 번호만 "R4785"(ADR-0085, 2026-11-22 사용자 결정 "라이더 R4785 만" — 전엔 ADR-0070 "김*수 · 482913").
+   * 가린 이름은 찾기(주문 검색)에만 쓴다. 모르면 null(부르는 쪽이 대체)
+   */
   riderLabel(riderId: string | null | undefined): string | null {
     if (!riderId) return null;
-    const n = this.riderNames.get(riderId);
-    if (!n?.riderNumber) return null;
-    return n.nameMasked ? `${n.nameMasked} · ${n.riderNumber}` : n.riderNumber;
+    return this.riderNames.get(riderId)?.riderNumber ?? null;
   }
 
   /** 운영자 ID → 이름·사번(hr employee-labels) */
