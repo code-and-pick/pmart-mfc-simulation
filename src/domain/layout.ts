@@ -395,28 +395,41 @@ export function buildLayout(): Layout {
 
   // ── 랙 ──────────────────────────────────────────────
   // 냉동 A 105개, 냉장 B 125개, 상온 138개 (문서 4-2, 3-1 계획 배치 [산출·가정])
-  const frozen = fillRacks({
-    temp: 'FROZEN',
-    area: { x0: 1.0, z0: 1.0, x1: 11.2, z1: 25.6 },
-    along: 'z',
-    crossAisleAt: 13,
-    target: 105,
-    ...dims('A'),
-    groupOf: (row) => `A${String(row + 1).padStart(2, '0')}`,
-    rowPriority: (c) => Math.abs(c - 6),
-    idPrefix: 'RA',
-  });
-  const chilled = fillRacks({
-    temp: 'CHILLED',
-    area: { x0: 13.2, z0: 1.0, x1: 22.2, z1: 25.6 },
-    along: 'z',
-    crossAisleAt: 13,
-    target: 125,
-    ...dims('B'),
-    groupOf: (row) => `B${String(row + 1).padStart(2, '0')}`,
-    rowPriority: (c) => Math.abs(c - 17.8),
-    idPrefix: 'RB',
-  });
+  // 냉동 A·냉장 B 피킹 랙은 새 평면에서 바로 만든다(옮기지 않음). 방 남쪽 끝까지 길게 써서 줄을 줄이고 통로를 넓힌다
+  // (사용자 2026-11-22 "비좁아 보이는데 냉동냉장 랙 배치를 꼭 이렇게 해야돼?" → 2안: 남쪽까지 늘려 줄 수 줄이기).
+  // 한 줄 = 북쪽 11랙 + 가로 통로 1.4 m + 남쪽 10랙 = 21랙(z 2.95~30.6). 북쪽 통로 1.15 m·남쪽 통로 1.2 m 는 남북 문으로 이어진다.
+  // 냉장 B(서쪽 띠 동쪽 x 3.85~10.7): 띠에 등 댄 홑줄 → 등 맞댄 2쌍 → 동쪽 벽에 등 댄 홑줄 = 6줄, 통로 3개 약 1.38 m. 125랙(마지막 줄 20).
+  // 냉동 A(x 14.75~22.9): 띠에 등 댄 홑줄 → 등 맞댄 2쌍 = 5줄, 통로 3개 약 1.97 m. 105랙 = 5 × 21. [가정]
+  const coldRows = (x0: number, x1: number, pattern: ('S+' | 'P' | 'S-')[]): { c: number; face: 1 | -1 }[] => {
+    const nRows = pattern.reduce((n, p) => n + (p === 'P' ? 2 : 1), 0);
+    const aisle = (x1 - x0 - nRows * RACK_DEPTH) / (pattern.length - (pattern[pattern.length - 1] === 'S-' ? 1 : 0));
+    const rows: { c: number; face: 1 | -1 }[] = [];
+    let x = x0;
+    for (const p of pattern) {
+      if (p === 'S+') { rows.push({ c: x + RACK_DEPTH / 2, face: 1 }); x += RACK_DEPTH + aisle; }
+      else if (p === 'P') { rows.push({ c: x + RACK_DEPTH / 2, face: -1 }, { c: x + RACK_DEPTH * 1.5, face: 1 }); x += 2 * RACK_DEPTH + aisle; }
+      else rows.push({ c: x + RACK_DEPTH / 2, face: -1 });
+    }
+    return rows;
+  };
+  const COLD_Z0 = 2.95;
+  const coldAlong = [
+    ...Array.from({ length: 11 }, (_, i) => COLD_Z0 + RACK_LEN * (i + 0.5)),
+    ...Array.from({ length: 10 }, (_, i) => COLD_Z0 + 11 * RACK_LEN + 1.4 + RACK_LEN * (i + 0.5)),
+  ];
+  const coldRacks = (temp: TemperatureZone, g: 'A' | 'B', rows: { c: number; face: 1 | -1 }[], target: number, prefix: string): Rack[] => {
+    const out: Rack[] = [];
+    rows.forEach((row, ri) => {
+      coldAlong.forEach((z, k) => {
+        if (out.length >= target) return;
+        out.push({ id: `${prefix}-${out.length + 1}`, temp, group: `${g}${String(ri + 1).padStart(2, '0')}`, rackNo: k + 1, cx: row.c, cz: z, along: 'z', face: row.face, ...dims(g) });
+      });
+    });
+    return out;
+  };
+  const frozen = coldRacks('FROZEN', 'A', coldRows(COLD_BAND.FROZEN + COLD_BAND.width + 0.1, 22.9, ['S+', 'P', 'P']), 105, 'RA');
+  const chilled = coldRacks('CHILLED', 'B', coldRows(COLD_BAND.CHILLED + COLD_BAND.width + 0.1, 10.7, ['S+', 'P', 'P', 'S-']), 125, 'RB');
+  const placedNew = new Set([...frozen, ...chilled].map((r) => r.id));
   const ambientRaw = fillRacks({
     temp: 'AMBIENT',
     area: { x0: 24.0, z0: 0.8, x1: 36.4, z1: 14.6 },
@@ -580,7 +593,7 @@ export function buildLayout(): Layout {
   // ── 예전 평면 → 새 평면(구역마다 평행 이동) ─────────────
   const rackMove = new Map<string, { dx: number; dz: number }>();
   for (const r of racks) {
-    const m = moveOf(r.cx, r.cz);
+    const m = placedNew.has(r.id) ? { dx: 0, dz: 0 } : moveOf(r.cx, r.cz);
     rackMove.set(r.id, m);
     r.cx += m.dx;
     r.cz += m.dz;
@@ -611,7 +624,7 @@ export function buildLayout(): Layout {
     const rs = reserveRacks(temp, { x0: X0 + 0.7, z0: 5.6, x1: X0 + 1.6, z1: 13.11 }, 'z', prefix);
     racks.push(...rs);
     addLocations(rs);
-    [X0 + 0.45, X0 + 2.05].forEach((x, j) => addReserve(`${rid}-${j + 3}`, temp, x, 2.6, { x: X0 + COLD_BAND.width + 0.3, z: 3.15 }, 'RECEIVING'));
+    [X0 + 0.45, X0 + 2.05].forEach((x, j) => addReserve(`${rid}-${j + 3}`, temp, x, 2.6, { x: X0 + 3.45, z: 2.3 }, 'RECEIVING'));
   }
 
   // 장바구니 거치대(시작점)·작업자 대기는 상온 C~H 남쪽 앞(상온 z 28.4 ~ 남쪽 통로) — 예전 자리(상온 아래 통로)에서 +1.0, +11.8
