@@ -173,7 +173,8 @@ export function zoneTags(L: Layout): Tag[] {
     const r = z.rect;
     const dim = z.kind === 'QUARANTINE';
     const racks = rackCount(L, z);
-    const sub = dim ? (z.docPyeong ? `${z.docPyeong}평` : null) : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
+    // 격리 카드는 보충재고 바닥 카드와 같은 모양·크기(글만, 높이 0.7 m — 사용자 2026-11-22 "격리 구역 카드 보충재고 카드 크기랑 똑같게 맞춰")
+    const sub = dim ? null : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
     const [pbg, ptop] = PILL[z.kind] ?? [SCENE.pill, SCENE.pillTop];
     const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
     const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
@@ -194,16 +195,19 @@ export function zoneTags(L: Layout): Tag[] {
       out.push({ id: z.id, tex, pos: [cx, big ? WALL_CARD_Y_BIG + (h - WALL_CARD_H_BIG) / 2 : WALL_CARD_Y, wall.face], rotX: 0, w, h });
     } else {
       // 바닥에 눕힘 — 격리는 작게, 패킹은 크게(벽을 뺀 뒤 바닥 카드, 사용자 2026-11-21 "바닥에 붙은 패킹구역카드 사이즈 좀 키워줘")
-      let h = dim ? 0.55 : z.kind === 'PACKING' ? 1.8 : 0.9;
+      let h = dim ? 0.7 : z.kind === 'PACKING' ? 1.8 : 0.9;
       let w = h * aspect;
-      // 냉동·냉장 격리는 서쪽 벽에 흰 랙(x0+0.25~0.7)이 서 있어 그 동쪽 바닥에만(바닥 표시 폭 2.2 m, 사용자 2026-11-22 "가로길이를 더 줄여")
-      const fx0 = z.id === 'AQ' || z.id === 'BQ' ? r.x0 + 0.8 : r.x0;
-      const room = (r.x1 - fx0) * 0.85;
+      // 냉동·냉장 격리: 서쪽 벽 흰 랙 2개(z0+0.35~3.0) 남쪽 빈 바닥, 구역 가운데 / 상온 격리: 동쪽 벽 랙(x1-0.65~) 서쪽 바닥 가운데
+      const coldQ = z.id === 'AQ' || z.id === 'BQ';
+      const fx0 = r.x0;
+      const fx1 = z.id === 'CQ' ? r.x1 - 0.65 : r.x1;
+      const room = (fx1 - fx0) * (dim ? 0.95 : 0.85);
       if (w > room) {
         w = room;
         h = w / aspect;
       }
-      out.push({ id: z.id, tex, pos: [(fx0 + r.x1) / 2, 0.03, (r.z0 + r.z1) / 2], rotX: -Math.PI / 2, w, h });
+      const pz = coldQ ? r.z1 - 0.5 : (r.z0 + r.z1) / 2;
+      out.push({ id: z.id, tex, pos: [(fx0 + fx1) / 2, 0.03, pz], rotX: -Math.PI / 2, w, h });
     }
   }
   return out;
