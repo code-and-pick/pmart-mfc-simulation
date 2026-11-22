@@ -155,7 +155,7 @@ const WALL_CARD_H_BIG = 2.35;
 const WALL_CARD_Y_BIG = 4.3;
 const BIG_KINDS: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'AMBIENT', 'INBOUND_STORE', 'RECEIVING', 'OFFICE'];
 /** 냉동과 같은 크기 — 문 때문에 벽 조각이 짧아도 줄이지 않고 구역 폭 안에서(사용자 2026-11-21 "휴게사무, 입고검수, 냉장 구역카드 크기 냉동이랑 같게 맞춰") */
-const SAME_AS_FROZEN: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'RECEIVING', 'OFFICE'];
+const SAME_AS_FROZEN: readonly ZoneKind[] = ['FROZEN', 'CHILLED', 'RECEIVING', 'OFFICE', 'AMBIENT'];
 
 interface Tag {
   id: string;
@@ -177,7 +177,8 @@ export function zoneTags(L: Layout): Tag[] {
     const sub = dim ? null : z.kind === 'PACKING' ? null : racks ? `랙 ${racks}` : z.docPyeong ? `${z.docPyeong}평` : null;
     const [pbg, ptop] = PILL[z.kind] ?? [SCENE.pill, SCENE.pillTop];
     const { tex, aspect } = makePill(z.label, sub, dim ? null : (ICON[z.kind] ?? null), dim ? SCENE.pillDim : pbg, dim ? '#44528a' : ptop);
-    const wall = dim || z.kind === 'PARKING' ? null : backWall(L, z);
+    // 상온 C~H 는 벽이 없어("상온구역은 벽이 없어도 돼") 바닥에 눕던 카드를 구역 북쪽 끝에 세워 띄운다 — 다른 구역 카드처럼(사용자 2026-11-22 "상온구역카드는 왜 바닥에 붙어 있니")
+    const wall = dim || z.kind === 'PARKING' ? null : (backWall(L, z) ?? (z.kind === 'AMBIENT' ? { x0: r.x0, x1: r.x1, face: r.z0 } : null));
     if (wall) {
       const big = BIG_KINDS.includes(z.kind);
       // 휴게·사무는 작게(사용자 2026-11-20 "휴게사무는 구역카드 사이즈 줄여")
