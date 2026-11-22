@@ -63,6 +63,32 @@ interface IdemEntry {
 const problem = (status: number, code: string, detail?: string, retryable = false, details?: { field: string; reason: string }[]) =>
   new ApiProblem({ status, code, detail, retryable, ...(details ? { details } : {}) });
 
+export interface MockReturnArrival {
+  arrivalId: string;
+  purpose: 'CLAIM_RETURN' | 'MISDELIVERY_RECOVERY' | 'FAILED_DELIVERY_RETURN';
+  state: 'WAITING' | 'RECEIVED';
+  lines: { sku: string; qty: number }[];
+}
+export interface MockReturnReceipt {
+  returnReceiptId: string;
+  arrivalId: string;
+  receivedBy: string;
+  inspectionState: 'PENDING' | 'APPLIED';
+  lines: { sku: string; qty: number }[];
+}
+export interface MockReturnTask {
+  taskId: string;
+  taskType: 'PUTAWAY' | 'QUARANTINE_MOVE';
+  origin: 'RETURN';
+  sku: string;
+  temperatureZone: TemperatureZone;
+  plannedQty: number;
+  doneQty: number;
+  locationCode: string;
+  assigneeId: string | null;
+  state: 'READY' | 'COMPLETED';
+}
+
 export interface MockOptions {
   mfcId: string;
   /** 시뮬레이션 시각(초, 자정 기준) */
@@ -835,6 +861,121 @@ export class MockBackend implements FulfillmentPort {
           return { status: 'APPLIED', requestId: key, resultId: commitId } satisfies CommandResponse;
         }),
       `${body.executionType} · 계약 공백 R-10`,
+    );
+  }
+
+  // ── 회수 (mfc-inbound 0.13~0.17 반납 도착·반입·격리 이동, mfc-quality 회수품 검수) ─────────
+  // 흐름(계약·2026-11-20 BR-52 회신): 라이더 반납(ReturnDelivered) → 반납 도착 대기 WAITING → 반입(RTN-A-01 에 격리, H+q·Q+q)
+  // → 회수품 검수(반입한 사람 말고) RESALE = RELEASE + 적치 작업 / DISPOSE = 반입한 사람에게 격리 이동 작업(온도대 격리 구역 칸).
+  // 폐기 승인·실행(disposal-approvals)은 센터 관리자 일이라 MOCK 은 격리 구역에 둔 채로 끝낸다.
+  private readonly arrivals = new Map<string, MockReturnArrival>();
+  private readonly returnReceipts = new Map<string, MockReturnReceipt>();
+  private readonly returnTasks = new Map<string, MockReturnTask>();
+
+  /** [delivery] 라이더가 회수품을 MFC 에 반납(ReturnDelivered) → 반납 도착 대기 */
+  returnDelivered(arrivalId: string, purpose: MockReturnArrival['purpose'], lines: { sku: string; qty: number }[]) {
+    this.arrivals.set(arrivalId, { arrivalId, purpose, state: 'WAITING', lines });
+    this.emit('ReturnDelivered', `${arrivalId} 회수품 반납 ${lines.length}품목 ${lines.reduce((a, l) => a + l.qty, 0)}개 → 반납 도착 대기`);
+  }
+
+  listReturnArrivals(mfcId: string): Promise<MockReturnArrival[]> {
+    return this.call('GET', `/return-arrivals?mfcId=${mfcId}`, 200, () => [...this.arrivals.values()].filter((a) => a.state === 'WAITING'));
+  }
+
+  /** 회수품 실물 반입 — 반품 위치(RETURN 구역)에 격리로만(IV-10). 응답 resultId = returnReceiptId */
+  recordReturnReceipt(body: { mfcId: string; toLocationCode: string; arrivalId: string; receivedBy: string }, key: string): Promise<CommandResponse> {
+    return this.call('POST', '/return-receipts', 202, () =>
+      this.idempotent('rtnrcp', key, body, () => {
+        const a = this.arrivals.get(body.arrivalId);
+        if (!a) throw problem(404, 'NOT_FOUND', body.arrivalId);
+        if (a.state !== 'WAITING') throw problem(409, 'ARRIVAL_ALREADY_RECEIVED', body.arrivalId);
+        if (!body.toLocationCode.startsWith('RTN-')) throw problem(409, 'LOCATION_ZONE_MISMATCH', body.toLocationCode);
+        const commitId = this.inventory.returnReceipt(a.lines);
+        a.state = 'RECEIVED';
+        const returnReceiptId = this.id('RTR');
+        this.returnReceipts.set(returnReceiptId, { returnReceiptId, arrivalId: a.arrivalId, receivedBy: body.receivedBy, inspectionState: 'PENDING', lines: a.lines });
+        this.emit('ReturnItemReceived', `${returnReceiptId} 회수품 반입 ${body.toLocationCode} 격리 H+${a.lines.reduce((x, l) => x + l.qty, 0)}·Q+ (${commitId}) — 검수 대기`);
+        return { status: 'APPLIED', requestId: key, resultId: returnReceiptId } satisfies CommandResponse;
+      }),
+    );
+  }
+
+  /**
+   * 회수품 검수(mfc-quality POST /return-inspections). RESALE 은 상온·미개봉·신선 아님만(422 RESALE_NOT_ALLOWED), 반입한 사람 본인은 안 됨(422 SELF_APPROVAL).
+   * RESALE → RELEASE(Q−q, E+q) + 적치 작업, DISPOSE → 반입한 사람에게 격리 이동 작업. 응답 createdTaskIds 는 MOCK 편의(실서버는 작업 목록에서 읽음)
+   */
+  createReturnInspection(
+    body: {
+      mfcId: string;
+      returnReceiptId: string;
+      inspectedBy: string;
+      lines: { sku: string; qty: number; verdict: 'RESALE' | 'DISPOSE'; temperatureZone: TemperatureZone; opened: boolean; fresh?: boolean; disposeReason?: string }[];
+    },
+    key: string,
+  ): Promise<CommandResponse & { createdTaskIds: string[] }> {
+    return this.call('POST', '/return-inspections', 202, () =>
+      this.idempotent('rtninsp', key, body, () => {
+        const rc = this.returnReceipts.get(body.returnReceiptId);
+        if (!rc) throw problem(404, 'NOT_FOUND', body.returnReceiptId);
+        if (rc.inspectionState !== 'PENDING') throw problem(409, 'INVALID_STATE', '이미 검수');
+        if (body.inspectedBy === rc.receivedBy) throw problem(422, 'SELF_APPROVAL', '반입한 사람은 검수할 수 없음');
+        for (const l of body.lines)
+          if (l.verdict === 'RESALE' && (l.temperatureZone !== 'AMBIENT' || l.opened || l.fresh)) throw problem(422, 'RESALE_NOT_ALLOWED', l.sku);
+        const created: string[] = [];
+        for (const l of body.lines) {
+          const taskId = this.id(l.verdict === 'RESALE' ? 'ITK-PUT' : 'ITK-QRT');
+          if (l.verdict === 'RESALE') this.inventory.releaseReturn(l.sku, l.qty);
+          this.returnTasks.set(taskId, {
+            taskId,
+            taskType: l.verdict === 'RESALE' ? 'PUTAWAY' : 'QUARANTINE_MOVE',
+            origin: 'RETURN',
+            sku: l.sku,
+            temperatureZone: l.temperatureZone,
+            plannedQty: l.qty,
+            doneQty: 0,
+            locationCode: 'RTN-A-01',
+            assigneeId: l.verdict === 'DISPOSE' ? rc.receivedBy : null,
+            state: 'READY',
+          });
+          created.push(taskId);
+        }
+        rc.inspectionState = 'APPLIED';
+        const word = body.lines.map((l) => `${l.sku}×${l.qty} ${l.verdict === 'RESALE' ? '재판매' : '폐기'}`).join(', ');
+        this.emit('ReturnInspected', `${body.returnReceiptId} 검수 ${word} → 작업 ${created.join(', ')}`);
+        return { status: 'APPLIED', requestId: key, resultId: this.id('RIN'), createdTaskIds: created };
+      }),
+    );
+  }
+
+  returnTask(taskId: string): MockReturnTask | undefined {
+    return this.returnTasks.get(taskId);
+  }
+
+  /** 회수 재판매분 적치가 끝남(작업 상태만 — 재고 반영은 commitStock PUTAWAY) */
+  completeReturnPutaway(taskId: string, qty: number) {
+    const t = this.returnTasks.get(taskId);
+    if (!t) return;
+    t.doneQty += qty;
+    if (t.doneQty >= t.plannedQty) t.state = 'COMPLETED';
+  }
+
+  /** 격리 이동(POST /inbound-tasks/{taskId}/quarantine-moves): 담당만(409 NOT_ASSIGNEE), 도착은 격리 구역·같은 온도대 칸 */
+  quarantineMove(taskId: string, body: { toLocationCode: string; qty: number }, key: string, workerId: string): Promise<CommandResponse> {
+    return this.call('POST', `/inbound-tasks/${taskId}/quarantine-moves`, 200, () =>
+      this.idempotent(`qrt:${taskId}`, key, body, () => {
+        const t = this.returnTasks.get(taskId);
+        if (!t || t.taskType !== 'QUARANTINE_MOVE') throw problem(404, 'NOT_FOUND', taskId);
+        if (t.assigneeId && t.assigneeId !== workerId) throw problem(409, 'NOT_ASSIGNEE', taskId);
+        if (t.state !== 'READY' || body.qty > t.plannedQty - t.doneQty) throw problem(409, 'TASK_QTY_EXCEEDED', taskId);
+        if (!body.toLocationCode.startsWith('QRT-')) throw problem(409, 'LOCATION_ZONE_MISMATCH', body.toLocationCode);
+        const zoneTemp = ({ A: 'AMBIENT', C: 'CHILLED', F: 'FROZEN' } as const)[body.toLocationCode.charAt(4) as 'A' | 'C' | 'F'];
+        if (zoneTemp !== t.temperatureZone) throw problem(409, 'TEMPERATURE_ZONE_MISMATCH', body.toLocationCode);
+        const commitId = this.inventory.quarantineMove(t.sku, body.qty);
+        t.doneQty += body.qty;
+        if (t.doneQty >= t.plannedQty) t.state = 'COMPLETED';
+        this.emit('InventoryExecutionApplied', `QUARANTINE_MOVE ${t.sku} ×${body.qty} RTN-A-01 → ${body.toLocationCode} (${commitId})`);
+        return { status: 'APPLIED', requestId: key, resultId: commitId } satisfies CommandResponse;
+      }),
     );
   }
 

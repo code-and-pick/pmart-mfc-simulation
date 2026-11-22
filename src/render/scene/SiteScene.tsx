@@ -8,7 +8,7 @@ import { People, Riders, Trucks } from './Agents';
 import { CameraRig, CameraTap, Lights, Picker, SimDriver } from './Core';
 import { Facility } from './Facility';
 import { SCENE } from '../colors';
-import { Declutter, Dock, Highlight, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
+import { Declutter, Dock, Highlight, Returns, LocationLabelsLayer, PathLine, Staged, TargetMarkers } from './Overlays';
 import { RealMarkers, RealShipLabels, RealStock } from './Real';
 import { ScanMarker } from './Marker';
 import { Goods, Reserves, ReserveFloors } from './Stock';
@@ -29,6 +29,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <Reserves />
         <ReserveFloors />
         <Dock />
+        <Returns />
         <Staged />
         <TargetMarkers />
         {app.sim.real && <RealMarkers />}

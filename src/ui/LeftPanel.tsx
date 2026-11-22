@@ -131,6 +131,14 @@ function InboundControls() {
           if (sim.callTruck()) controller.focusZone('RCV');
         }}
       />
+      <Act
+        icon="↩"
+        title="회수품 반납 지금 부르기"
+        sub={`반납 대기 ${ibb.returns.waiting} · 검수 대기 ${ibb.returns.inspecting} · 격리 ${ibb.returns.quarantined} — 정상은 선반, 폐기는 온도대 격리 구역`}
+        onClick={() => {
+          if (sim.callReturn()) controller.focusZone('RCV');
+        }}
+      />
     </Sec>
   );
 }

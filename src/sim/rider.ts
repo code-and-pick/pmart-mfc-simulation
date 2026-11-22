@@ -39,7 +39,7 @@ export class Rider extends Agent {
     readonly deliveryId: string,
     readonly orderId: string,
     parking: P,
-    private readonly ctx: SiteContext,
+    protected readonly ctx: SiteContext,
     private readonly onHandedOver: (orderId: string) => void,
   ) {
     super(id, offLot(ctx.layout.points.riderEntry), ctx.nav, 1.4);

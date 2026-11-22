@@ -95,6 +95,7 @@ export const INBOUND_COLOR: Record<InboundState, number> = {
   RECEIVING: 0x7986cb,
   PUTAWAY: 0x9ccc65,
   REPLENISH: 0xf06292,
+  RETURN_ITEM: 0x26a69a,
   RETURNING: 0x9aa0a6,
   ERROR: 0xea4335,
 };

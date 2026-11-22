@@ -58,6 +58,7 @@ describe('Simulation (mock, 화면 없이)', () => {
       .filter((p) => p.state === 'HANDED_OVER')
       .reduce((a, p) => a + p.contents.reduce((b, c) => b + c.qty, 0), 0);
     const h1 = inv.all().reduce((a, b) => a + b.H, 0);
-    expect(h1).toBe(h0 + ib.receivedUnits - handed);
+    // 회수품 반입도 H 를 늘린다(IV-10 격리로, 2026-11-22)
+    expect(h1).toBe(h0 + ib.receivedUnits + ib.returnsReceived - handed);
   }, 180_000);
 });

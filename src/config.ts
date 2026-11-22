@@ -181,6 +181,27 @@ export const REAL_WORKERS = {
  * 백엔드 회신(PC 3, PR #260 fulfillment 0.23.0 — 병합·LAN 배포 전): 새 포장 번호는 **4자리 고정**(사용자 결정 "앞으로 … 다 4자리로"),
  * 센터에서 쓰는(OPEN·SEALED) 포장끼리 겹치지 않음, 입력 pattern 4 또는 6자리(배포 전 포장 6자리), 5번 틀리면 HANDOVER_CODE_LOCKED [확정]
  */
+/**
+ * 회수품 흐름(사용자 2026-11-22 "넣어" — 회수반입 → 검수 → 정상은 선반, 폐기는 온도대 격리 구역).
+ * 규칙은 계약 [확정]: 반입 = RTN-A-01 격리(IV-10), 검수 RESALE 은 상온·미개봉만(냉장·냉동·신선·개봉은 폐기, mfc-quality 0.11.0),
+ * 검수자 ≠ 반입자(SELF_APPROVAL), 폐기분 격리 이동은 반입한 사람(QUARANTINE_MOVE, mfc-inbound 0.17.0). 아래 수치는 [시뮬].
+ */
+export const RETURN_FLOW = {
+  /** MOCK 회수 반납(고객 반품·전달 실패 반납) 평균 간격(분), 운영 시간 08~24시에만 [시뮬] */
+  mockEveryMin: 45,
+  /** 회수 한 건 품목 수 최대·품목 수량 최대 [시뮬] */
+  maxLines: 2,
+  maxQty: 2,
+  /** 상온 회수품 중 개봉·파손으로 폐기 판정되는 비율 [시뮬] */
+  ambientDisposeRate: 0.3,
+  /** 반입 등록·검수에 드는 손일(초) [시뮬] */
+  receiveSec: 18,
+  inspectBaseSec: 10,
+  inspectSecPerUnit: 6,
+  /** 회수품을 받는 인계 창 안쪽 자리(RTN-A-01 이 창 밖이라 점원은 창 안쪽에서 받는다) [시뮬] */
+  windowInside: { x: 42.333, z: 32.9 },
+} as const;
+
 export const HANDOVER_CODE = {
   minLen: 4,
   maxLen: 4,

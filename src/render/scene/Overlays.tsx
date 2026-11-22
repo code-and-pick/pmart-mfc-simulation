@@ -44,6 +44,41 @@ export function Dock() {
   );
 }
 
+/**
+ * 회수품 상자(MOCK, 사용자 2026-11-22 "넣어"): 회수반입 자리(반입 전·검수 대기·적치/격리 이동 대기)와 온도대 격리 구역(폐기 판정 뒤).
+ * 색 = 그 상품 구역 바닥색, 반입 전(반납 도착 대기)은 조금 낮게, 격리 구역 것은 작게
+ */
+export function Returns() {
+  const { sim } = useApp();
+  const mesh = useRef<THREE.InstancedMesh>(null!);
+  useFrame(() => {
+    const m = mesh.current;
+    const mtx = new THREE.Matrix4();
+    const col = new THREE.Color();
+    const q = new THREE.Quaternion();
+    let n = 0;
+    for (const it of sim.returnItems) {
+      if (n >= 128) break;
+      if (it.stage === 'ARRIVING' || it.stage === 'CARRIED' || it.stage === 'DONE') continue;
+      const s = it.stage === 'QUARANTINED' ? 0.3 : 0.34;
+      mtx.compose(new THREE.Vector3(it.pos.x, s / 2 + 0.02, it.pos.z), q, new THREE.Vector3(s, s, s));
+      m.setMatrixAt(n, mtx);
+      zoneBoxColor(it.temp, col);
+      m.setColorAt(n, col);
+      n++;
+    }
+    m.count = n;
+    m.instanceMatrix.needsUpdate = true;
+    if (m.instanceColor) m.instanceColor.needsUpdate = true;
+  });
+  return (
+    <instancedMesh name="return-boxes" ref={mesh} args={[undefined, undefined, 128]} count={0} castShadow frustumCulled={false}>
+      <boxGeometry args={[1, 1, 1]} />
+      <meshStandardMaterial roughness={0.7} map={boxTexture()} />
+    </instancedMesh>
+  );
+}
+
 /** 출하대기 랙 위 포장 (온도대 색). */
 export function Staged() {
   const { sim } = useApp();

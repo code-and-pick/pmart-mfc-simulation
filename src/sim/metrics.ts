@@ -31,6 +31,8 @@ export class Metrics {
     /** 피킹 칸이 비어 보충을 기다린 횟수·시간 */
     pickWaits: 0,
     pickWaitSec: 0,
+    /** 회수품 반입·재판매 적치·격리 이동 수량(MOCK) */
+    returnsReceived: 0,
   };
   readonly traces = new Map<string, OrderTrace>();
   private readonly readyTimes: number[] = [];

@@ -9,7 +9,8 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
+import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
@@ -86,6 +87,12 @@ export class Simulation {
   readonly reserveMap: Map<string, ReserveSpot>;
   trucks: Truck[] = [];
   readonly dockItems: DockItem[] = [];
+  /** 회수품(MOCK) — 반납 도착 → 반입 → 검수 → 선반 적치 / 격리 구역(사용자 2026-11-22 "넣어") */
+  readonly returnItems: ReturnItem[] = [];
+  private nextReturnAt = Infinity;
+  private returnSeq = 0;
+  private readonly quarantineCount: Record<string, number> = {};
+  private retRng: Rng;
   riders: SiteRider[] = [];
   readonly apiLog: ApiCallRecord[] = [];
   readonly events: DomainEventRecord[] = [];
@@ -144,6 +151,7 @@ export class Simulation {
   ) {
     this.rng = new Rng(params.seed);
     this.opsRng = new Rng(params.seed ^ 0x5f3759df);
+    this.retRng = new Rng(params.seed ^ 0x2a7e1d);
     this.time = params.startHour * 3600;
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     this.layout = buildLayout();
@@ -296,7 +304,11 @@ export class Simulation {
         releaseDock: (it) => this.releaseDock(it),
         onReceived: (t) => this.onTruckReceived(t),
         onReplenishDone: (sku) => this.replenishActive.delete(sku),
+        mfcId: params.mfcId,
+        rng: () => this.retRng.next(),
+        quarantineSpot: (temp) => this.quarantineSpot(temp),
       };
+      this.nextReturnAt = Math.max(8 * 3600, this.time) + this.retRng.exp(RETURN_FLOW.mockEveryMin * 60);
       this.nextTruckAt = this.time + params.firstInboundAfterSec;
       this.setInboundWorkers(params.inboundWorkers);
     }
@@ -1555,6 +1567,14 @@ export class Simulation {
       }
     }
     this.trucks = this.trucks.filter((t) => t.state !== 'GONE');
+    // 회수품 반납(운영 시간 08~24시에만)
+    if (this.time >= this.nextReturnAt) {
+      const hour = (this.time / 3600) % 24;
+      if (hour >= 8) this.callReturn();
+      this.nextReturnAt = this.time + this.retRng.exp(RETURN_FLOW.mockEveryMin * 60);
+    }
+    // 끝난 회수품(선반에 적치)은 목록에서 뺀다
+    for (let i = this.returnItems.length - 1; i >= 0; i--) if (this.returnItems[i].stage === 'DONE') this.returnItems.splice(i, 1);
   }
 
   private inboundTick(dt: number) {
@@ -1619,13 +1639,19 @@ export class Simulation {
   private dispatchInbound() {
     for (const w of this.inboundWorkers) {
       if (!w.idle) continue;
-      const job = this.nextInboundJob();
+      const job = this.nextInboundJob(w.id);
       if (!job) return;
       w.give(job);
     }
   }
 
-  private nextInboundJob(): InboundJob | null {
+  private nextInboundJob(workerId: string): InboundJob | null {
+    // 격리 이동은 정해진 담당(반입한 사람)에게 다른 어떤 새 작업보다 먼저(capacity 0.26.0)
+    const qm = this.returnItems.find((it) => it.stage === 'DISPOSE' && !it.claimed && it.receivedBy === workerId);
+    if (qm) {
+      qm.claimed = true;
+      return { kind: 'QUARANTINE_MOVE', item: qm };
+    }
     const docked = this.trucks.find((t) => t.state === 'DOCKED' && !this.receiving.has(t.trfId));
     if (docked) {
       this.receiving.add(docked.trfId);
@@ -1638,8 +1664,27 @@ export class Simulation {
       this.replenishActive.add(q.sku);
       return { kind: 'REPLENISH', sku: q.sku, urgent: q.urgent };
     };
+    // 회수품 반입(반납 도착 대기 한 건씩) [시뮬 순서]
+    const waiting = this.returnItems.find((it) => it.stage === 'WAITING' && !it.claimed);
+    if (waiting) {
+      const items = this.returnItems.filter((it) => it.arrivalId === waiting.arrivalId && it.stage === 'WAITING');
+      for (const it of items) it.claimed = true;
+      return { kind: 'RETURN_RECEIVE', items };
+    }
     const urgent = takeReplenish(true);
     if (urgent) return urgent;
+    // 회수품 검수 — 반입한 사람 본인은 안 됨(SELF_APPROVAL)
+    const toInspect = this.returnItems.find((it) => it.stage === 'RECEIVED' && !it.claimed && it.receivedBy !== workerId);
+    if (toInspect) {
+      const items = this.returnItems.filter((it) => it.receiptId === toInspect.receiptId && it.stage === 'RECEIVED');
+      for (const it of items) it.claimed = true;
+      return { kind: 'RETURN_INSPECT', items };
+    }
+    const resale = this.returnItems.find((it) => it.stage === 'RESALE' && !it.claimed);
+    if (resale) {
+      resale.claimed = true;
+      return { kind: 'RETURN_PUTAWAY', item: resale };
+    }
     const ready = this.dockItems.filter((it) => it.state === 'RECEIVED' && !this.claimed.has(it.id));
     if (ready.length) {
       const rank = { FROZEN: 0, CHILLED: 1, AMBIENT: 2 } as const;
@@ -1691,8 +1736,64 @@ export class Simulation {
     for (const l of t.lines) this.inTransit.set(l.sku, Math.max(0, (this.inTransit.get(l.sku) ?? 0) - l.qty));
   }
 
+  /** 회수품 반납을 지금 부른다(화면 버튼·정기). 상품은 MOCK 상품에서 고름(고객 반품·전달 실패 반납) */
+  callReturn(): string | null {
+    if (!this.mock) return null;
+    this.returnSeq += 1;
+    const arrivalId = `RTD-${String(this.returnSeq).padStart(4, '0')}`;
+    const n = this.retRng.int(1, RETURN_FLOW.maxLines);
+    const lines: { sku: string; qty: number }[] = [];
+    for (let i = 0; i < n; i++) {
+      const s = this.catalog[Math.floor(this.retRng.next() * this.catalog.length)];
+      if (lines.some((l) => l.sku === s.sku)) continue;
+      lines.push({ sku: s.sku, qty: this.retRng.int(1, RETURN_FLOW.maxQty) });
+    }
+    const drop = { x: BACKEND_FACTS.returnIntake.x, z: BACKEND_FACTS.returnIntake.z };
+    const base = this.returnItems.filter((it) => it.stage !== 'QUARANTINED' && it.stage !== 'DONE').length;
+    const items: ReturnItem[] = lines.map((l, i) => ({
+      id: `${arrivalId}-${i + 1}`,
+      arrivalId,
+      sku: l.sku,
+      qty: l.qty,
+      temp: this.skuMap.get(l.sku)!.temp,
+      stage: 'ARRIVING',
+      pos: returnSlot(drop, base + i),
+    }));
+    this.returnItems.push(...items);
+    this.riderSeq += 1;
+    const riderId = `R${String(this.riderSeq).padStart(3, '0')}`;
+    const usedBays = new Set(this.riders.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
+    const bays = this.layout.points.riderParking;
+    const parking = bays.find((b) => !usedBays.has(`${b.x},${b.z}`)) ?? bays[this.riderSeq % bays.length];
+    const rider = new ReturnRider(riderId, parking, { ...this.ctx, rng: this.retRng }, { x: drop.x, z: drop.z + 0.6 }, () => {
+      this.mock!.returnDelivered(arrivalId, this.retRng.next() < 0.7 ? 'CLAIM_RETURN' : 'FAILED_DELIVERY_RETURN', lines);
+      for (const it of items) it.stage = 'WAITING';
+    });
+    this.riders.push(rider);
+    void rider.run();
+    this.log(`회수품 반납 ${arrivalId} — 라이더 ${riderId}, ${lines.length}품목`);
+    return arrivalId;
+  }
+
+  /** 격리 구역 안 다음 자리(온도대별) — 서 있을 점은 구역 가운데 */
+  private quarantineSpot(temp: 'AMBIENT' | 'CHILLED' | 'FROZEN') {
+    const q = QUARANTINE_OF[temp];
+    const z = this.layout.zones.find((x) => x.id === q.zoneId)!;
+    const k = this.quarantineCount[q.zoneId] ?? 0;
+    this.quarantineCount[q.zoneId] = k + 1;
+    return { stand: { x: (z.rect.x0 + z.rect.x1) / 2, z: (z.rect.z0 + z.rect.z1) / 2 }, slot: quarantineSlot(z.rect, k) };
+  }
+
   inboundBoard() {
+    const st = (s: ReturnItem['stage'][]) => this.returnItems.filter((it) => s.includes(it.stage)).length;
     return {
+      returns: {
+        waiting: st(['ARRIVING', 'WAITING']),
+        inspecting: st(['RECEIVED']),
+        toShelf: st(['RESALE']),
+        toQuarantine: st(['DISPOSE', 'CARRIED']),
+        quarantined: st(['QUARANTINED']),
+      },
       putawayLines: this.dockItems.filter((d) => d.state !== 'TAKEN').length,
       replenishQueued: this.replenishQueue.length,
       replenishActive: this.replenishActive.size,

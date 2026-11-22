@@ -12,6 +12,9 @@
 //   피킹·패킹(IV-07)     총량 불변, 업무 상태만
 //   인계(IV-08)          H−q, E−q, R−q 한 사건
 //   결품(IV-09)          H 불변, E−q, R−q, D+q
+//   회수 반입(IV-10)     H+q, Q+q, E·R 불변, 반품 위치(returnArea)+q — "실제 인수는 격리 증가"
+//   회수 검수 RESALE     Q−q, E+q(RELEASE), 반품 위치 → 미적치(적치 작업으로 선반에)
+//   격리 이동(DISPOSE)   총량 불변, 반품 위치 → 격리 구역(quarantineArea)
 
 export interface Balance {
   sku: string;
@@ -25,6 +28,10 @@ export interface Balance {
   reserve: number;
   picked: number;
   packed: number;
+  /** 회수품 반입 위치(RTN-A-01)에 격리로 있는 수량(검수 전·검수 뒤 이동 전) */
+  returnArea: number;
+  /** 격리 구역 칸(QRT-A/C/F-01)에 있는 수량 */
+  quarantineArea: number;
 }
 
 export interface Reservation {
@@ -53,7 +60,7 @@ export class InventoryLedger {
 
   seed(sku: string, shelf: number, reserve = 0) {
     const h = shelf + reserve;
-    this.balances.set(sku, { sku, H: h, Q: 0, E: h, R: 0, D: 0, unstowed: 0, shelf, reserve, picked: 0, packed: 0 });
+    this.balances.set(sku, { sku, H: h, Q: 0, E: h, R: 0, D: 0, unstowed: 0, shelf, reserve, picked: 0, packed: 0, returnArea: 0, quarantineArea: 0 });
     this.dirty.add(sku);
   }
 
@@ -123,6 +130,41 @@ export class InventoryLedger {
     b.reserve -= qty;
     b.shelf += qty;
     this.dirty.add(sku);
+    this.check([sku]);
+    return this.commitId();
+  }
+
+  // ── 회수 (IV-10) ────────────────────────────────────
+  /** 회수품 실물 반입: H+q·Q+q, 판매적합 E 변화 없음(격리로만 들어감). 반품 위치에 둔다 */
+  returnReceipt(lines: { sku: string; qty: number }[]): string {
+    for (const l of lines) {
+      const b = this.must(l.sku);
+      b.H += l.qty;
+      b.Q += l.qty;
+      b.returnArea += l.qty;
+    }
+    this.check(lines.map((l) => l.sku));
+    return this.commitId();
+  }
+
+  /** 회수품 검수 RESALE → RELEASE: Q−q, E+q. 반품 위치에서 미적치로(적치 작업이 선반에 놓는다) */
+  releaseReturn(sku: string, qty: number): string {
+    const b = this.must(sku);
+    if (b.returnArea < qty || b.Q < qty) throw new InventoryError('INVALID_STATE', `반품 위치 격리 수량 부족 ${sku}`);
+    b.Q -= qty;
+    b.E += qty;
+    b.returnArea -= qty;
+    b.unstowed += qty;
+    this.check([sku]);
+    return this.commitId();
+  }
+
+  /** 격리 이동(QUARANTINE_MOVE): 반품 위치 → 격리 구역. H·Q·E 불변 */
+  quarantineMove(sku: string, qty: number): string {
+    const b = this.must(sku);
+    if (b.returnArea < qty) throw new InventoryError('INVALID_STATE', `반품 위치 격리 수량 부족 ${sku}`);
+    b.returnArea -= qty;
+    b.quarantineArea += qty;
     this.check([sku]);
     return this.commitId();
   }
@@ -205,10 +247,10 @@ export class InventoryLedger {
     for (const sku of skus) {
       const b = this.balances.get(sku);
       if (!b) continue;
-      const located = b.unstowed + b.shelf + b.reserve + b.picked + b.packed + b.D;
+      const located = b.unstowed + b.shelf + b.reserve + b.picked + b.packed + b.D + b.returnArea + b.quarantineArea;
       const ok =
-        0 <= b.R && b.R <= b.E && b.E <= b.H && 0 <= b.Q && b.Q <= b.H && located === b.H &&
-        b.unstowed >= 0 && b.shelf >= 0 && b.reserve >= 0 && b.picked >= 0 && b.packed >= 0;
+        0 <= b.R && b.R <= b.E && b.E <= b.H && 0 <= b.Q && b.Q <= b.H && b.E + b.Q <= b.H && located === b.H &&
+        b.returnArea >= 0 && b.quarantineArea >= 0 && b.unstowed >= 0 && b.shelf >= 0 && b.reserve >= 0 && b.picked >= 0 && b.packed >= 0;
       if (!ok) {
         this.violations.push(
           `불변식 위반 ${b.sku}: H${b.H} Q${b.Q} E${b.E} R${b.R} | 미적치${b.unstowed} 선반${b.shelf} 보충${b.reserve} 피킹${b.picked} 포장${b.packed} D${b.D}`,

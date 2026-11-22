@@ -55,7 +55,7 @@ function Tap({ on, children }: { on: ReactNode; children: ReactNode }) {
 }
 
 const WORKER: WorkerState[] = ['IDLE', 'TO_CART', 'PICKING', 'WAIT_STATION', 'PACKING', 'TO_SHIP', 'ERROR'];
-const INBOUND: InboundState[] = ['RECEIVING', 'PUTAWAY', 'REPLENISH'];
+const INBOUND: InboundState[] = ['RECEIVING', 'PUTAWAY', 'REPLENISH', 'RETURN_ITEM'];
 
 function Swatch({ color, square, children }: { color: string; square?: boolean; children: ReactNode }) {
   return (

@@ -124,6 +124,13 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
         ) : (
           <div className="note">입고 차량 없음</div>
         )}
+        {/* 회수품(MOCK): 반납 도착 → 반입(RTN-A-01 격리) → 검수 → 정상은 선반, 폐기는 온도대 격리 구역 */}
+        <div className="stats">
+          <Stat v={ibb.returns.waiting} k="회수 반납 대기" />
+          <Stat v={ibb.returns.inspecting} k="검수 대기" />
+          <Stat v={ibb.returns.toShelf + ibb.returns.toQuarantine} k="적치·격리 이동" />
+          <Stat v={ibb.returns.quarantined} k="격리 구역(폐기 대기)" />
+        </div>
         {/* 입고 버튼은 설정 탭 한 곳에만(사용자 2026-11-20 "입고예정이랑 가상작업자로 작업하기 버튼은 왜 또 중복으로 뜨고") */}
       </>
     );
@@ -339,6 +346,7 @@ function DetailBody() {
             <dl>
               <Row k="보충재고" v={`${b.reserve}개 @ ${k.reserveId}`} />
               <Row k="미적치(하차 칸)" v={`${b.unstowed}개`} />
+              {b.returnArea || b.quarantineArea ? <Row k="회수 격리(반입 자리 · 격리 구역)" v={`${b.returnArea} · ${b.quarantineArea}개 (Q ${b.Q})`} /> : null}
               <Row k="작업 중" v={`피킹 ${b.picked} · 포장 ${b.packed}`} />
               <Row k="H / E / R / A" v={`${b.H} / ${b.E} / ${b.R} / ${b.E - b.R}`} cls="loc" />
               {b.D ? <Row k="차이 D (실사 전)" v={b.D} /> : null}

@@ -18,6 +18,7 @@ export const INBOUND_KO: Record<InboundState, string> = {
   RECEIVING: '하차·검수',
   PUTAWAY: '적치',
   REPLENISH: '보충(MOV)',
+  RETURN_ITEM: '회수품',
   RETURNING: '복귀',
   ERROR: '오류',
 };

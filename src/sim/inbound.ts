@@ -11,6 +11,8 @@ import type { DockSlot, Layout, ReserveSpot } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
 import { Agent } from './agent';
 import type { Metrics } from './metrics';
+import { RETURN_FLOW } from '../config';
+import { QUARANTINE_OF, type ReturnItem } from './returns';
 
 /** 내려놓은 자리에 다가설 점 — 하차 칸은 통로 쪽(z 19.75 기준), 입고재고 팔레트는 그 팔레트 앞 */
 function approach(spot: { x: number; z: number }, it: { slot: unknown; stand?: { x: number; z: number } }): { x: number; z: number } {
@@ -18,7 +20,7 @@ function approach(spot: { x: number; z: number }, it: { slot: unknown; stand?: {
   return { x: spot.x, z: spot.z < 3.05 ? spot.z + 0.55 : spot.z - 0.55 }; // 하차 칸 두 블록 사이 통로 z 3.05(2026-11-21 재배치, 전 19.75)
 }
 
-export type InboundState = 'IDLE' | 'RECEIVING' | 'PUTAWAY' | 'REPLENISH' | 'RETURNING' | 'ERROR';
+export type InboundState = 'IDLE' | 'RECEIVING' | 'PUTAWAY' | 'REPLENISH' | 'RETURN_ITEM' | 'RETURNING' | 'ERROR';
 
 export interface Truck {
   trfId: string;
@@ -45,7 +47,15 @@ export interface DockItem {
 export type InboundJob =
   | { kind: 'RECEIVE'; truck: Truck }
   | { kind: 'PUTAWAY'; items: DockItem[] }
-  | { kind: 'REPLENISH'; sku: string; urgent: boolean };
+  | { kind: 'REPLENISH'; sku: string; urgent: boolean }
+  /** 회수품 반입(반납 도착 대기 한 건) */
+  | { kind: 'RETURN_RECEIVE'; items: ReturnItem[] }
+  /** 회수품 검수(반입한 사람 말고) */
+  | { kind: 'RETURN_INSPECT'; items: ReturnItem[] }
+  /** 재판매분 적치(회수반입 자리 → 선반) */
+  | { kind: 'RETURN_PUTAWAY'; item: ReturnItem }
+  /** 폐기분 격리 이동(반입한 사람만, 온도대 격리 구역) */
+  | { kind: 'QUARANTINE_MOVE'; item: ReturnItem };
 
 export interface InboundContext {
   runId: string;
@@ -61,6 +71,10 @@ export interface InboundContext {
   releaseDock(item: DockItem): void;
   onReceived(truck: Truck): void;
   onReplenishDone(sku: string): void;
+  mfcId: string;
+  rng(): number;
+  /** 격리 구역 안에 놓을 자리(온도대별, 놓을 때마다 다음 자리) */
+  quarantineSpot(temp: TemperatureZone): { stand: P; slot: P };
 }
 
 export interface InboundPda {
@@ -120,13 +134,20 @@ export class InboundWorker extends Agent {
       try {
         if (job.kind === 'RECEIVE') await this.receive(job.truck);
         else if (job.kind === 'PUTAWAY') await this.putaway(job.items);
-        else await this.replenish(job.sku, job.urgent);
+        else if (job.kind === 'REPLENISH') await this.replenish(job.sku, job.urgent);
+        else if (job.kind === 'RETURN_RECEIVE') await this.returnReceive(job.items);
+        else if (job.kind === 'RETURN_INSPECT') await this.returnInspect(job.items);
+        else if (job.kind === 'RETURN_PUTAWAY') await this.returnPutaway(job.item);
+        else await this.quarantineMove(job.item);
         this.jobsDone += 1;
       } catch (e) {
         this.state = 'ERROR';
         this.activity = `오류: ${e instanceof ApiProblem ? e.problem.code : (e as Error).message}`;
         this.ctx.log(`${this.id} 입고 작업 중단 — ${this.activity}`);
         this.ctx.metrics.apiErrors += 1;
+        // 회수품 일이 중간에 멈추면 다른 사람(또는 다시)이 맡을 수 있게 잡은 것을 푼다
+        if (job.kind === 'RETURN_RECEIVE' || job.kind === 'RETURN_INSPECT') for (const it of job.items) it.claimed = false;
+        else if (job.kind === 'RETURN_PUTAWAY' || job.kind === 'QUARANTINE_MOVE') job.item.claimed = false;
         await this.wait(20);
       }
       this.carrying = [];
@@ -195,7 +216,7 @@ export class InboundWorker extends Agent {
   }
 
   // ── 적치 ───────────────────────────────────────────
-  private async putaway(items: DockItem[]) {
+  private async putaway(items: DockItem[], from = 'RCV-DOCK', onTaken?: () => void) {
     const { ctx } = this;
     const inv = ctx.mock.inventory;
     this.state = 'PUTAWAY';
@@ -209,6 +230,7 @@ export class InboundWorker extends Agent {
       await this.wait(3);
       it.state = 'TAKEN';
       ctx.releaseDock(it);
+      onTaken?.();
       this.carrying.push(it.temp);
     }
 
@@ -244,7 +266,7 @@ export class InboundWorker extends Agent {
         if (q > 0) {
           await ctx.mock.commitStock(
             `PUT-${it.id}`,
-            { executionType: 'PUTAWAY', sku: it.sku, qty: q, to: 'shelf', fromLocation: 'RCV-DOCK', toLocation: loc.code },
+            { executionType: 'PUTAWAY', sku: it.sku, qty: q, to: 'shelf', fromLocation: from, toLocation: loc.code },
             this.key('put'),
           );
           ctx.metrics.inbound.putawayShelfUnits += q;
@@ -272,13 +294,124 @@ export class InboundWorker extends Agent {
       for (const r of list) {
         await ctx.mock.commitStock(
           `PUT-${r.it.id}-R`,
-          { executionType: 'PUTAWAY', sku: r.it.sku, qty: r.qty, to: 'reserve', fromLocation: 'RCV-DOCK', toLocation: rid },
+          { executionType: 'PUTAWAY', sku: r.it.sku, qty: r.qty, to: 'reserve', fromLocation: from, toLocation: rid },
           this.key('putR'),
         );
         ctx.metrics.inbound.putawayReserveUnits += r.qty;
         this.carrying.shift();
       }
     }
+  }
+
+  // ── 회수품 (사용자 2026-11-22 "넣어") ─────────────────────
+  /** 반입: 인계 창 안쪽에서 회수품을 받아 반품 위치 RTN-A-01 에 격리로 등록(POST /return-receipts, arrivalId) */
+  private async returnReceive(items: ReturnItem[]) {
+    const { ctx } = this;
+    this.state = 'RETURN_ITEM';
+    const a = items[0];
+    this.activity = `회수품 반입 ${a.arrivalId}`;
+    this.pda = { title: `회수품 반입 ${a.arrivalId}`, rows: items.map((it) => [ctx.skuMap.get(it.sku)?.name ?? it.sku, `${it.qty}개`]), step: '인계 창으로 이동' };
+    await this.walkTo(RETURN_FLOW.windowInside);
+    this.pda.step = '회수품 확인 → 반입 등록 RTN-A-01';
+    await this.wait(RETURN_FLOW.receiveSec);
+    const r = await ctx.mock.recordReturnReceipt(
+      { mfcId: ctx.mfcId, toLocationCode: 'RTN-A-01', arrivalId: a.arrivalId, receivedBy: this.id },
+      `${ctx.runId}:rtnrcp:${a.arrivalId}`,
+    );
+    for (const it of items) {
+      it.stage = 'RECEIVED';
+      it.receivedBy = this.id;
+      it.receiptId = r.resultId;
+      it.claimed = false;
+    }
+    ctx.metrics.inbound.returnsReceived += items.reduce((x, it) => x + it.qty, 0);
+    this.pda.step = '반입됨 — 격리(검수 대기)';
+    ctx.log(`${this.id} 회수품 반입 ${a.arrivalId} → ${r.resultId} RTN-A-01 격리 ${items.length}품목`);
+  }
+
+  /** 검수: 상온·미개봉 = 재판매, 냉장·냉동(온도대) · 개봉·파손 = 폐기(mfc-quality POST /return-inspections) */
+  private async returnInspect(items: ReturnItem[]) {
+    const { ctx } = this;
+    this.state = 'RETURN_ITEM';
+    const rid = items[0].receiptId!;
+    this.activity = `회수품 검수 ${rid}`;
+    this.pda = { title: `회수품 검수 ${rid}`, rows: [], step: '인계 창으로 이동' };
+    await this.walkTo(RETURN_FLOW.windowInside);
+    this.pda.step = '상품 상태·온도대 확인';
+    await this.wait(RETURN_FLOW.inspectBaseSec + RETURN_FLOW.inspectSecPerUnit * items.reduce((x, it) => x + it.qty, 0));
+    const lines = items.map((it) => {
+      const chilled = it.temp !== 'AMBIENT';
+      const bad = !chilled && ctx.rng() < RETURN_FLOW.ambientDisposeRate;
+      const opened = bad && ctx.rng() < 0.5;
+      it.disposeReason = chilled ? 'TEMPERATURE_ZONE' : bad ? (opened ? 'OPENED' : 'DAMAGED') : undefined;
+      return {
+        sku: it.sku,
+        qty: it.qty,
+        verdict: (chilled || bad ? 'DISPOSE' : 'RESALE') as 'RESALE' | 'DISPOSE',
+        temperatureZone: it.temp,
+        opened,
+        fresh: chilled,
+        ...(it.disposeReason ? { disposeReason: it.disposeReason } : {}),
+      };
+    });
+    this.pda.rows = items.map((it, i) => [ctx.skuMap.get(it.sku)?.name ?? it.sku, lines[i].verdict === 'RESALE' ? '재판매 → 선반' : `폐기 → ${TEMP_KO[it.temp]} 격리`]);
+    this.pda.step = '검수 등록';
+    const r = await ctx.mock.createReturnInspection(
+      { mfcId: ctx.mfcId, returnReceiptId: rid, inspectedBy: this.id, lines },
+      `${ctx.runId}:rtninsp:${rid}`,
+    );
+    items.forEach((it, i) => {
+      it.taskId = r.createdTaskIds[i];
+      it.stage = lines[i].verdict === 'RESALE' ? 'RESALE' : 'DISPOSE';
+      it.claimed = false;
+    });
+    this.pda.step = '검수 반영됨';
+    ctx.log(`${this.id} 회수품 검수 ${rid}: ${items.map((it) => `${it.sku} ${it.stage === 'RESALE' ? '재판매' : '폐기'}`).join(', ')}`);
+  }
+
+  /** 재판매분 적치 — 회수반입 자리에서 집어 선반(넘치면 보충재고)으로. 보통 적치와 같다 */
+  private async returnPutaway(item: ReturnItem) {
+    const d: DockItem = {
+      id: `RTN-${item.id}`,
+      trfId: item.arrivalId,
+      sku: item.sku,
+      qty: item.qty,
+      temp: item.temp,
+      slot: null,
+      floorPos: item.pos,
+      stand: RETURN_FLOW.windowInside,
+      state: 'RECEIVED',
+    };
+    const before = { ...item.pos };
+    await this.putaway([d], 'RTN-A-01', () => (item.stage = 'CARRIED'));
+    item.pos = before;
+    item.stage = 'DONE';
+    this.ctx.mock.completeReturnPutaway(item.taskId!, item.qty);
+  }
+
+  /** 폐기분 격리 이동 — 반입한 사람이 회수반입 자리 → 온도대 격리 구역 칸(POST /inbound-tasks/{taskId}/quarantine-moves) */
+  private async quarantineMove(item: ReturnItem) {
+    const { ctx } = this;
+    const q = QUARANTINE_OF[item.temp];
+    this.state = 'RETURN_ITEM';
+    this.hasCart = false;
+    this.activity = `격리 이동 → ${TEMP_KO[item.temp]} 격리 ${q.code}`;
+    this.pda = { title: `격리 이동 ${item.taskId}`, rows: [['상품', ctx.skuMap.get(item.sku)?.name ?? item.sku], ['수량', `${item.qty}개`], ['도착', q.code]], step: '회수반입 자리에서 집기' };
+    await this.walkTo(RETURN_FLOW.windowInside);
+    await this.wait(3);
+    item.stage = 'CARRIED';
+    this.carrying = [item.temp];
+    const spot = ctx.quarantineSpot(item.temp);
+    this.pda.step = `${q.code} 로 이동`;
+    await this.walkTo(spot.stand);
+    await this.wait(4);
+    this.pda.step = `${q.code} 스캔 → 내려놓기`;
+    await ctx.mock.quarantineMove(item.taskId!, { toLocationCode: q.code, qty: item.qty }, `${ctx.runId}:qrt:${item.taskId}`, this.id);
+    this.carrying = [];
+    item.pos = spot.slot;
+    item.quarantineCode = q.code;
+    item.stage = 'QUARANTINED';
+    ctx.log(`${this.id} 격리 이동 ${item.sku} ×${item.qty} RTN-A-01 → ${q.code}`);
   }
 
   // ── 자동 보충 (MOV) ─────────────────────────────────
