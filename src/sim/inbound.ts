@@ -75,7 +75,7 @@ export class InboundWorker extends Agent {
   state: InboundState = 'IDLE';
   pda: InboundPda | null = null;
   carrying: TemperatureZone[] = [];
-  /** 팔레트 잭/카트 */
+  /** 롤테이너를 밀고 있음(하차·적치) */
   hasCart = false;
   busySeconds = 0;
   jobsDone = 0;

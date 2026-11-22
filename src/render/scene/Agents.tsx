@@ -1,5 +1,6 @@
 // 움직이는 것들: 피킹·패킹 작업자, 입고 작업자, 라이더, 입고 차량.
 import type { VehicleType } from '../../domain/contract';
+import { RollContainer } from './RollContainer';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -102,6 +103,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   const inboundAcc = isWorker && /-(qc|rcv)-\d+/.test(id);
   const bagSize = inboundAcc ? 0.3 : isWorker ? 0.16 : 0.26;
   const per = inboundAcc ? 2 : isWorker ? 3 : 2;
+  const roll = !isWorker || inboundAcc; // 입고 작업자(시뮬 입고·실서버 입고 가상 작업자)는 롤테이너
   return (
     <group ref={group}>
       {/* 클릭 판정(보이지 않음) — 고르기는 이 상자 하나로(Core Picker: 직계 자식 중 personId) */}
@@ -115,10 +117,12 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
         <meshBasicMaterial ref={ringMat} color={0x9aa0a6} transparent opacity={0.85} />
       </mesh>
       <Humanoid ref={fig} look={look} />
-      <mesh ref={cart} position={[0, isWorker ? 0.5 : 0.12, isWorker ? 0.62 : 0.8]} castShadow>
-        {isWorker ? <boxGeometry args={[0.45, 0.42, 0.62]} /> : <boxGeometry args={[0.6, 0.14, 0.95]} />}
-        {isWorker ? <meshStandardMaterial color={0x4a90d9} transparent opacity={0.8} /> : <meshStandardMaterial color={0x546e7a} metalness={0.3} />}
-        {isWorker && (
+      <mesh ref={cart} position={[0, roll ? 0 : 0.5, roll ? 0.78 : 0.62]} castShadow={!roll}>
+        {/* 입고(하차·적치)는 파란 롤테이너를 민다(사용자 2026-11-22 "트럭에서 내린 입고제품 운반할때는 롤테이너 쓰는데") — 전엔 회색 납작 카트 */}
+        <boxGeometry args={roll ? [0.01, 0.01, 0.01] : [0.45, 0.42, 0.62]} />
+        {roll ? <meshBasicMaterial visible={false} /> : <meshStandardMaterial color={0x4a90d9} transparent opacity={0.8} />}
+        {roll && <RollContainer x={0} z={0} boxes={false} />}
+        {!roll && (
           <>
             {/* 손잡이·다리·바퀴 */}
             <mesh position={[0, 0.36, -0.36]}>
@@ -153,7 +157,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
               ref={(m) => {
                 if (m) bags.current[i] = m;
               }}
-              position={[gx, (isWorker ? 0.33 : 0.07 + bagSize * 0.45) + gy, isWorker ? -0.05 : 0]}
+              position={[gx, (roll ? 0.18 + bagSize * 0.45 : 0.33) + gy, roll ? 0.02 : -0.05]}
               visible={false}
             >
               <boxGeometry args={[bagSize, bagSize * 0.9, bagSize]} />
