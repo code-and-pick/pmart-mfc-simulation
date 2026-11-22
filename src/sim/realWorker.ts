@@ -27,7 +27,7 @@ import { Agent } from './agent';
 import { cartInDetail, type CartPool } from './cartPool';
 import { inspectVerdict, seoulToday } from '../domain/inspectVerdict';
 import type { StationPool } from './site';
-import type { PdaView, WorkerState } from './worker';
+import type { BasketLine, PdaView, WorkerState } from './worker';
 
 export interface RealSiteContext {
   runId: string;
@@ -378,14 +378,21 @@ export class RealWorker extends Agent {
       )
       .sort((x, y) => x.seq - y.seq);
     this.state = 'PICKING';
+    // 따라가기 왼쪽 패널용 고를 목록 — 집음 표시는 서버가 받은(ACCEPTED) 뒤에만
+    const basket: BasketLine[] = stops.map(({ line, pick, from }) => {
+      const t = from ? tempOfCode(from) : null;
+      return { name: line.productName ?? line.sku, location: from ?? '-', temp: t ? TEMP_KO[t] : null, planned: pick.remainingQty, picked: 0, state: 'TODO' };
+    });
     for (let i = 0; i < stops.length; i++) {
       const { line, pick, from } = stops[i];
       if (!from) throw new Error(`${line.sku} 집을 칸 없음`);
       const loc = ctx.location(from);
       const temp = tempOfCode(from);
       this.currentTarget = loc;
+      basket[i].state = 'NOW';
       this.pda = {
         ...this.view(task, 'PICK', '로케이션 이동'),
+        basket,
         progress: `${i + 1} / ${stops.length}`,
         location: from,
         nextLocation: stops[i + 1]?.from ?? null,
@@ -432,6 +439,8 @@ export class RealWorker extends Agent {
       this.dropped.set(line.sku, { loc: cart, temp });
       for (let k = 0; k < pick.remainingQty && this.carrying.length < 12; k++) this.carrying.push(temp ?? 'AMBIENT');
       this.pda.pickedQty = pick.remainingQty;
+      basket[i].picked = pick.remainingQty;
+      basket[i].state = 'DONE';
       this.pda.step = '집품 등록됨';
     }
     this.currentTarget = null;

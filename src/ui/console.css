@@ -1122,3 +1122,18 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .zst-split > * b { font-size: 18px; }
 .zst-split .in { border-color: #d9a441; cursor: pointer; }
 .zst-split .in b { color: #d9a441; }
+
+/* 따라가기 — 점원 장바구니(고를 상품) 목록 */
+.bk { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 320px; overflow-y: auto; }
+.bk li { display: flex; align-items: center; gap: 8px; padding: 5px 6px; border-radius: 8px; font-size: 12px; }
+.bk-i { width: 16px; text-align: center; font-weight: 700; color: var(--muted); flex: none; }
+.bk-n { flex: 1; min-width: 0; display: flex; flex-direction: column; overflow: hidden; }
+.bk-n small { color: var(--muted); font-size: 10.5px; }
+.bk-q { font-size: 12px; flex: none; }
+.bk-now { background: rgba(79, 140, 255, 0.16); outline: 1px solid rgba(79, 140, 255, 0.5); }
+.bk-now .bk-i { color: #4f8cff; }
+.bk-done .bk-i { color: #3fb950; }
+.bk-done .bk-n { opacity: 0.75; }
+.bk-short .bk-i, .bk-short .bk-q { color: var(--bad); }
+.bk-todo { opacity: 0.6; }
+.bk-empty { font-size: 12px; color: var(--muted); margin-bottom: 6px; }

@@ -25,6 +25,18 @@ export interface PdaView {
   barcode: string | null;
   plannedQty: number | null;
   pickedQty: number | null;
+  /** 이번 피킹에서 고를 상품 목록(따라가기 때 왼쪽 패널) — 집은 수량·완료는 서버 응답을 받은 뒤에만 바꾼다. 패킹 중에도 남는다 */
+  basket?: BasketLine[];
+}
+
+export interface BasketLine {
+  name: string;
+  location: string;
+  temp: string | null;
+  planned: number;
+  picked: number;
+  /** TODO 아직 / NOW 지금 가는 중·집는 중 / DONE 집음(서버 확정) / SHORT 결품 보고 */
+  state: 'TODO' | 'NOW' | 'DONE' | 'SHORT';
 }
 
 /** 화면(3D·카드·요약)이 보는 작업자 모양 — MOCK 작업자(Worker)와 실서버 가상 작업자(RealWorker) 공통 */
@@ -174,11 +186,17 @@ export class Worker extends Agent {
       ? [...lines].sort((a, b) => a.seq! - b.seq!)
       : routeOrder(lines, this.pos, (x) => rank[x.loc.code[0]] ?? 9);
     // 집은 상품을 내려놓는 포장 위치 = 패킹 대기 지점의 온도대 칸(냉동 PAK-F-01, 냉장·상온 PAK-C-01) — 피킹이 끝나면 그리로 간다
+    const basket: BasketLine[] = ordered.map(({ l, loc }) => {
+      const sk = ctx.skuMap.get(l.sku)!;
+      return { name: sk.name, location: loc.code, temp: TEMP_KO[sk.temp], planned: l.remainingQty, picked: 0, state: 'TODO' };
+    });
     for (let i = 0; i < ordered.length; i++) {
       const { l, loc, lotId } = ordered[i];
       const sku = ctx.skuMap.get(l.sku)!;
       this.currentTarget = loc;
+      basket[i].state = 'NOW';
       this.pda = {
+        basket,
         taskId: task.taskId,
         taskType: 'PICK',
         orderId,
@@ -237,6 +255,8 @@ export class Worker extends Agent {
         );
       }
       this.pda.pickedQty = picked;
+      basket[i].picked = picked;
+      basket[i].state = short > 0 ? 'SHORT' : 'DONE';
       for (let k = 0; k < picked; k++) this.carrying.push(sku.temp);
       if (short > 0) {
         // 결품 보고는 집품과 섞지 않은 한 줄(pickedQty 0 + shortage) — 받으면 작업이 BLOCKED, 결품 사가가 풀 때까지 기다린다

@@ -500,14 +500,66 @@ function BackendSettings() {
 }
 
 /** 왼쪽 패널 — 아이콘 메뉴의 "설정"·"도움말"(접으면 그리지 않음) */
+/**
+ * 따라가는 점원이 이번 피킹에서 고를 상품 — 실시간(약 4Hz). 집음(✓)은 서버가 받은 뒤에만 표시
+ * (사용자 2026-11-22 "점원을 따라가면 실시간으로 픽업할 때 고른 제품이 뭔지 왼쪽 탭에 떴으면 좋겠어")
+ */
+function FollowBasket({ id }: { id: string }) {
+  const { sim } = useApp();
+  useTick();
+  const w = sim.siteWorkers().find((x) => x.id === id);
+  if (!w) return null;
+  const basket = w.pda?.basket;
+  const done = basket?.filter((b) => b.state === 'DONE' || b.state === 'SHORT').length ?? 0;
+  return (
+    <Sec title={`${workerShortName(w.id)} 장바구니`} aside={basket ? `${done} / ${basket.length} 품목` : undefined}>
+      {!basket ? (
+        <div className="bk-empty">{w.pda ? `${w.pda.step} — 고를 상품 목록 없음` : '지금 피킹 중인 작업이 없어요'}</div>
+      ) : (
+        <>
+          {w.pda?.taskType === 'PACK' && <div className="bk-empty">피킹 끝 — 포장 중: {w.pda.step}</div>}
+          <ul className="bk">
+            {basket.map((b, i) => (
+              <li key={i} className={`bk-${b.state.toLowerCase()}`}>
+                <span className="bk-i" aria-hidden>
+                  {b.state === 'DONE' ? '✓' : b.state === 'NOW' ? '▶' : b.state === 'SHORT' ? '!' : '·'}
+                </span>
+                <span className="bk-n">
+                  {b.name}
+                  <small>
+                    {b.location}
+                    {b.temp ? ` · ${b.temp}` : ''}
+                  </small>
+                </span>
+                <b className="bk-q">
+                  {b.state === 'DONE' || b.state === 'SHORT' ? `${b.picked}/${b.planned}` : `×${b.planned}`}
+                </b>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </Sec>
+  );
+}
+
 export function LeftPanel() {
   const { sim } = useApp();
   const view = useView();
-  if (!view.leftView) return null;
+  const follow = view.follow && sim.siteWorkers().some((x) => x.id === view.follow) ? view.follow : null;
+  if (!view.leftView) {
+    // 패널을 닫아 둬도 점원을 따라가는 동안은 장바구니만 띄운다
+    return follow ? (
+      <div className="panel left">
+        <FollowBasket id={follow} />
+      </div>
+    ) : null;
+  }
   const mock = sim.mode === 'mock';
   const injected = !!sim.realTokens?.serverInjected;
   return (
     <div className="panel left">
+      {follow && <FollowBasket id={follow} />}
       {view.leftView === 'help' ? (
         <Help />
       ) : view.leftView === 'zone' ? (
