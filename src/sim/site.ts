@@ -75,7 +75,7 @@ export class ShippingRack {
       const staged: StagedPackage = {
         pkg,
         shipmentId,
-        slot: slot ?? { id: `FLOOR-${pkg.packageId}`, rackIndex: -1, pos: { x: 41.185 + (Math.random() - 0.5) * 3, y: 0.15, z: 34.6 } }, // 인계 돌출부 바닥(2026-11-22 474.55평 맞춤)
+        slot: slot ?? { id: `FLOOR-${pkg.packageId}`, rackIndex: -1, pos: { x: 40.018 + (Math.random() - 0.5) * 3, y: 0.15, z: 34.6 } }, // 인계 돌출부 바닥(2026-11-22 463평 맞춤)
       };
       this.used.set(staged.slot.id, staged);
       out.push(staged);

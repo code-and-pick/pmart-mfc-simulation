@@ -107,7 +107,9 @@ describe('라이더 수단(배차 배정 vehicleType)', () => {
     const P = L.points;
     for (const heading of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
       const r = new RealRider('RD-2', 'DLV-2', P.riderParking[3], P.riderEntry, P.riderPickup, new NavGrid(L), 'CAR');
-      r.pos = { x: 28, z: 38.4 };
+      // 앞마당 안 한 자리(주차 칸) — 평면을 옮겨도(2026-11-22 463평 맞춤) 앞마당 안이게
+      const at = { x: P.riderParking[3].x, z: P.riderParking[3].z - 1.8 };
+      r.pos = { ...at };
       r.heading = heading;
       const done = getOff(r);
       for (let i = 0; i < 40; i++) {
@@ -116,8 +118,8 @@ describe('라이더 수단(배차 배정 vehicleType)', () => {
       }
       await done;
       expect(r.parkedHeading).toBe(heading);
-      expect(r.pos.x).toBeCloseTo(28 + 0.9 * Math.cos(heading), 1);
-      expect(r.pos.z).toBeCloseTo(38.4 - 0.9 * Math.sin(heading), 1);
+      expect(r.pos.x).toBeCloseTo(at.x + 0.9 * Math.cos(heading), 1);
+      expect(r.pos.z).toBeCloseTo(at.z - 0.9 * Math.sin(heading), 1);
     }
   });
 

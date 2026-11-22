@@ -16,9 +16,9 @@ function walkways(L: Layout): [number, number, number, number][] {
   // 2026-11-21 재배치: 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
   return [
     // 2026-11-22 474.55평 맞춤으로 옮김
-    [1.2, 0.8, 24.3, 0.8],
-    [23.1, 1.2, 23.1, 32.6],
-    [1.2, 32.6, 36.6, 32.6],
+    [1.2, 0.8, 23.778, 0.8],
+    [22.728, 1.2, 22.728, 32.6],
+    [1.2, 32.6, 36.078, 32.6],
   ];
 }
 
@@ -275,7 +275,7 @@ export function WorkingCells() {
 export function InboundDecor() {
   return (
     <>
-      {[25.1, 26.0, 26.9].map((x) => ( // 2026-11-22 474.55평 맞춤으로 서쪽 1.4 m
+      {[31.2, 32.1, 33.0].map((x) => ( // 2026-11-22 463평 맞춤 — 승강기 문 동쪽(입고·검수 북동쪽)
         <RollContainer key={x} x={x} z={5.55} />
       ))}
     </>
@@ -412,7 +412,8 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 }
 
 /** 휴게·사무 가운데 사무용 긴 테이블(3.6×0.8 m) + 의자 6개(양쪽 3개) + PC 1대(모니터·키보드·본체) — 장식(사용자 2026-11-21). 장애물은 layout 에 */
-export const OFFICE_TABLE = { x: 41.185, z: 1.67, w: 3.6, d: 0.8, h: 0.74 }; // 2026-11-22 474.55평 맞춤(x −2.415) // 휴게·사무 가운데(2026-11-22 휴게·사무가 z 0~3.35 로 얕아져 1.0 m 북쪽)
+// 4인용 1.6 × 0.8 m, 휴게·사무 가운데(사용자 2026-11-22 "휴게사무 테이블은 4인용으로 줄이고 위치도 중앙으로") — 구역 x 36.729~45.418, z 0~2.663
+export const OFFICE_TABLE = { x: 41.074, z: 1.33, w: 1.6, d: 0.8, h: 0.74 }; // 휴게·사무 가운데(2026-11-22 휴게·사무가 z 0~3.35 로 얕아져 1.0 m 북쪽)
 function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
   // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
   const seat = 0x2b3240;
@@ -439,7 +440,7 @@ function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
 }
 export function OfficeDecor() {
   const T = OFFICE_TABLE;
-  const pcSeat = { x: T.x - 1.15, z: T.z - T.d / 2 }; // PC 는 북쪽 맨 왼쪽 자리 앞
+  const pcSeat = { x: T.x - 0.4, z: T.z - T.d / 2 }; // PC 는 북쪽 왼쪽 자리 앞
   return (
     <group>
       {/* 상판·다리 */}
@@ -455,8 +456,8 @@ export function OfficeDecor() {
           </mesh>
         )),
       )}
-      {/* 의자: 북쪽 3개(남쪽을 봄)·남쪽 3개(북쪽을 봄) */}
-      {[-1.15, 0, 1.15].flatMap((dx) => [
+      {/* 의자: 북쪽 2개(남쪽을 봄)·남쪽 2개(북쪽을 봄) — 4인용 */}
+      {[-0.4, 0.4].flatMap((dx) => [
         <OfficeChair key={`n${dx}`} x={T.x + dx} z={T.z - T.d / 2 - 0.35} face={1} />,
         <OfficeChair key={`s${dx}`} x={T.x + dx} z={T.z + T.d / 2 + 0.35} face={-1} />,
       ])}

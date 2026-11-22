@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { BACKEND_FACTS, DECOR } from '../../config';
-import { FREIGHT_LIFTS, LIFT_Z0, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
+import { FREIGHT_LIFTS, LIFT_ANNEX, LIFT_Z0, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -69,7 +69,16 @@ function Ground({ L }: { L: Layout }) {
         <planeGeometry args={[YARD_X[1] - YARD_X[0], L.depth - L.buildingDepth]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
-      {/* MFC 는 2층(2026-11-22) — 북쪽 입고 차량 길 대신 화물 승강기 2대(FreightLifts). 인계 돌출부 바닥은 인계 구역 바닥이 덮음 */}
+      {/* MFC 는 2층 — 북쪽 화물 승강기 별동(FreightLifts) 동쪽에 입고 차량이 대는 길(사용자 2026-11-22 "화물승강기 왼쪽이나 오른쪽에서 입고차량 들어오는 것도") */}
+      <mesh rotation={flat} position={[(LIFT_ANNEX.x1 + 90) / 2, -0.015, L.points.truckDock.z]} receiveShadow>
+        <planeGeometry args={[90 - LIFT_ANNEX.x1, 3.6]} />
+        <meshStandardMaterial color={SCENE.yard} roughness={1} />
+      </mesh>
+      {/* 승강기 별동 바닥(MFC 밖·건물 안) */}
+      <mesh rotation={flat} position={[(LIFT_ANNEX.x0 + LIFT_ANNEX.x1) / 2, -0.012, LIFT_ANNEX.z0 / 2]} receiveShadow>
+        <planeGeometry args={[LIFT_ANNEX.x1 - LIFT_ANNEX.x0, -LIFT_ANNEX.z0]} />
+        <meshStandardMaterial color={0xdfe3ea} roughness={0.95} />
+      </mesh>
     </>
   );
 }
@@ -614,21 +623,43 @@ export function Facility() {
  * 문은 입고·검수로 바로 열린다. 1층 입고 차량이 오면(DOCKED·UNLOADING) 카가 2층에 와 있어 문이 열린다. 승강로는 MFC 넓이에 넣지 않음. [가정 — 2~3 t 화물용]
  */
 function FreightLifts() {
+  // 승강기 코어(사용자 2026-11-22 "승강기 못생겼어") — 닫힌 밝은 콘크리트 박스 + 입고·검수 쪽 스테인리스 문틀·문 두 짝·층 표시등·호출 버튼·문 앞 노랑/검정 안전 띠
   const { sim } = useApp();
   const doors = useRef<THREE.Group[]>([]);
+  const lamps = useRef<THREE.MeshStandardMaterial[]>([]);
   const open = useRef(0);
   useFrame((_, dt) => {
     const want = sim.trucks.some((t) => t.state === 'DOCKED' || t.state === 'UNLOADING') ? 1 : 0;
     open.current += Math.sign(want - open.current) * Math.min(Math.abs(want - open.current), dt * 0.8);
     doors.current.forEach((g, i) => {
-      if (!g) return;
-      const half = i % 2 === 0 ? -1 : 1;
-      g.position.x = half * open.current * 0.42;
+      if (g) g.position.x = (i % 2 === 0 ? -1 : 1) * open.current * 0.52;
     });
+    for (const m of lamps.current) if (m) m.emissiveIntensity = 0.6 + open.current * 1.4;
   });
   const tags = useMemo(() => FREIGHT_LIFTS.map((_, i) => makeLabel(`화물 승강기 ${i + 1}`, { size: 26, bg: 'rgba(31,42,68,0.85)', screenPx: 14 })), []);
-  const H = 3.0;
-  const T = 0.15;
+  const stripe = useMemo(() => {
+    const c = document.createElement('canvas');
+    c.width = 256;
+    c.height = 32;
+    const ctx = c.getContext('2d')!;
+    ctx.fillStyle = '#1f2229';
+    ctx.fillRect(0, 0, 256, 32);
+    ctx.fillStyle = '#f5c518';
+    for (let x = -32; x < 256 + 32; x += 32) {
+      ctx.beginPath();
+      ctx.moveTo(x, 32);
+      ctx.lineTo(x + 16, 32);
+      ctx.lineTo(x + 32, 0);
+      ctx.lineTo(x + 16, 0);
+      ctx.fill();
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+  }, []);
+  const H = 3.4; // 코어 높이
+  const DH = 2.4; // 문 높이
+  const steel = { color: 0xe3e7ed, metalness: 0.55, roughness: 0.3 }; // 옅은 회색(사용자 2026-11-22 "승강기 색 좀 더 옅은 회색으로")
   return (
     <>
       {FREIGHT_LIFTS.map((l, i) => {
@@ -639,32 +670,71 @@ function FreightLifts() {
         const dw = l.door[1] - l.door[0];
         return (
           <group key={i}>
-            {/* 승강로 벽(뒤·옆) */}
-            <mesh position={[cx, H / 2, LIFT_Z0 + T / 2]} castShadow>
-              <boxGeometry args={[w, H, T]} />
-              <meshStandardMaterial color={0xb8c0cc} roughness={0.7} />
+            {/* 코어: 닫힌 밝은 박스(문 쪽 면 제외) + 지붕 테두리 */}
+            <mesh position={[cx, H / 2, LIFT_Z0 / 2 - 0.05]} castShadow receiveShadow>
+              <boxGeometry args={[w - 0.04, H, d - 0.1]} />
+              <meshStandardMaterial color={0xf1f3f6} roughness={0.85} />
             </mesh>
-            {[l.x0 + T / 2, l.x1 - T / 2].map((x) => (
-              <mesh key={x} position={[x, H / 2, LIFT_Z0 / 2]} castShadow>
-                <boxGeometry args={[T, H, d]} />
-                <meshStandardMaterial color={0xb8c0cc} roughness={0.7} />
+            <mesh position={[cx, H + 0.04, LIFT_Z0 / 2 - 0.05]}>
+              <boxGeometry args={[w + 0.06, 0.08, d - 0.0]} />
+              <meshStandardMaterial color={0xd5dae2} roughness={0.6} />
+            </mesh>
+            {/* 문틀(스테인리스): 양 기둥 + 윗틀 */}
+            {[l.door[0] - 0.07, l.door[1] + 0.07].map((x) => (
+              <mesh key={x} position={[x, DH / 2 + 0.05, 0.04]}>
+                <boxGeometry args={[0.14, DH + 0.1, 0.1]} />
+                <meshStandardMaterial {...steel} />
               </mesh>
             ))}
-            {/* 카 바닥 */}
-            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[cx, 0.01, LIFT_Z0 / 2]} receiveShadow>
-              <planeGeometry args={[w - 2 * T, d - T]} />
-              <meshStandardMaterial color={0x8a929e} roughness={0.6} metalness={0.3} />
+            <mesh position={[dc, DH + 0.2, 0.04]}>
+              <boxGeometry args={[dw + 0.28, 0.3, 0.1]} />
+              <meshStandardMaterial {...steel} />
             </mesh>
-            {/* 문 두 짝(가운데에서 양옆으로 열림) */}
+            {/* 층 표시등(윗틀 가운데) */}
+            <mesh position={[dc, DH + 0.2, 0.1]}>
+              <boxGeometry args={[0.34, 0.14, 0.02]} />
+              <meshStandardMaterial
+                ref={(m: THREE.MeshStandardMaterial | null) => {
+                  if (m) lamps.current[i] = m;
+                }}
+                color={0x0b1a2a}
+                emissive={0x22c3ee}
+                emissiveIntensity={0.6}
+              />
+            </mesh>
+            {/* 문 두 짝(가운데에서 양옆으로 열림) — 짝마다 세로 홈 */}
             {[0, 1].map((k) => (
-              <group key={k} ref={(g) => { if (g) doors.current[i * 2 + k] = g; }}>
-                <mesh position={[dc + (k === 0 ? -dw / 4 : dw / 4), 1.1, -0.06]}>
-                  <boxGeometry args={[dw / 2, 2.2, 0.05]} />
-                  <meshStandardMaterial color={0xd7dde6} metalness={0.6} roughness={0.3} />
+              <group
+                key={k}
+                ref={(g) => {
+                  if (g) doors.current[i * 2 + k] = g;
+                }}
+              >
+                <mesh position={[dc + (k === 0 ? -dw / 4 : dw / 4), DH / 2, 0.02]}>
+                  <boxGeometry args={[dw / 2 - 0.01, DH, 0.05]} />
+                  <meshStandardMaterial color={0xe0e4ea} metalness={0.55} roughness={0.25} />
+                </mesh>
+                <mesh position={[dc + (k === 0 ? -dw / 4 : dw / 4), DH / 2, 0.05]}>
+                  <boxGeometry args={[0.02, DH * 0.9, 0.01]} />
+                  <meshStandardMaterial color={0xbcc3ce} metalness={0.5} roughness={0.3} />
                 </mesh>
               </group>
             ))}
-            <primitive object={tags[i]} position={[cx, 3.4, LIFT_Z0 / 2]} />
+            {/* 호출 버튼 판 */}
+            <mesh position={[l.door[1] + 0.32, 1.15, 0.06]}>
+              <boxGeometry args={[0.12, 0.26, 0.03]} />
+              <meshStandardMaterial {...steel} />
+            </mesh>
+            <mesh position={[l.door[1] + 0.32, 1.15, 0.08]}>
+              <circleGeometry args={[0.035, 16]} />
+              <meshStandardMaterial color={0x16a34a} emissive={0x22c55e} emissiveIntensity={0.8} />
+            </mesh>
+            {/* 문 앞 바닥 안전 띠(노랑/검정) */}
+            <mesh rotation={[-Math.PI / 2, 0, 0]} position={[dc, 0.012, 0.32]} raycast={() => null}>
+              <planeGeometry args={[dw + 0.4, 0.4]} />
+              <meshStandardMaterial map={stripe} roughness={0.8} />
+            </mesh>
+            <primitive object={tags[i]} position={[cx, H + 0.6, LIFT_Z0 / 2]} />
           </group>
         );
       })}
