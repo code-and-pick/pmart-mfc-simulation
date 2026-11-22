@@ -14,6 +14,7 @@ import {
   type CommandResponse,
   type InboundTask,
   type InboundTaskExecution,
+  type ReturnInspectionLine,
   type TaskDetail,
   type TaskLine,
   type TemperatureZone,
@@ -21,7 +22,7 @@ import {
 } from '../domain/contract';
 import type { Layout, Location } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
-import { REAL_WORKERS } from '../config';
+import { REAL_WORKERS, RETURN_FLOW } from '../config';
 import type { SimParams } from '../config';
 import { Agent } from './agent';
 import { cartInDetail, type CartPool } from './cartPool';
@@ -65,6 +66,39 @@ export function simDeviceId(account: string): string {
 }
 
 const TEMP_KO: Record<TemperatureZone, string> = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' };
+
+/** 격리 구역 칸(LAN QRT-A/C/F-01, BR-52 회신) — 작업의 추천 칸(suggestedToLocations)이 없을 때만 */
+const QRT_OF: Record<TemperatureZone, string> = { AMBIENT: 'QRT-A-01', CHILLED: 'QRT-C-01', FROZEN: 'QRT-F-01' };
+/** 이 화면의 가상 작업자끼리 같은 반납·반입 건을 두 번 잡지 않게(서버도 409 ARRIVAL_ALREADY_RECEIVED·INVALID_STATE 로 막음) */
+const returnClaims = new Set<string>();
+/** 회수품 반입 위치(RETURN 구역) [확정] BACKEND_FACTS.returnIntake */
+const BACKEND_RTN = 'RTN-A-01';
+/** 입고 검사 계정(qc)·적치 계정(rcv) — 회수품 검수는 qc, 반입은 rcv(1호점 mfcw-·2호점 mfcw-mk-) */
+export function returnRoleOf(account: string): 'INSPECT' | 'RECEIVE' | null {
+  return /-qc-\d\d$/.test(account) ? 'INSPECT' : /-rcv-\d\d$/.test(account) ? 'RECEIVE' : null;
+}
+
+/**
+ * 회수품 검수 판정(계약 mfc-quality: RESALE 은 상온·미개봉·신선 아님만). 가상 작업자는 개봉·파손을 지어내지 않는다 —
+ * 상온·신선 아님 = 재판매, 냉장·냉동(신선) = 폐기. 온도대를 모르면 null(손대지 않음)
+ */
+export function returnVerdict(line: { sku: string; qty: number; lotId?: string | null; orderLineId?: string | null; temperatureZone?: TemperatureZone | null; fresh?: boolean | null }): ReturnInspectionLine | null {
+  const t = line.temperatureZone;
+  if (!t) return null;
+  const fresh = line.fresh ?? t !== 'AMBIENT';
+  const resale = t === 'AMBIENT' && !fresh;
+  return {
+    ...(line.orderLineId ? { orderLineId: line.orderLineId } : {}),
+    sku: line.sku,
+    ...(line.lotId ? { lotId: line.lotId } : {}),
+    qty: line.qty,
+    verdict: resale ? 'RESALE' : 'DISPOSE',
+    temperatureZone: t,
+    fresh,
+    opened: false,
+    ...(resale ? {} : { disposeReason: t !== 'AMBIENT' ? ('TEMPERATURE_ZONE' as const) : ('FRESH' as const) }),
+  };
+}
 
 /** 백엔드 칸 코드 첫 글자 = 온도대(`{A/C/F}-…`, SIM-6) */
 export function tempOfCode(code: string): TemperatureZone | null {
@@ -220,6 +254,8 @@ export class RealWorker extends Agent {
       }
       if (!a) {
         this.lastProblem = null;
+        // 받을 작업이 없으면 회수품 일(반입 rcv · 검수 qc) — capacity 작업이 아니라 PDA 처럼 대기 목록에서 고른다
+        if (await this.returnWork().catch((e: unknown) => this.returnWorkFailed(e))) continue;
         this.activity = '작업 없음 — 대기';
         await this.wait(REAL_WORKERS.noTaskRetrySec);
         continue;
@@ -231,11 +267,12 @@ export class RealWorker extends Agent {
         else if (a.taskType === 'RETURN') await this.doReturn(a);
         else if (a.taskType === 'INSPECT') await this.doInspect(a);
         else if (a.taskType === 'PUTAWAY') await this.doPutaway(a);
+        else if (a.taskType === 'QUARANTINE_MOVE') await this.doQuarantineMove(a);
         else if (a.taskType === 'REPLENISH' || a.taskType === 'MOVE') await this.doMove(a);
         else {
           // 묻는 업무(PICK_PACK·STOCK_MOVE·INSPECTION)면 오지 않는다(RECEIVE 등) — 온다면 손대지 않고 알린다(센터 관리자가 풀어야 함)
           this.lastProblem = `처리 안 하는 작업 유형 ${a.taskType}`;
-          this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 받음 — 가상 작업자는 PICK·PACK·RETURN·INSPECT·PUTAWAY·REPLENISH·MOVE 만`);
+          this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 받음 — 가상 작업자는 PICK·PACK·RETURN·INSPECT·PUTAWAY·QUARANTINE_MOVE·REPLENISH·MOVE 만`);
           this.state = 'ERROR';
           this.activity = this.lastProblem;
           await this.wait(REAL_WORKERS.errorBackoffSec * 4);
@@ -248,14 +285,14 @@ export class RealWorker extends Agent {
         }
         // 하던 작업이 그사이 취소됨(주문 취소 — 예: 배차 불가 자동 취소 DISPATCH_UNAVAILABLE, 관리자 판단 취소)이면 오류가 아니다.
         // 서버 작업 상태를 다시 읽어 끝난 작업이면 멈추고 다음 작업으로(남은 물건은 서버가 만든 복귀 작업 RETURN 이 처리). 사용자 2026-11-20 "409 INVALID_STATE — 포장 작업은 CANCELLED" 화면 오류
-        if (e instanceof ApiProblem && e.problem.status === 409 && (a.taskType === 'INSPECT' || a.taskType === 'PUTAWAY')) {
+        if (e instanceof ApiProblem && e.problem.status === 409 && (a.taskType === 'INSPECT' || a.taskType === 'PUTAWAY' || a.taskType === 'QUARANTINE_MOVE')) {
           // 입고 작업이 그사이 끝남(다른 화면의 같은 계정·다른 작업자가 먼저) — 오류가 아니라 다음 작업으로(사용자 2026-11-20)
           const it = await this.be.getInboundTask(a.taskId).catch(() => null);
           if (it && (it.state === 'COMPLETED' || it.plannedQty - it.doneQty <= 0)) {
             this.lastProblem = null;
             this.carrying = [];
             this.hasCart = false;
-            this.activity = `${a.taskType === 'INSPECT' ? '품질검사' : '적치'} 이미 끝남 — 다음 작업`;
+            this.activity = `${a.taskType === 'INSPECT' ? '품질검사' : a.taskType === 'QUARANTINE_MOVE' ? '격리 이동' : '적치'} 이미 끝남 — 다음 작업`;
             this.ctx.log(`${this.account} ${a.taskType} ${a.taskId} 이미 끝남(409) — 다음 작업으로`);
             continue;
           }
@@ -773,6 +810,139 @@ export class RealWorker extends Agent {
     this.pda.pickedQty = qty;
     this.pda.step = '품질검사 반영됨';
     ctx.log(`${this.account} 품질검사 ${t.taskId} ${t.sku} ${word} ${qty} (기한 ${v.result.expiryDate})${r.createdTaskIds?.length ? ` → 적치 ${r.createdTaskIds.join(', ')}` : ''}`);
+  }
+
+  // ── 격리 이동(QUARANTINE_MOVE, inbound 0.17.0) — 회수 폐기분·검사 격리분·현장 예외 파손을 온도대 격리 구역 칸으로. 담당만 ──
+  private async doQuarantineMove(a: CapacityAssignment) {
+    const { ctx, be } = this;
+    const t = await this.inboundTask(a);
+    if (!t) return;
+    const qty = t.plannedQty - t.doneQty - (t.exceptedQty ?? 0);
+    if (qty <= 0) return;
+    const temp = t.storageType ?? tempOfCode(t.locationCode) ?? 'AMBIENT';
+    const dest = t.suggestedToLocations?.find((c) => c.startsWith('QRT-')) ?? QRT_OF[temp];
+    this.state = 'PICKING';
+    this.pda = this.inboundView(t, 'PUTAWAY', `${t.locationCode} 에서 집기`, qty);
+    this.pda.progress = `격리 이동 ${t.sku}`;
+    this.activity = `격리 이동 ${t.locationCode} → ${dest}`;
+    // 반품 위치(RTN-)는 인계 창 밖이라 창 안쪽에서 받는다
+    const from = t.locationCode.startsWith('RTN-') ? RETURN_FLOW.windowInside : (ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    await this.walkTo(from);
+    await this.work(4);
+    this.carrying = [temp];
+    this.pda.step = `${dest} 로 이동`;
+    await this.walkTo(ctx.point(dest) ?? from);
+    this.pda.step = `${dest} 스캔 → ${qty}개 내려놓기`;
+    await this.work(4);
+    await this.applied(`격리 이동(${dest})`, this.key('qrtmove', t.taskId, `:${dest}:${qty}`), (k) => be.quarantineMoveInboundTask(t.taskId, { toLocationCode: dest, qty }, k));
+    this.carrying = [];
+    this.pda.pickedQty = qty;
+    this.pda.step = '격리 이동 반영됨';
+    ctx.log(`${this.account} 격리 이동 ${t.taskId} ${t.sku} ×${qty} ${t.locationCode} → ${dest}`);
+  }
+
+  // ── 회수품 반입(rcv)·검수(qc) — 사용자 2026-11-22 "넣어". 받을 capacity 작업이 없을 때만 ──
+  private lastReturnLook = 0;
+
+  /** 한 건 했으면 true */
+  private async returnWork(): Promise<boolean> {
+    const role = returnRoleOf(this.account);
+    if (!role || !this.workerId || this.resumeOnly) return false;
+    if (Date.now() - this.lastReturnLook < RETURN_FLOW.realLookSec * 1000) return false;
+    this.lastReturnLook = Date.now();
+    return role === 'RECEIVE' ? this.returnReceive() : this.returnInspect();
+  }
+
+  private returnWorkFailed(e: unknown): boolean {
+    const code = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}` : (e as Error).message;
+    this.lastProblem = `회수품 ${code}`;
+    this.ctx.log(`${this.account} 회수품 일 멈춤 — ${code}`);
+    this.carrying = [];
+    return false;
+  }
+
+  /** 반납 도착 대기(WAITING) 한 건을 반입 — RTN-A-01 에 격리(POST /return-receipts arrivalId) */
+  private async returnReceive(): Promise<boolean> {
+    const { ctx, be } = this;
+    const list = await this.retry(() => be.listReturnArrivals(ctx.mfcId));
+    // 상품 코드가 없는 줄이 있으면 줄을 보내야 해서(400) 가상 작업자는 손대지 않는다
+    const a = list.find((x) => x.state === 'WAITING' && !returnClaims.has(`arr:${x.arrivalId}`) && x.lines.every((l) => !!l.sku));
+    if (!a) return false;
+    returnClaims.add(`arr:${a.arrivalId}`);
+    this.idle = false;
+    try {
+      this.state = 'PICKING';
+      this.activity = `회수품 반입 ${a.arrivalId}`;
+      this.pda = this.plainView(a.arrivalId, 'PUTAWAY', '인계 창으로 이동');
+      this.pda.progress = `회수품 반입 (${a.lines.length}품목)`;
+      await this.walkTo(RETURN_FLOW.windowInside);
+      this.pda.step = '회수품 확인 → 반입 등록 RTN-A-01';
+      await this.work(RETURN_FLOW.receiveSec);
+      const key = this.key('rtnrcp', a.arrivalId);
+      const r = await this.commandApplied('회수품 반입', () =>
+        be.recordReturnReceipt({ mfcId: ctx.mfcId, toLocationCode: BACKEND_RTN, arrivalId: a.arrivalId, receivedBy: this.workerId! }, key),
+      ).catch((e: unknown) => {
+        if (e instanceof ApiProblem && e.problem.code === 'ARRIVAL_ALREADY_RECEIVED') return null; // 다른 사람이 먼저
+        throw e;
+      });
+      if (!r) {
+        ctx.log(`${this.account} 회수품 ${a.arrivalId} 이미 반입됨 — 다음`);
+        return true;
+      }
+      this.pda.step = '반입됨 — 격리(검수 대기)';
+      ctx.log(`${this.account} 회수품 반입 ${a.arrivalId} → ${r.resultId ?? ''} ${BACKEND_RTN} 격리 ${a.lines.length}품목`);
+      return true;
+    } finally {
+      this.idle = true;
+    }
+  }
+
+  /** 검수 대기 반입 한 건 — 반입한 사람이 아닐 때만(SELF_APPROVAL). 상온·신선 아님 = 재판매, 냉장·냉동 = 폐기 */
+  private async returnInspect(): Promise<boolean> {
+    const { ctx, be } = this;
+    const list = await this.retry(() => be.listPendingReturnReceipts(ctx.mfcId));
+    const rc = list.find(
+      (x) =>
+        x.inspectionState === 'PENDING' &&
+        x.inventoryApplyStatus === 'APPLIED' &&
+        x.receivedBy !== this.workerId &&
+        !returnClaims.has(`insp:${x.returnReceiptId}`) &&
+        x.lines.every((l) => !!l.temperatureZone),
+    );
+    if (!rc) return false;
+    returnClaims.add(`insp:${rc.returnReceiptId}`);
+    const lines = rc.lines.map((l) => returnVerdict(l)!);
+    this.idle = false;
+    try {
+      this.state = 'PICKING';
+      this.activity = `회수품 검수 ${rc.returnReceiptId}`;
+      this.pda = this.plainView(rc.returnReceiptId, 'INSPECT', '인계 창으로 이동');
+      this.pda.progress = `회수품 검수 (${lines.length}품목)`;
+      await this.walkTo(RETURN_FLOW.windowInside);
+      this.pda.step = '상품 상태·온도대 확인';
+      await this.work(RETURN_FLOW.inspectBaseSec + RETURN_FLOW.inspectSecPerUnit * lines.reduce((x, l) => x + l.qty, 0));
+      this.pda.step = lines.map((l) => `${l.sku} ${l.verdict === 'RESALE' ? '재판매' : `폐기(${TEMP_KO[l.temperatureZone]} 격리)`}`).join(' · ');
+      const key = this.key('rtninsp', rc.returnReceiptId);
+      await this.commandApplied('회수품 검수', () =>
+        be.createReturnInspection({ mfcId: ctx.mfcId, returnReceiptId: rc.returnReceiptId, claimId: rc.claimId ?? null, inspectedBy: this.workerId!, lines }, key),
+      );
+      ctx.log(`${this.account} 회수품 검수 ${rc.returnReceiptId}: ${this.pda.step} — 재판매는 적치 작업, 폐기는 반입한 사람에게 격리 이동 작업`);
+      return true;
+    } finally {
+      this.idle = true;
+    }
+  }
+
+  /** 명령 응답(CommandResponse) — APPLIED·ACCEPTED 만 확정, UNKNOWN_RESULT·503 은 같은 키로 다시, REJECTED 는 오류 */
+  private async commandApplied(op: string, call: () => Promise<CommandResponse>): Promise<CommandResponse> {
+    for (let i = 0; ; i++) {
+      const r = await this.retry(() => unknownAsResend(call));
+      if (r.status === 'APPLIED' || r.status === 'ACCEPTED') return r;
+      if (r.status === 'REJECTED') throw new Error(`${op} 거절`);
+      if (i >= REAL_WORKERS.unconfirmedResendMax) throw new ResultUnknown(`${op} 결과 불명 — 다음에 같은 키로 다시`);
+      this.activity = `${op} 반영 확인 중 (${r.status})`;
+      await this.wait(REAL_WORKERS.unconfirmedResendSec);
+    }
   }
 
   private async doPutaway(a: CapacityAssignment) {

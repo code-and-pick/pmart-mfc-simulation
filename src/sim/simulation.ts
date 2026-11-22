@@ -1839,6 +1839,9 @@ export class Simulation {
       return { x: (x0 + x1) / 2, z: (z0 + z1) / 2 };
     }
     if (rs) return { x: (rs.rect.x0 + rs.rect.x1) / 2, z: (rs.rect.z0 + rs.rect.z1) / 2 };
+    // 격리 구역 칸(QRT-A/C/F-01) → 그 격리 구역 가운데(격리 이동·격리 재고)
+    const qz = this.layout.zones.find((z) => z.id === simCode && z.kind === 'QUARANTINE');
+    if (qz) return { x: (qz.rect.x0 + qz.rect.x1) / 2, z: (qz.rect.z0 + qz.rect.z1) / 2 };
     const rack = /^SHIP-RACK-(\d+)$/.exec(simCode);
     if (rack) {
       const slot = this.layout.shippingSlots.find((x) => x.rackIndex === Number(rack[1]) - 1);

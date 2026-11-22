@@ -21,6 +21,9 @@ import {
   type InboundTask,
   type InitialStockLoad,
   type InboundTaskExecution,
+  type ReturnArrival,
+  type ReturnInspectionLine,
+  type ReturnReceipt,
   type InspectionResult,
   type LotLabel,
   type EmployeeLabel,
@@ -477,6 +480,36 @@ export class HttpBackend implements FulfillmentPort {
     idempotencyKey: string,
   ): Promise<{ resultId?: string; applyStatus?: string }> {
     return this.request('POST', `/mfcs/${enc(mfcId)}/stock-corrections`, { body, idempotencyKey });
+  }
+
+  /** mfc-inbound listReturnArrivals(0.13.0) — 반납 도착 대기(기본 WAITING, 오래된 순). 그 센터 운영자 */
+  async listReturnArrivals(mfcId: string): Promise<ReturnArrival[]> {
+    const r: { items?: ReturnArrival[] } = await this.request('GET', `/return-arrivals?${new URLSearchParams({ mfcId, state: 'WAITING', size: '50' })}`);
+    return r.items ?? [];
+  }
+
+  /** mfc-inbound recordReturnReceipt — arrivalId 로 반입(줄은 대기 건 그대로). 반품 위치(RETURN 구역)에 격리로만. APPLIED·REJECTED·UNKNOWN_RESULT(같은 키로 다시) */
+  recordReturnReceipt(body: { mfcId: string; toLocationCode: string; arrivalId: string; receivedBy: string }, idempotencyKey: string): Promise<CommandResponse> {
+    return this.request('POST', '/return-receipts', { body, idempotencyKey });
+  }
+
+  /** mfc-inbound listReturnReceipts(0.15.0) — inspectionState=PENDING 이면 검수 대기 큐(오래된 순, 재고 반영 APPLIED 만) */
+  async listPendingReturnReceipts(mfcId: string): Promise<ReturnReceipt[]> {
+    const r: { items?: ReturnReceipt[] } = await this.request('GET', `/return-receipts?${new URLSearchParams({ mfcId, inspectionState: 'PENDING', size: '50' })}`);
+    return r.items ?? [];
+  }
+
+  /** mfc-quality createReturnInspection — 회수품 검수 RESALE/DISPOSE(반입한 사람은 안 됨 422 SELF_APPROVAL) */
+  createReturnInspection(
+    body: { mfcId: string; returnReceiptId: string; claimId?: string | null; inspectedBy: string; lines: ReturnInspectionLine[] },
+    idempotencyKey: string,
+  ): Promise<CommandResponse> {
+    return this.request('POST', '/return-inspections', { body, idempotencyKey });
+  }
+
+  /** mfc-inbound quarantineMoveInboundTask(0.17.0) — 격리품을 격리 구역 칸으로(담당만). 처리는 적치와 같다 */
+  quarantineMoveInboundTask(taskId: string, body: { toLocationCode: string; qty: number }, idempotencyKey: string): Promise<InboundTaskExecution> {
+    return this.request('POST', `/inbound-tasks/${enc(taskId)}/quarantine-moves`, { body, idempotencyKey });
   }
 
   /** mfc-inbound listInboundTasks — 센터 입고 작업(품질검사·적치) 목록. 상품 이름 포함(withLabels 기본 true) */

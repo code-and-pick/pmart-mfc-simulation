@@ -200,6 +200,8 @@ export const RETURN_FLOW = {
   inspectSecPerUnit: 6,
   /** 회수품을 받는 인계 창 안쪽 자리(RTN-A-01 이 창 밖이라 점원은 창 안쪽에서 받는다) [시뮬] */
   windowInside: { x: 42.333, z: 32.9 },
+  /** 실서버 가상 작업자가 받을 작업이 없을 때 반납 대기·검수 대기 목록을 보는 간격(초) [시뮬] */
+  realLookSec: 20,
 } as const;
 
 export const HANDOVER_CODE = {

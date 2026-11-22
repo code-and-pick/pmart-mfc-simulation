@@ -7,7 +7,7 @@ import { ApiProblem, type CapacityAssignment, type InboundTask, type InboundTask
 import { buildLayout } from '../src/domain/layout';
 import { buildLocationCodeMap } from '../src/domain/locationCodes';
 import { NavGrid } from '../src/domain/navgrid';
-import { RealWorker, packDropFor, tempOfCode, type RealSiteContext } from '../src/sim/realWorker';
+import { RealWorker, packDropFor, returnRoleOf, returnVerdict, tempOfCode, type RealSiteContext } from '../src/sim/realWorker';
 import { CartPool } from '../src/sim/cartPool';
 import { StationPool } from '../src/sim/site';
 
@@ -212,13 +212,40 @@ class FakeBe {
     this.calls.push(`stage ${id} ${rack}`);
     return { packageId: id, stagingLocation: rack };
   }
+  // ── 회수품(inbound 0.13~0.17, quality) ──
+  arrivals: { arrivalId: string; state: 'WAITING'; mfcId: string; purpose: 'CLAIM_RETURN'; arrivedAt: string; lines: { sku: string | null; qty: number }[] }[] = [];
+  pendingReceipts: { returnReceiptId: string; mfcId: string; inventoryApplyStatus: 'APPLIED'; inspectionState: 'PENDING'; toLocationCode: string; receivedBy: string; lines: { sku: string; qty: number; lotId: string; temperatureZone: 'AMBIENT' | 'CHILLED' | null }[] }[] = [];
+  async listReturnArrivals(m: string) {
+    this.calls.push(`arrivals ${m}`);
+    return this.arrivals;
+  }
+  async recordReturnReceipt(body: { arrivalId: string; toLocationCode: string; receivedBy: string }, key: string) {
+    this.calls.push(`rtnrcp ${body.arrivalId} ${body.toLocationCode} by ${body.receivedBy}`);
+    this.keys.push(key);
+    this.arrivals = this.arrivals.filter((a) => a.arrivalId !== body.arrivalId);
+    return { status: 'APPLIED', requestId: key, resultId: 'RTR-1' };
+  }
+  async listPendingReturnReceipts(m: string) {
+    this.calls.push(`pending ${m}`);
+    return this.pendingReceipts;
+  }
+  async createReturnInspection(body: { returnReceiptId: string; inspectedBy: string; lines: { sku: string; verdict: string; disposeReason?: string; lotId?: string }[] }, key: string) {
+    this.calls.push(`rtninsp ${body.returnReceiptId} by ${body.inspectedBy} ${body.lines.map((l) => `${l.sku}:${l.verdict}${l.disposeReason ? `(${l.disposeReason})` : ''}@${l.lotId}`).join(',')}`);
+    this.keys.push(key);
+    this.pendingReceipts = this.pendingReceipts.filter((r) => r.returnReceiptId !== body.returnReceiptId);
+    return { status: 'APPLIED', requestId: key, resultId: 'RIN-1' };
+  }
+  async quarantineMoveInboundTask(id: string, body: { toLocationCode: string; qty: number }, key: string) {
+    this.calls.push(`qrtmove ${id} ${body.qty}→${body.toLocationCode}`);
+    return this.execInbound(id, body.qty, key);
+  }
   async getCenterStock() {
     this.calls.push('stock');
     return { mfcId: 'MFC-SEED-01', sku: '', lots: [], units: [] };
   }
 }
 
-function setup() {
+function setup(account = 'mfcw-pp-01') {
   const layout = buildLayout();
   const codes = buildLocationCodeMap(layout);
   const locBy = new Map(layout.locations.map((l) => [l.code, l]));
@@ -239,7 +266,7 @@ function setup() {
   };
   const be = new FakeBe();
   const tokens = { get: async () => 'tok', operatorId: ME, lastError: null, invalidated: 0, invalidate() { this.invalidated++; } };
-  const w = new RealWorker('mfcw-pp-01', layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens as unknown as TokenSource);
+  const w = new RealWorker(account, layout.points.idle[0], ctx, be as unknown as HttpBackend, tokens as unknown as TokenSource);
   return { w, be, tokens, ctx, logs };
 }
 
@@ -637,6 +664,72 @@ describe('RealWorker — 재고 이동·품질검사 업무', () => {
     expect(pulls.filter((x) => x.endsWith('PICK_PACK')).length).toBeGreaterThanOrEqual(2);
     expect(pulls.filter((x) => x.endsWith('INSPECTION')).length).toBeGreaterThanOrEqual(2);
     expect(w.lastProblem).toBeNull();
+    w.stop();
+  });
+});
+
+describe('RealWorker — 회수품(반입·검수·격리 이동)', () => {
+  it('계정 역할: qc = 검수, rcv = 반입(1호점·2호점 목포), 피킹포장은 없음 / 판정: 상온 = 재판매, 냉장·냉동 = 폐기, 온도대 모르면 손대지 않음', () => {
+    expect(returnRoleOf('mfcw-qc-03')).toBe('INSPECT');
+    expect(returnRoleOf('mfcw-mk-rcv-10')).toBe('RECEIVE');
+    expect(returnRoleOf('mfcw-pp-01')).toBeNull();
+    expect(returnVerdict({ sku: 'A', qty: 1, temperatureZone: 'AMBIENT', fresh: false })).toMatchObject({ verdict: 'RESALE', opened: false });
+    expect(returnVerdict({ sku: 'C', qty: 1, temperatureZone: 'CHILLED' })).toMatchObject({ verdict: 'DISPOSE', disposeReason: 'TEMPERATURE_ZONE', fresh: true });
+    expect(returnVerdict({ sku: 'X', qty: 1, temperatureZone: null })).toBeNull();
+  });
+
+  it('격리 이동(QUARANTINE_MOVE): 담당이 받으면 추천 격리 칸으로 남은 양 — 503 이면 같은 키로 다시', async () => {
+    const { w, be } = setup();
+    be.inbound.set('QM-1', {
+      ...inboundTask('QM-1', 'PUTAWAY', 3),
+      taskType: 'QUARANTINE_MOVE',
+      origin: 'RETURN',
+      locationCode: 'RTN-A-01',
+      storageType: 'CHILLED',
+      exceptedQty: 1,
+      suggestedToLocations: ['QRT-C-01'],
+    });
+    be.applyStatuses = [503];
+    be.areaQueue.STOCK_MOVE = [assign('QM-1', 'QUARANTINE_MOVE')];
+    void w.run();
+    await runFor(w, 300);
+    expect(be.calls.filter((x) => x.startsWith('qrtmove'))).toEqual(['qrtmove QM-1 2→QRT-C-01', 'qrtmove QM-1 2→QRT-C-01']);
+    expect(new Set(be.keys).size).toBe(1);
+    w.stop();
+  });
+
+  it('적치 계정(rcv)은 받을 작업이 없으면 반납 대기 한 건을 RTN-A-01 로 반입(상품 코드 없는 줄이 있는 건은 손대지 않음)', async () => {
+    const { w, be } = setup('mfcw-rcv-01');
+    be.arrivals = [
+      { arrivalId: 'DLV-0', state: 'WAITING', mfcId: 'MFC-SEED-01', purpose: 'CLAIM_RETURN', arrivedAt: '2026-11-22T01:00:00Z', lines: [{ sku: null, qty: 1 }] },
+      { arrivalId: 'DLV-1', state: 'WAITING', mfcId: 'MFC-SEED-01', purpose: 'CLAIM_RETURN', arrivedAt: '2026-11-22T01:00:00Z', lines: [{ sku: 'B-1', qty: 2 }] },
+    ];
+    void w.run();
+    await runFor(w, 200);
+    expect(be.calls.filter((x) => x.startsWith('rtnrcp'))).toEqual([`rtnrcp DLV-1 RTN-A-01 by ${ME}`]);
+    w.stop();
+  });
+
+  it('검사 계정(qc)은 자기가 반입한 것은 건너뛰고 남이 반입한 것을 검수 — 상온 재판매, 냉장 폐기, LOT 그대로', async () => {
+    const { w, be } = setup('mfcw-qc-01');
+    be.pendingReceipts = [
+      { returnReceiptId: 'RTR-MINE', mfcId: 'MFC-SEED-01', inventoryApplyStatus: 'APPLIED', inspectionState: 'PENDING', toLocationCode: 'RTN-A-01', receivedBy: ME, lines: [{ sku: 'B-1', qty: 1, lotId: 'L0', temperatureZone: 'AMBIENT' }] },
+      {
+        returnReceiptId: 'RTR-2',
+        mfcId: 'MFC-SEED-01',
+        inventoryApplyStatus: 'APPLIED',
+        inspectionState: 'PENDING',
+        toLocationCode: 'RTN-A-01',
+        receivedBy: 'OP-other',
+        lines: [
+          { sku: 'B-1', qty: 1, lotId: 'L1', temperatureZone: 'AMBIENT' },
+          { sku: 'C-1', qty: 2, lotId: 'L2', temperatureZone: 'CHILLED' },
+        ],
+      },
+    ];
+    void w.run();
+    await runFor(w, 200);
+    expect(be.calls.filter((x) => x.startsWith('rtninsp'))).toEqual([`rtninsp RTR-2 by ${ME} B-1:RESALE@L1,C-1:DISPOSE(TEMPERATURE_ZONE)@L2`]);
     w.stop();
   });
 });

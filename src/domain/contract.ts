@@ -675,7 +675,12 @@ export interface InitialStockLoad {
 
 export interface InboundTask {
   taskId: string;
-  taskType: 'INSPECT' | 'PUTAWAY';
+  /** (inbound 0.17.0) QUARANTINE_MOVE = 격리품을 격리 구역 칸으로(담당 = 반입한 사람·검수자·보고자) */
+  taskType: 'INSPECT' | 'PUTAWAY' | 'QUARANTINE_MOVE';
+  /** (0.17.0) 만든 까닭 INSPECTION·RETURN·EXCEPTION·RELEASE·HOLD_FOUND — 모르는 값이면 보통 작업 */
+  origin?: string | null;
+  /** (0.17.0) 현장 예외·해제·폐기로 빠진 양 — 잔량 = planned − done − excepted */
+  exceptedQty?: number | null;
   mfcId: string;
   receiptId: string;
   parentTaskId?: string | null;
@@ -704,6 +709,50 @@ export interface InboundTask {
   version: number;
   assigneeId?: string | null;
   createdAt?: string;
+}
+
+/** mfc-inbound ReturnArrival(0.13.0) — 라이더가 MFC 에 반납한 회수품, 반입 전 WAITING */
+export interface ReturnArrival {
+  arrivalId: string;
+  mfcId: string;
+  purpose: 'CLAIM_RETURN' | 'MISDELIVERY_RECOVERY' | 'FAILED_DELIVERY_RETURN';
+  claimId?: string | null;
+  orderId?: string | null;
+  riderId?: string | null;
+  state: 'WAITING' | 'RECEIVED';
+  returnReceiptId?: string | null;
+  arrivedAt: string;
+  lines: { orderLineId?: string | null; sku?: string | null; productName?: string | null; temperatureZone?: TemperatureZone | null; fresh?: boolean | null; qty: number }[];
+}
+
+/** mfc-inbound ReturnReceipt(0.7.0~0.17.0) — 회수품 반입. 검수 대기 = inspectionState PENDING */
+export interface ReturnReceipt {
+  returnReceiptId: string;
+  claimId?: string | null;
+  returnPickupId?: string;
+  mfcId: string;
+  arrivalId?: string | null;
+  inventoryApplyStatus: 'SUBMITTED' | 'APPLIED' | 'REJECTED' | 'UNKNOWN_RESULT';
+  inspectionState: 'PENDING' | 'INSPECTED';
+  receivedAt?: string;
+  toLocationCode: string;
+  receivedBy: string;
+  rejectReason?: string | null;
+  lines: { orderLineId?: string | null; sku: string; qty: number; lotId?: string | null; productName?: string | null; temperatureZone?: TemperatureZone | null; fresh?: boolean | null }[];
+  putawayTaskIds?: string[];
+}
+
+/** mfc-quality ReturnInspectionRequest 한 줄 — RESALE 은 상온·미개봉·신선 아님만(422 RESALE_NOT_ALLOWED) */
+export interface ReturnInspectionLine {
+  orderLineId?: string | null;
+  sku: string;
+  lotId?: string;
+  qty: number;
+  verdict: 'RESALE' | 'DISPOSE';
+  temperatureZone: TemperatureZone;
+  fresh?: boolean;
+  opened: boolean;
+  disposeReason?: 'TEMPERATURE_ZONE' | 'FRESH' | 'OPENED' | 'DAMAGED' | 'EXPIRED' | 'OTHER';
 }
 
 /** mfc-inbound InboundTaskExecution — CAPTURED·UNKNOWN_RESULT 는 같은 Idempotency-Key 로 다시 보내 확정한다 */
