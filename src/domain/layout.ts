@@ -192,7 +192,7 @@ function moveOf(x: number, z: number): { dx: number; dz: number } {
   // 냉장 B: 피킹 랙을 동쪽으로 1.8 m 더(서쪽 벽 띠 3.65 m 를 비워 격리·입고재고·보충재고를 세움 — 사용자 2026-11-21 "남쪽문을 막고있잖아. 왼쪽 벽면으로 다 옮겨")
   if (x < 23.1) return { dx: -10.4, dz: 1.8 }; // 냉장 B
   // 상온 C~H: 랙 묶음(예전 x 24.0~35.25)을 구역(x 24.2~38.0) 가운데로 — dx 1.475(사용자 2026-11-21 "상온구역 랙도 왼쪽으로 치우쳐졌잖아")
-  if (x < 37.1) return z < 15.5 ? { dx: 1.475, dz: 13.0 } : { dx: 13.6, dz: 3.0 }; // 상온 C~H / 패킹 쪽
+  if (x < 37.1) return z < 15.5 ? { dx: 1.475, dz: 13.0 } : { dx: 13.6, dz: 2.5 }; // 상온 C~H / 패킹 쪽(2026-11-22 패킹 0.5 m 북쪽, 사용자 "패킹구역도 아주 조금 북쪽으로")
   if (z < 16.6) return { dx: 1.0, dz: 5.6 }; // 상온 입고창고
   if (z < 23.1) return { dx: -11.4, dz: -16.7 }; // 입고·검수(2026-11-22 동쪽으로 1.4 m — 사용자 "입고검수 구역을 오른쪽으로 밀어서 … 북쪽통로 가는 공간을 확보해")
   return { dx: 1.0, dz: -23.2 }; // 휴게·사무
@@ -344,7 +344,7 @@ export function buildLayout(): Layout {
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: { x0: 39.4, z0: 3.55, x1: 49.0, z1: 21.1 }, docPyeong: 51 }, // 2026-11-22 남쪽 1.0 m 줄임(보충재고 쪽) — 패킹 앞 통로 1.3 → 2.3 m(사용자 "상온보충재고 평수 조금 줄여서 북쪽으로 밀고 패킹 통로 넓히자"), 9.6 × 17.55 ≈ 168.5 m²
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: { x0: 25.8, z0: 0, x1: 36.6, z1: 6.3 }, docPyeong: 22 },
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 39.4, z0: 0, x1: 49.0, z1: 3.35 }, docPyeong: 10 }, // 18평 → 약 10평, 서쪽 벽을 창고와 한 줄(x 39.3)로(사용자 2026-11-22 "서쪽에 튀어 나온 부분 없애") [가정]
-    { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 38.6, z0: 23.5, x1: 48.6, z1: 31.5 }, docPyeong: 24 },
+    { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 38.6, z0: 23.0, x1: 48.6, z1: 31.0 }, docPyeong: 24 },
     // 냉동·냉장 격리: 서쪽 벽 띠 남쪽 끝(남쪽 문 앞을 비움, 사용자 2026-11-21)
     { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 21.1, x1: 13.2, z1: 25.1 }, docPyeong: 4 },
     { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 21.1, x1: 2.3, z1: 25.1 }, docPyeong: 4 },
