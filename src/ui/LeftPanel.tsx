@@ -149,8 +149,8 @@ type OrderLog = { at: string; text: string; warn?: boolean; ask?: boolean };
 
 function RealOrderControls() {
   const { sim } = useApp();
-  // 고객은 허용 목록의 한 계정뿐(R-22 보류) — 고르지 않는다
-  const cust = REAL_ORDER.customers[0];
+  // 고객은 지점마다 허용 목록의 한 계정(1호점 PC 1 지정 고객, 2호점 목포 시험 고객) — 고르지 않는다
+  const cust = REAL_ORDER.customers.find((c) => c.mfcId === sim.params.mfcId);
   const [step, setStep] = useState<0 | 1 | 2>(0);
   const [mode, setMode] = useState<OrderModeChoice>('RANDOM');
   const [count, setCount] = useState(1);
@@ -167,7 +167,7 @@ function RealOrderControls() {
         const res = await fetch('/sim-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ customer: cust.key, mode: m, mfcId: sim.params.mfcId }),
+          body: JSON.stringify({ customer: cust!.key, mode: m, mfcId: sim.params.mfcId }),
         });
         r = (await res.json()) as RealOrderResult;
       } catch {
@@ -184,9 +184,15 @@ function RealOrderControls() {
     setBusy('');
   };
 
+  if (!cust)
+    return (
+      <Sec title="주문 넣기">
+        <div className="note">이 지점({sim.params.mfcId})의 시험 고객이 허용 목록에 없어 실제 주문을 넣을 수 없습니다.</div>
+      </Sec>
+    );
   return (
     <Sec title="주문 넣기">
-      <Act icon="＋" title="실제 주문 넣기" sub={busy || '내 계정 · 시험 결제'} primary disabled={!!busy} onClick={() => setStep(1)} />
+      <Act icon="＋" title="실제 주문 넣기" sub={busy || `${cust.label} · 시험 결제`} primary disabled={!!busy} onClick={() => setStep(1)} />
       {step === 1 && (
         <Ask title="어떤 주문을 넣을까요?" onClose={() => setStep(0)}>
           <div className="ask-l">배송 방식</div>

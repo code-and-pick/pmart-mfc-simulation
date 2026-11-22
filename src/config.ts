@@ -383,7 +383,17 @@ export const REAL_ORDER = {
       key: 'pc1',
       label: 'PC 1 지정 고객(사용자 Google 계정)',
       accountId: 'CU-eae131fa-886a-4733-9eee-86a158be281a',
+      /** 쇼핑 주소 담당 센터 — 지점마다 이 센터 고객만 고른다(서버가 다르면 MFC_MISMATCH) */
+      mfcId: 'MFC-SEED-01',
       warn: '실제 계정 — 고객 앱 주문 내역에 보이고 배송 알림이 휴대폰으로 갑니다(결제만 시험).',
+    },
+    {
+      key: 'mokpo',
+      label: '목포 시험 고객(사용자 시험용 Google 계정, 평화로83번길 16)',
+      // PC1 백엔드 2026-11-23 — 개발용 고객 토큰 허용 목록 pmart-config d88fc70, 쇼핑 센터 MFC-MOKPO-01 [확정]
+      accountId: 'CU-d58124e3-f13a-4d5f-a7ed-7c851b32160e',
+      mfcId: 'MFC-MOKPO-01',
+      warn: '시험용 Google 계정 — 고객 앱 주문 내역에 보이고 배송 알림이 그 계정으로 갑니다(결제만 시험).',
     },
     // 시험 고객 CU-fdccbd6b… 는 R-22 보류(실제 Google 계정·동의 전) — 허용 목록에 들어가면 다시 넣는다(사용자 2026-11-20 "테스트 계정 없지 않나")
   ],
