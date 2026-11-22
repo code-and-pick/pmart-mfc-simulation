@@ -339,7 +339,7 @@ export function buildLayout(): Layout {
   const zones: Zone[] = [
     { id: 'A', kind: 'FROZEN', label: '냉동 A', rect: { x0: 11.0, z0: 1.8, x1: 23.0, z1: 31.8 }, docPyeong: 109 },
     { id: 'B', kind: 'CHILLED', label: '냉장 B', rect: { x0: 0, z0: 1.8, x1: 10.8, z1: 31.8 }, docPyeong: 100 },
-    { id: 'C-H', kind: 'AMBIENT', label: '상온 C~H', rect: { x0: 24.2, z0: 13.0, x1: 38.0, z1: 28.4 }, docPyeong: 65 },
+    { id: 'C-H', kind: 'AMBIENT', label: '상온 C~H', rect: { x0: 24.2, z0: 11.7, x1: 38.0, z1: 28.4 }, docPyeong: 65 },
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: { x0: 38.2, z0: 5.6, x1: 49.0, z1: 22.1 }, docPyeong: 55 },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: { x0: 25.8, z0: 0, x1: 36.6, z1: 6.3 }, docPyeong: 22 },
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 38.2, z0: 0, x1: 49.0, z1: 5.4 }, docPyeong: 18 },
@@ -464,6 +464,22 @@ export function buildLayout(): Layout {
     const n = (perGroup.get(r.group) ?? 0) + 1;
     perGroup.set(r.group, n);
     r.rackNo = n;
+  }
+  // 상온 자리 다시(사용자 2026-11-22 "상온랙이 가로로 9개 놓여있는데 중앙을 빼고 거길 통로로 … 4개 4개 … 뺀애들은 북쪽에 가로로 진열해.
+  // 번호는 당연히 이어지게 미는 식으로" → "번호를 통째로 밀기"): 줄마다 가운데(5번째) 자리를 비워 세로 통로(폭 1.25 m), 4 | 통로 | 4.
+  // 칸 코드는 그대로 두고, 북쪽에 새 등 맞댄 2줄(북쪽 줄은 북쪽을, 남쪽 줄은 남쪽을 봄)을 더해 북쪽 줄부터 순서대로(C01-1 …) 8자리씩 밀어 채운다.
+  // 새 평면 z: 북쪽 줄 12.125·12.575(기존 1줄과 통로 1.0 m), 기존 줄 그대로. 예전 평면 z = 새 − 13.0
+  {
+    const rowsOld = [...new Map(ambient.map((r) => [r.cz.toFixed(4), { cz: r.cz, face: r.face }])).values()].sort((a, b) => a.cz - b.cz);
+    const xs = [...new Set(ambient.map((r) => +r.cx.toFixed(4)))].sort((a, b) => a - b); // 9자리
+    const keep = xs.filter((_, k) => k !== 4);
+    const rowsNew = [{ cz: 12.125 - 13.0, face: -1 as const }, { cz: 12.575 - 13.0, face: 1 as const }, ...rowsOld];
+    const slots = rowsNew.flatMap((row) => keep.map((x) => ({ x, ...row })));
+    ambient.forEach((r, i) => {
+      r.cx = slots[i].x;
+      r.cz = slots[i].cz;
+      r.face = slots[i].face;
+    });
   }
   const racks = [...frozen, ...chilled, ...ambient];
   for (const r of racks) Object.assign(r, dims(r.group[0]));
