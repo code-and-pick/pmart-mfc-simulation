@@ -122,7 +122,8 @@ function Zones({ L }: { L: Layout }) {
             >
               <planeGeometry args={[w, d]} />
               {/* 구역 바닥(사용자 2026-11-20 참고 그림 "그림처럼") — 냉동 옅은 하늘·냉장 옅은 연두, 나머지 거의 흰색. 경계는 옅은 점선. 이름은 떠 있는 둥근 이름표(ZoneNames) */}
-              <meshStandardMaterial color={ZONE_FLOOR[z.kind]} roughness={0.95} />
+              {/* 냉동·냉장 격리(AQ·BQ)는 그 방 바닥색(사용자 2026-11-22 "냉장냉동 바닥에 회색으로 칠해진 부분 각 구역이랑 같은 색으로") */}
+              <meshStandardMaterial color={z.id === 'AQ' ? ZONE_FLOOR.FROZEN : z.id === 'BQ' ? ZONE_FLOOR.CHILLED : ZONE_FLOOR[z.kind]} roughness={0.95} />
             </mesh>
             {/* 구역 경계 — 바닥 흰 실선(사용자 2026-11-20 "구역 나눠놓은게 잘 안보여. 하얀 실선으로 바닥에 확실하게") */}
             {z.kind !== 'PARKING' && <SolidRect x0={r.x0 + 0.12} z0={r.z0 + 0.12} x1={r.x1 - 0.12} z1={r.z1 - 0.12} width={z.kind === 'QUARANTINE' ? 0.1 : 0.16} />}

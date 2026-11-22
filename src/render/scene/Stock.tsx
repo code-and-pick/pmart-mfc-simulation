@@ -259,12 +259,13 @@ type Seg = [x0: number, z0: number, x1: number, z1: number];
 const LINE_W = 0.1;
 // 냉동·냉장: 서쪽 벽 띠(COLD_BAND) 하나 — 남쪽부터 격리 | 입고재고 | 보충재고, 가로 실선으로 나눔. 띠 바깥 선은 격리 선과 같은 자리(띠 끝 ± 0.12)
 // (사용자 2026-11-21 "왼쪽 벽면으로 다 옮겨 버려" → "냉장냉동에서 옮겼으면 바닥 표시도 옮겨야지")
-const coldArea = (X0: number) => {
+const coldArea = (X0: number, color?: number) => {
   const X1 = X0 + COLD_BAND.mark;
   // 북쪽부터 입고재고 | 보충재고 | 격리(격리 구역 선이 보충재고와의 경계) — 띠가 북쪽 끝으로(사용자 2026-11-21 "북쪽으로 밀어")
   const L0 = X0 + 0.12, L1 = X1 - 0.12, T = COLD_BAND.z0 + 0.12, B = COLD_BAND.z1 - 0.12, DIV = 5.3;
   return {
     floor: [X0, COLD_BAND.z0, X1, COLD_BAND.z1] as Seg,
+    color,
     lines: [[L0, T, L1, T], [L0, B, L1, B], [L0, T, L0, B], [L1, T, L1, B], [L0, DIV, L1, DIV]] as Seg[],
     texts: [
       { t: '입고재고', x: (X0 + X1) / 2, z: 4.8 }, // 띠가 좁아져(2.2 m) 카드는 세로 팔레트 2개 바로 남쪽에
@@ -273,8 +274,9 @@ const coldArea = (X0: number) => {
   };
 };
 const STORE_AREAS = [
-  coldArea(COLD_BAND.FROZEN), // 냉동 서쪽 벽 띠
-  coldArea(COLD_BAND.CHILLED), // 냉장 서쪽 벽 띠
+  // 바닥색은 그 방과 같게(사용자 2026-11-22 "냉장냉동 바닥에 회색으로 칠해진 부분 각 구역이랑 같은 색으로") — 흰 실선·카드로만 나눔
+  coldArea(COLD_BAND.FROZEN, ZONE_FLOOR.FROZEN), // 냉동 서쪽 벽 띠
+  coldArea(COLD_BAND.CHILLED, ZONE_FLOOR.CHILLED), // 냉장 서쪽 벽 띠
   {
     // 상온 입고창고: 안쪽 대형 묶음(+지게차 가로 통로) | 입고재고 | 문 쪽 보충재고. 서쪽 세로 지게차 통로 x 37.3~40.3
     // 2026-11-21 재배치: 입고창고 x +1.0, z +5.6
@@ -306,7 +308,7 @@ export function ReserveFloors() {
           <group key={k}>
             <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(fx0 + fx1) / 2, 0.0065, (fz0 + fz1) / 2]} receiveShadow raycast={() => null}>
               <planeGeometry args={[fx1 - fx0, fz1 - fz0]} />
-              <meshStandardMaterial color={ZONE_FLOOR.QUARANTINE} roughness={0.95} />
+              <meshStandardMaterial color={('color' in a && a.color) || ZONE_FLOOR.QUARANTINE} roughness={0.95} />
             </mesh>
             {a.lines.map(([x0, z0, x1, z1], i) => (
               <mesh key={i} position={[(x0 + x1) / 2, 0.013, (z0 + z1) / 2]} raycast={() => null}>
