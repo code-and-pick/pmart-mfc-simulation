@@ -1,4 +1,5 @@
 // 롤테이너 모형 — 입고·검수 장식(Decor)과 입고 작업자가 미는 짐수레(Agents)가 같이 쓴다
+import { StaticMerge } from './StaticMerge';
 
 /**
  * 롤테이너(롤 컨테이너) — 바퀴 달린 철망 짐수레 0.8×0.6×1.7 m [시뮬]. 입고 상품은 지게차가 아니라 롤테이너로 옮긴다
@@ -11,6 +12,8 @@ export function RollContainer({ x, z, rot = 0, boxes = true }: { x: number; z: n
   const frame = 0x2f6fd6; // 파랑(사용자 2026-11-21 "롤테이너 색은 파랑이야")
   return (
     <group position={[x, 0, z]} rotation={[0, rot, 0]}>
+      {/* 부품 30개는 롤테이너 안에서 서로 움직이지 않음 → 같은 재질끼리 합쳐 그림(성능 2026-11-22, 약 30 → 6 draw call). 롤테이너 전체 이동·숨김은 그대로 */}
+      <StaticMerge>
       {/* 바닥판 */}
       <mesh position={[0, 0.16, 0]} castShadow receiveShadow>
         <boxGeometry args={[W, 0.04, D]} />
@@ -65,6 +68,7 @@ export function RollContainer({ x, z, rot = 0, boxes = true }: { x: number; z: n
         <meshStandardMaterial color={0xc99a6b} roughness={0.85} />
       </mesh>
       </>}
+      </StaticMerge>
     </group>
   );
 }

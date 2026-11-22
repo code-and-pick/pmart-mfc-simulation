@@ -1,6 +1,7 @@
 // 움직이는 것들: 피킹·패킹 작업자, 입고 작업자, 라이더, 입고 차량.
 import type { VehicleType } from '../../domain/contract';
 import { RollContainer } from './RollContainer';
+import { StaticMerge } from './StaticMerge';
 import { useFrame } from '@react-three/fiber';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
@@ -123,7 +124,8 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
         {roll ? <meshBasicMaterial visible={false} /> : <meshStandardMaterial color={0x4a90d9} transparent opacity={0.8} />}
         {roll && <RollContainer x={0} z={0} boxes={false} />}
         {!roll && (
-          <>
+          // 손잡이·다리·바퀴는 카트 안에서 움직이지 않음 → 같은 재질끼리 합쳐 그림(성능 2026-11-22, 7 → 2). 카트 보임/숨김·이동은 부모(cart)가 그대로
+          <StaticMerge>
             {/* 손잡이·다리·바퀴 */}
             <mesh position={[0, 0.36, -0.36]}>
               <boxGeometry args={[0.5, 0.03, 0.03]} />
@@ -146,7 +148,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
                 <meshStandardMaterial color={0x263238} />
               </mesh>
             ))}
-          </>
+          </StaticMerge>
         )}
         {Array.from({ length: 8 }, (_, i) => {
           const gx = ((i % per) - (per - 1) / 2) * (bagSize + 0.01);
