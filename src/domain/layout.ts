@@ -182,8 +182,8 @@ export const YARD_X: readonly [number, number] = [33.75, 53.45];
 // 띠는 방 북쪽 끝(북쪽 벽 z 1.7 아래) — 사용자 2026-11-21 "입고랑보충이랑 격리재고 남쪽말고 북쪽으로 밀어". 북쪽부터 입고재고 → 보충재고 → 격리
 // 폭 3.65 → 3.0 m(사용자 2026-11-22 "…가로 길이 줄여" → 2.4 m 는 보충재고 랙 서쪽 통로 0.7 m 라 빠듯해 3.0 m 로, "응").
 // 서쪽 벽 ~ 보충재고 랙(등 맞댄 2줄 x +0.9~1.8) 통로 0.9 m, 랙 ~ 띠 끝 1.2 m, 입고재고 팔레트 ~ 피킹 랙 약 1.75 m
-// mark = 바닥 표시(판·실선)와 격리 구역의 폭 2.2 m — 사용자 2026-11-22 "팔레트 위치 그대로 두고 바닥에 실선 표시만 가로길이를 더 줄여". width(3.0)는 피킹 랙 줄이 시작하는 자리라 그대로
-export const COLD_BAND = { FROZEN: 11.0, CHILLED: 0.1, width: 3.0, mark: 2.2, z0: 1.8, z1: 25.1 } as const;
+// mark = 바닥 표시(판·실선)와 격리 구역의 폭 1.7 m(2026-11-22 2.2 → 1.7 "실선 좀 더 서쪽으로 밀어") — 사용자 2026-11-22 "팔레트 위치 그대로 두고 바닥에 실선 표시만 가로길이를 더 줄여". width(3.0)는 피킹 랙 줄이 시작하는 자리라 그대로
+export const COLD_BAND = { FROZEN: 11.0, CHILLED: 0.1, width: 3.0, mark: 1.7, z0: 1.8, z1: 25.1 } as const;
 
 /** 예전 평면 좌표 → 새 평면 좌표. 구역마다 평행 이동(모양·랙 배치는 그대로) */
 function moveOf(x: number, z: number): { dx: number; dz: number } {
@@ -346,8 +346,8 @@ export function buildLayout(): Layout {
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: { x0: 39.4, z0: 0, x1: 49.0, z1: 3.35 }, docPyeong: 10 }, // 18평 → 약 10평, 서쪽 벽을 창고와 한 줄(x 39.3)로(사용자 2026-11-22 "서쪽에 튀어 나온 부분 없애") [가정]
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: { x0: 38.6, z0: 23.0, x1: 48.6, z1: 31.0 }, docPyeong: 24 },
     // 냉동·냉장 격리: 서쪽 벽 띠 남쪽 끝(남쪽 문 앞을 비움, 사용자 2026-11-21)
-    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 21.1, x1: 13.2, z1: 25.1 }, docPyeong: 4 },
-    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 21.1, x1: 2.3, z1: 25.1 }, docPyeong: 4 },
+    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: 11.0, z0: 21.1, x1: 12.7, z1: 25.1 }, docPyeong: 4 },
+    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: 0.1, z0: 21.1, x1: 1.8, z1: 25.1 }, docPyeong: 4 },
     { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: { x0: 43.0, z0: 18.9, x1: 49.0, z1: 21.1 }, docPyeong: 4 }, // 남쪽 벽에 붙은 가로로 긴 6.0 × 2.2 m(사용자 2026-11-22 "정사각형 … 직사각형으로 늘려서 구역 자체가 벽에 가깝게") // 입고창고 안 남동쪽("상온 격리는 입고 창고 안이야")
     { id: 'SHIP', kind: 'SHIPPING', label: '외부 출하대기', rect: { x0: 40.6, z0: 34.2, x1: 46.6, z1: 36.8 }, docPyeong: 3 },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: { x0: 37.6, z0: 38.3, x1: 49.6, z1: 41.4 } },
