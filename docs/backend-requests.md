@@ -63,6 +63,7 @@
 - 참고: 지금 pc5(192.168.0.101) Keycloak·auth 무응답 — 계정 일은 살아난 뒤.
 - **진행(11-22)**: pc5 21:30 복구. 라이더 백엔드 PR #353(배송 권역 seed Z-SEED-MOKPO, 목포 시내 126.36~126.455·34.77~34.85, 남악 뺌 — 배차·라이더는 변경 없음, 목포 시험 고객·주문 설정은 PC1 로). PC 3 PR #354(deploy/lan/seed/mfc_clone_center.py locations — 1호점 칸을 같은 코드·치수·R-38 위치로, 15,529칸(R-38 r33 뒤), LAN 쓰기 없음). 센터 등록은 PC 1(center-master Seed.java) 몫 — PC1 백엔드가 센터 생긴 뒤 계정 30 + claude-mfc-sup-mk + claude-mfc-wrk 목포 권한. 순서: ① PC1 센터·계정 ② #354 병합·--apply ③ 재고. 병합은 "PR 백엔드".
 - **재고 방법(사용자 결정 11-22 "정식 입고 흐름으로")**: 개발용 초기 반입 → 수령 → 검사 → 적치로 1호점과 같은 SKU 503·수량 9,671·칸 분포. 직접 복사(위치 정정) 안 함. PC 3 에 스크립트·계획 PR 요청, 실행은 센터·계정·칸 뒤 사용자 확인.
+- **센터 주소(사용자 11-22)**: 2호점 "전라남도 목포시 상동 869", 1호점 "부산시 부산진구 동천로 109, 삼한골드게이트". LAN 은 1호점 "서면 부근"·목포 "평화광장 부근"이라 PC1 백엔드에 center-master 주소·좌표 정정과 권역 재확인을 요청함(사용자 확인 뒤).
 - **①② 끝(11-22, PC1 백엔드 be760b3d, 사용자 "이 값으로 전부 진행")**: center-master MFC-MOKPO-01 "목포 MFC" ACTIVE(목포 평화광장 부근 34.7985, 126.4334, 상온·냉장·냉동, 주문 08~24·근무 07~24 — 1호점과 같음). 계정: mfcw-mk-pp/qc/rcv-01~10(1호점과 같은 역할·공용 비밀번호 파일, 로그인 확인), claude-mfc-sup-mk(MFC_SUPERVISOR, OP-d9fbce5f-…, 비밀번호 파일 keycloak-claude-mfc-sup-mk-password — 이 PC .secrets 에 있음), claude-mfc-wrk 두 센터. pmart-config d7a133d 목포 센터별 값(retry-window·max-new-versions·pick-lead-time). 다음: ③ #354 병합 → R-38 r33 뒤 locations --apply, ④ stock 단계마다 사용자 확인. PC 3 #354 재고 = 정식 입고 흐름(초기 반입 → 수령 → 품질검사 → 적치, SKU 503·9,671개·LOT 1,298, 목포 관리자 계정으로) — 실행하는 동안 목포 가상 작업자는 끔.
 
 ### R-38 MFC 463평 + 승강기 별동 11평(474평) — 위치 14,612칸 + 대형재고 칸 2개 정리 — 높음 (2026-11-22 추가·같은 날 다시, "mfc 백엔드 4 pc3" 에 보냄)

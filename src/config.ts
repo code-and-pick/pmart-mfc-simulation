@@ -253,6 +253,8 @@ export interface MfcSite {
   id: string;
   /** 화면 이름 */
   name: string;
+  /** 센터 주소 [확정](사용자 2026-11-22) — 화면 표시용. 서버 정본은 center-master */
+  address: string;
   /** 지점 고르기 단추 글 */
   short: string;
   /** MOCK 배송지 동네(화면용) */
@@ -266,6 +268,7 @@ export const MFC_SITES: readonly MfcSite[] = [
   {
     id: 'MFC-SEED-01',
     name: '1호점 (부산)',
+    address: '부산광역시 부산진구 동천로 109, 삼한골드게이트',
     short: '1호점 부산',
     mockAreas: ['부산진구 부전동', '부산진구 전포동', '부산진구 범천동', '동래구 온천동', '연제구 연산동', '남구 대연동'],
     accountPrefix: 'mfcw-',
@@ -274,6 +277,7 @@ export const MFC_SITES: readonly MfcSite[] = [
   {
     id: 'MFC-MOKPO-01',
     name: '2호점 목포 MFC',
+    address: '전라남도 목포시 상동 869',
     short: '2호점 목포',
     mockAreas: ['목포시 상동', '목포시 하당동', '목포시 옥암동', '목포시 용해동', '목포시 산정동', '목포시 석현동'],
     accountPrefix: 'mfcw-mk-',

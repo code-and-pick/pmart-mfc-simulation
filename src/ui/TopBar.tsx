@@ -115,7 +115,7 @@ function SiteSwitch() {
   return (
     <span className="mode-sw" title="MFC 지점 — 평면·랙·상품 수는 같고 센터·계정이 다름">
       {MFC_SITES.map((s) => (
-        <button key={s.id} className={sim.params.mfcId === s.id ? 'on mock' : ''} onClick={() => go(s.id)} title={`${s.name} (${s.id})`}>
+        <button key={s.id} className={sim.params.mfcId === s.id ? 'on mock' : ''} onClick={() => go(s.id)} title={`${s.name} (${s.id}) · ${s.address}`}>
           {s.short}
         </button>
       ))}
