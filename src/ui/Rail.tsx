@@ -22,6 +22,8 @@ const LEFT: [LeftView, string, string][] = [
   ['settings', '⚙', '설정'],
   ['zone', '▣', '구역'],
   ['help', '?', '도움말'],
+  // 개발용 성능 탭 — npm run dev 에서만(운영 빌드에서는 import.meta.env.DEV 가 false 라 빠짐)
+  ...(import.meta.env.DEV ? [['perf', '◔', '성능'] as [LeftView, string, string]] : []),
 ];
 
 export function Rail() {

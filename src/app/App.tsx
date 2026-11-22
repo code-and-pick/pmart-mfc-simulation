@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { SiteScene } from '../render/scene/SiteScene';
 import { DetailCard } from '../ui/Cards';
 import { ScanZoom } from '../ui/Barcode';
@@ -9,9 +9,6 @@ import { RightPanel } from '../ui/RightPanel';
 import { ScanBubbles } from '../ui/ScanBubbles';
 import { TopBar, ViewBar } from '../ui/TopBar';
 import { AppContext, type AppCtx } from './context';
-
-// 개발용 성능 표시 — npm run dev 에서만. 운영 빌드에서는 import.meta.env.DEV 가 false 라 이 import 가 통째로 빠진다
-const PerfPanel = import.meta.env.DEV ? lazy(() => import('../dev/perf').then((m) => ({ default: m.PerfPanel }))) : null;
 
 export function App({ app }: { app: AppCtx }) {
   // 주소 ?focus=<백엔드 위치 코드> — 열자마자 그 칸(또는 자리)으로 카메라(링크 공유·화면 확인용)
@@ -50,11 +47,6 @@ export function App({ app }: { app: AppCtx }) {
         <DetailCard />
       </div>
       <ScanZoom />
-      {PerfPanel && (
-        <Suspense fallback={null}>
-          <PerfPanel />
-        </Suspense>
-      )}
     </AppContext.Provider>
   );
 }

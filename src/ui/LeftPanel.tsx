@@ -1,7 +1,7 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
 // 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
 import { workerShortName } from '../domain/workerName';
-import { useRef, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
@@ -543,6 +543,9 @@ function FollowBasket({ id }: { id: string }) {
   );
 }
 
+// 개발용 성능 탭 내용 — npm run dev 에서만 불러온다(운영 빌드에서는 이 import 가 빠짐)
+const PerfPanel = import.meta.env.DEV ? lazy(() => import('../dev/perf').then((m) => ({ default: m.PerfPanel }))) : null;
+
 export function LeftPanel() {
   const { sim } = useApp();
   const view = useView();
@@ -560,7 +563,13 @@ export function LeftPanel() {
   return (
     <div className="panel left">
       {follow && <FollowBasket id={follow} />}
-      {view.leftView === 'help' ? (
+      {view.leftView === 'perf' ? (
+        PerfPanel && (
+          <Suspense fallback={null}>
+            <PerfPanel />
+          </Suspense>
+        )
+      ) : view.leftView === 'help' ? (
         <Help />
       ) : view.leftView === 'zone' ? (
         <ZonePanel />

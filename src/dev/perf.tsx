@@ -55,7 +55,6 @@ interface Snapshot extends Omit<PerfWindow, 'topInstanced'> {
 }
 
 const SNAP_KEY = 'pmart-perf-snapshots'; // sessionStorage(토큰 아님)
-const OPEN_KEY = 'pmart-perf-open';
 
 const store = {
   last: null as PerfWindow | null,
@@ -372,17 +371,16 @@ function toMarkdown(rows: Snapshot[]): string {
 
 export function PerfPanel() {
   useSyncExternalStore(subscribe, getVer);
-  const [open, setOpen] = useState(() => sessionStorage.getItem(OPEN_KEY) !== '0');
   const [snaps, setSnaps] = useState<Snapshot[]>(loadSnaps);
   const [copied, setCopied] = useState(false);
-  useEffect(() => {
-    sessionStorage.setItem(OPEN_KEY, open ? '1' : '0');
-    if (!open) {
-      // 닫으면 시험도 끈다
+  // 왼쪽 탭을 떠나면(언마운트) 시험도 끈다
+  useEffect(
+    () => () => {
       store.tests = { dpr1: false, noShadow: false, hideGoods: false };
       store.emit();
-    }
-  }, [open]);
+    },
+    [],
+  );
   const w = store.last;
   const toggle = (k: keyof typeof store.tests) => {
     store.tests = { ...store.tests, [k]: !store.tests[k] };
@@ -409,48 +407,24 @@ export function PerfPanel() {
     }
   };
 
-  const box: CSSProperties = {
-    position: 'fixed',
-    right: 8,
-    bottom: 8,
-    zIndex: 99999,
-    font: '11px/1.35 ui-monospace, Consolas, monospace',
-    color: '#e8ecf5',
-    background: 'rgba(12,16,28,0.92)',
-    border: '1px solid #3a4560',
-    borderRadius: 8,
-    padding: open ? '8px 10px' : '3px 8px',
-    width: open ? 330 : 'auto',
-    maxHeight: '70vh',
-    overflowY: 'auto',
-    pointerEvents: 'auto',
-  };
-  const btn: CSSProperties = { font: 'inherit', background: '#24304f', color: '#e8ecf5', border: '1px solid #44528a', borderRadius: 5, padding: '1px 6px', cursor: 'pointer', marginRight: 4, marginTop: 4 };
-  const on = (b: boolean): CSSProperties => (b ? { ...btn, background: '#b7791f', borderColor: '#f6ad55' } : btn);
-  if (!open)
-    return (
-      <div style={box}>
-        <button style={btn} onClick={() => setOpen(true)} title="개발용 성능 표시 열기(npm run dev 에서만)">
-          PERF {w ? `${n0(w.fps)}fps · ${n0(w.calls)}dc` : ''}
-        </button>
-      </div>
-    );
+  // 왼쪽 패널 탭 안(사용자 2026-11-22 "팝업창이 아니라 왼쪽창에 뜨게 별도 탭으로") — 패널 색(var(--text)·var(--muted))을 따른다
+  const box: CSSProperties = { font: '11px/1.4 ui-monospace, Consolas, monospace' };
+  const btn: CSSProperties = { font: 'inherit', background: 'var(--soft)', color: 'inherit', border: '1px solid var(--line)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', marginRight: 4, marginTop: 4 };
+  const on = (b: boolean): CSSProperties => (b ? { ...btn, background: '#b7791f', borderColor: '#f6ad55', color: '#fff' } : btn);
   const v = w ? verdict(w) : null;
   const tone = { ok: '#68d391', cpu: '#f6ad55', gpu: '#fc8181', mix: '#f6e05e' };
   const row = (k: string, val: string, hint?: string) => (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }} title={hint}>
-      <span style={{ color: '#9aa6c4' }}>{k}</span>
+      <span style={{ color: 'var(--muted)' }}>{k}</span>
       <b>{val}</b>
     </div>
   );
   return (
-    <div style={box}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-        <b>개발용 성능 · {w?.mode ?? '-'} {w?.tests ? <span style={{ color: '#f6ad55' }}>[시험 {w.tests}]</span> : null}</b>
-        <button style={btn} onClick={() => setOpen(false)}>
-          닫기
-        </button>
-      </div>
+    <section className="sec" style={box}>
+      <h4>
+        개발용 성능 · {w?.mode ?? '-'}
+        {w?.tests ? <span style={{ color: '#f6ad55' }}>시험 {w.tests}</span> : null}
+      </h4>
       {!w ? (
         <div>재는 중…</div>
       ) : (
@@ -470,7 +444,7 @@ export function PerfPanel() {
           {row('JS 힙', w.heapMb === null ? '측정 불가' : `${n1(w.heapMb)} MB`)}
           {row('DPR · 캔버스 화소', `${w.dpr} · ${n1(w.canvasMpx)} MP`)}
           <div style={{ marginTop: 6, color: tone[v!.tone] }}>병목: {v!.text}</div>
-          <div style={{ marginTop: 6, color: '#9aa6c4' }}>인스턴스 많은 순 (보임/슬롯 · 삼각형)</div>
+          <div style={{ marginTop: 6, color: 'var(--muted)' }}>인스턴스 많은 순 (보임/슬롯 · 삼각형)</div>
           {w.topInstanced.map((t, i) => (
             <div key={i} style={{ display: 'flex', justifyContent: 'space-between' }}>
               <span>{t.name}</span>
@@ -480,7 +454,7 @@ export function PerfPanel() {
             </div>
           ))}
           <div style={{ marginTop: 6 }}>
-            <span style={{ color: '#9aa6c4' }}>시험(누른 동안만): </span>
+            <span style={{ color: 'var(--muted)' }}>시험(누른 동안만): </span>
             <button style={on(store.tests.dpr1)} onClick={() => toggle('dpr1')} title="화소 수를 줄여 GPU 채우기 부담 확인">
               해상도 1x
             </button>
@@ -505,7 +479,7 @@ export function PerfPanel() {
           {snaps.length > 0 && (
             <table style={{ marginTop: 6, borderCollapse: 'collapse', width: '100%' }}>
               <thead>
-                <tr style={{ color: '#9aa6c4', textAlign: 'right' }}>
+                <tr style={{ color: 'var(--muted)', textAlign: 'right' }}>
                   <th style={{ textAlign: 'left' }}>기록</th>
                   <th>FPS</th>
                   <th>프레임</th>
@@ -532,6 +506,6 @@ export function PerfPanel() {
           )}
         </>
       )}
-    </div>
+    </section>
   );
 }

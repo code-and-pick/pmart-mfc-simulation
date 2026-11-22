@@ -73,7 +73,7 @@ export type LabelMode = 'all' | 'rack' | 'off';
 export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan' | 'admin';
 /** 왼쪽 패널 화면 */
 /** 왼쪽 패널 — 설정 · 구역(구역 정보·재고, 2026-11-20 떠 있는 카드에서 옮김) · 도움말 */
-export type LeftView = 'settings' | 'zone' | 'help';
+export type LeftView = 'settings' | 'zone' | 'help' | 'perf'; // perf = 개발용 성능(npm run dev 에서만 탭이 보임)
 export type Theme = 'dark' | 'light';
 
 /** 이 브라우저에 기억하는 화면 편의 설정(테마) — 못 읽으면 기본(어둡게). 토큰·업무 값은 두지 않는다 */
