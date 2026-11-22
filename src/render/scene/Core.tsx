@@ -308,7 +308,7 @@ export function Lights() {
         intensity={1.3}
         position={[40, 60, 30]}
         castShadow
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]} // 2048 → 1024(성능, 사용자 2026-11-22 "그림자 맵 2048→1024") — 텍셀 약 4.4 → 8.8 cm
         shadow-camera-left={-45}
         shadow-camera-right={45}
         shadow-camera-top={45}

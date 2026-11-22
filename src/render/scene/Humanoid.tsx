@@ -83,7 +83,8 @@ export const Humanoid = forwardRef<HumanoidHandle, { look: HumanoidLook }>(funct
             <capsuleGeometry args={[0.075, LEG - 0.15, 3, 8]} />
             <meshStandardMaterial color={look.pants} roughness={0.8} />
           </mesh>
-          <mesh position={[0, -LEG + 0.02, 0.05]} castShadow>
+          {/* 발: 그림자 안 냄 — 다리 그림자에 거의 가려지는 크기(성능 2026-11-22, 그림자 패스 draw call −2/명) */}
+          <mesh position={[0, -LEG + 0.02, 0.05]}>
             <boxGeometry args={[0.13, 0.08, 0.26]} />
             <meshStandardMaterial color={0x2b2b2b} roughness={0.9} />
           </mesh>
@@ -95,7 +96,8 @@ export const Humanoid = forwardRef<HumanoidHandle, { look: HumanoidLook }>(funct
         <meshStandardMaterial color={look.shirt} roughness={0.7} />
       </mesh>
       {look.vest !== null && (
-        <mesh position-y={1.13} castShadow>
+        // 조끼: 그림자 안 냄 — 몸통(캡슐)과 거의 같은 자리·크기라 그림자가 겹친다(성능 2026-11-22, −1/명)
+        <mesh position-y={1.13}>
           <cylinderGeometry args={[0.215, 0.205, 0.46, 12, 1, true]} />
           <meshStandardMaterial ref={vestMat} color={look.vest} roughness={0.6} side={THREE.DoubleSide} />
         </mesh>
