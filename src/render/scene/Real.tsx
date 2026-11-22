@@ -23,6 +23,38 @@ import { dispatchText, dispatchView } from '../../sim/realBoard';
 const RING_COLOR: Partial<Record<TaskState, number>> = { IN_PROGRESS: 0x34a853, ASSIGNED: 0x4285f4, BLOCKED: 0xea4335 };
 const MAX = 128;
 
+/**
+ * 이름표를 다시 만들 때 겹침 정리(Declutter)가 정한 상태(보임/숨김 투명도·멀리서 줄인 크기)를 같은 자리 새 이름표에 이어 준다.
+ * 안 그러면 조회마다(약 3초) 새 이름표가 원래 크기·불투명으로 잠깐 나타났다가 0.25초 뒤 숨거나 줄어 깜빡였다
+ * (사용자 2026-11-22 "입고재고랑 재진열대기 카드들 계속 깜빡깜빡 거려"). key = 자리(위치 코드 등), 글이 바뀌어도(수량) 같은 자리면 이어 줌.
+ */
+function clearLabels(group: THREE.Group): Map<string, { opacity: number; base: number; k: number }> {
+  const prev = new Map<string, { opacity: number; base: number; k: number }>();
+  for (const c of [...group.children]) {
+    const s = c as THREE.Sprite;
+    const key = s.userData.labelKey as string | undefined;
+    if (key !== undefined && s.userData.baseOpacity !== undefined) {
+      const bs = s.userData.baseScale as THREE.Vector2 | undefined;
+      prev.set(key, { opacity: s.material.opacity, base: s.userData.baseOpacity as number, k: bs ? s.scale.x / bs.x : 1 });
+    }
+    s.material.map?.dispose();
+    s.material.dispose();
+    group.remove(s);
+  }
+  return prev;
+}
+function keepLabel(s: THREE.Sprite, key: string, prev: Map<string, { opacity: number; base: number; k: number }>) {
+  s.userData.labelKey = key;
+  const p = prev.get(key);
+  if (!p) return;
+  s.userData.baseOpacity = p.base;
+  s.material.opacity = p.opacity;
+  if (s.userData.shrinkFar && p.k !== 1) {
+    s.userData.baseScale = new THREE.Vector2(s.scale.x, s.scale.y);
+    s.scale.set(s.scale.x * p.k, s.scale.y * p.k, 1);
+  }
+}
+
 export function RealMarkers() {
   const { sim } = useApp();
   const rings = useRef<THREE.InstancedMesh>(null!);
@@ -72,15 +104,11 @@ export function RealMarkers() {
     const key = [...firstByTask.values()].map((p) => `${p.name}@${p.x.toFixed(1)},${p.z.toFixed(1)}`).join('|');
     if (key !== labelKey.current) {
       labelKey.current = key;
-      for (const c of [...labels.children]) {
-        const s = c as THREE.Sprite;
-        s.material.map?.dispose();
-        s.material.dispose();
-        labels.remove(s);
-      }
+      const prev = clearLabels(labels);
       for (const p of firstByTask.values()) {
         const s = makeLabel(`PDA ${p.name}`, { size: 40, bg: 'rgba(20,22,26,0.85)', screenPx: 20, prio: 3 });
         s.position.set(p.x, 2.05, p.z);
+        keepLabel(s, `PDA ${p.name}`, prev);
         labels.add(s);
       }
     }
@@ -132,18 +160,14 @@ export function RealShipLabels() {
     const key = [...byRack].map(([k, v]) => `${k}:${v.join('|')}`).join('#');
     if (key === ver.current) return;
     ver.current = key;
-    for (const c of [...labels.children]) {
-      const s = c as THREE.Sprite;
-      s.material.map?.dispose();
-      s.material.dispose();
-      labels.remove(s);
-    }
+    const prev = clearLabels(labels);
     for (const [rk, texts] of byRack) {
       const p = sim.backendPoint(rk);
       if (!p) continue;
       texts.forEach((t, i) => {
         const s = makeLabel(t, { size: 36, bg: 'rgba(26,115,232,0.9)', screenPx: 18, prio: 5 });
         s.position.set(p.x, 2.4 + i * 0.45, p.z);
+        keepLabel(s, `${rk}#${i}`, prev);
         labels.add(s);
       });
     }
@@ -399,12 +423,7 @@ export function RealStock() {
     // 클릭 판정(레이캐스트)은 경계 구를 먼저 본다 — 상자가 바뀌면 다시 계산(안 하면 처음 빈 구라 상자를 못 누름)
     m.computeBoundingSphere();
 
-    for (const c of [...labels.children]) {
-      const s = c as THREE.Sprite;
-      s.material.map?.dispose();
-      s.material.dispose();
-      labels.remove(s);
-    }
+    const prev = clearLabels(labels);
     for (const [code, g] of points) {
       // 출하대기 랙은 랙 말풍선이 포장 수·주문을 보인다 — 같은 자리에 글을 또 띄우면 랙 번호판·구역 이름과 겹친다(사용자 2026-11-20 "겹쳐진 거 그대로")
       if (code.startsWith('DSP-')) continue;
@@ -444,6 +463,7 @@ export function RealStock() {
         s.center.set(0, 0.5);
         s.position.set(g.x - 0.4, 1.8, g.z);
       } else s.position.set(g.x, (g.table ? 0.9 : 0.02) + Math.max(0.9, layers * (S + 0.01) + 0.35), g.z);
+      keepLabel(s, code, prev);
       labels.add(s);
     }
     // 빈 팔레트: 번호만 팔레트 바로 위에
@@ -464,6 +484,7 @@ export function RealStock() {
       s.userData.shrinkFar = true;
       s.userData.prio = 0;
       s.position.set(mid?.x ?? (rs.rect.x0 + rs.rect.x1) / 2, 0.22, mid?.z ?? (rs.rect.z0 + rs.rect.z1) / 2);
+      keepLabel(s, `empty:${code}`, prev);
       labels.add(s);
     }
   });
