@@ -416,26 +416,34 @@ export function ReturnTable({ x, z }: { x: number; z: number }) {
 // 구역 x 36.729~45.418 · z 0~2.663 의 가운데 x, 벽(z 0.1) 쪽. 3.6 × 0.5 m [시뮬]. PC 1대는 서쪽 끝 자리
 // 의자는 일반 의자(등받이), 그래서 상판 높이 1.05 → 0.74 m(사용자 2026-11-22 "바 테이블은 맞는데 의자는 일반 의자로")
 export const OFFICE_TABLE = { x: 41.074, z: 0.4, w: 3.6, d: 0.5, h: 0.74 };
-const BAR_SEATS = 6;
+const BAR_SEATS = 4; // 의자 4개(사용자 2026-11-22 "의자는 4개만") — 바 테이블 길이 그대로, 자리 간격 0.9 m
 function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
-  // face: 앉은 사람이 보는 방향(z). 등받이는 반대쪽
+  // 다리 4개 일반 의자(사용자 2026-11-22 "의자 다리 4개있는 걸로") — face: 앉은 사람이 보는 방향(z), 등받이는 반대쪽
   const seat = 0x2b3240;
+  const leg = 0x8a929e;
   return (
     <group position={[x, 0, z]}>
-      <mesh position={[0, 0.25, 0]}>
-        <cylinderGeometry args={[0.025, 0.025, 0.4, 8]} />
-        <meshStandardMaterial color={0x9aa3b0} metalness={0.5} roughness={0.4} />
-      </mesh>
-      <mesh position={[0, 0.04, 0]}>
-        <cylinderGeometry args={[0.24, 0.24, 0.04, 16]} />
-        <meshStandardMaterial color={0x3a4150} roughness={0.6} />
-      </mesh>
-      <mesh position={[0, 0.47, 0]} castShadow>
-        <boxGeometry args={[0.44, 0.07, 0.42]} />
+      {[-1, 1].flatMap((sx) =>
+        [-1, 1].map((sz) => (
+          <mesh key={`${sx}${sz}`} position={[sx * 0.18, 0.22, sz * 0.17]}>
+            <boxGeometry args={[0.035, 0.44, 0.035]} />
+            <meshStandardMaterial color={leg} metalness={0.4} roughness={0.45} />
+          </mesh>
+        )),
+      )}
+      <mesh position={[0, 0.465, 0]} castShadow>
+        <boxGeometry args={[0.44, 0.05, 0.42]} />
         <meshStandardMaterial color={seat} roughness={0.7} />
       </mesh>
-      <mesh position={[0, 0.78, -face * 0.2]} castShadow>
-        <boxGeometry args={[0.42, 0.52, 0.05]} />
+      {/* 등받이 기둥 2개 + 등판 */}
+      {[-1, 1].map((sx) => (
+        <mesh key={`b${sx}`} position={[sx * 0.18, 0.7, -face * 0.19]}>
+          <boxGeometry args={[0.03, 0.44, 0.03]} />
+          <meshStandardMaterial color={leg} metalness={0.4} roughness={0.45} />
+        </mesh>
+      ))}
+      <mesh position={[0, 0.8, -face * 0.19]} castShadow>
+        <boxGeometry args={[0.42, 0.3, 0.04]} />
         <meshStandardMaterial color={seat} roughness={0.7} />
       </mesh>
     </group>
@@ -462,7 +470,7 @@ export function OfficeDecor() {
           <meshStandardMaterial color={0x4a5160} roughness={0.6} />
         </mesh>
       ))}
-      {/* 일반 의자 6개: 남쪽에 한 줄(벽을 보고 혼자 앉음, 등받이는 남쪽) */}
+      {/* 다리 4개 의자 4개: 남쪽에 한 줄(벽을 보고 혼자 앉음, 등받이는 남쪽) */}
       {Array.from({ length: BAR_SEATS }, (_, k) => (
         <OfficeChair key={k} x={seatX(k)} z={T.z + T.d / 2 + 0.32} face={-1} />
       ))}
