@@ -1,5 +1,5 @@
 // 확대한 구역 요약 카드, 선택한 작업자 PDA / 로케이션 카드.
-import { isInboundAccount, workerShortName } from '../domain/workerName';
+import { isInboundAccount, workerShortName, workerRoleName } from '../domain/workerName';
 import { orderText } from './OrderNo';
 import { useEffect, type ReactNode } from 'react';
 import { useApp, useTick, useView } from '../app/context';
@@ -394,7 +394,7 @@ function DetailBody() {
   return (
     <>
       <div className="hd">
-        <b title={w.id}>{workerShortName(w.id)}</b>
+        <b title={w.id}>{workerRoleName(w.id, w.state)}</b>
         <span>
           <StateBadge color={STATE_COLOR[w.state]} text={STATE_KO[w.state]} /> {follow} {close}
         </span>

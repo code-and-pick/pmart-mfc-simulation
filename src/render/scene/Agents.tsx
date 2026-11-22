@@ -12,7 +12,7 @@ import type { InboundWorker } from '../../sim/inbound';
 import type { SiteWorker } from '../../sim/worker';
 import { INBOUND_COLOR, STATE_COLOR, VEST_INBOUND, VEST_PICKER } from '../colors';
 import { BAG_COLOR, makeLabel } from '../sprites';
-import { workerShortName, workerTagColor } from '../../domain/workerName';
+import { workerRoleName, workerShortName, workerTagColor } from '../../domain/workerName';
 import { Box } from './Facility';
 import { Humanoid, type HumanoidHandle, type HumanoidLook } from './Humanoid';
 
@@ -65,6 +65,12 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
   const bags = useRef<THREE.Mesh[]>([]);
   // 짧은 이름·역할 색(사용자 2026-11-20 "작업자들 식별값이 너무 길어서") — 전체 계정은 누르면 오른쪽 카드에
   const tag = useMemo(() => makeLabel(workerShortName(id), { size: 34, bg: kind === 'worker' ? workerTagColor(id) : 'rgba(120,60,0,0.75)', screenPx: 17, prio: 3 }), [id, kind]);
+  // 패킹 중 이름표(피킹N → 패킹N) — 피킹 점원만, 상태에 따라 둘 중 하나만 보인다(사용자 2026-11-22)
+  const packName = kind === 'worker' ? workerRoleName(id, 'PACKING') : null;
+  const tagPack = useMemo(
+    () => (packName && packName !== workerShortName(id) ? makeLabel(packName, { size: 34, bg: workerTagColor(id), screenPx: 17, prio: 3 }) : null),
+    [id, packName],
+  );
   const ud = useMemo(() => ({ personId: id, personKind: kind }), [id, kind]);
 
   useEffect(() => {
@@ -82,6 +88,11 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     group.current.rotation.y = a.heading;
     // 상태 색 = 발밑 고리(범례 색과 같음)
     ringMat.current.color.setHex(kind === 'worker' ? STATE_COLOR[(a as SiteWorker).state] : INBOUND_COLOR[(a as InboundWorker).state]);
+    if (tagPack) {
+      const packing = workerRoleName(id, a.state) !== workerShortName(id);
+      tag.visible = !packing;
+      tagPack.visible = packing;
+    }
     const s = controller.selection;
     const sel = !!s && s.kind !== 'location' && s.id === id;
     const moved = last.current ? Math.hypot(a.pos.x - last.current.x, a.pos.z - last.current.z) : 0;
@@ -169,6 +180,7 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
         })}
       </mesh>
       <primitive object={tag} position-y={1.95} />
+      {tagPack && <primitive object={tagPack} position-y={1.95} />}
     </group>
   );
 }

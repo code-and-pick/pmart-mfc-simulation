@@ -1,6 +1,6 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
 // 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
-import { workerShortName } from '../domain/workerName';
+import { workerShortName, workerRoleName } from '../domain/workerName';
 import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
@@ -512,7 +512,7 @@ function FollowBasket({ id }: { id: string }) {
   const basket = w.pda?.basket;
   const done = basket?.filter((b) => b.state === 'DONE' || b.state === 'SHORT').length ?? 0;
   return (
-    <Sec title={`${workerShortName(w.id)} 장바구니`} aside={basket ? `${done} / ${basket.length} 품목` : undefined}>
+    <Sec title={`${workerRoleName(w.id, w.state)} 장바구니`} aside={basket ? `${done} / ${basket.length} 품목` : undefined}>
       {!basket ? (
         <div className="bk-empty">{w.pda ? `${w.pda.step} — 고를 상품 목록 없음` : '지금 피킹 중인 작업이 없어요'}</div>
       ) : (

@@ -41,3 +41,15 @@ export function workerTagColor(id: string): string {
   if (isInboundAccount(id) || /^IB\d+$/.test(id)) return 'rgba(214,110,20,0.92)'; // 입고(검사·적치 한 색)
   return 'rgba(0,0,0,0.7)';
 }
+
+/** 패킹 쪽 상태(패킹대 대기·포장·출하대기 랙으로) — 이때 피킹 점원 이름을 "패킹N" 으로 */
+const PACK_STATES = new Set(['WAIT_STATION', 'PACKING', 'TO_SHIP']);
+
+/**
+ * 지금 하는 일에 맞춘 이름 — 피킹·패킹 겸업 점원(피킹N)이 패킹으로 가면 "패킹N"(사용자 2026-11-22 "피킹점원이 패킹으로 가면 피킹1 이렇게 뜨는 거 패킹1로 바뀌게 해").
+ * 번호는 그대로(같은 사람), 다른 역할(입고 등)은 workerShortName 그대로.
+ */
+export function workerRoleName(id: string, state?: string | null): string {
+  const base = workerShortName(id);
+  return state && PACK_STATES.has(state) && base.startsWith('피킹') ? `패킹${base.slice(2)}` : base;
+}

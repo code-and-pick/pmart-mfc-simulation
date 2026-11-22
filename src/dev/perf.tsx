@@ -47,7 +47,8 @@ export interface PerfWindow {
   dpr: number;
   canvasMpx: number;
   topInstanced: { name: string; slots: number; drawn: number; tris: number }[];
-  tests: string;
+  /** 잰 때의 화면 — 구역 보기·시뮬 속도(같은 조건끼리 비교) */
+  view: string;
 }
 
 interface Snapshot extends Omit<PerfWindow, 'topInstanced'> {
@@ -60,7 +61,9 @@ const store = {
   last: null as PerfWindow | null,
   history: [] as PerfWindow[],
   gpuSupported: null as boolean | null,
-  tests: { dpr1: false, noShadow: false, hideGoods: false },
+  snaps: [] as Snapshot[],
+  /** 측정 진행(10초 측정·구역 돌며 측정) — null 이면 쉬는 중 */
+  run: null as null | { text: string; stop: boolean },
   ver: 0,
   listeners: new Set<() => void>(),
   emit() {
@@ -83,11 +86,10 @@ const avg = (a: number[]) => (a.length ? a.reduce((x, y) => x + y, 0) / a.length
 
 // ── Canvas 안 측정기 ─────────────────────────────────────────
 export function PerfProbe() {
-  const { sim } = useApp();
+  const { sim, controller } = useApp();
   const gl = useThree((s) => s.gl);
   const scene = useThree((s) => s.scene);
   const camera = useThree((s) => s.camera);
-  const setDpr = useThree((s) => s.setDpr);
   const acc = useRef({
     frameStart: 0,
     lastStart: 0,
@@ -162,48 +164,6 @@ export function PerfProbe() {
     ob.observe({ entryTypes: ['longtask'] });
     return () => ob.disconnect();
   }, []);
-
-  // 시험 단추: 해상도 1x(채우기 부담 확인)·그림자 끔·상품 숨김 — 누른 동안만, 떼면(언마운트) 되돌린다
-  const base = useRef({ dpr: gl.getPixelRatio() });
-  const [, force] = useState(0);
-  useEffect(() => {
-    const off = subscribe(() => force((n) => n + 1));
-    return () => {
-      off();
-    };
-  }, []);
-  const t = store.tests;
-  useEffect(() => {
-    setDpr(t.dpr1 ? 1 : base.current.dpr);
-  }, [t.dpr1, setDpr]);
-  // 처음 붙을 때 그림자를 내던 빛만 기억해 두고, 시험 동안만 끈다
-  const shadowLights = useRef<THREE.Light[] | null>(null);
-  useEffect(() => {
-    if (!shadowLights.current) {
-      const ls: THREE.Light[] = [];
-      scene.traverse((o) => {
-        if ((o as THREE.Light).isLight && o.castShadow) ls.push(o as THREE.Light);
-      });
-      shadowLights.current = ls;
-    }
-    for (const l of shadowLights.current) l.castShadow = !t.noShadow;
-    return () => {
-      for (const l of shadowLights.current ?? []) l.castShadow = true;
-    };
-  }, [t.noShadow, scene]);
-  useEffect(() => {
-    const goods = scene.getObjectByName('goods');
-    if (goods) goods.visible = !t.hideGoods;
-    return () => {
-      if (goods) goods.visible = true;
-    };
-  }, [t.hideGoods, scene]);
-  useEffect(
-    () => () => {
-      setDpr(base.current.dpr);
-    },
-    [setDpr],
-  );
 
   // 프레임 시작(가장 먼저 도는 useFrame — 음수 우선순위는 자동 그리기를 끄지 않는다)
   useFrame(() => {
@@ -292,7 +252,7 @@ export function PerfProbe() {
       dpr: gl.getPixelRatio(),
       canvasMpx: (el.width * el.height) / 1e6,
       topInstanced: top.slice(0, 6),
-      tests: [t.dpr1 && '해상도1x', t.noShadow && '그림자끔', t.hideGoods && '상품숨김'].filter(Boolean).join('·'),
+      view: `${controller.views.find((v) => v.key === controller.focusedZone)?.label ?? controller.focusedZone} · ${sim.speed}×`,
     };
     a.frames = [];
     a.cpu = [];
@@ -335,15 +295,15 @@ function loadSnaps(): Snapshot[] {
   }
 }
 
-function snapshotOf(ws: PerfWindow[]): Snapshot | null {
-  const recent = ws.slice(-5);
+function snapshotOf(ws: PerfWindow[], n = 5, note = ''): Snapshot | null {
+  const recent = ws.slice(-n);
   if (!recent.length) return null;
   const last = recent[recent.length - 1];
   const m = (k: keyof PerfWindow) => avg(recent.map((w) => w[k] as number));
   const g = recent.filter((w) => w.gpuAvg !== null).map((w) => w.gpuAvg as number);
   return {
     ...last,
-    label: `${last.mode}${last.tests ? ` (${last.tests})` : ''}`,
+    label: `${last.mode} · ${last.view}${note ? ` · ${note}` : ''}`,
     fps: m('fps'),
     frameAvg: m('frameAvg'),
     frameP95: m('frameP95'),
@@ -354,13 +314,14 @@ function snapshotOf(ws: PerfWindow[]): Snapshot | null {
     gpuAvg: g.length ? avg(g) : null,
     calls: m('calls'),
     triangles: m('triangles'),
+    // 측정 구간(n초) 합계
     longTasks: recent.reduce((x, w) => x + w.longTasks, 0),
     longTaskMs: recent.reduce((x, w) => x + w.longTaskMs, 0),
   } as Snapshot;
 }
 
 function toMarkdown(rows: Snapshot[]): string {
-  const head = '| 기록 | 시각 | FPS | 프레임 평균/p95 ms | CPU(JS) 평균/p95 ms | 그리기명령 ms | GPU ms | Draw calls | Triangles | Geo | Tex | Mesh | Sprite | 인스턴스(보임/슬롯) | 화면밖 | 긴작업(5초) | 힙 MB | DPR · 화소 |';
+  const head = '| 기록 | 시각 | FPS | 프레임 평균/p95 ms | CPU(JS) 평균/p95 ms | 그리기명령 ms | GPU ms | Draw calls | Triangles | Geo | Tex | Mesh | Sprite | 인스턴스(보임/슬롯) | 화면밖 | 긴작업(구간 합) | 힙 MB | DPR · 화소 |';
   const sep = '|' + '---|'.repeat(18);
   const body = rows.map(
     (r) =>
@@ -369,33 +330,80 @@ function toMarkdown(rows: Snapshot[]): string {
   return [head, sep, ...body].join('\n');
 }
 
+store.snaps = loadSnaps(); // 새로고침해도 이 탭 기록 유지
+
+function saveSnaps(next: Snapshot[]) {
+  store.snaps = next.slice(-30);
+  sessionStorage.setItem(SNAP_KEY, JSON.stringify(store.snaps));
+  store.emit();
+}
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/** 최근 n초를 잰다 — 1초 묶음이 n개 새로 쌓일 때까지 기다린 뒤 그 평균을 기록 */
+async function measure(n: number, note: string): Promise<boolean> {
+  const start = store.history.length ? store.history[store.history.length - 1].at : 0;
+  for (let t = 0; t < n * 20; t++) {
+    if (store.run?.stop) return false;
+    const fresh = store.history.filter((w) => w.at > start);
+    if (fresh.length >= n) {
+      const s = snapshotOf(fresh, n, note);
+      if (s) saveSnaps([...store.snaps, s]);
+      return true;
+    }
+    await sleep(250);
+  }
+  return false;
+}
+
+/**
+ * 시험(화면·화질은 바꾸지 않음 — 카메라만 옮김, 사용자 2026-11-22 "해상도 1·그림자 끔·상품 숨김은 없어도 돼 … 다른 걸로 테스트할 거 있으면 넣어"):
+ *  - 10초 측정: 지금 화면 그대로 10초 평균을 기록(5초보다 흔들림 적음)
+ *  - 구역 돌며 측정: 구역 보기(전체·냉동·냉장·상온…)를 차례로 띄워 각 2초 쉬고 5초씩 기록 → 어느 화면에서 느린지. 끝나면 처음 보기로 돌아감
+ */
+async function runTimed(label: string, fn: () => Promise<void>) {
+  if (store.run) return;
+  store.run = { text: label, stop: false };
+  store.emit();
+  try {
+    await fn();
+  } finally {
+    store.run = null;
+    store.emit();
+  }
+}
+
+type Ctl = ReturnType<typeof useApp>['controller'];
+function sweepZones(controller: Ctl) {
+  const back = controller.focusedZone;
+  return runTimed('구역 돌며 측정', async () => {
+    for (const [i, v] of controller.views.entries()) {
+      if (store.run?.stop) break;
+      store.run!.text = `구역 돌며 측정 ${i + 1}/${controller.views.length} · ${v.label}`;
+      store.emit();
+      controller.focusZone(v.key, false);
+      if (controller.leftView !== 'perf') controller.toggleLeft('perf'); // 구역을 고르면 왼쪽이 "구역" 탭으로 가서 — 성능 탭으로 되돌림
+      await sleep(2000);
+      await measure(5, '구역 순회');
+    }
+    controller.focusZone(back, false);
+    if (controller.leftView !== 'perf') controller.toggleLeft('perf');
+  });
+}
+
 export function PerfPanel() {
   useSyncExternalStore(subscribe, getVer);
-  const [snaps, setSnaps] = useState<Snapshot[]>(loadSnaps);
+  const { controller } = useApp();
   const [copied, setCopied] = useState(false);
-  // 왼쪽 탭을 떠나면(언마운트) 시험도 끈다
-  useEffect(
-    () => () => {
-      store.tests = { dpr1: false, noShadow: false, hideGoods: false };
-      store.emit();
-    },
-    [],
-  );
+  const snaps = store.snaps;
   const w = store.last;
-  const toggle = (k: keyof typeof store.tests) => {
-    store.tests = { ...store.tests, [k]: !store.tests[k] };
-    store.emit();
-  };
   const record = () => {
     const s = snapshotOf(store.history);
-    if (!s) return;
-    const next = [...snaps, s].slice(-20);
-    setSnaps(next);
-    sessionStorage.setItem(SNAP_KEY, JSON.stringify(next));
+    if (s) saveSnaps([...store.snaps, s]);
   };
   const clear = () => {
-    setSnaps([]);
+    store.snaps = [];
     sessionStorage.removeItem(SNAP_KEY);
+    store.emit();
   };
   const copy = async () => {
     try {
@@ -410,7 +418,6 @@ export function PerfPanel() {
   // 왼쪽 패널 탭 안(사용자 2026-11-22 "팝업창이 아니라 왼쪽창에 뜨게 별도 탭으로") — 패널 색(var(--text)·var(--muted))을 따른다
   const box: CSSProperties = { font: '11px/1.4 ui-monospace, Consolas, monospace' };
   const btn: CSSProperties = { font: 'inherit', background: 'var(--soft)', color: 'inherit', border: '1px solid var(--line)', borderRadius: 5, padding: '2px 7px', cursor: 'pointer', marginRight: 4, marginTop: 4 };
-  const on = (b: boolean): CSSProperties => (b ? { ...btn, background: '#b7791f', borderColor: '#f6ad55', color: '#fff' } : btn);
   const v = w ? verdict(w) : null;
   const tone = { ok: '#68d391', cpu: '#f6ad55', gpu: '#fc8181', mix: '#f6e05e' };
   const row = (k: string, val: string, hint?: string) => (
@@ -423,7 +430,7 @@ export function PerfPanel() {
     <section className="sec" style={box}>
       <h4>
         개발용 성능 · {w?.mode ?? '-'}
-        {w?.tests ? <span style={{ color: '#f6ad55' }}>시험 {w.tests}</span> : null}
+        {w ? <span>{w.view}</span> : null}
       </h4>
       {!w ? (
         <div>재는 중…</div>
@@ -454,19 +461,32 @@ export function PerfPanel() {
             </div>
           ))}
           <div style={{ marginTop: 6 }}>
-            <span style={{ color: 'var(--muted)' }}>시험(누른 동안만): </span>
-            <button style={on(store.tests.dpr1)} onClick={() => toggle('dpr1')} title="화소 수를 줄여 GPU 채우기 부담 확인">
-              해상도 1x
-            </button>
-            <button style={on(store.tests.noShadow)} onClick={() => toggle('noShadow')} title="그림자 패스(draw call·삼각형 약 2배) 비용 확인">
-              그림자 끔
-            </button>
-            <button style={on(store.tests.hideGoods)} onClick={() => toggle('hideGoods')} title="선반 상품 InstancedMesh 비용 확인">
-              상품 숨김
-            </button>
+            <span style={{ color: 'var(--muted)' }}>시험(화면은 그대로, 카메라만): </span>
+            {store.run ? (
+              <>
+                <span style={{ color: '#f6ad55' }}>{store.run.text}…</span>
+                <button
+                  style={btn}
+                  onClick={() => {
+                    if (store.run) store.run.stop = true;
+                  }}
+                >
+                  멈춤
+                </button>
+              </>
+            ) : (
+              <>
+                <button style={btn} onClick={() => void runTimed('10초 측정', async () => void (await measure(10, '10초')))} title="지금 화면 그대로 10초 평균을 기록">
+                  10초 측정
+                </button>
+                <button style={btn} onClick={() => void sweepZones(controller)} title="구역 보기를 차례로 띄워 각 5초씩 기록 — 어느 화면이 느린지(끝나면 처음 보기로)">
+                  구역 돌며 측정
+                </button>
+              </>
+            )}
           </div>
           <div style={{ marginTop: 6 }}>
-            <button style={btn} onClick={record} title="최근 5초 평균을 이 모드(MOCK/REAL) 이름으로 남김 — 탭을 닫으면 지워짐">
+            <button style={btn} onClick={record} title="최근 5초 평균을 이 모드(MOCK/REAL)·화면 이름으로 남김 — 탭을 닫으면 지워짐">
               {w.mode} 기록
             </button>
             <button style={btn} onClick={copy} disabled={!snaps.length}>

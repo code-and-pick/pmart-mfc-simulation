@@ -4,7 +4,7 @@
 // 선택 취소("선택취소하는 기능도"): 말풍선의 ✕, Esc, 고른 주문 줄 다시 누르기, 바코드 탭 "선택 취소".
 // 순서는 PDA 앱과 같다(domain/pickStop): ① 카트 → ② 칸 위치 → ③ 상품(× 집을 양). 서버에 집품이 확정되면 다음 칸으로 걸어간다.
 // 위치는 매 프레임(requestAnimationFrame) 카메라로 바꿔 DOM 에 바로 쓴다 — React 상태로 올리지 않는다.
-import { workerShortName } from '../domain/workerName';
+import { workerShortName, workerRoleName } from '../domain/workerName';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
@@ -354,7 +354,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
   const { sim, controller } = useApp();
   const head = (t: string) => (
     <div className="sb-head">
-      {workerShortName(w.id)} · 포장 {t}
+      {workerRoleName(w.id, 'PACKING')} · 포장 {t}
       <Close />
     </div>
   );
