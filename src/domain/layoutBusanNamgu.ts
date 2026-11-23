@@ -61,7 +61,7 @@ const R = {
 /** 인계 돌출부 5.0 × 1.98 m = 3평 */
 const BUMP = { x0: 36.2, z0: BNG_BD, x1: 41.2, z1: BNG_BD + 1.98 } as const;
 /** 냉장·냉동 서쪽 벽 띠 2.4 m(입고재고 팔레트 ~ 첫 피킹 줄 약 1.3 m — 춘천에서 사용자 "너무 가까운데" 반영) */
-const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6, qz0: 22.6, qz1: 25.6, qw: 1.1 } as const;
+const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6, qz0: 17.6, qz1: 20.6, qw: 1.1 } as const; // 격리 = 보충재고 랙(z 4.6~17.1) 바로 남쪽(사용자 2026-11-24 "냉장냉동 격리구역 보충재고 옆에 있게 북쪽으로 밀어")
 /** 화물 승강기 2(입고·검수 북쪽 벽) + 별동 16평(14.7 × 3.6 m, 동쪽 하역 통로 → 입고 차량) */
 const LIFTS = [
   { x0: 24.0, x1: 27.0, door: [24.4, 26.6] as const },
