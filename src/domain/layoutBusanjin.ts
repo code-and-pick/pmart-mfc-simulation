@@ -52,19 +52,20 @@ const R = {
   RCV: { x0: X(9.2), z0: 0, x1: X(24.7), z1: 2.5 }, // 입고·검수 12평(15.5 × 2.5 = 38.75 m²) — 동쪽 끝은 냉동 동쪽 벽 줄까지(입고창고 앞 통로 안 침범, 사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
   // 냉동·냉장 동쪽도 1.0 m 줄여 입고창고 앞 통로 확보(x 24.7~26.3 = 1.6 m, 사용자 2026-11-24 "냉장냉동 동쪽 평수도 좀 줄여서 상온 입고창고 통로도 확보하자") — 방마다 18.1 × 9.9 = 54평(격리 포함)
   // 냉동·냉장 서쪽을 1.0 m 줄여 패킹 구역 확보(사용자 2026-11-24 "냉장냉동 서쪽 평수 좀 줄여서 패킹 구역 확보하자") — 방마다 19.1 × 9.9 = 57평(격리 포함)
-  A: { x0: X(6.6), z0: 2.55, x1: X(24.7), z1: 12.45 },
-  B: { x0: X(6.6), z0: 12.45, x1: X(24.7), z1: 22.35 },
+  // 냉동은 등 맞댄 3쌍이라 남쪽을 줄임(18.1 × 8.05 = 44평), 냉장은 그만큼 북쪽으로(사용자 2026-11-24 "냉동 적치랙 8 8/8 8/8 8/8 8 이거에서 10 10/10 10/8 8 이렇게 바꾸고 남쪽 평수 줄여서 냉장구역 북쪽으로 당기고, 아래 상온 구역 북쪽으로 밀어" + 64대 맞춤 답 "12 12 / 12 12 / 8 8")
+  A: { x0: X(6.6), z0: 2.55, x1: X(24.7), z1: 10.6 },
+  B: { x0: X(6.6), z0: 10.6, x1: X(24.7), z1: 20.5 },
   WH: { x0: X(26.3), z0: 0, x1: X(37), z1: 7.4 }, // 상온 입고창고 24평(10.7 × 7.4 = 79 m²) — 상온 동쪽 줄 통로를 줄여 남쪽으로 늘림, 입고재고 팔레트 5 를 안에(사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
-  CH: { x0: X(24.7), z0: 7.4, x1: X(37), z1: 22.35 }, // 상온 동쪽 세로 띠
-  CH2: { x0: X(6.6), z0: 22.35, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 가로 띠
+  CH: { x0: X(24.7), z0: 7.4, x1: X(37), z1: 20.5 }, // 상온 동쪽 세로 띠
+  CH2: { x0: X(6.6), z0: 20.5, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 가로 띠(냉장을 북쪽으로 당긴 만큼 북쪽으로)
   PK: { x0: X(0), z0: 14.85, x1: X(4.8), z1: BSJ_BD }, // 패킹 15평(4.8 × 10.45 = 50 m²) — 냉동·냉장 서쪽을 줄여 넓힘(사용자 2026-11-24 "냉장냉동 서쪽 평수 좀 줄여서 패킹 구역 확보하자")
   SHIP: { x0: X(1.6), z0: 9.0, x1: X(3.6), z1: 12.3 }, // 인계 대기 2평(2.0 × 3.3) — 그림처럼 서쪽 통로 가운데 따로 선 칸
-  CQ: { x0: X(10.3), z0: 23.0, x1: X(11.8), z1: 25.2 }, // 상온 격리 1평(1.5 × 2.2) — 그림처럼 남쪽 띠 G·H 줄 서쪽, 남쪽 벽에 붙음(북쪽 통로는 열어 둠)
+  CQ: { x0: X(10.3), z0: 21.15, x1: X(11.8), z1: 23.35 }, // 상온 격리 1평(1.5 × 2.2) — 남쪽 띠 G·H 줄 서쪽, 줄과 같이 북쪽으로
   PARK: { x0: 0.6, z0: 7.3, x1: 4.6, z1: 16.6 }, // 라이더 대기 11.3평(건물 밖 서쪽, 입고 차량 남쪽)
 } as const satisfies Record<string, Rect>;
 /** 저온 방 안: 서쪽 벽 띠(격리), 북쪽 벽 띠(보충재고 랙 7 + 입고재고 팔레트 2), 피킹 줄 시작 x */
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 피킹 줄 시작 x */
-const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(8.6) } as const;
+const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(7.1) } as const;
 
 const ZONE_PY: Record<string, number> = { B: 58, A: 58, 'C-H': 41, WH: 18, RCV: 12, PK: 12, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
@@ -107,28 +108,30 @@ export function buildBusanjinLayout(): Layout {
     const zA = z0 + COLD.bandZ;
     const a = (z1 - zA - pairs.length * 2 * RACK_DEPTH) / (pairs.length + 1);
     // 가운데 통로(x)는 모든 줄이 같은 자리, 묶음은 방 폭 가운데로
+    // 가운데 통로 자리는 가장 긴 면 기준, 짧은 면은 가운데 통로 양옆에 붙임(냉동 12 = 6 | 6, 8 = 4 | 4)
     const maxN = Math.max(...pairs.flat().map((r) => r.length));
-    const west = Math.ceil(maxN / 2);
     const blockW = maxN * RACK_LEN + 1.4;
-    const bx0 = COLD.rowX0 + (room.x1 - 0.15 - COLD.rowX0 - blockW) / 2;
-    const xAt = (i: number) => bx0 + (i < west ? (i + 0.5) * RACK_LEN : west * RACK_LEN + 1.4 + (i - west + 0.5) * RACK_LEN);
+    const gapX = COLD.rowX0 + (room.x1 - 0.15 - COLD.rowX0 - blockW) / 2 + Math.ceil(maxN / 2) * RACK_LEN;
+    const xAt = (i: number, n: number) => {
+      const w = Math.ceil(n / 2);
+      return i < w ? gapX - (w - i - 0.5) * RACK_LEN : gapX + 1.4 + (i - w + 0.5) * RACK_LEN;
+    };
     for (let k = 0; k <= pairs.length; k++) {
       const top = zA + k * (a + 2 * RACK_DEPTH);
       coldAisles[temp].push([top, top + a]);
     }
     pairs.forEach(([north, south], k) => {
       const top = zA + a + k * (a + 2 * RACK_DEPTH);
-      north.forEach((r, i) => out.push(place(r, xAt(i), top + RACK_DEPTH / 2, 'x', -1)));
-      south.forEach((r, i) => out.push(place(r, xAt(i), top + 1.5 * RACK_DEPTH, 'x', 1)));
+      north.forEach((r, i) => out.push(place(r, xAt(i, north.length), top + RACK_DEPTH / 2, 'x', -1)));
+      south.forEach((r, i) => out.push(place(r, xAt(i, south.length), top + 1.5 * RACK_DEPTH, 'x', 1)));
     });
     return out;
   };
-  // 한 면 = 옛 1호점 한 줄 코드의 이어진 번호(A01-01~08 | A01-09~16 …)
+  // 한 면 = 옛 1호점 한 줄 코드의 이어진 번호. 냉동은 면마다 12 | 12 / 12 | 12 / 8 | 8(사용자 2026-11-24 "냉동 적치랙 8 8/8 8/8 8/8 8 이거에서 10 10/10 10/8 8 이렇게 바꾸고 남쪽 평수 줄여서 냉장구역 북쪽으로 당기고, 아래 상온 구역 북쪽으로 밀어" + 64대 맞춤 답 "12 12 / 12 12 / 8 8")
   const frozen = coldRoom('FROZEN', R.A, [
-    [run('A01', 1, 8), run('A01', 9, 8)],
-    [run('A02', 1, 8), run('A02', 9, 8)],
-    [run('A03', 1, 8), run('A03', 9, 8)],
-    [run('A04', 1, 8), run('A04', 9, 8)],
+    [run('A01', 1, 12), run('A02', 1, 12)],
+    [run('A03', 1, 12), run('A04', 1, 12)],
+    [run('A05', 1, 8), run('A06', 1, 8)],
   ], resOld('FROZEN', BUSANJIN_RACKS.reserveFrozen), 'AR');
   const chilled = coldRoom('CHILLED', R.B, [
     [run('B01', 1, 10), run('B02', 1, 9)],
@@ -142,14 +145,14 @@ export function buildBusanjinLayout(): Layout {
   // 남쪽 가로 띠: 등 맞댄 한 쌍 — 북쪽 줄 G, 남쪽 줄 H(+ G 2), 서쪽 묶음 6 | (가운데 빈 곳 — 그림의 구역 이름 자리) | 동쪽 묶음 8(동쪽 벽까지).
   // 넓은 칸 랙 H01-02~06·H02-07 이 남게 H01-01~06 + H02-02~07.
   const ambient: Rack[] = [];
-  const EAST = { x0: X(26.4), z0: 7.65, z1: 21.9 } as const; // 줄 사이 통로 1.75 → 1.5 m
+  const EAST = { x0: X(26.4), z0: 7.65, z1: 20.5 } as const; // 남쪽 띠가 북쪽으로 와서 줄 사이 통로 1.3 m
   const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 1, 7), run('D03', 1, 7), run('E02', 1, 6), run('E03', 1, 6), run('F02', 1, 7), run('F03', 1, 7)];
   const pitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => {
     const cz = EAST.z0 + k * pitch + RACK_DEPTH / 2;
     row.forEach((r, i) => ambient.push(place(r, EAST.x0 + (i < 4 ? (i + 0.5) * RACK_LEN : 4 * RACK_LEN + 1.0 + (i - 3.5) * RACK_LEN), cz, 'x', 1)));
   });
-  const SOUTH_Z = 23.4;
+  const SOUTH_Z = 21.55; // 냉장 남쪽 벽(20.5)에서 통로 1.0 m
   const southSegs: [number, Rack[], Rack[]][] = [
     [X(12.6), run('G01', 1, 6), run('H01', 1, 6)],
     [X(BSJ_W) - 0.3 - 8 * RACK_LEN, run('G02', 1, 8), [...run('H02', 2, 6), ...run('G03', 1, 2)]],
