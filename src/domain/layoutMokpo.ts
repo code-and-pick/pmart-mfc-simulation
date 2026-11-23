@@ -9,11 +9,23 @@ import { RACK_LEN, SHIP_BUMP, rackLocations, type Layout, type Location } from '
 export function applyMokpo(L: Layout): Layout {
   // ── 상온 F 를 가장 남쪽으로 ─────────────────────────────
   const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
-  const slotKey = (r: { cx: number; cz: number }) => `${r.cx.toFixed(3)},${r.cz.toFixed(3)}`;
   // 자리(남쪽 줄부터, 줄 안 서쪽부터) — 각 자리는 원래 그 자리의 피킹 면을 가진다
-  const slots = amb.map((r) => ({ cx: r.cx, cz: r.cz, face: r.face })).sort((a, b) => b.cz - a.cz || a.cx - b.cx);
-  const bySlot = new Map(amb.map((r) => [slotKey(r), r]));
-  const ordered = slots.map((s) => bySlot.get(slotKey(s))!); // 원래 자리 순서(남 → 북)
+  let slots = amb.map((r) => ({ cx: r.cx, cz: r.cz, face: r.face })).sort((a, b) => b.cz - a.cz || a.cx - b.cx);
+  // 1호점 맨 남쪽 등 맞댄 쌍은 남쪽 줄이 2랙뿐이고 8랙 줄은 북쪽을 본다 → 8랙 줄을 남쪽(패킹 쪽을 봄)으로, 2랙을 북쪽 줄로 바꿔
+  // 맨 앞 F 줄 번호판이 패킹 쪽에서 보이게(사용자 2026-11-24 "맨앞줄 F랙 식별값이 북쪽에 붙어있어서 바로 앞에서 안 보여")
+  {
+    const zs = [...new Set(slots.map((s) => s.cz))].sort((a, b) => b - a);
+    const [south, north] = zs;
+    const sRow = slots.filter((s) => s.cz === south);
+    const nRow = slots.filter((s) => s.cz === north);
+    if (sRow.length < nRow.length) {
+      const sFace = sRow[0].face;
+      const nFace = nRow[0].face;
+      const swapped = [...nRow.map((s) => ({ cx: s.cx, cz: south, face: sFace })), ...sRow.map((s) => ({ cx: s.cx, cz: north, face: nFace }))];
+      slots = [...swapped, ...slots.filter((s) => s.cz !== south && s.cz !== north)].sort((a, b) => b.cz - a.cz || a.cx - b.cx);
+    }
+  }
+  const ordered = [...amb].sort((a, b) => b.cz - a.cz || a.cx - b.cx); // 원래 자리 순서(남 → 북)
   const moving = [...ordered.filter((r) => r.group[0] === 'F'), ...ordered.filter((r) => r.group[0] !== 'F')];
   moving.forEach((r, k) => Object.assign(r, { cx: slots[k].cx, cz: slots[k].cz, face: slots[k].face }));
   // 칸 다시(같은 식 — 코드·치수 그대로), 순서는 그대로 바꿔 끼움

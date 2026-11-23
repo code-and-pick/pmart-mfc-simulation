@@ -21,6 +21,11 @@ describe('목포 평면', () => {
     const f = amb.filter((r) => r.group[0] === 'F');
     const rest = amb.filter((r) => r.group[0] !== 'F');
     expect(Math.min(...f.map((r) => r.cz))).toBeGreaterThanOrEqual(Math.max(...rest.map((r) => r.cz)) - 1e-6);
+    // 맨 앞(가장 남쪽) 줄은 8랙 F 이고 남쪽(패킹 쪽)을 봄 — 번호판이 앞에서 보임
+    const frontZ = Math.max(...amb.map((r) => r.cz));
+    const front = amb.filter((r) => Math.abs(r.cz - frontZ) < 1e-6);
+    expect(front.length).toBe(8);
+    for (const r of front) expect(r.group[0] === 'F' && r.face === 1).toBe(true);
     // 나머지는 원래 남 → 북 순서 그대로(뒤로 밀림)
     const key = (r: { cx: number; cz: number }) => -r.cz * 1000 + r.cx;
     const before = seed.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT' && r.group[0] !== 'F').sort((a, b) => key(a) - key(b)).map((r) => r.id);
