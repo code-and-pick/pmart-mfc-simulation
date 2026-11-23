@@ -61,7 +61,11 @@ describe('세종 MFC 평면(R-41)', () => {
     expect(py('WH')).toBeCloseTo(51.31, 0);
     expect(py('PK')).toBeCloseTo(20.26, 0);
     expect(py('OFF')).toBeCloseTo(8.15, 0);
-    expect(py('C-H') + py('C-H2')).toBeCloseTo(80.46, -1);
+    // 상온 구역 테두리는 피킹 통로(1.6 m)·가운데 주 통로까지 감싸 표의 80.46평보다 크다 — 늘어난 몫은 예전에 빈 통로였던 바닥(2026-11-24 통로 고르게).
+    // 건물 합계(아래 539평)는 그대로. 구역 이름표·카드의 평수는 표 값(docPyeong)
+    expect(py('C-H') + py('C-H2')).toBeGreaterThan(80.46 - 1);
+    expect(py('C-H') + py('C-H2')).toBeLessThan(80.46 + 25);
+    expect(L.zones.find((z) => z.id === 'C-H')!.docPyeong).toBe(80.46);
     expect(Math.abs(py('B') - 112.9)).toBeLessThan(1.5); // 냉장 110.9 + 격리 2
     const mfc = (L.width * L.buildingDepth) / 3.3058 + 3;
     expect(Math.abs(mfc - 539)).toBeLessThan(1);
