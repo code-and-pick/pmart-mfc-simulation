@@ -113,5 +113,9 @@ describe('세종 배치 고침(2026-11-24)', () => {
     const pk = zr('PK');
     expect(pk.z0).toBeGreaterThan(ch.z1); // 패킹이 상온 구역 1 남쪽
     expect(L.geo.cartDepotVertical).toBe(true);
+    // 패킹은 서쪽 끝, 거치대·대기 작업자는 그 동쪽(패킹과 띄움), 대기 작업자는 거치대 가까이
+    expect(pk.x0).toBe(ch.x0);
+    expect(L.points.cartDepot.x).toBeGreaterThan(pk.x1 + 1.5);
+    for (const p of L.points.idle) expect(Math.hypot(p.x - L.points.cartDepot.x, p.z - L.points.cartDepot.z)).toBeLessThan(6);
   });
 });
