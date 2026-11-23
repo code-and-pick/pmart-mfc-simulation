@@ -36,6 +36,11 @@ export class StationPool {
     });
   }
 
+  /** 지금 기다리는 사람 없이 빈 패킹대가 있다 — 있으면 대기 지점에 들르지 않고 바로 간다 */
+  hasFree(): boolean {
+    return this.queue.length === 0 && this.all.some((s) => !this.busy.has(s.id));
+  }
+
   release(station: PackingStation) {
     this.busy.delete(station.id);
     this.drain();

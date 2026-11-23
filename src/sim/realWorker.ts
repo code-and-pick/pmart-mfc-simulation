@@ -483,9 +483,12 @@ export class RealWorker extends Agent {
     this.currentTarget = null;
     // 패킹 대기 지점(장바구니를 끌고 가 둔다) — PACK 은 다음 작업 받기가 이어서 준다(capacity: PICK 담당에게 PACK)
     this.state = 'WAIT_STATION';
-    this.activity = `장바구니 ${cart} 패킹 대기 지점으로`;
-    await this.walkTo(ctx.layout.points.packQueue);
-    await this.work(4);
+    // 빈 패킹대가 있으면 대기 지점에 들르지 않고 바로 패킹대로(사용자 2026-11-23 "장바구니 거치대로 갔다가 대기 자리로 갔다가 패킹하러 가는거지? 동선이 그게 맞는 건가?")
+    if (!ctx.stations.hasFree()) {
+      this.activity = `장바구니 ${cart} 패킹 대기 지점으로`;
+      await this.walkTo(ctx.layout.points.packQueue);
+      await this.work(4);
+    }
     this.hasCart = false;
     this.carrying = [];
     ctx.log(`${this.account} 피킹 완료 ${shipmentId}`);
@@ -500,7 +503,7 @@ export class RealWorker extends Agent {
     this.state = 'WAIT_STATION';
     this.pda = this.view(task, 'PACK', '패킹대 대기');
     this.activity = '패킹대 대기';
-    await this.walkTo(ctx.layout.points.packQueue);
+    if (!ctx.stations.hasFree()) await this.walkTo(ctx.layout.points.packQueue);
     /** 이번에 밀봉한 포장 — ⑤ 랙에 올릴 것 */
     const sealed: string[] = [];
     const station = await ctx.stations.acquire(this.account);

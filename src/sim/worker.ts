@@ -306,7 +306,8 @@ export class Worker extends Agent {
     this.state = 'WAIT_STATION';
     this.activity = '패킹대 대기';
     this.pda = { ...this.pda!, taskId: pack.taskId, taskType: 'PACK', step: '패킹대 대기', progress: '', location: null, nextLocation: null, productName: null, barcode: null, plannedQty: null, pickedQty: null, temp: null };
-    await this.walkTo(ctx.layout.points.packQueue);
+    // 빈 패킹대가 있으면 대기 지점에 들르지 않고 바로 패킹대로(사용자 2026-11-23 "장바구니 거치대로 갔다가 대기 자리로 갔다가 패킹하러 가는거지? 동선이 그게 맞는 건가?")
+    if (!ctx.stations.hasFree()) await this.walkTo(ctx.layout.points.packQueue);
     if (trace) trace.packQueuedAt = ctx.now();
     const station = await ctx.stations.acquire(this.id);
     this.activity = `${station.id}로 이동`;
