@@ -97,7 +97,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect(py('PK')).toBeGreaterThanOrEqual(12); // 사용자 "패킹 구역 확보" — 15평
     expect(py('WH')).toBeGreaterThanOrEqual(18); // 사용자 "입고 창고 크기 늘리고" — 24평
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').every((r) => r.rect.x0 >= zr('WH').x0 && r.rect.z1 <= zr('WH').z1)).toBe(true);
-    expect(py('A')).toBeCloseTo(60, -1);
+    expect(py('A')).toBeCloseTo(54, 0); // 사용자: 서쪽·동쪽 1 m 씩 줄임(패킹·입고창고 통로)
     expect(py('CQ')).toBeCloseTo(1, 0);
     expect(py('SHIP')).toBeCloseTo(2, 0);
   });
