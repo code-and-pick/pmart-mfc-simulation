@@ -110,8 +110,6 @@ export const BACKEND_FACTS = {
    * (백엔드 mfc-inventory 0.18.0 UnitSize.capacity·SkuSize.FILL_RATE = 0.8, 2026-11-16 6423db75). MOCK 칸 한도도 같은 식.
    */
   slotFillRate: 0.8,
-  /** E2E 시험용 고회전 칸 5개 [확정] (2026-11-09-simulator-notice-layout-bins.md, docs/simulator/mfc/layout/high-turnover.json). 그 밖의 선반은 일반 선반(임시) */
-  highTurnoverBins: ['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'],
   /**
    * 회수 반입 자리 RTN-A-01. 백엔드 알림 좌표는 입고·검수 구역 x 38.6 · z 22.0 m [확정](2026-11-09-simulator-notice-return-location.md, backend-points.json).
    * 회수품은 입고 차량이 아니라 라이더가 들고 오므로 화면 자리만 인계 구역(외부 출하대기, 인계 랙 1·2 사이 앞) x 30.0 · z 34.3 으로 [시뮬]

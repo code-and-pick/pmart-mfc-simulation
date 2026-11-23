@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import { BACKEND_FACTS } from '../src/config';
 import { SLOT_DESIGN, buildLayout } from '../src/domain/layout';
 import { SIM_POINT, buildLocationCodeMap, packDropPoint } from '../src/domain/locationCodes';
 
@@ -68,9 +67,9 @@ describe('위치 코드 대응 (SIM-6)', () => {
     expect([...mine].filter((c) => !want.has(c))).toEqual([]);
   });
 
-  it('공지의 예와 고회전 5칸이 맞는다', () => {
+  it('공지의 예와 (예전 E2E 시험) H01-01 다섯 칸 코드가 맞는다', () => {
     expect(m.toBackend('A01-01-101')).toBe('F-A1-01-1-01');
-    expect(BACKEND_FACTS.highTurnoverBins.map((c) => m.toBackend(c))).toEqual([
+    expect(['H01-01-101', 'H01-01-102', 'H01-01-103', 'H01-01-104', 'H01-01-201'].map((c) => m.toBackend(c))).toEqual([
       'A-H1-01-1-01',
       'A-H1-01-1-02',
       'A-H1-01-1-03',

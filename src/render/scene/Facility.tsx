@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
-import { BACKEND_FACTS, DECOR } from '../../config';
+import { BACKEND_FACTS, DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
 import { FREIGHT_LIFTS, LIFT_ANNEX, LIFT_Z0, PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
@@ -432,32 +432,16 @@ function ShipRack({ r, h, grey = false }: { r: { x0: number; z0: number; x1: num
 }
 
 /**
- * 고회전 칸: 백엔드 시험 센터의 E2E 시험용 고회전 5칸(H01-01 랙)을 빨간 띠로 표시한다.
- * 그 밖의 선반은 일반 선반(임시) — 근거 BACKEND_FACTS.highTurnoverBins.
+ * 상온 고회전 구역 F — 주문율 상위 20개 상온 상품을 두는 랙(MFC 2-1 "F 상온 고회전 — 카테고리 무관 인기 SKU").
+ * 사용자 2026-11-23 "고회전 시험 말고 이제 진짜 고회전 상품(주문율 높은 상품 top20)은 거기에 적치" — 예전 E2E 시험 칸 5개(H01-01) 표시는 뺐다.
+ * MOCK 은 MOCK_HIGH_TURNOVER_TOP 상품이 F 칸을 갖고, 실서버는 적치 칸 추천이 mfc-inventory 몫(backend-requests R-40).
  */
 function HighTurnover({ L }: { L: Layout }) {
-  const bins = useMemo(() => L.locations.filter((l) => (BACKEND_FACTS.highTurnoverBins as readonly string[]).includes(l.code)), [L]);
-  const rack = useMemo(() => L.racks.find((r) => r.id === bins[0]?.rackId), [L, bins]);
-  if (!rack) return null;
-  return (
-    <>
-      {bins.map((loc) => {
-        const w = loc.slotW * 0.92;
-        const [sx, sz] = loc.along === 'x' ? [w, RACK_DEPTH + 0.04] : [RACK_DEPTH + 0.04, w];
-        return (
-          <mesh key={loc.code} position={[loc.shelf.x, loc.shelf.y - 0.02, loc.shelf.z]}>
-            <boxGeometry args={[sx, 0.035, sz]} />
-            <meshStandardMaterial color={0xe53935} emissive={0x7f1010} roughness={0.5} />
-          </mesh>
-        );
-      })}
-      <Label
-        text="고회전(시험) H01-01"
-        position={[rack.cx, RACK_HEIGHT + 0.5, rack.cz]}
-        opts={{ size: 28, bg: 'rgba(160,20,20,0.75)', screenPx: 14 }}
-      />
-    </>
-  );
+  const racks = useMemo(() => L.racks.filter((r) => r.temp === 'AMBIENT' && r.group.startsWith('F')), [L]);
+  if (!racks.length) return null;
+  const cx = racks.reduce((a, r) => a + r.cx, 0) / racks.length;
+  const cz = racks.reduce((a, r) => a + r.cz, 0) / racks.length;
+  return <Label text={`고회전 F — 주문율 상위 ${MOCK_HIGH_TURNOVER_TOP}`} position={[cx, RACK_HEIGHT + 0.7, cz]} opts={{ size: 28, bg: 'rgba(160,20,20,0.75)', screenPx: 14 }} />;
 }
 
 /**
