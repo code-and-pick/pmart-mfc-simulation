@@ -63,8 +63,8 @@ const R = {
   PARK: { x0: 0.6, z0: 7.3, x1: 4.6, z1: 16.6 }, // 라이더 대기 11.3평(건물 밖 서쪽, 입고 차량 남쪽)
 } as const satisfies Record<string, Rect>;
 /** 저온 방 안: 서쪽 벽 띠(격리), 북쪽 벽 띠(보충재고 랙 7 + 입고재고 팔레트 2), 피킹 줄 시작 x */
-/** 격리는 그림처럼 서쪽 벽 북쪽(보충재고 랙 띠 바로 아래) */
-const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(8.6), q: { x0: X(6.8), w: 1.4, len: 2.8, dz: 1.4 } } as const;
+/** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 피킹 줄 시작 x */
+const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(8.6) } as const;
 
 const ZONE_PY: Record<string, number> = { B: 58, A: 58, 'C-H': 41, WH: 18, RCV: 12, PK: 12, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
@@ -220,17 +220,15 @@ export function buildBusanjinLayout(): Layout {
   // 승강기 별동: 동쪽 문(입고·검수 쪽 통로) + 남쪽 문(그림 — 서쪽 통로로 바로, 사용자 2026-11-24 "승강기에서 바로 들어올 수 있는 문이 있는데 왜 거기다가 벽을 치고 장바구니 거치대를 뒀지")
   vWall(R.ANNEX.x1, 0, R.ANNEX.z1, [[0.3, 2.3]]);
   hWall(R.ANNEX.z1, R.ANNEX.x0, R.ANNEX.x1, [[X(3.6), X(5.45)]]);
-  // 냉동·냉장: 문은 통로에 맞춤 — 냉동 북쪽(입고·검수에서), 서쪽·동쪽은 두 번째 통로
+  // 냉동·냉장: 문은 서쪽 문 하나씩만(사용자 2026-11-24 "냉동이랑 냉장 문은 오직 서쪽문 뿐이야 문 다 없애고 냉장냉동 격리랙 입고팔레트 옆으로 옮겨") — 셋째 통로(둘째·셋째 쌍 사이)에 맞춤
   const door = (c: number) => [c - 0.9, c + 0.9] as const;
-  // 서쪽·동쪽 문 = 셋째 통로(둘째·셋째 쌍 사이 — 격리·장바구니 거치대와 안 겹침)
   const fA1 = (coldAisles.FROZEN[2][0] + coldAisles.FROZEN[2][1]) / 2;
   const cA1 = (coldAisles.CHILLED[2][0] + coldAisles.CHILLED[2][1]) / 2;
-  const FROZEN_NORTH_DOOR = door(X(19.8));
-  hWall(R.A.z0, R.A.x0, R.A.x1, [FROZEN_NORTH_DOOR]);
+  hWall(R.A.z0, R.A.x0, R.A.x1);
   hWall(R.A.z1, R.A.x0, R.A.x1);
   hWall(R.B.z1, R.A.x0, R.A.x1);
   vWall(R.A.x0, R.A.z0, R.B.z1, [door(fA1), door(cA1)]);
-  vWall(R.A.x1, R.A.z0, R.B.z1, [door(fA1), door(cA1)]);
+  vWall(R.A.x1, R.A.z0, R.B.z1);
   // 입고·검수 ↔ 입고창고 문, 입고창고 남쪽 문(상온 동쪽 띠 가운데 통로)
   vWall(R.WH.x0, 0, R.WH.z1, [[0.35, 2.25]]);
   hWall(R.WH.z1, R.WH.x0, R.WH.x1, [door(EAST.x0 + 4 * RACK_LEN + 0.5)]);
@@ -260,7 +258,8 @@ export function buildBusanjinLayout(): Layout {
   for (const z of [0.6, 1.3]) for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: X(11.0) + c * 0.75, z } });
 
   // ── 구역 ─────────────────────────────────────────────
-  const q = (room: Rect) => ({ x0: COLD.q.x0, z0: room.z0 + COLD.q.dz, x1: COLD.q.x0 + COLD.q.w, z1: room.z0 + COLD.q.dz + COLD.q.len });
+  // 저온 격리 = 북쪽 벽 띠의 입고재고 팔레트 바로 동쪽, 2.8 × 1.2 m(1평)(사용자 2026-11-24 "냉동이랑 냉장 문은 오직 서쪽문 뿐이야 문 다 없애고 냉장냉동 격리랙 입고팔레트 옆으로 옮겨")
+  const q = (room: Rect) => ({ x0: palEnd(), z0: room.z0 + 0.1, x1: palEnd() + 2.8, z1: room.z0 + 0.1 + COLD.bandZ });
   const zones: Zone[] = [
     { id: 'A', kind: 'FROZEN', label: '냉동 A', rect: R.A, docPyeong: ZONE_PY.A },
     { id: 'B', kind: 'CHILLED', label: '냉장 B', rect: R.B, docPyeong: ZONE_PY.B },
@@ -344,7 +343,8 @@ export function buildBusanjinLayout(): Layout {
     quarantineRacks: {
       ...Object.fromEntries(([['AQ', R.A], ['BQ', R.B]] as const).map(([id, room]) => {
         const r = q(room);
-        return [id, [0, 1].map((i) => ({ x0: r.x0 + 0.1, z0: r.z0 + 0.1 + i * (RACK_LEN + 0.1), x1: r.x0 + 0.1 + RACK_DEPTH, z1: r.z0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN }))];
+        // 흰 랙 2 북쪽 벽에 가로로 나란히(남쪽에서 꺼냄)
+        return [id, [0, 1].map((i) => ({ x0: r.x0 + 0.1 + i * (RACK_LEN + 0.1), z0: r.z0 + 0.05, x1: r.x0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN, z1: r.z0 + 0.05 + RACK_DEPTH }))];
       })),
       // 상온 격리: 가로 2개, 남쪽 것은 남쪽 벽에 — 서로 마주 봐 가운데에서 둘 다 꺼냄
       CQ: [R.CQ.z1 - 0.1 - RACK_DEPTH, R.CQ.z0 + 0.05].map((z0) => ({ x0: R.CQ.x0 + 0.125, z0, x1: R.CQ.x0 + 0.125 + RACK_LEN, z1: z0 + RACK_DEPTH })),

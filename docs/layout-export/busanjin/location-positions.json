@@ -9256,7 +9256,7 @@
 {"locationCode":"CRT-A-38","kind":"SUPPORT","xM":7.3,"zM":6.9},
 {"locationCode":"CRT-A-39","kind":"SUPPORT","xM":7.3,"zM":6.9},
 {"locationCode":"CRT-A-40","kind":"SUPPORT","xM":7.3,"zM":6.9},
-{"locationCode":"QRT-F-01","kind":"SUPPORT","xM":12.5,"zM":5.35},
-{"locationCode":"QRT-C-01","kind":"SUPPORT","xM":12.5,"zM":15.25},
+{"locationCode":"QRT-F-01","kind":"SUPPORT","xM":25.15,"zM":3.25},
+{"locationCode":"QRT-C-01","kind":"SUPPORT","xM":25.15,"zM":13.15},
 {"locationCode":"QRT-A-01","kind":"SUPPORT","xM":16.05,"zM":24.1}
 ]
