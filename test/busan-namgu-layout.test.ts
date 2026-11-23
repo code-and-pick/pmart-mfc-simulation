@@ -56,7 +56,14 @@ describe('부산남구 MFC 평면(R-44)', () => {
     const whRacks = L.racks.filter((x) => x.reserve && x.temp === 'AMBIENT');
     const wr = L.reserves.filter((x) => x.role === 'RECEIVING' && x.temp === 'AMBIENT');
     expect(Math.min(...whRacks.map((x) => x.cz - 0.225)) - Math.max(...wr.map((x) => x.rect.z1))).toBeGreaterThan(1.8);
-    expect(zr('CQ').z0 - Math.max(...whRacks.map((x) => x.cz + 0.225))).toBeGreaterThan(1.0);
+    // 보충재고 랙 줄마다 5랙(3쌍 30) + 남는 1랙 한 줄(사용자 2026-11-24 "5 5 5 남은거")
+    const perRow = [...whRacks.reduce((m, x) => m.set(x.cz.toFixed(3), (m.get(x.cz.toFixed(3)) ?? 0) + 1), new Map<string, number>()).values()];
+    expect(perRow.sort((a, b) => b - a)).toEqual([5, 5, 5, 5, 5, 5, 1]);
+    // 3쌍 마지막 줄 ~ 상온 격리 1 m 이상(남는 1랙은 서쪽 끝이라 격리와 x 가 겹치지 않음)
+    const main = whRacks.filter((x) => perRow.length && whRacks.filter((y) => y.cz.toFixed(3) === x.cz.toFixed(3)).length === 5);
+    expect(zr('CQ').z0 - Math.max(...main.map((x) => x.cz + 0.225))).toBeGreaterThan(1.0);
+    const lone = whRacks.find((x) => whRacks.filter((y) => y.cz.toFixed(3) === x.cz.toFixed(3)).length === 1)!;
+    expect(lone.cx + 0.625).toBeLessThan(zr('CQ').x0);
     // 입고·검수 ~ 냉동 방 동쪽 벽 통로 2 m 이상(사용자 2026-11-24 "입고검수랑 냉동 사이가 좁잖아")
     expect(rcv.x0 - zr('A').x1).toBeGreaterThan(2);
     // 저온 입고재고 팔레트 ~ 첫 피킹 줄 0.8 m 이상
