@@ -38,6 +38,10 @@ describe('춘천 MFC 평면(R-42)', () => {
     for (const r of f01) expect(r.cz).toBeCloseTo(z1front, 5);
     for (const r of z1.filter((x) => Math.abs(x.cz - z1front) < 1e-6)) expect(r.group[0]).toBe('F');
     for (const r of L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && x.group !== 'F02')) expect(inZ(r, 'CDFG'.includes(r.group[0]) ? 'C-H' : 'C-H2')).toBe(true);
+    // 상온 구역 2 줄 사이 통로가 모두 같음(등 맞댄 쌍 사이 + 마지막 쌍 ~ 맨 앞 F02 줄)
+    const z2rows = [...new Set(L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && inZ(x, 'C-H2')).map((x) => +x.cz.toFixed(3)))].sort((a, b) => a - b);
+    const gaps = z2rows.slice(1).map((z, i) => +(z - z2rows[i] - 0.45).toFixed(3)).filter((g) => g > 0.01);
+    expect(new Set(gaps).size).toBe(1);
     // 상온 격리는 입고창고 동쪽 벽에 붙고, 보충재고 랙과 0.8 m 넘게 떨어짐
     const cq = zr('CQ');
     expect(cq.x1).toBeGreaterThan(zr('WH').x1 - 0.2);
