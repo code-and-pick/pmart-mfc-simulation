@@ -64,8 +64,8 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
       const q = zr(id);
       expect(r.x0 >= q.x0 - 1e-6 && r.x1 <= q.x1 + 1e-6 && r.z0 >= q.z0 - 1e-6 && r.z1 <= q.z1 + 1e-6).toBe(true);
     }
-    // 인계 창(서쪽 벽 z 11.4~12.6) 안쪽 1 m 에 장애물 없음
-    for (const o of L.obstacles) expect(o.rect.x0 < 6.0 && o.rect.z1 > 11.4 && o.rect.z0 < 12.6).toBe(false);
+    // 인계 창(서쪽 벽 z 6.95~7.95) 안쪽 1 m 에 장애물 없음
+    for (const o of L.obstacles) expect(o.rect.x0 < 6.0 && o.rect.z1 > 6.95 && o.rect.z0 < 7.95).toBe(false);
     expect(L.reserves.filter((r) => r.role === 'BULK').length).toBe(10);
     expect(L.stations.length).toBe(8);
   });
