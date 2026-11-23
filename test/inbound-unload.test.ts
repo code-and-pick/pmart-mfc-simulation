@@ -46,3 +46,24 @@ describe('입고 상자가 넘칠 때', () => {
     }
   });
 });
+
+describe('입고 차량 2대', () => {
+  it('앞뒤로 줄 서고(겹치지 않음) 맨 앞 차만 차량문에 댄다, 앞 차가 떠나면 뒤 차가 앞으로', async () => {
+    const s = new Simulation({ ...DEFAULT_PARAMS, ordersPerHour: 0, firstInboundAfterSec: 1e9 });
+    s.speed = 60;
+    const a = s.callTruck()!;
+    const b = s.callTruck()!;
+    const dockX = s.layout.points.truckDock.x;
+    const ta = s.trucks.find((t) => t.trfId === a)!;
+    const tb = s.trucks.find((t) => t.trfId === b)!;
+    let queued = false;
+    for (let i = 0; i < 400; i++) {
+      await s.advance(0.1);
+      expect(Math.abs(ta.x - tb.x) >= 7.2 - 1e-6 || ta.state === 'LEAVING' || ta.state === 'GONE').toBe(true);
+      if (ta.state !== 'APPROACHING' && tb.state === 'APPROACHING' && Math.abs(tb.x - (dockX + 7.2)) < 1e-6) queued = true;
+    }
+    expect(queued).toBe(true);
+    for (let i = 0; i < 30000 && tb.state === 'APPROACHING'; i++) await s.advance(0.1);
+    expect(tb.state).not.toBe('APPROACHING'); // 앞 차가 떠난 뒤 뒤 차가 차량문에 댐
+  }, 180_000);
+});

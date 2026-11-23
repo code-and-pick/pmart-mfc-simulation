@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { INBOUND_UNLOAD, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
+import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -715,7 +715,7 @@ export class Simulation {
     const load = { receiptId: receipts.join(', ') };
     const units = lines.reduce((a, l) => a + l.qty, 0);
     // 실서버엔 차량이 없다 — 입고가 서버에 들어가면 그림 차량이 도로에서 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아"). 수령은 서버가 이미 끝냄
-    this.trucks.push({ trfId: `입고 ${receipts[0]?.slice(-6) ?? ''}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: 80, unloaded: lines.length, scheduledAt: this.time });
+    this.trucks.push({ trfId: `입고 ${receipts[0]?.slice(-6) ?? ''}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: lines.length, scheduledAt: this.time });
     // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없어 아무도 못 받았다(사용자 2026-11-20)
     if (withVirtual) this.ensureInboundVirtual();
     return { receiptId: load.receiptId, units };
@@ -1563,7 +1563,7 @@ export class Simulation {
     const trfId = `TRF-${String(this.truckSeq).padStart(4, '0')}`;
     for (const l of lines) this.inTransit.set(l.sku, (this.inTransit.get(l.sku) ?? 0) + l.qty);
     this.mock.inboundExpect(trfId, lines);
-    this.trucks.push({ trfId, lines, state: 'APPROACHING', x: 80, unloaded: 0, scheduledAt: this.time });
+    this.trucks.push({ trfId, lines, state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time });
     this.log(`${trfId} 입고 차량 출발 — ${lines.length}품목 ${lines.reduce((a, l) => a + l.qty, 0)}개`);
     return trfId;
   }
@@ -1587,13 +1587,31 @@ export class Simulation {
     return cand.slice(0, this.params.inboundMaxLines).map(({ sku, qty }) => ({ sku, qty }));
   }
 
+  /**
+   * 입고 차량 줄(사용자 2026-11-24 "입고차량 2대면 2대가 앞 뒤로 나란히 있게 해줘"): 떠나는 차를 뺀 차들이 온 순서대로 앞뒤로 — 맨 앞은 차량문(dockX), 그 뒤는 차 한 대 길이 + 간격만큼 뒤(동쪽).
+   * 떠나는 차는 화면에서 바깥 차로로 비켜 나간다(Agents Truck)
+   */
+  /** 새 차는 도로 끝(x 80), 앞에 오는 차가 있으면 그 차 뒤에서 출발(처음부터 겹치지 않게) */
+  private truckSpawnX(): number {
+    const last = this.trucks.filter((t) => t.state !== 'LEAVING' && t.state !== 'GONE').reduce((a, t) => Math.max(a, t.x), -Infinity);
+    return Math.max(80, last + TRUCK_QUEUE_GAP);
+  }
+
+  private truckQueueX(dockX: number): Map<Truck, number> {
+    const m = new Map<Truck, number>();
+    this.trucks.filter((t) => t.state !== 'LEAVING' && t.state !== 'GONE').forEach((t, k) => m.set(t, dockX + k * TRUCK_QUEUE_GAP));
+    return m;
+  }
+
   /** 실서버 그림 입고 차량: 도로 → 입고 차량문(섬) → REAL_TRUCK.dockSec 뒤 떠남. 서버 수령과 무관한 그림 */
   private realTruckTick(dt: number) {
     const dockX = this.layout.points.truckDock.x;
+    const queue = this.truckQueueX(dockX);
     for (const t of this.trucks) {
       if (t.state === 'APPROACHING') {
-        t.x = Math.max(dockX, t.x - 7 * dt);
-        if (t.x <= dockX) {
+        const target = queue.get(t) ?? dockX;
+        t.x = Math.max(target, t.x - 7 * dt);
+        if (t.x <= dockX + 1e-6) {
           t.state = 'DOCKED';
           t.scheduledAt = this.time;
         }
@@ -1621,12 +1639,14 @@ export class Simulation {
       this.callTruck();
       this.nextTruckAt = this.time + this.params.inboundIntervalHours * 3600;
     }
-    // 차량 이동 (도로 → 입고 차량문)
+    // 차량 이동 (도로 → 입고 차량문). 여러 대면 앞뒤로 줄 서고 맨 앞 차만 댄다
     const dockX = this.layout.points.truckDock.x;
+    const queue = this.truckQueueX(dockX);
     for (const t of this.trucks) {
       if (t.state === 'APPROACHING') {
-        t.x = Math.max(dockX, t.x - 7 * dt);
-        if (t.x <= dockX) {
+        const target = queue.get(t) ?? dockX;
+        t.x = Math.max(target, t.x - 7 * dt);
+        if (t.x <= dockX + 1e-6) {
           t.state = 'DOCKED';
           this.metrics.inbound.trucksArrived += 1;
         }

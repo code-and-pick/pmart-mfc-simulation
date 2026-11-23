@@ -1,3 +1,4 @@
+import { TRUCK_PASS_LANE } from '../../config';
 // 움직이는 것들: 피킹·패킹 작업자, 입고 작업자, 라이더, 입고 차량.
 import type { VehicleType } from '../../domain/contract';
 import { RollContainer } from './RollContainer';
@@ -515,10 +516,15 @@ function Truck({ trfId }: { trfId: string }) {
   const { sim } = useApp();
   const group = useRef<THREE.Group>(null!);
   const tag = useMemo(() => makeLabel(trfId, { size: 30, bg: 'rgba(30,60,120,0.85)', screenPx: 15, prio: 2 }), [trfId]);
-  useFrame(() => {
+  useFrame((_, dt) => {
     const t = sim.trucks.find((x) => x.trfId === trfId);
-    // 뒷문(로컬 x=-3.2)이 truck.x - 3.2 에 오도록
-    if (t) group.current.position.set(t.x, 0, sim.layout.points.truckDock.z);
+    // 뒷문(로컬 x=-3.2)이 truck.x - 3.2 에 오도록. 떠나는 차는 북쪽 바깥 차로로 비켜 줄 선 차 옆을 지나감(TRUCK_PASS_LANE)
+    if (!t) return;
+    const zTo = sim.layout.points.truckDock.z - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
+    const g = group.current;
+    const z = g.userData.placed ? g.position.z + (zTo - g.position.z) * Math.min(1, dt * 2.5) : zTo;
+    g.userData.placed = true;
+    g.position.set(t.x, 0, z);
   });
   return (
     <group ref={group}>

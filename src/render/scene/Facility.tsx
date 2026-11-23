@@ -4,7 +4,7 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
-import { DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
+import { TRUCK_PASS_LANE, DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
 import { PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, depotPoint, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
@@ -72,8 +72,9 @@ function Ground({ L }: { L: Layout }) {
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
       {/* MFC 는 2층 — 북쪽 화물 승강기 별동(FreightLifts) 동쪽에 입고 차량이 대는 길(사용자 2026-11-22 "화물승강기 왼쪽이나 오른쪽에서 입고차량 들어오는 것도") */}
-      <mesh rotation={flat} position={[(LIFT_ANNEX.x1 + 90) / 2, -0.015, L.points.truckDock.z]} receiveShadow>
-        <planeGeometry args={[90 - LIFT_ANNEX.x1, 3.6]} />
+      {/* 차로 2개: 차량문 줄(줄 선 차) + 북쪽 바깥 차로(떠나는 차가 비켜 나감, 2026-11-24) */}
+      <mesh rotation={flat} position={[(LIFT_ANNEX.x1 + 90) / 2, -0.015, L.points.truckDock.z - TRUCK_PASS_LANE / 2]} receiveShadow>
+        <planeGeometry args={[90 - LIFT_ANNEX.x1, 3.6 + TRUCK_PASS_LANE]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
       {/* 승강기 별동 바닥(MFC 밖·건물 안) */}
