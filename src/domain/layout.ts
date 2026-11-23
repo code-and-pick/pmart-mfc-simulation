@@ -889,7 +889,9 @@ function compact474(o: {
   P.inboundIdle = P.inboundIdle.map((p) => c474(p.x, p.z));
   P.cartDepot = c474(P.cartDepot.x, P.cartDepot.z);
   P.idle = P.idle.map((p) => c474(p.x, p.z));
-  P.packQueue = c474(P.packQueue.x, P.packQueue.z);
+  // 패킹 대기 지점 = 패킹 구역 서쪽 입구(피킹 구역 쪽), 위·아래 패킹대 줄 사이 통로. 예전엔 c474 로 옮기다 동쪽 벽(입고창고·패킹 사이)에 가 있었다
+  // (사용자 2026-11-23 "패킹할 때 왜 동쪽 벽에 한 번 박고 장바구니 거치대로 갔다가 패킹하러 가는거지?") [시뮬]
+  P.packQueue = { x: R.PK.x0 + 0.5, z: (R.PK.z0 + R.PK.z1) / 2 };
   P.shipDrop = { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: BD2 - 0.4 }; // 출하문 안쪽(포장 봉투를 인계 랙으로)
   P.riderPickup = { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: SHIP_BUMP.z1 + 0.55 }; // 인계 창 밖
   P.riderParking = P.riderParking.map((p) => c474(p.x, p.z));
