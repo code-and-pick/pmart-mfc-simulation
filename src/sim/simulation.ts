@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
+import { INBOUND_UNLOAD, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -1741,7 +1741,7 @@ export class Simulation {
     {
       const spots = this.layout.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === it.temp);
       const k = this.dockItems.filter((d) => d.temp === it.temp && d.stand).length;
-      if (spots.length && k < spots.length * 4) {
+      if (spots.length && k < spots.length * 4 * INBOUND_UNLOAD.palletLayers) {
         const rs = spots[k % spots.length];
         const j = Math.floor(k / spots.length) % 4; // 팔레트 하나에 2×2
         it.floorPos = { x: (rs.rect.x0 + rs.rect.x1) / 2 + (j % 2 ? 0.25 : -0.25), z: (rs.rect.z0 + rs.rect.z1) / 2 + (j < 2 ? -0.25 : 0.25) };
@@ -1755,7 +1755,10 @@ export class Simulation {
       this.dockUsed.add(slot.id);
       it.slot = slot;
     } else {
-      it.floorPos = { x: 35.878 + (this.dockItems.length % 6) * 0.5, z: 21.6 }; // 2026-11-22 463평 맞춤
+      // 하차 칸이 다 차면 하차 칸 위로 쌓는다(높이는 화면이 같은 자리 상자 수로) — 전엔 1호점 패킹 구역 바닥 좌표에 놓음(사용자 2026-11-24 "입고 검수에 상자들 다 차면 위로 쌓아올려야지 그걸 왜 패킹구역에 갖다놔?")
+      const slots = this.layout.dockSlots;
+      const n = this.dockItems.filter((d) => !d.slot && !d.stand).length;
+      it.floorPos = slots.length ? { ...slots[n % slots.length].pos } : { ...this.layout.points.truckDoor };
     }
     this.dockItems.push(it);
   }

@@ -28,3 +28,21 @@ describe('입고 하차 — 롤테이너 단위', () => {
     expect(lifts.size).toBe(Math.max(0, Math.ceil(rolls.size / INBOUND_UNLOAD.rollsPerLift) - 1));
   }, 120_000);
 });
+
+describe('입고 상자가 넘칠 때', () => {
+  it('입고재고 팔레트·하차 칸이 다 차도 그 자리 위로 쌓고 다른 구역(패킹)으로 안 감', () => {
+    for (const mfcId of ['MFC-SEED-01', 'MFC-SEJ-01', 'MFC-CHC-01', 'MFC-BNG-01']) {
+      const s = new Simulation({ ...DEFAULT_PARAMS, mfcId, ordersPerHour: 0, firstInboundAfterSec: 1e9 });
+      const place = (s as unknown as { placeOnDock(it: unknown): void }).placeOnDock.bind(s);
+      const ok = new Set(s.layout.dockSlots.map((d) => `${d.pos.x.toFixed(2)},${d.pos.z.toFixed(2)}`));
+      for (let i = 0; i < 300; i++) {
+        const temp = (['AMBIENT', 'CHILLED', 'FROZEN'] as const)[i % 3];
+        const it = { id: `T-${i}`, trfId: 'T', sku: 'X', qty: 1, temp, slot: null, floorPos: { x: 0, z: 0 }, state: 'ON_DOCK' as const } as { slot: { pos: { x: number; z: number } } | null; floorPos: { x: number; z: number }; stand?: unknown; temp: string };
+        place(it);
+        const p = it.slot?.pos ?? it.floorPos;
+        const onPallet = s.layout.reserves.some((r) => r.role === 'RECEIVING' && r.temp === temp && p.x >= r.rect.x0 && p.x <= r.rect.x1 && p.z >= r.rect.z0 && p.z <= r.rect.z1);
+        expect(onPallet || ok.has(`${p.x.toFixed(2)},${p.z.toFixed(2)}`)).toBe(true);
+      }
+    }
+  });
+});

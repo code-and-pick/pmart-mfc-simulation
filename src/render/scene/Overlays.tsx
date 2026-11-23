@@ -18,13 +18,18 @@ export function Dock() {
     const mtx = new THREE.Matrix4();
     const col = new THREE.Color();
     let n = 0;
+    // 같은 자리 상자는 위로 쌓아 그림(사용자 2026-11-24 "다 차면 위로 쌓아올려야지")
+    const height = new Map<string, number>();
     for (const it of sim.dockItems) {
-      if (it.state === 'TAKEN' || n >= 96) continue;
+      if (it.state === 'TAKEN' || n >= 256) continue;
       const p = it.slot?.pos ?? it.floorPos;
+      const key = `${p.x.toFixed(2)},${p.z.toFixed(2)}`;
+      const lv = height.get(key) ?? 0;
+      height.set(key, lv + 1);
       // 입고재고 팔레트(2×2) 위는 작은 상자로 — 롤테이너 크기면 서로 겹친다
       const small = !it.slot && !!it.stand;
-      if (small) mtx.compose(new THREE.Vector3(p.x, 0.14 + 0.21, p.z), new THREE.Quaternion(), new THREE.Vector3(0.7, 0.4, 0.75));
-      else mtx.makeTranslation(p.x, 0.53, p.z);
+      if (small) mtx.compose(new THREE.Vector3(p.x, 0.14 + 0.21 + lv * 0.42, p.z), new THREE.Quaternion(), new THREE.Vector3(0.7, 0.4, 0.75));
+      else mtx.makeTranslation(p.x, 0.53 + lv * 1.07, p.z);
       m.setMatrixAt(n, mtx);
       // 입고 상자 색 = 선반 상자와 같은 구역 바닥색(zoneBoxColor: 냉동 하늘·냉장 연두·상온 흰색, 사용자 2026-11-22 "입고재고 상품 색들이 왜 저래 각 구역 바닥색으로 하기로 했잖아").
       // 전엔 골판지 빛깔(BOX_TINT)에 검수 전은 더 옅게 해서 구역색과 달라 보였다
@@ -37,7 +42,7 @@ export function Dock() {
     if (m.instanceColor) m.instanceColor.needsUpdate = true;
   });
   return (
-    <instancedMesh name="dock-boxes" ref={mesh} args={[undefined, undefined, 96]} count={0} castShadow frustumCulled={false}>
+    <instancedMesh name="dock-boxes" ref={mesh} args={[undefined, undefined, 256]} count={0} castShadow frustumCulled={false}>
       <boxGeometry args={[0.62, 1.05, 0.6]} />
       <meshStandardMaterial roughness={0.7} map={boxTexture()} />
     </instancedMesh>

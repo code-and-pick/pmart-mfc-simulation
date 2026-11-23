@@ -491,6 +491,8 @@ export const INBOUND_UNLOAD = {
   liftCycleSec: 90,
   /** 승강기에서 롤테이너 빼기(초) [시뮬] */
   takeRollSec: 4,
+  /** 입고재고 팔레트(2×2) 위로 쌓는 단 — 넘으면 입고·검수 하차 칸, 그것도 차면 하차 칸 위로 쌓음 [시뮬] */
+  palletLayers: 3,
   /** 입고재고 자리에 품목 하나 내리기(초) [시뮬] */
   dropLineSec: 2,
 };
