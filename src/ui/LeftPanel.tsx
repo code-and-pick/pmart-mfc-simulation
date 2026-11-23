@@ -136,7 +136,8 @@ function InboundControls() {
         title="회수품 반납 지금 부르기"
         sub={`반납 대기 ${ibb.returns.waiting} · 검수 대기 ${ibb.returns.inspecting} · 격리 ${ibb.returns.quarantined} — 정상은 선반, 폐기는 온도대 격리 구역`}
         onClick={() => {
-          if (sim.callReturn()) controller.focusZone('RCV');
+          // 회수품은 라이더가 들고 와 인계 창 밖 회수반입 자리(RTN-A-01)에 놓는다 → 출하대기·라이더 앞마당 쪽을 본다(사용자 2026-11-23 "왜 승강기 쪽으로 가는 거야? 이건 라이더가 들고 오는건데")
+          if (sim.callReturn()) controller.focusZone('SHIP');
         }}
       />
     </Sec>
