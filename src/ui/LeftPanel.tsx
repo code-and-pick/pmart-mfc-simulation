@@ -100,7 +100,7 @@ function OutboundControls() {
     <Sec title="출고">
       <Slider name="시간당 주문" initial={p.ordersPerHour} min={5} max={120} step={1} hint="기준안 피크 약 40건/시간, 낙관안 88건 (MFC 7-1 가정)" apply={(v) => (sim.params.ordersPerHour = v)} />
       <Slider name="작업자" initial={p.workers} min={1} max={24} step={1} hint="피킹·패킹 작업자. 기준안 약 10명, 낙관안 약 22명 (MFC 7-2 가정)" apply={(v) => sim.setWorkers(v)} />
-      <Slider name="패킹대" initial={p.packingStations} min={1} max={8} step={1} hint="가동 패킹대. 기본 4대 · 최대 8대 (MFC 11장). 다 차면 나머지 패킹대도 씀" apply={(v) => sim.setStations(v)} />
+      <Slider name="패킹대" initial={p.packingStations} min={1} max={sim.layout.stations.length} step={1} hint={`가동 패킹대. 기본 4대 · 최대 ${sim.layout.stations.length}대(지점 평면 — 1호점 8, 세종 10). 다 차면 나머지 패킹대도 씀`} apply={(v) => sim.setStations(v)} />
       <Slider name="결품률" unit="%" initial={p.shortageRate * 100} min={0} max={10} step={0.5} hint="피킹 때 선반 실물 부족을 보고할 확률 (시뮬 값)" apply={(v) => (sim.params.shortageRate = v / 100)} />
       <div className="srow">
         <span className="srow-l">피킹 순서</span>

@@ -58,7 +58,7 @@ describe('세종 MFC 평면(R-41)', () => {
       return ((r.x1 - r.x0) * (r.z1 - r.z0)) / 3.3058;
     };
     expect(py('RCV')).toBeCloseTo(24.27, 0);
-    expect(py('WH')).toBeCloseTo(51.31, 0);
+    expect(py('WH') + py('WH2')).toBeCloseTo(51.31, 0); // ㄱ자(동쪽 다리 + 북쪽 띠)
     expect(py('PK')).toBeCloseTo(20.26, 0);
     expect(py('OFF')).toBeCloseTo(8.15, 0);
     // 상온 구역 테두리는 피킹 통로(1.6 m)·가운데 주 통로까지 감싸 표의 80.46평보다 크다 — 늘어난 몫은 예전에 빈 통로였던 바닥(2026-11-24 통로 고르게).
@@ -78,7 +78,7 @@ describe('세종 MFC 평면(R-41)', () => {
     expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
     expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(16935);
     expect(reserveCells.length).toBe(1050);
-    expect(positions.some((p) => p.locationCode === 'PAK-A-08')).toBe(true); // 패킹대 8(4 | 4, 2026-11-24)
+    expect(positions.some((p) => p.locationCode === 'PAK-A-10')).toBe(true); // 패킹대 10(5 | 5, 2026-11-24)
     if (env.WRITE_LAYOUT === '1') {
       const out = new URL('../docs/layout-export/sejong/', import.meta.url);
       fs.writeFileSync(new URL('location-positions.json', out), '[\n' + positions.map((p) => JSON.stringify(p)).join(',\n') + '\n]\n');
@@ -114,7 +114,7 @@ describe('세종 배치 고침(2026-11-24)', () => {
       const hz = r.along === 'x' ? 0.225 : 0.625;
       expect(r.cx + hx <= cq.x0 || r.cx - hx >= cq.x1 || r.cz + hz <= cq.z0 || r.cz - hz >= cq.z1).toBe(true);
     }
-    expect(L.stations.length).toBe(8);
+    expect(L.stations.length).toBe(10); // 5 | 5(2026-11-24)
     expect(new Set(L.stations.map((s) => s.table.z.toFixed(2))).size).toBe(2);
     const pk = zr('PK');
     expect(pk.z0).toBeGreaterThan(ch.z1); // 패킹이 상온 구역 1 남쪽
@@ -123,12 +123,23 @@ describe('세종 배치 고침(2026-11-24)', () => {
     expect(pk.x0).toBe(ch.x0);
     expect(L.points.cartDepot.x).toBeGreaterThan(pk.x1 + 1.5);
     for (const p of L.points.idle) expect(Math.hypot(p.x - L.points.cartDepot.x, p.z - L.points.cartDepot.z)).toBeLessThan(6);
-    // 입고창고: 대형재고(맨 안쪽 북쪽) → 입고재고 → 보충재고 랙(문 쪽)
-    const bulkZ = Math.max(...L.reserves.filter((r) => r.role === 'BULK').map((r) => r.rect.z1));
+    // 입고창고(ㄱ자): 입고재고는 입고·검수 동쪽 문 앞, 대형재고는 그 문에서 가장 먼 곳(맨 안쪽), 보충재고 랙은 둘보다 남쪽
+    const door = { x: zr('RCV').x1, z: 4.1 };
+    const dist = (rs: typeof L.reserves) => Math.min(...rs.map((r) => Math.hypot((r.rect.x0 + r.rect.x1) / 2 - door.x, (r.rect.z0 + r.rect.z1) / 2 - door.z)));
+    const bulk = L.reserves.filter((r) => r.role === 'BULK');
     const wr = L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT');
-    const rackZ = Math.min(...L.racks.filter((r) => r.reserve && r.temp === 'AMBIENT').map((r) => r.cz));
-    expect(bulkZ).toBeLessThan(Math.min(...wr.map((r) => r.rect.z0)));
-    expect(Math.max(...wr.map((r) => r.rect.z1))).toBeLessThan(rackZ);
+    expect(dist(bulk)).toBeGreaterThan(dist(wr) + 5);
+    const resRacks = L.racks.filter((r) => r.reserve && r.temp === 'AMBIENT');
+    expect(Math.max(...[...bulk, ...wr].map((r) => r.rect.z1))).toBeLessThan(Math.min(...resRacks.map((r) => r.cz - 0.625)));
+    // 보충재고 랙 세로 3쌍(6줄 × 7), 상온 구역 2 줄 5·5·5·5·4(남쪽부터 4·4·5·5…, 마지막 한 자리 빔)
+    expect(new Set(resRacks.map((r) => r.cx.toFixed(3))).size).toBe(6);
+    const z2 = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT' && (r.group[0] === 'E' || r.group[0] === 'H'));
+    const perRow = [...z2.reduce((m, r) => m.set(r.cz.toFixed(3), (m.get(r.cz.toFixed(3)) ?? 0) + 1), new Map<string, number>()).entries()].sort((a, b) => +a[0] - +b[0]).map(([, c]) => c);
+    expect(perRow.reduce((a, b) => a + b, 0)).toBe(47);
+    expect(Math.max(...perRow)).toBe(5);
+    expect(perRow.length).toBe(10);
+    // 사무·휴게 8.15평 유지
+    expect(((zr('OFF').x1 - zr('OFF').x0) * (zr('OFF').z1 - zr('OFF').z0)) / 3.3058).toBeCloseTo(8.15, 1);
     // 카트 줄 북쪽 끝 = 패킹 북쪽 선, 되돌릴 상품 탁자는 카트 남쪽
     expect(L.points.cartDepot.z - 0.7 - 0.24).toBeCloseTo(pk.z0, 5);
     expect(L.geo.returnTable!.z).toBeGreaterThan(L.points.cartDepot.z);
