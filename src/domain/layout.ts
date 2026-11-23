@@ -168,6 +168,8 @@ export interface SiteGeo {
   liftDoorZ?: number;
   /** 입고 차량이 남북 세로 차로로(이 x) 북쪽에서 내려와 선다 — 부산진구(그림: 차량이 승강기 별동 서쪽). 없으면 북쪽 동서 길 */
   truckLaneX?: number;
+  /** 구역 카드 가운데 x 를 구역마다 바꿈(부산진구 입고·검수 — 냉동 카드와 겹치지 않게) */
+  zoneCardX?: Record<string, number>;
   /** 건물 바닥 시작 x(기본 0) — 부산진구는 서쪽 밖 라이더 마당 때문에 건물이 동쪽으로 밀림 */
   floorX0?: number;
   /** 건물 밖 마당(라이더 대기 등) 바닥 — 남쪽 앞마당(yardX) 말고 더 */

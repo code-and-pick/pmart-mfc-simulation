@@ -49,11 +49,11 @@ export const BUSANJIN_RACKS = { B: 76, A: 64, C: 14, D: 14, E: 12, F: 14, G: 16,
 const X = (x: number) => OX + x;
 const R = {
   ANNEX: { x0: X(0), z0: 0, x1: X(5.6), z1: 5.9 }, // 승강기 별동 10평(MFC 밖)
-  RCV: { x0: X(10.1), z0: 0, x1: X(26.3), z1: 2.5 }, // 입고·검수 12평(16.2 × 2.5 = 40.5 m²)
+  RCV: { x0: X(10.1), z0: 0, x1: X(25.7), z1: 2.5 }, // 입고·검수 12평(15.6 × 2.5 = 39 m²) — 동쪽 끝은 냉동 동쪽 벽 줄까지(입고창고 앞 통로 안 침범, 사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
   A: { x0: X(5.6), z0: 2.55, x1: X(25.7), z1: 12.45 }, // 냉동 58평 + 격리
   B: { x0: X(5.6), z0: 12.45, x1: X(25.7), z1: 22.35 }, // 냉장 58평 + 격리
-  WH: { x0: X(26.3), z0: 0, x1: X(37), z1: 5.8 }, // 상온 입고창고 18평(10.7 × 5.8 = 62 m²)
-  CH: { x0: X(25.7), z0: 5.8, x1: X(37), z1: 22.35 }, // 상온 동쪽 세로 띠
+  WH: { x0: X(26.3), z0: 0, x1: X(37), z1: 7.4 }, // 상온 입고창고 24평(10.7 × 7.4 = 79 m²) — 상온 동쪽 줄 통로를 줄여 남쪽으로 늘림, 입고재고 팔레트 5 를 안에(사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
+  CH: { x0: X(25.7), z0: 7.4, x1: X(37), z1: 22.35 }, // 상온 동쪽 세로 띠
   CH2: { x0: X(5.6), z0: 22.35, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 가로 띠
   PK: { x0: X(0), z0: 14.85, x1: X(3.8), z1: BSJ_BD }, // 패킹 12평(3.8 × 10.45 = 39.7 m²) — 패킹대 2줄이 구역 안에
   SHIP: { x0: X(1.6), z0: 9.0, x1: X(3.6), z1: 12.3 }, // 인계 대기 2평(2.0 × 3.3) — 그림처럼 서쪽 통로 가운데 따로 선 칸
@@ -140,7 +140,7 @@ export function buildBusanjinLayout(): Layout {
   // 남쪽 가로 띠: 등 맞댄 한 쌍 — 북쪽 줄 G, 남쪽 줄 H(+ G 2), 서쪽 묶음 6 | (가운데 빈 곳 — 그림의 구역 이름 자리) | 동쪽 묶음 8(동쪽 벽까지).
   // 넓은 칸 랙 H01-02~06·H02-07 이 남게 H01-01~06 + H02-02~07.
   const ambient: Rack[] = [];
-  const EAST = { x0: X(26.4), z0: 6.05, z1: 21.9 } as const;
+  const EAST = { x0: X(26.4), z0: 7.65, z1: 21.9 } as const; // 줄 사이 통로 1.75 → 1.5 m
   const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 1, 7), run('D03', 1, 7), run('E02', 1, 6), run('E03', 1, 6), run('F02', 1, 7), run('F03', 1, 7)];
   const pitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => {
@@ -174,10 +174,11 @@ export function buildBusanjinLayout(): Layout {
       addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', bx, z0, { x: bx + P + 0.35, z: z0 + P / 2 }, 'BULK');
     }
   }
-  // 상온 입고재고 팔레트 5(RCV-A-02) — 그림 입고창고에 자리가 없어 입고·검수 동쪽 끝 남쪽 벽에
+  // 상온 입고재고 팔레트 5(RCV-A-02) — 입고창고 남쪽(보충재고 랙 앞 통로 건너), 입고·검수에는 팔레트 없음(사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
   for (let c = 0; c < 5; c++) {
-    const x0 = R.RCV.x1 - 0.15 - (5 - c) * (P + 0.15);
-    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, R.RCV.z1 - 0.1 - P, { x: x0 + P / 2, z: R.RCV.z1 - 0.1 - P - 0.4 }, 'RECEIVING');
+    // 남쪽 문(상온 동쪽 줄 가운데 통로 위) 앞은 비움 — 서쪽 3 | 문 | 동쪽 2
+    const x0 = c < 3 ? R.WH.x0 + 0.4 + c * (P + 0.4) : X(33.0) + (c - 3) * (P + 0.4);
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, R.WH.z1 - 0.15 - P, { x: x0 + P / 2, z: R.WH.z1 - 0.15 - P - 0.4 }, 'RECEIVING');
   }
 
   const racks = [...frozen, ...chilled, ...ambient, ...whReserve];
@@ -294,10 +295,11 @@ export function buildBusanjinLayout(): Layout {
     coldArea(R.B, 'CHILLED'),
     {
       floor: [R.WH.x0, R.WH.z0 + 0.1, R.WH.x1, R.WH.z1],
-      lines: [[R.WH.x0 + 0.12, 2.95, R.WH.x1 - 0.12, 2.95]],
+      lines: [[R.WH.x0 + 0.12, 2.95, R.WH.x1 - 0.12, 2.95], [R.WH.x0 + 0.12, 5.6, R.WH.x1 - 0.12, 5.6]], // 대형재고 | 보충재고 | 입고재고
       texts: [
         { t: '대형재고', x: R.WH.x1 - 0.9, z: 2.65 },
-        { t: '보충재고', x: R.WH.x1 - 0.9, z: 5.45 },
+        { t: '보충재고', x: R.WH.x1 - 0.9, z: 5.3 },
+        { t: '입고재고', x: R.WH.x0 + 0.9, z: 7.0 },
       ],
     },
   ];
@@ -335,6 +337,8 @@ export function buildBusanjinLayout(): Layout {
     storeAreas,
     officeTable: null, // 그림에 휴게·사무 없음
     rollContainers: [X(23.6), X(24.4)].map((x) => ({ x, z: 0.7 })),
+    // 구역 카드 x — 입고·검수 카드를 동쪽으로(냉동 카드와 안 겹침)
+    zoneCardX: { RCV: X(22.0) },
     quarantineRacks: {
       ...Object.fromEntries(([['AQ', R.A], ['BQ', R.B]] as const).map(([id, room]) => {
         const r = q(room);
