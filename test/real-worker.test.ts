@@ -358,18 +358,13 @@ describe('RealWorker — 실서버 가상 작업자', () => {
 
   it('이어 하기(resumeOnly): 들고 있던 작업은 하고, 서버에 남은 자기 일이 없으면 새 작업을 받지 않고 퇴근', async () => {
     const { w, be, ctx } = setup();
-    let mine = true;
-    ctx.ownWork = () => mine;
+    // 들고 있던 PICK 을 다 집으면 서버에 남은 자기 일이 없다(장바구니를 끌고 곧장 다음 받기로 가므로 집기 끝과 함께 바뀐다)
+    ctx.ownWork = () => !be.calls.some((c) => c.startsWith('pick P1 B-1'));
     w.resumeOnly = true;
     be.tasks.set('P1', task('P1', 'PICK', 'ASSIGNED'));
     be.queue = [{ assignmentId: 'AS1', mfcId: 'MFC-SEED-01', taskId: 'P1', taskType: 'PICK', workerId: ME, assignmentVersion: 1, state: 'ACTIVE' }];
     void w.run();
-    for (let t = 0; t < 600 && !be.calls.some((c) => c.startsWith('pick P1 B-1')); t += 0.25) {
-      w.tick(0.25);
-      for (let i = 0; i < 20; i++) await Promise.resolve();
-    }
-    mine = false; // 서버에 남은 일 없음
-    await runFor(w, 120);
+    await runFor(w, 720);
     expect(be.calls.filter((c) => c.startsWith('pull')).length).toBe(1);
     expect(w.left).toBe(true);
     w.stop();

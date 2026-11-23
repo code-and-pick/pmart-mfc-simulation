@@ -252,6 +252,13 @@ export class RealWorker extends Agent {
         await this.wait(REAL_WORKERS.errorBackoffSec);
         continue;
       }
+      // 피킹한 장바구니를 끌고 왔는데 다음 일이 포장이 아니면(다른 사람이 포장) 장바구니를 패킹 대기 지점에 두고 간다
+      if (this.hasCart && a?.taskType !== 'PACK') {
+        this.activity = '장바구니 패킹 대기 지점에 두기';
+        await this.walkTo(this.ctx.layout.points.packQueue);
+        await this.work(3);
+        this.hasCart = false;
+      }
       if (!a) {
         this.lastProblem = null;
         // 받을 작업이 없으면 회수품 일(반입 rcv · 검수 qc) — capacity 작업이 아니라 PDA 처럼 대기 목록에서 고른다
@@ -489,7 +496,7 @@ export class RealWorker extends Agent {
       await this.walkTo(ctx.layout.points.packQueue);
       await this.work(4);
     }
-    this.hasCart = false;
+    // 장바구니는 패킹대까지 끌고 간다 — 패킹 뒤 빈 장바구니를 거치대에 둔다(사용자 2026-11-23 "패킹하러 갈 때 장바구니가 어느순간 사라져 … 장바구니 거치대에 두고 나서 인계랙에 포장 갖다두던가")
     this.carrying = [];
     ctx.log(`${this.account} 피킹 완료 ${shipmentId}`);
   }
@@ -501,6 +508,8 @@ export class RealWorker extends Agent {
     const shipmentId = task.shipmentId;
     if (!shipmentId) throw new Error('PACK 작업에 출고 ID 없음');
     this.state = 'WAIT_STATION';
+    const packCart = ctx.carts.cartOf(shipmentId);
+    if (packCart) this.hasCart = true; // 집품분이 실린 장바구니를 끌고 패킹대로
     this.pda = this.view(task, 'PACK', '패킹대 대기');
     this.activity = '패킹대 대기';
     if (!ctx.stations.hasFree()) await this.walkTo(ctx.layout.points.packQueue);
@@ -580,6 +589,14 @@ export class RealWorker extends Agent {
       ctx.carts.release(shipmentId); // 집품분이 패킹대로 옮겨져 장바구니가 빔
     } finally {
       ctx.stations.release(station);
+    }
+    // 빈 장바구니를 거치대에 두고 나서 포장을 인계 랙으로(사용자 2026-11-23 "패킹하러 갈 때 장바구니가 어느순간 사라져 … 장바구니 거치대에 두고 나서 인계랙에 포장 갖다두던가")
+    if (this.hasCart) {
+      this.state = 'RETURNING';
+      this.activity = `빈 장바구니 ${packCart ?? ''} 거치대에`.replace('  ', ' ');
+      await this.walkTo((packCart ? ctx.point(packCart) : null) ?? ctx.layout.points.cartDepot);
+      await this.work(3);
+      this.hasCart = false;
     }
     // ⑤ 출하대기 랙 — 랙에 올리고 서버에 알린다(fulfillment 0.20.0 stagePackage, F-12·R-20): 포장분 위치만 패킹대 → 랙
     const rack = ctx.pickRack?.() ?? 'DSP-A-01';

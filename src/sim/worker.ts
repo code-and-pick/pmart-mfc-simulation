@@ -372,8 +372,13 @@ export class Worker extends Agent {
       sealed.push(pkg);
     }
     ctx.stations.release(station);
-    this.hasCart = false;
     this.carrying = sealed.map((p) => p.temperatureZone);
+    // 빈 장바구니를 거치대에 두고 나서 포장을 출하대기 랙으로(사용자 2026-11-23 "패킹하러 갈 때 장바구니가 어느순간 사라져 … 장바구니 거치대에 두고 나서 인계랙에 포장 갖다두던가")
+    this.state = 'RETURNING';
+    this.activity = '빈 장바구니 거치대에';
+    await this.walkTo(ctx.layout.points.cartDepot);
+    await this.wait(3);
+    this.hasCart = false;
 
     // ── 5. 외부 출하대기 랙 적재 ──
     this.state = 'TO_SHIP';
