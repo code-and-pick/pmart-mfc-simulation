@@ -97,6 +97,13 @@ export const DEFAULT_PARAMS: SimParams = {
  * 백엔드 시험 센터(MFC-SEED-01)가 정한 값 — 백엔드 공지가 근거다(pmart-backend docs/handoff/simulator/mfc/).
  * 실서버 모드에서는 위치 조회(GET /locations) 결과가 정본이고, 여기 값은 MOCK 화면 표시용 사본이다.
  */
+/**
+ * 상온 고회전 구역 F 에 두는 인기 상품 수 — 주문율(MOCK 인기 가중치) 상위 20개 상온 상품이 F 칸을 먼저 갖고, 나머지는 F 를 피한다
+ * [시뮬] 사용자 2026-11-23 "진짜 고회전 상품(주문율 높은 상품 top20)은 거기에 적치". 근거 구역 정의 MFC-business-logic 2-1 "F 상온 고회전 — 카테고리 무관 인기 SKU".
+ * MOCK 만 — 실서버 적치 칸 추천은 mfc-inventory 몫(backend-requests R-40). 냉장·냉동 인기 상품은 F(상온)에 둘 수 없다.
+ */
+export const MOCK_HIGH_TURNOVER_TOP = 20;
+
 export const BACKEND_FACTS = {
   /**
    * 칸 용량 = floor(칸 부피 × 이 값 ÷ 상품 부피), 어느 방향으로도 안 들어가면 0 [확정]

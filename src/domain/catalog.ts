@@ -91,7 +91,7 @@ const mm = (u: { w: number; d: number; h: number }) => ({ w: Math.round(u.w * 10
  * MOCK 상품 목록. 온도대별 count 개를 그 온도대 칸에 무작위로 한 칸씩 둔다(문서에 슬로팅 규칙 없음).
  * 상온은 좁은 칸에 안 들어가는 큰 상품을 H(큰 상품 구역)에 둔다 — 백엔드 LAN 재고 펼침(mfc_spread_stock.py)과 같은 생각.
  */
-export function buildCatalog(layout: Layout, count: Record<TemperatureZone, number>, fill: number, seed: number): Sku[] {
+export function buildCatalog(layout: Layout, count: Record<TemperatureZone, number>, fill: number, seed: number, highTurnoverTop = 0): Sku[] {
   const rng = new Rng(seed);
   const temps: TemperatureZone[] = ['AMBIENT', 'CHILLED', 'FROZEN'];
   const skus: Sku[] = [];
@@ -104,23 +104,39 @@ export function buildCatalog(layout: Layout, count: Record<TemperatureZone, numb
       [pool[i], pool[j]] = [pool[j], pool[i]];
     }
     const used = new Set<string>();
-    /** 들어가는(용량 2 이상) 첫 빈 칸. 상온 큰 상품은 H 먼저 */
-    const pickSlot = (unitMm: { w: number; d: number; h: number }): Location => {
+    /**
+     * 들어가는(용량 2 이상) 첫 빈 칸. 상온 큰 상품은 H 먼저.
+     * 상온 고회전 구역 F(MFC 2-1 "카테고리 무관 인기 SKU")는 인기 상위 highTurnoverTop 개 상품 몫 — 그 상품은 F 먼저, 나머지는 F 를 피한다
+     * (사용자 2026-11-23 "진짜 고회전 상품(주문율 높은 상품 top20)은 거기에 적치"). F 에 안 들어가면 다른 칸
+     */
+    const isF = (l: Location) => t === 'AMBIENT' && l.code[0] === 'F';
+    const pickSlot = (unitMm: { w: number; d: number; h: number }, hot: boolean): Location => {
       const ok = (l: Location) => !used.has(l.code) && slotCapacity(l.dimMm, unitMm, fill) >= 2;
-      const narrow = pool.find((l) => ok(l) && l.code[0] !== 'H');
-      const found = narrow ?? pool.find(ok) ?? pool.find((l) => !used.has(l.code))!;
+      const found =
+        (hot ? pool.find((l) => ok(l) && isF(l)) : undefined) ??
+        pool.find((l) => ok(l) && l.code[0] !== 'H' && !isF(l)) ??
+        pool.find((l) => ok(l) && !isF(l)) ??
+        pool.find(ok) ??
+        pool.find((l) => !used.has(l.code))!;
       used.add(found.code);
       return found;
     };
     const reserves = layout.reserveRackSpots.filter((r) => r.temp === t); // 보충재고 = 보충재고 랙(입고재고 팔레트는 아님)
+    // 먼저 상품(인기 가중치 포함)을 만들고, 인기 순으로 칸을 고른다 — 상위 highTurnoverTop 개 상온 상품이 F 를 먼저 갖는다
+    const made: { base: string; isB: boolean; code: string; weightG: number; unit: { w: number; d: number; h: number }; weight: number; i: number }[] = [];
     for (let i = 0; i < n; i++) {
       const [base, w] = rng.pick(NAMES[t]);
       const isB = rng.next() < 0.12;
       const code = `${isB ? 'B' : 'E'}-${String(serial).padStart(8, '0')}`;
       serial += 1;
       const weightG = isB ? w * 4 : w;
-      const unit = unitOf(weightG);
-      const loc = pickSlot(mm(unit));
+      made.push({ base, isB, code, weightG, unit: unitOf(weightG), weight: 1 / Math.pow(rng.int(1, Math.max(1, n)), 0.9), i });
+    }
+    const hot = new Set(t === 'AMBIENT' ? [...made].sort((a, b) => b.weight - a.weight || a.i - b.i).slice(0, highTurnoverTop).map((m) => m.i) : []);
+    const locOf = new Map<number, Location>();
+    for (const m of [...made].sort((a, b) => Number(hot.has(b.i)) - Number(hot.has(a.i)) || a.i - b.i)) locOf.set(m.i, pickSlot(mm(m.unit), hot.has(m.i)));
+    for (const { base, isB, code, weightG, unit, weight, i } of made) {
+      const loc = locOf.get(i)!;
       const shelfCap = Math.max(1, slotCapacity(loc.dimMm, mm(unit), fill));
       skus.push({
         sku: code,
@@ -130,7 +146,7 @@ export function buildCatalog(layout: Layout, count: Record<TemperatureZone, numb
         weightG,
         location: loc,
         reserveId: reserves[i % reserves.length].id,
-        weight: 1 / Math.pow(rng.int(1, Math.max(1, n)), 0.9),
+        weight,
         containsAlcohol: base.startsWith('맥주'),
         unit,
         shelfCap,

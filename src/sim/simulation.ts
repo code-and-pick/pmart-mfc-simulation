@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -159,7 +159,7 @@ export class Simulation {
     applyWideCells(this.layout, this.codes); // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18)
     this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
-    this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed);
+    this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed, MOCK_HIGH_TURNOVER_TOP);
     this.reserveMap = new Map([...this.layout.reserves, ...this.layout.reserveRackSpots].map((r) => [r.id, r]));
     this.skuMap = new Map(this.catalog.map((s) => [s.sku, s]));
     this.stations = new StationPool(this.layout.stations, params.packingStations);
