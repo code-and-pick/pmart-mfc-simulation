@@ -332,9 +332,10 @@ export function RealStock() {
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);
       // 인계 랙(DSP-)에 남은 것은 포장된 봉투째(취소 주문의 재진열 대기 포함) — 상자로 그리지 않는다(사용자 2026-11-21 "인계랙 옆에 상자는 … 비닐봉투 포장으로")
       if (u.workState !== 'PACKED' && !key.startsWith('DSP-')) {
-        // 입고재고(검수 전 — 품질 판정 전)는 온도색 대신 검수 전 상자색(사용자 2026-11-21 입고재고·보충재고 구분)
+        // 입고재고(검수 전)도 상품 온도대 색으로(사용자 2026-11-23 "입고 상품 색이 온도에 따라서 달라야 하는데 다 같네") — 검수 전 구분은 입고칸 회색 바닥이 한다.
+        // 그 전(11-21)엔 검수 전 상자를 한 색(PENDING_BOX)으로 그렸다. 온도대는 재고 줄 temperatureZone(검수 전 줄에도 있음), 없으면 검수 전 색
         if (u.qualityState === 'PENDING_INSPECTION') g.pending += u.qty;
-        const tk = u.qualityState === 'PENDING_INSPECTION' ? 'PENDING' : (skuTemp.get(u.sku) ?? '?');
+        const tk = skuTemp.get(u.sku) ?? (isTemp(u.temperatureZone) ? u.temperatureZone : u.qualityState === 'PENDING_INSPECTION' ? 'PENDING' : '?');
         g.tz.set(tk, (g.tz.get(tk) ?? 0) + u.qty);
       }
       points.set(key, g);
