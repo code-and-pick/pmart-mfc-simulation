@@ -278,21 +278,22 @@ export interface MfcSite {
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
   layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
 }
+// 화면 이름에 'N호점' 을 붙이지 않고, 1호점은 '부산진구'(사용자 2026-11-24 "1호점2호점 아니니까 다 빼. 그리고 부산이 아니라 부산진구 라고 적어야돼")
 export const MFC_SITES: readonly MfcSite[] = [
   {
     id: 'MFC-SEED-01',
-    name: '1호점 (부산)',
+    name: '부산진구 MFC',
     address: '부산광역시 부산진구 동천로 109, 삼한골드게이트',
-    short: '1호점 부산',
+    short: '부산진구',
     mockAreas: ['부산진구 부전동', '부산진구 전포동', '부산진구 범천동', '동래구 온천동', '연제구 연산동', '남구 대연동'],
     accountPrefix: 'mfcw-',
     supervisorAccount: 'claude-mfc-sup',
   },
   {
     id: 'MFC-MOKPO-01',
-    name: '2호점 목포 MFC',
+    name: '목포 MFC',
     address: '전라남도 목포시 상동 869',
-    short: '2호점 목포',
+    short: '목포',
     mockAreas: ['목포시 상동', '목포시 하당동', '목포시 옥암동', '목포시 용해동', '목포시 산정동', '목포시 석현동'],
     accountPrefix: 'mfcw-mk-',
     supervisorAccount: 'claude-mfc-sup-mk',
@@ -303,9 +304,9 @@ export const MFC_SITES: readonly MfcSite[] = [
     // 3호점 세종(R-41, 2026-11-23 사용자 "이 평면도대로 세종 MFC 1개 더 만들어줘") — 평면이 1호점과 달라 따로 만든다(layoutSejong.ts).
     // 계정 [확정] 백엔드 deploy/lan/seed/mfc_test_workers.py --center sejong: mfcw-sj-pp·qc·rcv 01~10 + claude-mfc-sup-sj. 주소·좌표 center-master(PC 1)
     id: 'MFC-SEJ-01',
-    name: '3호점 세종 MFC',
+    name: '세종 MFC',
     address: '세종특별자치시 다솜1로 36 엠브릿지 3층 (어진동 513)',
-    short: '3호점 세종',
+    short: '세종',
     mockAreas: ['세종시 어진동', '세종시 나성동', '세종시 도담동', '세종시 아름동', '세종시 종촌동', '세종시 대평동'],
     accountPrefix: 'mfcw-sj-',
     supervisorAccount: 'claude-mfc-sup-sj',
@@ -315,9 +316,9 @@ export const MFC_SITES: readonly MfcSite[] = [
     // 4호점 춘천(R-42, 2026-11-24 사용자 "mfc 하나 더 만들자. 평면도 대로 mfc 구조 설계하고, 랙수랑 평수는 아래 적은대로") — layoutChuncheon.ts.
     // 계정 [확정] 백엔드 mfc_test_workers.py --center chuncheon: mfcw-cc-pp·qc·rcv 01~10 + claude-mfc-sup-cc. 주소·좌표 center-master(PC 1)
     id: 'MFC-CHC-01',
-    name: '4호점 춘천 MFC',
+    name: '춘천 MFC',
     address: '강원특별자치도 춘천시 춘천로 236 2층 (효자동 750)',
-    short: '4호점 춘천',
+    short: '춘천',
     mockAreas: ['춘천시 효자동', '춘천시 석사동', '춘천시 퇴계동', '춘천시 후평동', '춘천시 온의동', '춘천시 소양동'],
     accountPrefix: 'mfcw-cc-',
     supervisorAccount: 'claude-mfc-sup-cc',
@@ -327,9 +328,9 @@ export const MFC_SITES: readonly MfcSite[] = [
     // 5호점 부산남구(R-44, 2026-11-24 사용자 "mfc 하나 더 만들자. 평면도 대로 …") — layoutBusanNamgu.ts. ID MFC-BNG-01(옛 잘못된 MFC-BSN-01 아님).
     // 계정 [확정] 백엔드 mfc_test_workers.py --center busan-namgu: mfcw-bn-pp·qc·rcv 01~10 + claude-mfc-sup-bn
     id: 'MFC-BNG-01',
-    name: '5호점 부산남구 MFC',
+    name: '부산남구 MFC',
     address: '부산 남구 수영로 305 스파크타워 지하 1층 (대연동 73-15)',
-    short: '5호점 부산남구',
+    short: '부산남구',
     mockAreas: ['남구 대연동', '남구 문현동', '남구 용호동', '남구 감만동', '남구 우암동', '남구 용당동'],
     accountPrefix: 'mfcw-bn-',
     supervisorAccount: 'claude-mfc-sup-bn',
