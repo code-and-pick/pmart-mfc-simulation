@@ -135,6 +135,9 @@ export class RealRider extends Agent implements SiteRider {
   private leave: ((n: number) => void) | null = null;
   private readonly left: Promise<number>;
 
+  /** 이 라이더가 가게에서 픽업할 배송(알뜰 묶음이면 여러 건 — 한 사람으로 그린다, 사용자 2026-11-23 "응 맞춰") */
+  readonly deliveryIds = new Set<string>();
+
   constructor(
     id: string,
     readonly deliveryId: string,
@@ -145,6 +148,7 @@ export class RealRider extends Agent implements SiteRider {
     vehicleType?: string | null,
   ) {
     super(id, offLot(entry), nav, 1.4);
+    this.deliveryIds.add(deliveryId);
     this.vehicle = vehicleOf(vehicleType);
     this.left = new Promise((resolve) => (this.leave = resolve));
   }

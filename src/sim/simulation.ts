@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -128,7 +128,11 @@ export class Simulation {
   private readonly orderShipments = new Map<string, Set<string>>();
   private readonly stagedShipments = new Set<string>();
   private readonly handedShipments = new Set<string>();
-  private readonly pendingRiders: { at: number; shipmentId: string }[] = [];
+  /** 배차 요청된 출고 — 알뜰 묶음이면 한 라이더에 1~3건(MOCK_BUNDLE) */
+  private readonly pendingRiders: { at: number; shipmentIds: string[]; bundled: boolean }[] = [];
+  /** MOCK 알뜰배달(BUNDLED) 주문의 출고 */
+  private readonly bundledShipments = new Set<string>();
+  private readonly bundleRng: Rng;
   private readonly packOwner = new Map<string, string>(); // shipmentId → PICK 작업자
   private readonly ctx: SiteContext;
   private readonly cumulativeByTemp: Record<TemperatureZone, { skus: Sku[]; cum: number[] }>;
@@ -152,6 +156,7 @@ export class Simulation {
     this.rng = new Rng(params.seed);
     this.opsRng = new Rng(params.seed ^ 0x5f3759df);
     this.retRng = new Rng(params.seed ^ 0x2a7e1d);
+    this.bundleRng = new Rng(params.seed ^ 0x6b3d29);
     this.time = params.startHour * 3600;
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     this.layout = buildLayout();
@@ -188,7 +193,11 @@ export class Simulation {
       this.mockBoard = new RealBoard(
         new MockReader(mock, {
           workers: () => this.workers,
-          riders: () => this.riders.filter((r): r is Rider => r instanceof Rider),
+          // 묶음 라이더는 배송마다 한 줄(같은 라이더 ID)
+          riders: () =>
+            this.riders
+              .filter((r): r is Rider => r instanceof Rider)
+              .flatMap((r) => (r.legs.length ? r.legs : [{ shipmentId: '', deliveryId: '', orderId: '' }]).map((l) => ({ id: r.id, shipmentId: l.shipmentId, deliveryId: l.deliveryId, carrying: r.carrying, done: r.done, activity: r.activity }))),
           rackOf: (sid) => {
             const sl = this.shipRack.ofShipment(sid)[0]?.slot;
             return sl && sl.rackIndex >= 0 ? `DSP-A-0${sl.rackIndex + 1}` : null;
@@ -1184,13 +1193,19 @@ export class Simulation {
     }
     const mine = this.riders.filter((x): x is RealRider => x instanceof RealRider);
     for (const rr of mine) {
-      const s = live.get(rr.deliveryId);
-      if (!s) rr.depart(0);
-      else if (s.gone) rr.depart(s.handed);
-      else rr.updateVehicle(s.vehicle); // 배차 상세가 늦게 오면 처음엔 기본 수단 — 오면 바꾼다
+      // 알뜰 묶음: 그 라이더의 배송이 모두 픽업(또는 해제)돼야 떠난다 — 들고 가는 포장은 합
+      const ss = [...rr.deliveryIds].map((id) => live.get(id));
+      if (ss.every((s) => !s || s.gone)) rr.depart(ss.reduce((n, s) => n + (s?.handed ?? 0), 0));
+      else rr.updateVehicle(ss.find((s) => s && !s.gone)?.vehicle); // 배차 상세가 늦게 오면 처음엔 기본 수단 — 오면 바꾼다
     }
     for (const [deliveryId, s] of live) {
-      if (!s.arrived || s.gone || mine.some((x) => x.deliveryId === deliveryId)) continue;
+      if (!s.arrived || s.gone || mine.some((x) => x.deliveryIds.has(deliveryId))) continue;
+      // 같은 라이더가 이미 가게에 와 있으면(알뜰 묶음) 새로 그리지 않고 그 사람의 배송으로 더한다
+      const here = s.riderId ? mine.find((x) => !x.done && !x.leaving && x.id.split(' (')[0] === s.riderId) : undefined;
+      if (here) {
+        here.deliveryIds.add(deliveryId);
+        continue;
+      }
       const used = new Set(mine.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
       // 같은 라이더가 묶음 배송 여러 건이면 같은 칸(수단 하나) — 다른 라이더는 한 칸씩 띄워 빈 칸부터(겹침 방지, 사용자 2026-11-20)
       const same = s.riderId ? mine.find((x) => !x.done && x.id.split(' (')[0] === s.riderId) : undefined;
@@ -1363,9 +1378,11 @@ export class Simulation {
       orderVersion: 1,
       mfcId: this.params.mfcId,
       reservationId,
-      deliveryMode: 'SINGLE',
+      // 알뜰배달 일부 [시뮬 비율 MOCK_BUNDLE.share] — 따로 뽑는 난수(다른 흐름의 순서를 바꾸지 않게)
+      deliveryMode: this.bundleRng.next() < MOCK_BUNDLE.share ? 'BUNDLED' : 'SINGLE',
       shipments,
     };
+    if (req.deliveryMode === 'BUNDLED') for (const s of shipments) this.bundledShipments.add(s.shipmentId);
     const temps = new Map<string, TemperatureZone>();
     const meta = new Map<string, { code: string; name: string; barcode: string }>();
     for (const l of lines) {
@@ -1476,9 +1493,16 @@ export class Simulation {
    * 라이더는 도착 시각이 지나고 출고가 출하대기(READY)일 때 들어와 인계한다 — 포장이 늦으면 그동안 기다린다(spawnRiders).
    */
   private onDispatchRequested(shipmentId: string) {
-    if (this.mode !== 'mock' || this.pendingRiders.some((p) => p.shipmentId === shipmentId)) return;
+    if (this.mode !== 'mock' || this.pendingRiders.some((p) => p.shipmentIds.includes(shipmentId))) return;
+    const bundled = this.bundledShipments.has(shipmentId);
+    // 알뜰이면 아직 안 온 알뜰 라이더 묶음에 붙는다(최대 MOCK_BUNDLE.maxSize 건) — 가게에서 한 번에 픽업
+    const join = bundled ? this.pendingRiders.find((p) => p.bundled && p.shipmentIds.length < MOCK_BUNDLE.maxSize) : undefined;
+    if (join) {
+      join.shipmentIds.push(shipmentId);
+      return;
+    }
     const delay = this.opsRng.range(this.params.riderArrivalMinSec, this.params.riderArrivalMaxSec);
-    this.pendingRiders.push({ at: this.time + delay, shipmentId });
+    this.pendingRiders.push({ at: this.time + delay, shipmentIds: [shipmentId], bundled });
   }
 
   private isCancelled(shipmentId: string): boolean {
@@ -1488,22 +1512,24 @@ export class Simulation {
   private spawnRiders() {
     for (let i = this.pendingRiders.length - 1; i >= 0; i--) {
       const p = this.pendingRiders[i];
-      if (this.isCancelled(p.shipmentId)) {
-        this.pendingRiders.splice(i, 1); // 출고 취소 — 배차도 끝(MOCK)
+      p.shipmentIds = p.shipmentIds.filter((s) => !this.isCancelled(s)); // 출고 취소 — 그 배차도 끝(MOCK)
+      if (!p.shipmentIds.length) {
+        this.pendingRiders.splice(i, 1);
         continue;
       }
-      if (this.time < p.at || !this.stagedShipments.has(p.shipmentId)) continue; // 배차 요청 뒤 도착 + 출하대기
+      // 배차 요청 뒤 도착 + 묶음 전부 출하대기 — 포장이 늦으면 그동안 기다린다(묶음은 한 번에 픽업)
+      if (this.time < p.at || !p.shipmentIds.every((s) => this.stagedShipments.has(s))) continue;
       this.pendingRiders.splice(i, 1);
       this.riderSeq += 1;
       const riderId = `R${String(this.riderSeq).padStart(3, '0')}`;
-      const deliveryId = this.mock!.deliveryAssign(p.shipmentId, riderId);
-      const orderId = this.shipmentOrder.get(p.shipmentId) ?? '';
+      const legs = p.shipmentIds.map((shipmentId) => ({ shipmentId, deliveryId: this.mock!.deliveryAssign(shipmentId, riderId), orderId: this.shipmentOrder.get(shipmentId) ?? '' }));
+      if (legs.length > 1) this.log(`라이더 ${riderId} 알뜰 묶음 ${legs.length}건 배정 — ${legs.map((l, k) => `${k + 1}번째 ${l.orderId}`).join(' → ')}`);
       // 빈 주차 칸부터(전엔 순번 나머지 — 아직 안 떠난 라이더와 같은 칸에 겹쳤다, 사용자 2026-11-20 "자동차랑 오토바이 지들끼리 겹치고")
       const usedBays = new Set(this.riders.filter((x) => !x.done).map((x) => `${x.parking.x},${x.parking.z}`));
       const bays = this.layout.points.riderParking;
       const parking = bays.find((b, k) => k % 2 === 0 && !usedBays.has(`${b.x},${b.z}`)) ?? bays.find((b) => !usedBays.has(`${b.x},${b.z}`)) ?? bays[this.riderSeq % bays.length];
-      const rider = new Rider(riderId, p.shipmentId, deliveryId, orderId, parking, this.ctx, () => {
-        this.handedShipments.add(p.shipmentId);
+      const rider = new Rider(riderId, legs, parking, this.ctx, (shipmentId, orderId) => {
+        this.handedShipments.add(shipmentId);
         const all = this.orderShipments.get(orderId);
         if (all && [...all].every((s) => this.handedShipments.has(s) || this.isCancelled(s))) this.metrics.markHandedOver(orderId, this.time);
       });

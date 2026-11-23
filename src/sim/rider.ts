@@ -32,19 +32,34 @@ export class Rider extends Agent {
   parkedAt: P | null = null;
   parkedHeading = 0;
   readonly parking: P;
+  /**
+   * 맡은 배송(방문 순서대로). 한집은 1건, 알뜰 묶음은 1~3건을 가게에서 한 번에 픽업하고 1번째 고객 → 2번째 고객 순으로 간다
+   * (delivery-dispatch 계약 "알뜰배달 1~3건을 한 라이더에게 묶어 제안 … stopSequence(방문 순서)", 사용자 2026-11-23 "가게가 하나고 알뜰배달 2건이면 가게는 한 번에 가서 2개 동시에 픽업하고 1번째 고객 - 2번째 고객 전달" → "응 맞춰")
+   */
+  readonly legs: { shipmentId: string; deliveryId: string; orderId: string }[];
 
   constructor(
     id: string,
-    readonly shipmentId: string,
-    readonly deliveryId: string,
-    readonly orderId: string,
+    legs: { shipmentId: string; deliveryId: string; orderId: string }[],
     parking: P,
     protected readonly ctx: SiteContext,
-    private readonly onHandedOver: (orderId: string) => void,
+    private readonly onHandedOver: (shipmentId: string, orderId: string) => void,
   ) {
     super(id, offLot(ctx.layout.points.riderEntry), ctx.nav, 1.4);
+    this.legs = legs;
     this.parking = parking;
     this.vehicle = pickVehicle(ctx.rng.next());
+  }
+
+  /** 첫 배송(한집이면 유일한 배송) */
+  get shipmentId(): string {
+    return this.legs[0]?.shipmentId ?? '';
+  }
+  get deliveryId(): string {
+    return this.legs[0]?.deliveryId ?? '';
+  }
+  get orderId(): string {
+    return this.legs[0]?.orderId ?? '';
   }
 
   private async retry<T>(fn: () => Promise<T>): Promise<T> {
@@ -69,7 +84,8 @@ export class Rider extends Agent {
       await this.wait(8);
       this.activity = '출하대기 랙으로';
       await walkOn(this, ctx.layout.points.riderPickup);
-      const staged = ctx.shipRack.ofShipment(this.shipmentId);
+      // 묶음이면 모든 배송의 포장을 한 번에 픽업한다
+      const staged = this.legs.flatMap((l) => ctx.shipRack.ofShipment(l.shipmentId).map((s) => ({ ...s, deliveryId: l.deliveryId })));
       for (const s of staged) {
         this.activity = `QR 스캔 ${s.pkg.packageId}`;
         await this.wait(4);
@@ -83,10 +99,10 @@ export class Rider extends Agent {
         }
         const auth = await this.retry(() =>
           byCode
-            ? ctx.port.authorizeHandoverByCode({ riderId: this.id, deliveryId: this.deliveryId, handoverCode: code! }, `${ctx.runId}:authcode:${s.pkg.packageId}:${this.id}`)
+            ? ctx.port.authorizeHandoverByCode({ riderId: this.id, deliveryId: s.deliveryId, handoverCode: code! }, `${ctx.runId}:authcode:${s.pkg.packageId}:${this.id}`)
             : ctx.port.authorizeHandover(
                 s.pkg.packageId,
-                { riderId: this.id, deliveryId: this.deliveryId, scannedCode: s.pkg.qrCode },
+                { riderId: this.id, deliveryId: s.deliveryId, scannedCode: s.pkg.qrCode },
                 `${ctx.runId}:auth:${s.pkg.packageId}:${this.id}`,
               ),
         );
@@ -102,8 +118,8 @@ export class Rider extends Agent {
         ctx.shipRack.remove(s.pkg.packageId);
         this.carrying += 1;
       }
-      this.onHandedOver(this.orderId);
-      this.activity = '출발';
+      for (const l of this.legs) this.onHandedOver(l.shipmentId, l.orderId);
+      this.activity = this.legs.length > 1 ? `알뜰 ${this.legs.length}건 픽업 — 1번째 고객 → ${this.legs.length}번째 고객 순으로 출발` : '출발';
       await walkOn(this, this.parking);
       await this.wait(3);
       await loadAndGetOn(this);

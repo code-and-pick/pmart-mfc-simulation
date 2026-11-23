@@ -209,6 +209,13 @@ export const RETURN_FLOW = {
   realLookSec: 20,
 } as const;
 
+/**
+ * MOCK 알뜰배달(묶음) — 주문 중 알뜰 비율 [시뮬], 한 라이더 묶음 최대 건수 3 [확정](delivery-dispatch 계약 "알뜰배달 1~3건을 한 라이더에게").
+ * 알뜰 출고는 배차 요청 때 아직 오지 않은 알뜰 라이더가 있으면 그 묶음에 붙는다(그 라이더는 묶음 전부가 출하대기일 때 들어와 한 번에 픽업).
+ * 사용자 2026-11-23 "가게가 하나고 알뜰배달 2건이면 가게는 한 번에 가서 2개 동시에 픽업하고 1번째 고객 - 2번째 고객 전달" → "응 맞춰"
+ */
+export const MOCK_BUNDLE = { share: 0.35, maxSize: 3 };
+
 export const HANDOVER_CODE = {
   minLen: 4,
   maxLen: 4,

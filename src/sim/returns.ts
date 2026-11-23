@@ -64,7 +64,7 @@ export class ReturnRider extends Rider {
     private readonly drop: P,
     private readonly onDropped: () => void,
   ) {
-    super(id, '', '', '', parking, ctx, () => {});
+    super(id, [], parking, ctx, () => {});
     this.carrying = 1;
   }
 
