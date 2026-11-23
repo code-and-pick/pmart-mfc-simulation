@@ -51,7 +51,8 @@ const R = {
   CH: { x0: 23.0, z0: 7.0, x1: 34.9, z1: 23.6 }, // 상온 C~H 60.25평(11.9 × 16.6 = 197.5 m²)
   OFF: { x0: 36.8, z0: 0, x1: BNG_W, z1: 2.35 }, // 휴게·사무 6.11평(8.6 × 2.35)
   WH: { x0: 36.8, z0: 2.35, x1: BNG_W, z1: 17.05 }, // 상온 입고창고 37.34 + 상온 격리 1(8.6 × 14.7)
-  CQ: { x0: 44.6, z0: 11.2, x1: 45.3, z1: 15.9 }, // 상온 격리 1평 — 입고창고 동쪽 벽 세로(0.7 × 4.7)
+  // 상온 격리 1평 — 입고창고 남쪽 벽 동쪽 끝 가로(2.8 × 1.18), 흰 랙 2 가로로 남쪽 벽에(사용자 2026-11-24 "상온구역에 보충재고에서 패킹쪽으로 나있는 문 없애고, 상온격리 랙 위치 가로로 돌려서 남쪽벽에 붙여")
+  CQ: { x0: 42.5, z0: 15.85, x1: 45.3, z1: 17.03 },
   PK: { x0: 36.8, z0: 19.5, x1: BNG_W, z1: 25.34 }, // 패킹 15.19평 = 50.2 m²(8.6 × 5.84)
   SHIP: { x0: 36.3, z0: BNG_BD + 0.1, x1: 41.1, z1: BNG_BD + 1.88 }, // 인계 3평(돌출부 안)
   PARK: { x0: 33.2, z0: 34.0, x1: 44.2, z1: 37.4 }, // 라이더 대기 11.3평(건물 밖)
@@ -231,7 +232,7 @@ export function buildBusanNamguLayout(): Layout {
   // 휴게·사무 / 입고창고(서쪽 벽 문: 휴게·사무, 대형재고·입고재고 앞, 남쪽 보충재고 끝)
   vWall(R.WH.x0, 0, R.WH.z1, [[0.3, 1.9], [6.2, 8.2], [15.2, 16.9]]);
   hWall(R.OFF.z1, R.OFF.x0, BNG_W);
-  hWall(R.WH.z1, R.WH.x0, BNG_W, [[39.0, 41.0]]);
+  hWall(R.WH.z1, R.WH.x0, BNG_W); // 남쪽(패킹 쪽) 문 없음 — 사용자 2026-11-24 "상온구역에 보충재고에서 패킹쪽으로 나있는 문 없애고, 상온격리 랙 위치 가로로 돌려서 남쪽벽에 붙여"
   // 승강기 별동
   vWall(ANNEX.x0, ANNEX.z0, 0);
   hWall(ANNEX.z0, ANNEX.x0, ANNEX.x1);
@@ -351,7 +352,7 @@ export function buildBusanNamguLayout(): Layout {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
         return [id, [0, 1].map((i) => ({ x0: X0 + 0.2, z0: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15), x1: X0 + 0.2 + RACK_DEPTH, z1: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15) + RACK_LEN }))];
       })),
-      CQ: [0, 1].map((i) => ({ x0: R.CQ.x1 - 0.05 - RACK_DEPTH, z0: R.CQ.z0 + 0.3 + i * (RACK_LEN + 0.15), x1: R.CQ.x1 - 0.05, z1: R.CQ.z0 + 0.3 + i * (RACK_LEN + 0.15) + RACK_LEN })),
+      CQ: [0, 1].map((i) => ({ x0: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1), z0: R.CQ.z1 - 0.05 - RACK_DEPTH, x1: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN, z1: R.CQ.z1 - 0.05 })),
     },
     cartDepotVertical: false,
     returnTable: { x: cartDepot.x + 0.7 - 19 * 0.28 - 0.32 - 0.05 - 0.55, z: cartDepot.z - 0.6 },

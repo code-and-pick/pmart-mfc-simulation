@@ -44,6 +44,14 @@ describe('부산남구 MFC 평면(R-44)', () => {
     const rcv = zr('RCV');
     const southWall = L.walls.filter((w) => Math.abs((w.rect.z0 + w.rect.z1) / 2 - (rcv.z1 + 0.1)) < 0.01 && w.rect.x0 < rcv.x1 && w.rect.x1 > rcv.x0);
     expect(southWall.reduce((a, w) => a + Math.min(w.rect.x1, rcv.x1) - Math.max(w.rect.x0, rcv.x0), 0)).toBeCloseTo(rcv.x1 - rcv.x0, 3);
+    // 입고창고 남쪽(패킹 쪽) 벽에 문 없음, 상온 격리 흰 랙은 가로로 남쪽 벽에
+    const wh = zr('WH');
+    const whSouth = L.walls.filter((w) => Math.abs((w.rect.z0 + w.rect.z1) / 2 - wh.z1) < 0.01 && w.rect.x0 < wh.x1 && w.rect.x1 > wh.x0);
+    expect(whSouth.reduce((a, w) => a + Math.min(w.rect.x1, wh.x1) - Math.max(w.rect.x0, wh.x0), 0)).toBeCloseTo(wh.x1 - wh.x0, 3);
+    for (const r of L.geo.quarantineRacks!.CQ) {
+      expect(r.x1 - r.x0).toBeGreaterThan(r.z1 - r.z0);
+      expect(wh.z1 - r.z1).toBeLessThan(0.2);
+    }
     // 입고·검수 ~ 냉동 방 동쪽 벽 통로 2 m 이상(사용자 2026-11-24 "입고검수랑 냉동 사이가 좁잖아")
     expect(rcv.x0 - zr('A').x1).toBeGreaterThan(2);
     // 저온 입고재고 팔레트 ~ 첫 피킹 줄 0.8 m 이상
