@@ -239,8 +239,8 @@ export function buildBusanjinLayout(): Layout {
   // 입고·검수 ↔ 입고창고 문, 입고창고 남쪽 문(상온 동쪽 띠 가운데 통로)
   vWall(R.WH.x0, 0, R.WH.z1, [[0.35, 2.25]]);
   hWall(R.WH.z1, R.WH.x0, R.WH.x1, [door(EAST.x0 + 4 * RACK_LEN + 0.5)]);
-  // 패킹 북쪽 벽(그림)
-  hWall(R.PK.z0, R.PK.x0, R.PK.x1);
+  // 패킹 북쪽 벽은 없앰, 장바구니 거치대 북쪽에 벽 하나(서쪽 벽 ~ 거치대 동쪽 끝 — 사용자 2026-11-24 "패킹구역 북쪽에 있는벽 없애고 장바구니 거치대 북쪽으로 벽 하나 놔둬줘")
+  hWall(8.9, X(0), X(3.9));
 
   // ── 패킹대 8 = 서쪽 줄 4 | 동쪽 줄 4(사람은 남쪽에) ─────────────
   const stations: PackingStation[] = [];
