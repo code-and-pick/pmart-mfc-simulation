@@ -60,3 +60,23 @@ describe('세종 지점', () => {
     expect(s.mock!.inventory.violations).toEqual([]);
   }, 120_000);
 });
+
+// 4호점 춘천 MFC(R-42, 사용자 2026-11-24 "mfc 하나 더 만들자. 평면도 대로 …")
+describe('춘천 지점', () => {
+  afterEach(() => setActiveSite(undefined));
+
+  it('춘천 평면·계정 mfcw-cc-…, MOCK 이 돈다', async () => {
+    setActiveSite('MFC-CHC-01');
+    expect(REAL_LINK.virtualAccounts[0]).toBe('mfcw-cc-pp-01');
+    expect(passwordFileFor(REAL_LINK.supervisorAccount)).toBe('keycloak-claude-mfc-sup-cc-password');
+    expect(isInboundAccount('mfcw-cc-qc-02')).toBe(true);
+    expect(workerShortName('mfcw-cc-pp-04')).toBe('피킹4');
+    const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: 'MFC-CHC-01', ordersPerHour: 60 });
+    expect(s.layout.variant).toBe('CHUNCHEON');
+    s.speed = 60;
+    for (let i = 0; i < 1500 && s.metrics.summary().handedOver < 5; i++) await s.advance(0.1);
+    expect(s.metrics.summary().handedOver).toBeGreaterThanOrEqual(5);
+    expect(s.metrics.apiErrors).toBe(0);
+    expect(s.mock!.inventory.violations).toEqual([]);
+  }, 120_000);
+});

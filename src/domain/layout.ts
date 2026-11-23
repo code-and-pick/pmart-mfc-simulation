@@ -153,8 +153,8 @@ export interface SiteGeo {
   returnIntake: { x: number; z: number };
   /** 바닥 표시 — 없으면 1호점 표시(Stock STORE_AREAS) */
   storeAreas?: StoreArea[];
-  /** 휴게·사무 테이블(없으면 1호점 OFFICE_TABLE) */
-  officeTable?: { x: number; z: number; w: number; d: number; h: number };
+  /** 휴게·사무 테이블(없으면 1호점 OFFICE_TABLE, null = 휴게·사무 없음 — 춘천) */
+  officeTable?: { x: number; z: number; w: number; d: number; h: number } | null;
   /** 입고·검수 롤테이너 장식 자리 */
   rollContainers?: { x: number; z: number }[];
   /** 장바구니 거치대를 세로(남북)로 — 카트 줄이 남쪽으로 늘어서고 시작점 판은 동쪽을 본다(세종, 사용자 2026-11-24) */
@@ -171,7 +171,7 @@ export function depotPoint(L: Pick<Layout, 'geo' | 'points'>, dx: number, dz: nu
 
 export interface Layout {
   /** 어느 평면인가 — SEED = 1호점(목포 같음), SEJONG = 3호점 세종(2026-11-23 R-41) */
-  variant: 'SEED' | 'SEJONG';
+  variant: 'SEED' | 'SEJONG' | 'CHUNCHEON';
   geo: SiteGeo;
   width: number;
   depth: number; // 외부 앞마당 포함

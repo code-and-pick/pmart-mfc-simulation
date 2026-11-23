@@ -1,0 +1,93 @@
+// 4호점 춘천 평면(R-42) — 사용자 표의 랙 수(칸은 1호점·세종과 같은 단×칸), 칸 코드 겹침 없음, 걸어갈 수 있음. WRITE_LAYOUT=1 이면 위치 파일을 docs/layout-export/chuncheon/ 에 쓴다.
+import { describe, expect, it } from 'vitest';
+import { buildChuncheonLayout, CHUNCHEON_RACKS } from '../src/domain/layoutChuncheon';
+import { buildLocationCodeMap } from '../src/domain/locationCodes';
+import { exportPositions } from '../src/domain/layoutExport';
+import { NavGrid } from '../src/domain/navgrid';
+
+const NODE_FS = 'node:fs';
+const fs = (await import(/* @vite-ignore */ NODE_FS)) as { writeFileSync(p: URL, s: string): void };
+const env = (globalThis as unknown as { process?: { env: Record<string, string | undefined> } }).process?.env ?? {};
+
+describe('춘천 MFC 평면(R-42)', () => {
+  const L = buildChuncheonLayout();
+  const codes = buildLocationCodeMap(L);
+  const count = (pred: (r: (typeof L.racks)[number]) => boolean) => L.racks.filter(pred).length;
+  const cells = (pred: (l: (typeof L.locations)[number]) => boolean) => L.locations.filter(pred).length;
+  const zr = (id: string) => L.zones.find((z) => z.id === id)!.rect;
+
+  it('랙·칸 수가 사용자 표와 같다(칸은 1호점 단×칸 — 9,737)', () => {
+    expect(count((r) => !r.reserve && r.temp === 'CHILLED')).toBe(CHUNCHEON_RACKS.B);
+    expect(count((r) => !r.reserve && r.temp === 'FROZEN')).toBe(CHUNCHEON_RACKS.A);
+    for (const g of ['C', 'D', 'E', 'F', 'G', 'H'] as const) expect(count((r) => !r.reserve && r.temp === 'AMBIENT' && r.group[0] === g)).toBe(CHUNCHEON_RACKS[g]);
+    expect(count((r) => !r.reserve)).toBe(235);
+    expect(count((r) => !!r.reserve)).toBe(30);
+    expect(cells((l) => !l.reserve && l.temp === 'CHILLED')).toBe(80 * 35);
+    expect(cells((l) => !l.reserve && l.temp === 'FROZEN')).toBe(67 * 30);
+    expect(cells((l) => !l.reserve)).toBe(9287);
+    expect(cells((l) => !!l.reserve)).toBe(450);
+    // 상온 구역 1 = C·D·F·G, 구역 2 = E·H
+    const inZ = (r: (typeof L.racks)[number], id: string) => r.cx >= zr(id).x0 && r.cx <= zr(id).x1 && r.cz >= zr(id).z0 && r.cz <= zr(id).z1;
+    for (const r of L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT')) expect(inZ(r, 'CDFG'.includes(r.group[0]) ? 'C-H' : 'C-H2')).toBe(true);
+  });
+
+  it('칸 코드가 겹치지 않고 서버 코드로 모두 바뀐다', () => {
+    const backend = L.locations.map((l) => codes.toBackend(l.code));
+    expect(backend.every(Boolean)).toBe(true);
+    expect(new Set(backend).size).toBe(L.locations.length);
+  });
+
+  it('랙끼리·벽과 겹치지 않고, 모든 칸 앞 자리에 장바구니 거치대에서 걸어갈 수 있다', () => {
+    const box = (r: (typeof L.racks)[number]) => {
+      const hx = r.along === 'x' ? 0.625 : 0.225;
+      const hz = r.along === 'x' ? 0.225 : 0.625;
+      return { x0: r.cx - hx, z0: r.cz - hz, x1: r.cx + hx, z1: r.cz + hz };
+    };
+    const hit = (a: { x0: number; z0: number; x1: number; z1: number }, b: typeof a) => a.x0 < b.x1 - 1e-6 && b.x0 < a.x1 - 1e-6 && a.z0 < b.z1 - 1e-6 && b.z0 < a.z1 - 1e-6;
+    const bs = L.racks.map(box);
+    for (let i = 0; i < bs.length; i++) for (let j = i + 1; j < bs.length; j++) expect(hit(bs[i], bs[j])).toBe(false);
+    for (const b of bs) for (const w of L.walls) expect(hit(b, w.rect)).toBe(false);
+    for (const b of bs) for (const o of L.obstacles) expect(hit(b, o.rect)).toBe(false);
+    const nav = new NavGrid(L);
+    const picks = [...new Map(L.locations.map((l) => [`${l.pick.x.toFixed(2)},${l.pick.z.toFixed(2)}`, l.pick])).values()];
+    expect(picks.filter((p) => !nav.isFreeAt(p) || !nav.findPath(L.points.cartDepot, p))).toEqual([]);
+    for (const st of L.stations) expect(nav.findPath(L.points.cartDepot, st.stand)).toBeTruthy();
+    expect(nav.findPath(L.points.packQueue, L.points.shipDrop)).toBeTruthy();
+    expect(nav.findPath(L.points.riderEntry, L.points.riderPickup)).toBeTruthy(); // 라이더는 앞마당에서 인계 창으로
+    for (const r of L.reserves) expect(nav.findPath(L.points.truckDoor, r.stand)).toBeTruthy();
+  }, 60_000);
+
+  it('구역 넓이(평) · 건물 278평', () => {
+    const py = (id: string) => ((zr(id).x1 - zr(id).x0) * (zr(id).z1 - zr(id).z0)) / 3.3058;
+    expect(py('RCV')).toBeCloseTo(12.63, 0);
+    expect(py('PK')).toBeCloseTo(12.63, 0);
+    expect(Math.abs((L.width * L.buildingDepth) / 3.3058 + 2.1 - 278)).toBeLessThan(1);
+    expect(L.stations.length).toBe(8);
+    expect(L.reserves.filter((r) => r.role === 'BULK').length).toBe(10);
+    expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').length).toBe(6);
+  });
+
+  it('넓은 칸 — 1호점 규칙(코드가 있는 55칸) + 춘천 H3 의 4칸(제안), 닫힘 83 + 17', async () => {
+    const { applyWideCells } = await import('../src/domain/wideCells');
+    const M = buildChuncheonLayout();
+    const spans = applyWideCells(M, buildLocationCodeMap(M));
+    expect(spans.length).toBe(59);
+    expect(M.locations.filter((l) => l.closed).length).toBe(100);
+    expect(M.locations.find((l) => l.code === 'H03-03-101')!.dimMm).toEqual({ w: 1125, d: 450, h: 1260 });
+  });
+
+  it('위치 파일', () => {
+    const { positions, reserveCells, bulkCells } = exportPositions(L, codes);
+    const nonCart = positions.filter((p) => !p.locationCode.startsWith('CRT-'));
+    expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
+    expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(9287);
+    expect(reserveCells.length).toBe(450);
+    expect(bulkCells.length).toBe(10);
+    if (env.WRITE_LAYOUT === '1') {
+      const out = new URL('../docs/layout-export/chuncheon/', import.meta.url);
+      fs.writeFileSync(new URL('location-positions.json', out), '[\n' + positions.map((p) => JSON.stringify(p)).join(',\n') + '\n]\n');
+      fs.writeFileSync(new URL('reserve-rack-cells.json', out), JSON.stringify(reserveCells) + '\n');
+      fs.writeFileSync(new URL('bulk-pallet-cells.json', out), JSON.stringify(bulkCells) + '\n');
+    }
+  });
+});

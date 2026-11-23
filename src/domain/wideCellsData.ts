@@ -74,9 +74,25 @@ export const WIDE_CLOSED: readonly string[] = ['A-H1-02-1-02', 'A-H1-02-1-03', '
  * 세종(R-41, PC3 #392 2026-11-24): B-00000006 이 드는 1호점 A-H2-07-1-01 이 세종 평면엔 없어(H 줄 6랙까지) H4 줄 마지막 랙 A-H4-05 의 1~3단을 같은 모양(5칸 × 3단 = 1125 × 450 × 1260)으로 합침,
  * 나머지 14칸 CLOSED. 실행은 PC1(사용자 확인 뒤).
  */
-export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
+export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
   SEJONG: {
     merged: [['A-H4-05-1-01', 1125, 450, 1260, 'B-00000006']],
     closed: [1, 2, 3].flatMap((lv) => [1, 2, 3, 4, 5].map((s) => `A-H4-05-${lv}-0${s}`)).filter((c) => c !== 'A-H4-05-1-01'),
+  },
+  // 춘천(R-42, 2026-11-24 제안 — PC3 판단): H 줄이 5랙이라 1호점 A-H2-07·A-H1-06 이 없음 → 같은 모양을 춘천 H 마지막 줄(A-H3-01~03)에.
+  // B-00000006 = A-H3-03 1~3단 합침(1125 × 450 × 1260, 나머지 14칸 닫힘), E-00000066·071·144 = A-H3-02 의 2칸 합침 3개(450 폭, 1호점 A-H1-06 과 같은 자리 꼴)
+  CHUNCHEON: {
+    merged: [
+      ['A-H3-03-1-01', 1125, 450, 1260, 'B-00000006'],
+      ['A-H3-02-1-01', 450, 450, 420, 'E-00000066'],
+      ['A-H3-02-1-03', 450, 450, 420, 'E-00000071'],
+      ['A-H3-02-2-01', 450, 450, 420, 'E-00000144'],
+    ],
+    closed: [
+      ...[1, 2, 3].flatMap((lv) => [1, 2, 3, 4, 5].map((s) => `A-H3-03-${lv}-0${s}`)).filter((c) => c !== 'A-H3-03-1-01'),
+      'A-H3-02-1-02',
+      'A-H3-02-1-04',
+      'A-H3-02-2-02',
+    ],
   },
 };

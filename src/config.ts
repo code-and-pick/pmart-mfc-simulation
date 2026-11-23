@@ -276,7 +276,7 @@ export interface MfcSite {
   /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
   supervisorAccount: string;
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
-  layout?: 'SEED' | 'SEJONG';
+  layout?: 'SEED' | 'SEJONG' | 'CHUNCHEON';
 }
 export const MFC_SITES: readonly MfcSite[] = [
   {
@@ -308,6 +308,18 @@ export const MFC_SITES: readonly MfcSite[] = [
     accountPrefix: 'mfcw-sj-',
     supervisorAccount: 'claude-mfc-sup-sj',
     layout: 'SEJONG',
+  },
+  {
+    // 4호점 춘천(R-42, 2026-11-24 사용자 "mfc 하나 더 만들자. 평면도 대로 mfc 구조 설계하고, 랙수랑 평수는 아래 적은대로") — layoutChuncheon.ts.
+    // 계정 [확정] 백엔드 mfc_test_workers.py --center chuncheon: mfcw-cc-pp·qc·rcv 01~10 + claude-mfc-sup-cc. 주소·좌표 center-master(PC 1)
+    id: 'MFC-CHC-01',
+    name: '4호점 춘천 MFC',
+    address: '강원특별자치도 춘천시 춘천로 236 2층 (효자동 750)',
+    short: '4호점 춘천',
+    mockAreas: ['춘천시 효자동', '춘천시 석사동', '춘천시 퇴계동', '춘천시 후평동', '춘천시 온의동', '춘천시 소양동'],
+    accountPrefix: 'mfcw-cc-',
+    supervisorAccount: 'claude-mfc-sup-cc',
+    layout: 'CHUNCHEON',
   },
 ];
 let currentSite: MfcSite = MFC_SITES[0];
