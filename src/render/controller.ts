@@ -27,7 +27,8 @@ export function zoneViews(L: Layout): ZoneView[] {
     { key: 'C-H', label: L.zones.some((x) => x.id === 'C-H2') ? '상온 구역 1' : '상온 C~H', zoneId: 'C-H', rect: z('C-H') },
     // 세종(R-41)은 상온 피킹 구역이 둘
     ...(L.zones.some((x) => x.id === 'C-H2') ? [{ key: 'C-H2', label: '상온 구역 2', zoneId: 'C-H2', rect: z('C-H2') }] : []),
-    { key: 'WH', label: '입고창고', zoneId: 'WH', rect: z('WH') },
+    // 세종 입고창고는 ㄱ자(WH + WH2) — 시야는 둘을 합친 사각형
+    { key: 'WH', label: '입고창고', zoneId: 'WH', rect: L.zones.some((x) => x.id === 'WH2') ? { x0: Math.min(z('WH').x0, z('WH2').x0), z0: Math.min(z('WH').z0, z('WH2').z0), x1: Math.max(z('WH').x1, z('WH2').x1), z1: Math.max(z('WH').z1, z('WH2').z1) } : z('WH') },
     // 입고·검수는 북쪽 차량문 밖 트럭 자리까지(2026-11-21 재배치 — 전엔 동쪽 x 57 까지)
     { key: 'RCV', label: '입고·검수', zoneId: 'RCV', rect: { ...z('RCV'), z0: -5.5 } },
     { key: 'PK', label: '패킹', zoneId: 'PK', rect: z('PK') },

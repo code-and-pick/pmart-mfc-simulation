@@ -126,7 +126,7 @@ function Zones({ L }: { L: Layout }) {
               rotation={[-Math.PI / 2, 0, 0]}
               position={[r.x0 + w / 2, z.kind === 'QUARANTINE' ? 0.008 : 0.005, r.z0 + d / 2]}
               receiveShadow
-              userData={{ zoneId: z.id }}
+              userData={{ zoneId: z.id === 'WH2' ? 'WH' : z.id }} // 세종 입고창고 ㄱ자 덧붙은 바닥 = 입고창고
             >
               <planeGeometry args={[w, d]} />
               {/* 구역 바닥(사용자 2026-11-20 참고 그림 "그림처럼") — 냉동 옅은 하늘·냉장 옅은 연두, 나머지 거의 흰색. 경계는 옅은 점선. 이름은 떠 있는 둥근 이름표(ZoneNames) */}

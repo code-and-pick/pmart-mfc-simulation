@@ -170,6 +170,7 @@ export function zoneTags(L: Layout): Tag[] {
   const out: Tag[] = [];
   for (const z of L.zones) {
     if (z.kind === 'SHIPPING') continue; // 라이더 대기와 같은 곳 — 인계 랙 번호판으로 충분
+    if (z.noTag) continue; // 같은 구역의 덧붙은 바닥(세종 입고창고 ㄱ자)
     const r = z.rect;
     const dim = z.kind === 'QUARANTINE';
     const racks = rackCount(L, z);

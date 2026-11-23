@@ -33,6 +33,8 @@ export interface Zone {
   rect: Rect;
   /** 문서 면적(평). 배치 면적과 다를 수 있다. */
   docPyeong?: number;
+  /** 같은 구역의 덧붙은 바닥(ㄱ자 구역 등) — 이름표를 따로 달지 않는다 */
+  noTag?: boolean;
 }
 
 export interface Rack {

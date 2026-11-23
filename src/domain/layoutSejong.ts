@@ -62,13 +62,16 @@ const R = {
   // 가운데 남쪽 = 패킹(가로로 길게, 맨 앞) → 그 북쪽 상온 구역 1(가로로 길게) — 사용자 2026-11-24 "패킹대 남쪽으로 가로로 길게 맨 앞에 두고 그 뒤로 상온구역1 시작하게 해 그것도 지금 세로로 길게 늘려져 있는데 가로로 길게 늘려. 상온구역2는 그대로"
   // 상온 구역 1 (18.0 × 13.6 m, 그 안 상온 격리 2평) — 입고·검수 남쪽 통로 1.9 m · 패킹 북쪽 주 통로 2.0 m 사이를 다 쓰고 피킹 통로를 넓힘
   // (사용자 2026-11-24 "넓은 곳은 너무 넓고 통로가 좁은 곳은 너무 좁아 보이는데" → 제안(주 통로 2.0 m·피킹 통로 1.6 m, 북쪽 빈 띠를 구역으로) "응"). 그 전: z 11.4~21.95, 피킹 통로 1.0 m
-  CH1: { x0: 26.4, z0: 8.9, x1: 44.4, z1: 22.5 },
+  // 2026-11-24 "상온 구역 사이 통로가 너무 늘었는데 … 조금 다시 줄여봐" — 피킹 통로 1.6 → 1.3 m, 여백 1.2 m(구역 깊이 12.1 m)
+  CH1: { x0: 26.4, z0: 10.4, x1: 44.4, z1: 22.5 },
   // 상온 격리 2평 — 상온 구역 1 안 북서쪽 모서리(비워 둔 북쪽 줄 서쪽 6랙 자리). 사용자 2026-11-24 "상온격리 구역 지금 남쪽에 있는데 북쪽으로 옮겨" → "상온 구역1 안에 있어야지"
-  CQ: { x0: 26.6, z0: 8.95, x1: 30.4, z1: 10.7 },
+  CQ: { x0: 26.6, z0: 10.45, x1: 30.4, z1: 12.05 },
   // 패킹 20.26평 = 66.6 m²(10.0 × 6.66) — 패킹대 4 | 4 두 줄(사용자 2026-11-24 "패킹구역 너무 납작해졌잖아. 4 4 이렇게 해야지"), 남쪽 출하문 앞 통로(z 31.2~33.3)는 비움
   // 패킹은 상온 구역 1 아래 서쪽 끝에 붙임 — 사용자 2026-11-24 "패킹구역을 중앙 말고 왼쪽으로 붙이고 작업자가 왜 북쪽에 … 장바구니 거치대 근처에 있게 해 … 장바구니는 오른쪽에 작업자들이랑 같이 공간 확보"
   PK: { x0: 26.4, z0: 24.54, x1: 36.4, z1: 31.2 },
   WH: { x0: 44.6, z0: 0, x1: SJ_W, z1: 19.6 }, // 상온 입고창고 51.31평 = 169.6 m²
+  // 상온 입고창고 서쪽 덧붙은 바닥(입고·검수 동쪽 ~ 창고, 그림의 ㄱ자) — 사용자 2026-11-24 "입고검수 구역이랑 상온입고창고 구역 사이에 남는 공간이 원래 상온입고창고구역이어야 하는데?"
+  WH2: { x0: 38.0, z0: 0, x1: 44.6, z1: 7.0 },
   CH2: { x0: 44.6, z0: 19.8, x1: SJ_W, z1: 29.9 }, // 상온 구역 2 (구역 1 + 2 = 80.46평)
   OFF: { x0: 44.6, z0: 30.1, x1: SJ_W, z1: SJ_BD }, // 사무·휴게 8.15평
   SHIP: { x0: 37.7, z0: SJ_BD + 0.1, x1: 43.7, z1: SJ_BD + 1.5 }, // 인계(돌출부 안) 3평
@@ -99,6 +102,7 @@ export function buildSejongLayout(): Layout {
     { id: 'C-H', kind: 'AMBIENT', label: '상온 구역 1', rect: R.CH1, docPyeong: ZONE_PY['C-H'] },
     { id: 'C-H2', kind: 'AMBIENT', label: '상온 구역 2', rect: R.CH2, docPyeong: ZONE_PY['C-H2'] },
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: R.WH, docPyeong: ZONE_PY.WH },
+    { id: 'WH2', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: R.WH2, noTag: true },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: R.RCV, docPyeong: ZONE_PY.RCV },
     { id: 'OFF', kind: 'OFFICE', label: '사무·휴게', rect: R.OFF, docPyeong: ZONE_PY.OFF },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: R.PK, docPyeong: ZONE_PY.PK },
@@ -148,7 +152,9 @@ export function buildSejongLayout(): Layout {
   hWall(R.RCV.z1 + 0.1, R.RCV.x0, R.RCV.x1, [[33.4, 37.4]]); // 남쪽 문 = 상온 구역 1 가운데 주 통로(x 35.4)와 일직선(2026-11-24)
   vWall(R.RCV.x1, 0, R.RCV.z1 + 0.1, [[3.0, 5.2]]);
   // 상온 입고창고: 서쪽 벽 문 2(북쪽 = 입고·검수 쪽 마당, 남쪽 = 가운데 통로), 남쪽 벽(상온 구역 2 와 경계)
-  vWall(R.WH.x0, 0, R.WH.z1, [[2.0, 4.6], [14.6, 17.2]]);
+  // ㄱ자: 북쪽 덧붙은 바닥(x 38.0~44.6, z 0~7.0)과 창고 사이엔 벽 없음 — 입고·검수 동쪽 문이 창고로 바로 열림. 덧붙은 바닥 남쪽 벽에 가운데 통로 쪽 문
+  vWall(R.WH.x0, R.WH2.z1, R.WH.z1, [[14.6, 17.2]]);
+  hWall(R.WH2.z1, R.WH2.x0, R.WH.x0, [[40.2, 42.6]]);
   hWall(R.WH.z1, R.WH.x0, SJ_W);
   // 사무·휴게
   hWall(R.OFF.z0, R.OFF.x0, SJ_W);
@@ -235,8 +241,8 @@ export function buildSejongLayout(): Layout {
       }
     }
   };
-  // 피킹 통로 1.6 m, 가운데 세로 주 통로 2.0 m(입고·검수 남쪽 문과 일직선), 남·북 여백 1.35 m
-  ambientBlock(R.CH1, [['F', SEJONG_RACKS.F], ['G', SEJONG_RACKS.G], ['C', SEJONG_RACKS.C], ['D', SEJONG_RACKS.D]], 5, 1.6, 'RC', true, 2, 2.0, 1.35, true);
+  // 피킹 통로 1.3 m, 가운데 세로 주 통로 2.0 m(입고·검수 남쪽 문과 일직선), 남·북 여백 1.2 m
+  ambientBlock(R.CH1, [['F', SEJONG_RACKS.F], ['G', SEJONG_RACKS.G], ['C', SEJONG_RACKS.C], ['D', SEJONG_RACKS.D]], 5, 1.3, 'RC', true, 2, 2.0, 1.2, true);
   ambientBlock(R.CH2, [['E', SEJONG_RACKS.E], ['H', SEJONG_RACKS.H]], 4, 1.2, 'RC2', true);
   // 그룹(줄) 안 랙 번호 — 서쪽부터
   {
