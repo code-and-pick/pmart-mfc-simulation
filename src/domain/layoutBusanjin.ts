@@ -91,9 +91,10 @@ export function buildBusanjinLayout(): Layout {
   };
   /** 방마다 통로 z 범위(북쪽부터) — 문을 통로에 맞춤 */
   const coldAisles: Record<'FROZEN' | 'CHILLED', [number, number][]> = { FROZEN: [], CHILLED: [] };
-  // 피킹: 그림처럼 한 면 가로 줄(북쪽을 봄, 줄마다 앞 통로), 고르게 6줄 — 줄마다 서쪽 묶음 | 통로 1.4 m | 동쪽 묶음.
-  // (그림의 4줄 × 16랙은 랙 길이 1.25 m 로 한 줄 20 m 라 방 폭에 안 들어감 → 6줄)
-  const coldRoom = (temp: 'FROZEN' | 'CHILLED', room: Rect, rows: Rack[][], resRacks: Rack[], rid: string): Rack[] => {
+  // 피킹: 그림의 가로 4줄 = 등 맞댄 4쌍(사용자 2026-11-24 "냉장냉동구역에 다 6개씩 놔두다가 왜 2줄은 5개씩 두고 내 쪽에서 랙 식별값도 안 보여?").
+  //   한 쌍의 북쪽 면·남쪽 면이 같은 묶음 모양(냉동 4 | 4, 냉장 5 | 5 와 5 | 4) — 남쪽 면은 남쪽(화면 앞)을 봐 번호판이 보임.
+  //   그림 한 줄 16·19랙은 랙 길이 1.25 m 로 20 m 넘어 방에 안 들어가 한 줄을 등 맞댄 두 면으로 나눔.
+  const coldRoom = (temp: 'FROZEN' | 'CHILLED', room: Rect, pairs: [Rack[], Rack[]][], resRacks: Rack[], rid: string): Rack[] => {
     const out: Rack[] = [];
     const z0 = room.z0 + 0.1;
     const z1 = room.z1 - 0.1;
@@ -102,22 +103,37 @@ export function buildBusanjinLayout(): Layout {
     const palX = COLD.x0 + 0.1 + resRacks.length * RACK_LEN + 0.4;
     [0, 1].forEach((j) => addReserve(`${rid}-${j + 3}`, temp, palX + j * (P + 0.3), z0 + 0.05, { x: palX + j * (P + 0.3) + P / 2, z: z0 + 0.05 + P + 0.4 }, 'RECEIVING'));
     const zA = z0 + COLD.bandZ;
-    const a = (z1 - zA - rows.length * RACK_DEPTH) / rows.length;
-    // 가운데 통로(x)는 모든 줄이 같은 자리, 줄 묶음은 방 폭 가운데로(짧은 줄은 동쪽 묶음이 짧음)
-    const maxN = Math.max(...rows.map((r) => r.length));
+    const a = (z1 - zA - pairs.length * 2 * RACK_DEPTH) / (pairs.length + 1);
+    // 가운데 통로(x)는 모든 줄이 같은 자리, 묶음은 방 폭 가운데로
+    const maxN = Math.max(...pairs.flat().map((r) => r.length));
     const west = Math.ceil(maxN / 2);
     const blockW = maxN * RACK_LEN + 1.4;
     const bx0 = COLD.rowX0 + (room.x1 - 0.15 - COLD.rowX0 - blockW) / 2;
-    rows.forEach((row, k) => {
-      const top = zA + k * (a + RACK_DEPTH);
+    const xAt = (i: number) => bx0 + (i < west ? (i + 0.5) * RACK_LEN : west * RACK_LEN + 1.4 + (i - west + 0.5) * RACK_LEN);
+    for (let k = 0; k <= pairs.length; k++) {
+      const top = zA + k * (a + 2 * RACK_DEPTH);
       coldAisles[temp].push([top, top + a]);
-      const cz = top + a + RACK_DEPTH / 2;
-      row.forEach((r, i) => out.push(place(r, bx0 + (i < west ? (i + 0.5) * RACK_LEN : west * RACK_LEN + 1.4 + (i - west + 0.5) * RACK_LEN), cz, 'x', -1)));
+    }
+    pairs.forEach(([north, south], k) => {
+      const top = zA + a + k * (a + 2 * RACK_DEPTH);
+      north.forEach((r, i) => out.push(place(r, xAt(i), top + RACK_DEPTH / 2, 'x', -1)));
+      south.forEach((r, i) => out.push(place(r, xAt(i), top + 1.5 * RACK_DEPTH, 'x', 1)));
     });
     return out;
   };
-  const frozen = coldRoom('FROZEN', R.A, [run('A01', 1, 11), run('A02', 1, 11), run('A03', 1, 11), run('A04', 1, 11), run('A05', 1, 10), run('A06', 1, 10)], resOld('FROZEN', BUSANJIN_RACKS.reserveFrozen), 'AR');
-  const chilled = coldRoom('CHILLED', R.B, [run('B01', 1, 13), run('B02', 1, 13), run('B03', 1, 13), run('B04', 1, 13), run('B05', 1, 12), run('B06', 1, 12)], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR');
+  // 한 면 = 옛 1호점 한 줄 코드의 이어진 번호(A01-01~08 | A01-09~16 …)
+  const frozen = coldRoom('FROZEN', R.A, [
+    [run('A01', 1, 8), run('A01', 9, 8)],
+    [run('A02', 1, 8), run('A02', 9, 8)],
+    [run('A03', 1, 8), run('A03', 9, 8)],
+    [run('A04', 1, 8), run('A04', 9, 8)],
+  ], resOld('FROZEN', BUSANJIN_RACKS.reserveFrozen), 'AR');
+  const chilled = coldRoom('CHILLED', R.B, [
+    [run('B01', 1, 10), run('B02', 1, 9)],
+    [run('B03', 1, 10), run('B04', 1, 9)],
+    [run('B05', 1, 10), run('B06', 1, 9)],
+    [run('B07', 1, 10), run('B02', 10, 9)],
+  ], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR');
 
   // ── 상온 C~H(그림대로) ─────────────────────────────────
   // 동쪽 세로 띠: 한 면 가로 줄 8(남쪽을 봄), 줄마다 서쪽 4 | 통로 1.0 m | 동쪽 나머지, 북쪽부터 C → D → E → F.
@@ -198,14 +214,14 @@ export function buildBusanjinLayout(): Layout {
   vWall(X(0), 0, BSJ_BD, [SHIP_WINDOW]);
   walls.push({ rect: { x0: X(0) - T / 2, z0: SHIP_WINDOW[0], x1: X(0) + T / 2, z1: SHIP_WINDOW[1] }, height: 1.1 }); // 인계 창(허리 높이 창턱 — 라이더는 밖에서 받음)
   vWall(X(BSJ_W), 0, BSJ_BD);
-  // 승강기 별동: 동쪽 문(입고·검수 쪽 통로)만 — 남쪽 벽 앞은 장바구니 거치대
+  // 승강기 별동: 동쪽 문(입고·검수 쪽 통로) + 남쪽 문(그림 — 서쪽 통로로 바로, 사용자 2026-11-24 "승강기에서 바로 들어올 수 있는 문이 있는데 왜 거기다가 벽을 치고 장바구니 거치대를 뒀지")
   vWall(R.ANNEX.x1, 0, R.ANNEX.z1, [[0.3, 2.3]]);
-  hWall(R.ANNEX.z1, R.ANNEX.x0, R.ANNEX.x1);
+  hWall(R.ANNEX.z1, R.ANNEX.x0, R.ANNEX.x1, [[X(3.6), X(5.45)]]);
   // 냉동·냉장: 문은 통로에 맞춤 — 냉동 북쪽(입고·검수에서), 서쪽·동쪽은 두 번째 통로
   const door = (c: number) => [c - 0.9, c + 0.9] as const;
-  // 서쪽·동쪽 문 = 다섯째 통로(격리·장바구니 거치대와 안 겹침)
-  const fA1 = (coldAisles.FROZEN[4][0] + coldAisles.FROZEN[4][1]) / 2;
-  const cA1 = (coldAisles.CHILLED[4][0] + coldAisles.CHILLED[4][1]) / 2;
+  // 서쪽·동쪽 문 = 셋째 통로(둘째·셋째 쌍 사이 — 격리·장바구니 거치대와 안 겹침)
+  const fA1 = (coldAisles.FROZEN[2][0] + coldAisles.FROZEN[2][1]) / 2;
+  const cA1 = (coldAisles.CHILLED[2][0] + coldAisles.CHILLED[2][1]) / 2;
   const FROZEN_NORTH_DOOR = door(X(19.8));
   hWall(R.A.z0, R.A.x0, R.A.x1, [FROZEN_NORTH_DOOR]);
   hWall(R.A.z1, R.A.x0, R.A.x1);
@@ -288,8 +304,8 @@ export function buildBusanjinLayout(): Layout {
 
   // ── 점 ───────────────────────────────────────────────
   // 장바구니 거치대: 냉동·냉장 서쪽 벽 앞 세로(카트 줄 x ≈ OX+4.4, 냉동 서쪽 문과 냉장 서쪽 문 사이)
-  // 장바구니 거치대: 승강기 별동 남쪽 벽 앞 가로(카트 x OX+0.2~5.2), 시작점은 동쪽 끝
-  const cartDepot = { x: X(4.5), z: R.ANNEX.z1 + 1.0 };
+  // 장바구니 거치대: 승강기 별동 남쪽 문 서쪽, 가로 2줄(줄마다 카트 약 10대, 카트 x OX+0.5~3.0) — 문 앞은 비움
+  const cartDepot = { x: X(2.3), z: R.ANNEX.z1 + 1.0 };
   const points: Layout['points'] = {
     truckDoor: { x: X(2.15), z: 3.0 },
     truckDock: { x: 20, z: 3.6 }, // 서쪽 마당 세로 차로(geo.truckLaneX) — z 는 서 있을 때 차 가운데, x 는 차로 위 거리 기준값
@@ -328,7 +344,9 @@ export function buildBusanjinLayout(): Layout {
       CQ: [R.CQ.z1 - 0.1 - RACK_DEPTH, R.CQ.z0 + 0.05].map((z0) => ({ x0: R.CQ.x0 + 0.125, z0, x1: R.CQ.x0 + 0.125 + RACK_LEN, z1: z0 + RACK_DEPTH })),
     },
     cartDepotVertical: false,
-    returnTable: { x: X(0.9), z: 8.3 },
+    cartDepotRows: 2,
+    cartDepotRowGap: 1.6,
+    returnTable: { x: X(4.5), z: 10.6, vertical: true },
   };
 
   return {
