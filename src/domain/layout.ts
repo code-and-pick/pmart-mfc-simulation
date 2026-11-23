@@ -176,7 +176,7 @@ export function depotPoint(L: Pick<Layout, 'geo' | 'points'>, dx: number, dz: nu
 
 export interface Layout {
   /** 어느 평면인가 — SEED = 1호점(목포 같음), SEJONG = 3호점 세종(2026-11-23 R-41) */
-  variant: 'SEED' | 'SEJONG' | 'CHUNCHEON';
+  variant: 'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
   geo: SiteGeo;
   width: number;
   depth: number; // 외부 앞마당 포함

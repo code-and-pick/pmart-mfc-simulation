@@ -31,6 +31,9 @@ export function passwordFileFor(account: string): string | null {
   // 4호점 춘천(R-42, 2026-11-24) — mfc_test_workers.py --center chuncheon(공용 비밀번호, 관리자 파일 따로 — .secrets 파일 이름 확인)
   if (/^mfcw-cc-(pp|qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
   if (short === 'claude-mfc-sup-cc') return 'keycloak-claude-mfc-sup-cc-password';
+  // 5호점 부산남구(R-44, 2026-11-24) — mfc_test_workers.py --center busan-namgu
+  if (/^mfcw-bn-(pp|qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
+  if (short === 'claude-mfc-sup-bn') return 'keycloak-claude-mfc-sup-bn-password';
   return null;
 }
 

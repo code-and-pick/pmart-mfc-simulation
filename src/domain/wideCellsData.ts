@@ -74,7 +74,7 @@ export const WIDE_CLOSED: readonly string[] = ['A-H1-02-1-02', 'A-H1-02-1-03', '
  * 세종(R-41, PC3 #392 2026-11-24): B-00000006 이 드는 1호점 A-H2-07-1-01 이 세종 평면엔 없어(H 줄 6랙까지) H4 줄 마지막 랙 A-H4-05 의 1~3단을 같은 모양(5칸 × 3단 = 1125 × 450 × 1260)으로 합침,
  * 나머지 14칸 CLOSED. 실행은 PC1(사용자 확인 뒤).
  */
-export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
+export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
   SEJONG: {
     merged: [['A-H4-05-1-01', 1125, 450, 1260, 'B-00000006']],
     closed: [1, 2, 3].flatMap((lv) => [1, 2, 3, 4, 5].map((s) => `A-H4-05-${lv}-0${s}`)).filter((c) => c !== 'A-H4-05-1-01'),
@@ -95,4 +95,14 @@ export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON', { merge
       'A-H3-02-2-02',
     ],
   },
+  // 부산남구(R-44, 2026-11-24 제안 — PC3 판단): H 줄이 4랙 묶음이라 1호점 H 넓은 칸 랙(A-H1-02~06, A-H2-07)이 없음 →
+  // 같은 칸 구성(단·칸·치수·닫힘)을 부산남구 H 랙 6대에 그대로 옮김: H1-02 → H2-01, H1-03 → H2-02, H1-04 → H2-03, H1-05 → H2-04, H1-06 → H3-01, H2-07 → H3-02
+  BUSAN_NAMGU: (() => {
+    const map: Record<string, string> = { 'A-H1-02': 'A-H2-01', 'A-H1-03': 'A-H2-02', 'A-H1-04': 'A-H2-03', 'A-H1-05': 'A-H2-04', 'A-H1-06': 'A-H3-01', 'A-H2-07': 'A-H3-02' };
+    const re = (c: string) => (map[c.slice(0, 7)] ? map[c.slice(0, 7)] + c.slice(7) : null);
+    return {
+      merged: WIDE_MERGED.filter(([c]) => re(c)).map(([c, w, d, h, sku]) => [re(c)!, w, d, h, sku] as const),
+      closed: WIDE_CLOSED.filter((c) => re(c)).map((c) => re(c)!),
+    };
+  })(),
 };

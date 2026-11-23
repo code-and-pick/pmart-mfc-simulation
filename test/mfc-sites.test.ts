@@ -80,3 +80,23 @@ describe('춘천 지점', () => {
     expect(s.mock!.inventory.violations).toEqual([]);
   }, 120_000);
 });
+
+// 5호점 부산남구 MFC(R-44, 사용자 2026-11-24)
+describe('부산남구 지점', () => {
+  afterEach(() => setActiveSite(undefined));
+
+  it('부산남구 평면·계정 mfcw-bn-…, MOCK 이 돈다', async () => {
+    setActiveSite('MFC-BNG-01');
+    expect(REAL_LINK.virtualAccounts[0]).toBe('mfcw-bn-pp-01');
+    expect(passwordFileFor(REAL_LINK.supervisorAccount)).toBe('keycloak-claude-mfc-sup-bn-password');
+    expect(isInboundAccount('mfcw-bn-rcv-03')).toBe(true);
+    expect(workerShortName('mfcw-bn-pp-05')).toBe('피킹5');
+    const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: 'MFC-BNG-01', ordersPerHour: 60 });
+    expect(s.layout.variant).toBe('BUSAN_NAMGU');
+    s.speed = 60;
+    for (let i = 0; i < 1500 && s.metrics.summary().handedOver < 5; i++) await s.advance(0.1);
+    expect(s.metrics.summary().handedOver).toBeGreaterThanOrEqual(5);
+    expect(s.metrics.apiErrors).toBe(0);
+    expect(s.mock!.inventory.violations).toEqual([]);
+  }, 120_000);
+});

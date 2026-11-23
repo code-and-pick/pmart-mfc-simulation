@@ -276,7 +276,7 @@ export interface MfcSite {
   /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
   supervisorAccount: string;
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
-  layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON';
+  layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
 }
 export const MFC_SITES: readonly MfcSite[] = [
   {
@@ -322,6 +322,18 @@ export const MFC_SITES: readonly MfcSite[] = [
     accountPrefix: 'mfcw-cc-',
     supervisorAccount: 'claude-mfc-sup-cc',
     layout: 'CHUNCHEON',
+  },
+  {
+    // 5호점 부산남구(R-44, 2026-11-24 사용자 "mfc 하나 더 만들자. 평면도 대로 …") — layoutBusanNamgu.ts. ID MFC-BNG-01(옛 잘못된 MFC-BSN-01 아님).
+    // 계정 [확정] 백엔드 mfc_test_workers.py --center busan-namgu: mfcw-bn-pp·qc·rcv 01~10 + claude-mfc-sup-bn
+    id: 'MFC-BNG-01',
+    name: '5호점 부산남구 MFC',
+    address: '부산 남구 수영로 305 스파크타워 지하 1층 (대연동 73-15)',
+    short: '5호점 부산남구',
+    mockAreas: ['남구 대연동', '남구 문현동', '남구 용호동', '남구 감만동', '남구 우암동', '남구 용당동'],
+    accountPrefix: 'mfcw-bn-',
+    supervisorAccount: 'claude-mfc-sup-bn',
+    layout: 'BUSAN_NAMGU',
   },
 ];
 let currentSite: MfcSite = MFC_SITES[0];
