@@ -53,9 +53,11 @@ const R = {
   A: { x0: 7.8, z0: 1.8, x1: 15.4, z1: 26.9 }, // 냉동 61.02 + 격리 1
   RCV: { x0: 16.6, z0: 0, x1: 22.8, z1: 6.73 }, // 12.63평 = 41.7 m²
   WH: { x0: 24.2, z0: 0, x1: CHC_W, z1: 9.6 }, // 상온 입고창고(+ 상온 격리) — 그림 크기(7.6 × 9.6)
-  CQ: { x0: 30.0, z0: 7.6, x1: 31.7, z1: 9.55 }, // 상온 격리 1평(입고창고 남동 모서리)
-  CH1: { x0: 16.6, z0: 7.9, x1: 23.6, z1: 20.9 }, // 상온 구역 1(C·D·F·G)
-  CH2: { x0: 24.6, z0: 10.6, x1: 31.6, z1: 17.7 }, // 상온 구역 2(E·H)
+  // 상온 격리 1평 — 입고창고 동쪽 벽에 세로로 붙임(0.85 × 3.9 m), 보충재고 랙(동쪽 끝 x 30.0)과 사이 통로 0.85 m — 사용자 2026-11-24 "상온 격리 동쪽 벽으로 돌려서 붙여 사람이 지나갈 순 있게 해줘야지"
+  CQ: { x0: 30.85, z0: 5.6, x1: 31.7, z1: 9.5 },
+  // 상온 구역 1(C·D·F·G) — 등 맞댄 6쌍(G 맨 앞 줄은 구역 2 앞으로), 앞(남쪽) 통로 약 3.4 m — 사용자 2026-11-24 "G랙 맨 앞 한 줄 상온구역2 앞에 붙이면 G 가로로 이어지겠네"
+  CH1: { x0: 16.6, z0: 8.1, x1: 23.6, z1: 19.2 },
+  CH2: { x0: 24.6, z0: 10.6, x1: 31.6, z1: 19.2 }, // 상온 구역 2(E·H 3쌍 + 맨 앞 G 한 줄 — 구역 1 맨 앞 G 줄과 같은 높이로 이어짐)
   PK: { x0: 16.6, z0: 22.6, x1: 25.3, z1: 27.4 }, // 패킹 12.63평 = 41.8 m²(8.7 × 4.8)
   SHIP: { x0: 23.7, z0: CHC_BD + 0.1, x1: 26.9, z1: CHC_BD + 1.94 }, // 인계대기 2.10평(돌출부 안)
   PARK: { x0: 19.6, z0: 33.0, x1: 30.6, z1: 36.4 }, // 라이더 대기 11.3평(건물 밖)
@@ -170,6 +172,31 @@ export function buildChuncheonLayout(): Layout {
   };
   ambientBlock(R.CH1, [['G', CHUNCHEON_RACKS.G], ['F', CHUNCHEON_RACKS.F], ['D', CHUNCHEON_RACKS.D], ['C', CHUNCHEON_RACKS.C]], 7, 1.0, 'RC');
   ambientBlock(R.CH2, [['H', CHUNCHEON_RACKS.H], ['E', CHUNCHEON_RACKS.E]], 3, 1.1, 'RC2');
+  // 자리 다시(칸 코드는 위 그대로 — 서버에 재고 있음): 구역 1 은 등 맞댄 6쌍(통로 1.0 m, 남·북 여백 0.35 m), 만든 순서(남쪽 줄부터)대로 채우되
+  // G 첫 줄(G01, 5랙)은 구역 2 앞(남쪽)으로 — 구역 1 맨 앞 줄과 같은 높이라 G 가 가로로 이어진다. 구역 2 의 E·H 3쌍은 그 북쪽(z 10.6~17.6 가운데) — 사용자 2026-11-24 "G랙 맨 앞 한 줄 상온구역2 앞에 붙이면 G 가로로 이어지겠네"
+  {
+    const rowSlots = (area: Rect, pairs: number, aisle: number, southMargin: number) => {
+      const xs = Array.from({ length: 5 }, (_, i) => (area.x0 + area.x1) / 2 + (i - 2) * RACK_LEN);
+      const depth = pairs * 2 * RACK_DEPTH + (pairs - 1) * aisle;
+      const z0 = area.z1 - southMargin - depth;
+      const rows: { cz: number; face: 1 | -1 }[] = [];
+      for (let p = 0; p < pairs; p++) {
+        const zz = z0 + p * (2 * RACK_DEPTH + aisle);
+        rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
+      }
+      rows.reverse();
+      return rows.flatMap((row) => xs.map((x) => ({ x, ...row })));
+    };
+    const z1Racks = ambient.filter((r) => r.id.startsWith('RC-'));
+    const moved = z1Racks.slice(0, 5); // G01 — 구역 1 맨 앞 줄
+    const s1 = rowSlots(R.CH1, 6, 1.0, 0.35);
+    z1Racks.slice(5).forEach((r, k) => Object.assign(r, { cx: s1[k].x, cz: s1[k].cz, face: s1[k].face }));
+    const frontCz = s1[0].cz; // 구역 1 맨 앞(남쪽) 줄 높이
+    const xs2 = Array.from({ length: 5 }, (_, i) => (R.CH2.x0 + R.CH2.x1) / 2 + (i - 2) * RACK_LEN);
+    moved.forEach((r, i) => Object.assign(r, { cx: xs2[i], cz: frontCz, face: 1 }));
+    const s2 = rowSlots({ x0: R.CH2.x0, z0: R.CH2.z0, x1: R.CH2.x1, z1: 17.6 }, 3, 1.1, (17.6 - R.CH2.z0 - (3 * 2 * RACK_DEPTH + 2 * 1.1)) / 2);
+    ambient.filter((r) => r.id.startsWith('RC2-')).forEach((r, k) => Object.assign(r, { cx: s2[k].x, cz: s2[k].cz, face: s2[k].face }));
+  }
 
   // 보충재고 랙(랙당 5단 × 3 = 15) — 냉장·냉동은 서쪽 벽 띠에 등 댄 한 줄 7, 상온은 입고창고에 가로 4랙 × 4줄(등 맞댄 2쌍) 16
   const reserve: Rack[] = [];
@@ -296,14 +323,16 @@ export function buildChuncheonLayout(): Layout {
   // ── 바닥 표시 ───────────────────────────────────────
   const coldArea = (X0: number, color: 'FROZEN' | 'CHILLED'): StoreArea => {
     const X1 = X0 + BAND.mark;
-    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = BAND.qz1 - 0.12, DIV = 4.45;
+    // 판·실선은 입고재고 팔레트(z 1.95~4.3)와 보충재고 랙(z 4.6~13.35)에 맞춤 — 격리는 남쪽 따로(구역 판). 사용자 2026-11-24 "냉동냉장 구역 바닥에 입고 보충 격리 나눈 실선 랙에 맞게 조절해"
+    const rackEnd = BAND.reserveZ0 + CHUNCHEON_RACKS.reserveCold * RACK_LEN + 0.25;
+    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = rackEnd - 0.12, DIV = (4.3 + BAND.reserveZ0) / 2;
     return {
-      floor: [X0, BAND.z0, X1, BAND.qz1],
+      floor: [X0, BAND.z0, X1, rackEnd],
       color,
       lines: [[L0, Tz, L1, Tz], [L0, Bz, L1, Bz], [L0, Tz, L0, Bz], [L1, Tz, L1, Bz], [L0, DIV, L1, DIV]],
       texts: [
         { t: '입고', x: (X0 + X1) / 2, z: 4.1 },
-        { t: '보충', x: X0 + 0.9, z: 9.0 },
+        { t: '보충', x: X0 + 0.95, z: (BAND.reserveZ0 + rackEnd) / 2 },
       ],
     };
   };
@@ -331,7 +360,7 @@ export function buildChuncheonLayout(): Layout {
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 17.4 + (i % 4) * 0.8, z: 5.6 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
-    idle: Array.from({ length: 24 }, (_, i) => ({ x: R.CH2.x0 + 0.6 + (i % 8) * 0.8, z: R.CH2.z1 + 0.9 + Math.floor(i / 8) * 0.8 })), // 거치대 북쪽(상온 구역 2 남쪽 앞)
+    idle: Array.from({ length: 24 }, (_, i) => ({ x: 29.9 + (i % 3) * 0.7, z: 22.3 + Math.floor(i / 3) * 0.75 })), // 거치대 동쪽
     packQueue: { x: R.PK.x1 - 0.5, z: (R.PK.z0 + R.PK.z1) / 2 },
     shipDrop: { x: (SHIP_DOOR[0] + SHIP_DOOR[1]) / 2, z: CHC_BD - 0.4 },
     riderPickup: { x: (BUMP.x0 + BUMP.x1) / 2, z: BUMP.z1 + 0.55 },
@@ -351,7 +380,7 @@ export function buildChuncheonLayout(): Layout {
     cartDepotVertical: false,
     cartDepotRows: 2,
     cartDepotRowGap: 1.6,
-    returnTable: { x: cartDepot.x + 1.9, z: cartDepot.z + 0.2 },
+    returnTable: { x: cartDepot.x - 0.9, z: cartDepot.z - 1.55 }, // 첫 카트 줄 북쪽
   };
 
   return {
