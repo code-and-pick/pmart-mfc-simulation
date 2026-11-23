@@ -50,7 +50,7 @@ describe('세종 MFC 평면(R-41)', () => {
     for (const st of L.stations) expect(nav.findPath(L.points.cartDepot, st.stand)).toBeTruthy();
     expect(nav.findPath(L.points.packQueue, L.points.shipDrop)).toBeTruthy();
     expect(nav.findPath(L.points.truckDoor, L.reserves.find((r) => r.id === 'WR-01')!.stand)).toBeTruthy();
-  });
+  }, 60_000); // 칸 앞 자리 수천 곳 길 찾기 — 전체 시험과 같이 돌면 5초를 넘는다
 
   it('구역 넓이(평)가 표와 가깝다', () => {
     const py = (id: string) => {
@@ -79,5 +79,15 @@ describe('세종 MFC 평면(R-41)', () => {
       fs.writeFileSync(new URL('location-positions.json', out), '[\n' + positions.map((p) => JSON.stringify(p)).join(',\n') + '\n]\n');
       fs.writeFileSync(new URL('reserve-rack-cells.json', out), JSON.stringify(reserveCells) + '\n');
     }
+  });
+});
+
+describe('세종 넓은 칸(R-41 PC3 계획과 같음)', () => {
+  it('1호점 넓은 칸 규칙이 세종 칸에도 — 합친 칸 58·닫힌 칸 86', async () => {
+    const { applyWideCells } = await import('../src/domain/wideCells');
+    const L = buildSejongLayout();
+    const spans = applyWideCells(L, buildLocationCodeMap(L));
+    expect(spans.length).toBe(58);
+    expect(L.locations.filter((l) => l.closed).length).toBe(86);
   });
 });

@@ -163,7 +163,8 @@ export class Simulation {
     // 지점 평면 — 세종(R-41)은 따로, 1호점·목포는 같은 평면
     this.layout = activeSite().layout === 'SEJONG' ? buildSejongLayout() : buildLayout();
     this.codes = buildLocationCodeMap(this.layout);
-    if (this.layout.variant === 'SEED') applyWideCells(this.layout, this.codes); // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18 — 1호점 칸)
+    // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18) — 칸 코드로 맞춘다. 세종도 같은 규칙(PC3 R-41 계획: 같은 코드 넓은 칸 58·닫힘 86, #390)
+    applyWideCells(this.layout, this.codes);
     this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
     this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed, MOCK_HIGH_TURNOVER_TOP);
