@@ -141,7 +141,7 @@ describe('세종 배치 고침(2026-11-24)', () => {
     // 사무·휴게 8.15평 유지
     expect(((zr('OFF').x1 - zr('OFF').x0) * (zr('OFF').z1 - zr('OFF').z0)) / 3.3058).toBeCloseTo(8.15, 1);
     // 카트 줄 북쪽 끝 = 패킹 북쪽 선, 되돌릴 상품 탁자는 카트 남쪽
-    expect(L.points.cartDepot.z - 0.7 - 0.24).toBeCloseTo(pk.z0, 5);
+    expect(L.points.cartDepot.z - 0.7 - 0.24).toBeCloseTo(pk.z0, 5); // 카트 줄 북쪽 끝 = 패킹 북쪽 선
     expect(L.geo.returnTable!.z).toBeGreaterThan(L.points.cartDepot.z);
   });
 });
