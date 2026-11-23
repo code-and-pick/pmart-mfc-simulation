@@ -9800,7 +9800,7 @@
 {"locationCode":"CRT-A-38","kind":"SUPPORT","xM":29.2,"zM":24.1},
 {"locationCode":"CRT-A-39","kind":"SUPPORT","xM":29.2,"zM":24.1},
 {"locationCode":"CRT-A-40","kind":"SUPPORT","xM":29.2,"zM":24.1},
-{"locationCode":"QRT-F-01","kind":"SUPPORT","xM":8.45,"zM":24.7},
-{"locationCode":"QRT-C-01","kind":"SUPPORT","xM":0.65,"zM":24.7},
+{"locationCode":"QRT-F-01","kind":"SUPPORT","xM":8.6,"zM":14.781},
+{"locationCode":"QRT-C-01","kind":"SUPPORT","xM":0.8,"zM":14.781},
 {"locationCode":"QRT-A-01","kind":"SUPPORT","xM":31.275,"zM":7.55}
 ]

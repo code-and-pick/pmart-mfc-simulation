@@ -68,7 +68,10 @@ const R = {
 const BUMP = { x0: 23.6, z0: CHC_BD, x1: 27.0, z1: CHC_BD + 2.04 } as const;
 /** 냉장·냉동 서쪽 벽 띠 — 폭 1.6 m(방이 좁아 1호점 3.0 보다 좁게): 북쪽 입고재고 팔레트 2 → 보충재고 랙 7 → 남쪽 격리 1평(1.4 × 2.36) */
 // 띠 폭 1.6 → 2.0 m, 입고재고 팔레트를 벽 쪽으로 — 팔레트 ~ 첫 피킹 줄 0.35 → 0.9 m(사용자 2026-11-24 "춘천mfc에 냉장냉동구역에 입고팔레트랑 그 옆에 적치랙이 너무 가까운데 간격 조정 좀"). 냉장 통로 약 1.05 m·냉동 1.75 m
-const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 2.0, mark: 1.4, z0: 1.8, reserveZ0: 4.6, qz0: 23.2, qz1: 26.2, qw: 1.1 } as const; // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
+const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 2.0, mark: 1.4, z0: 1.8, reserveZ0: 4.6 } as const;
+/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 가로(동서)로 */
+const Q = { z0: BAND.reserveZ0 + 7 * RACK_LEN + 0.25, w: BAND.mark, len: 3.3058 / BAND.mark } as const;
+ // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
 /** 화물 승강기 2대(입고·검수 북쪽 벽) + 별동 22평(10.9 × 6.66 m, 동쪽에 입고 차량 하역) */
 const LIFTS = [
   { x0: 16.65, x1: 19.65, door: [17.05, 19.25] as const },
@@ -89,8 +92,8 @@ export function buildChuncheonLayout(): Layout {
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: R.WH, docPyeong: ZONE_PY.WH },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: R.RCV, docPyeong: ZONE_PY.RCV },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: R.PK, docPyeong: ZONE_PY.PK },
-    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: BAND.qz0, x1: BAND.FROZEN + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
-    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: BAND.qz0, x1: BAND.CHILLED + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
+    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: Q.z0, x1: BAND.FROZEN + Q.w, z1: Q.z0 + Q.len }, docPyeong: 1 },
+    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: Q.z0, x1: BAND.CHILLED + Q.w, z1: Q.z0 + Q.len }, docPyeong: 1 },
     { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: R.CQ, docPyeong: 1 },
     { id: 'SHIP', kind: 'SHIPPING', label: '인계', rect: R.SHIP, docPyeong: ZONE_PY.SHIP },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: R.PARK },
@@ -334,9 +337,9 @@ export function buildChuncheonLayout(): Layout {
     const X1 = X0 + BAND.mark;
     // 판·실선은 입고재고 팔레트(z 1.95~4.3)와 보충재고 랙(z 4.6~13.35)에 맞춤 — 격리는 남쪽 따로(구역 판). 사용자 2026-11-24 "냉동냉장 구역 바닥에 입고 보충 격리 나눈 실선 랙에 맞게 조절해"
     const rackEnd = BAND.reserveZ0 + CHUNCHEON_RACKS.reserveCold * RACK_LEN + 0.25;
-    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = rackEnd - 0.12, DIV = (4.3 + BAND.reserveZ0) / 2;
+    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = Q.z0 + Q.len - 0.12, DIV = (4.3 + BAND.reserveZ0) / 2;
     return {
-      floor: [X0, BAND.z0, X1, rackEnd],
+      floor: [X0, BAND.z0, X1, Q.z0 + Q.len],
       color,
       lines: [[L0, Tz, L1, Tz], [L0, Bz, L1, Bz], [L0, Tz, L0, Bz], [L1, Tz, L1, Bz], [L0, DIV, L1, DIV]],
       texts: [
@@ -392,7 +395,7 @@ export function buildChuncheonLayout(): Layout {
       // 저온 격리: 서쪽 벽에 세로로 2개(흰 실선 안, 사이 0.15 m)
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
-        return [id, [0, 1].map((i) => ({ x0: X0 + 0.2, z0: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15), x1: X0 + 0.2 + RACK_DEPTH, z1: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15) + RACK_LEN }))];
+        return [id, [0, 1].map((i) => ({ x0: X0 + (Q.w - RACK_LEN) / 2, z0: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6), x1: X0 + (Q.w + RACK_LEN) / 2, z1: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6) + RACK_DEPTH }))];
       })),
       // 상온 격리: 입고창고 동쪽 벽에 세로로 2개
       CQ: [0, 1].map((i) => ({ x0: R.CQ.x1 - 0.05 - RACK_DEPTH, z0: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15), x1: R.CQ.x1 - 0.05, z1: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15) + RACK_LEN })),

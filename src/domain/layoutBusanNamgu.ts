@@ -61,7 +61,10 @@ const R = {
 /** 인계 돌출부 5.0 × 1.98 m = 3평 */
 const BUMP = { x0: 36.2, z0: BNG_BD, x1: 41.2, z1: BNG_BD + 1.98 } as const;
 /** 냉장·냉동 서쪽 벽 띠 2.4 m(입고재고 팔레트 ~ 첫 피킹 줄 약 1.3 m — 춘천에서 사용자 "너무 가까운데" 반영) */
-const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6, qz0: 17.6, qz1: 20.6, qw: 1.1 } as const; // 격리 = 보충재고 랙(z 4.6~17.1) 바로 남쪽(사용자 2026-11-24 "냉장냉동 격리구역 보충재고 옆에 있게 북쪽으로 밀어")
+const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6 } as const;
+/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 가로(동서)로 */
+const Q = { z0: BAND.reserveZ0 + 10 * RACK_LEN + 0.25, w: BAND.mark, len: 3.3058 / BAND.mark } as const;
+
 /** 화물 승강기 2(입고·검수 북쪽 벽) + 별동 16평(14.7 × 3.6 m, 동쪽 하역 통로 → 입고 차량) */
 const LIFTS = [
   { x0: 24.0, x1: 27.0, door: [24.4, 26.6] as const },
@@ -82,8 +85,8 @@ export function buildBusanNamguLayout(): Layout {
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: R.RCV, docPyeong: ZONE_PY.RCV },
     { id: 'OFF', kind: 'OFFICE', label: '휴게·사무', rect: R.OFF, docPyeong: ZONE_PY.OFF },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: R.PK, docPyeong: ZONE_PY.PK },
-    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: BAND.qz0, x1: BAND.FROZEN + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
-    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: BAND.qz0, x1: BAND.CHILLED + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
+    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: Q.z0, x1: BAND.FROZEN + Q.w, z1: Q.z0 + Q.len }, docPyeong: 1 },
+    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: Q.z0, x1: BAND.CHILLED + Q.w, z1: Q.z0 + Q.len }, docPyeong: 1 },
     { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: R.CQ, docPyeong: 1 },
     { id: 'SHIP', kind: 'SHIPPING', label: '인계', rect: R.SHIP, docPyeong: ZONE_PY.SHIP },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: R.PARK },
@@ -302,9 +305,9 @@ export function buildBusanNamguLayout(): Layout {
   const coldArea = (X0: number, color: 'FROZEN' | 'CHILLED'): StoreArea => {
     const X1 = X0 + BAND.mark;
     const rackEnd = BAND.reserveZ0 + BUSAN_NAMGU_RACKS.reserveCold * RACK_LEN + 0.25;
-    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = rackEnd - 0.12, DIV = (4.3 + BAND.reserveZ0) / 2;
+    const L0 = X0 + 0.12, L1 = X1 - 0.12, Tz = BAND.z0 + 0.12, Bz = Q.z0 + Q.len - 0.12, DIV = (4.3 + BAND.reserveZ0) / 2;
     return {
-      floor: [X0, BAND.z0, X1, rackEnd],
+      floor: [X0, BAND.z0, X1, Q.z0 + Q.len],
       color,
       lines: [[L0, Tz, L1, Tz], [L0, Bz, L1, Bz], [L0, Tz, L0, Bz], [L1, Tz, L1, Bz], [L0, DIV, L1, DIV]],
       texts: [
@@ -356,7 +359,7 @@ export function buildBusanNamguLayout(): Layout {
     quarantineRacks: {
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
-        return [id, [0, 1].map((i) => ({ x0: X0 + 0.2, z0: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15), x1: X0 + 0.2 + RACK_DEPTH, z1: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15) + RACK_LEN }))];
+        return [id, [0, 1].map((i) => ({ x0: X0 + (Q.w - RACK_LEN) / 2, z0: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6), x1: X0 + (Q.w + RACK_LEN) / 2, z1: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6) + RACK_DEPTH }))];
       })),
       CQ: [0, 1].map((i) => ({ x0: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1), z0: R.CQ.z1 - 0.05 - RACK_DEPTH, x1: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN, z1: R.CQ.z1 - 0.05 })),
     },
