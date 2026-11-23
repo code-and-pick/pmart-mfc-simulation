@@ -62,7 +62,7 @@ const R = {
 const BUMP = { x0: 36.2, z0: BNG_BD, x1: 41.2, z1: BNG_BD + 1.98 } as const;
 /** 냉장·냉동 서쪽 벽 띠 2.4 m(입고재고 팔레트 ~ 첫 피킹 줄 약 1.3 m — 춘천에서 사용자 "너무 가까운데" 반영) */
 const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6 } as const;
-/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 가로(동서)로 */
+/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 세로로 서쪽 벽에 나란히 */
 const Q = { z0: BAND.reserveZ0 + 10 * RACK_LEN + 0.25, w: BAND.mark, len: 3.3058 / BAND.mark } as const;
 
 /** 화물 승강기 2(입고·검수 북쪽 벽) + 별동 16평(14.7 × 3.6 m, 동쪽 하역 통로 → 입고 차량) */
@@ -359,7 +359,7 @@ export function buildBusanNamguLayout(): Layout {
     quarantineRacks: {
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
-        return [id, [0, 1].map((i) => ({ x0: X0 + (Q.w - RACK_LEN) / 2, z0: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6), x1: X0 + (Q.w + RACK_LEN) / 2, z1: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6) + RACK_DEPTH }))];
+        return [id, [0, 1].map((i) => ({ x0: X0 + 0.1 + i * (RACK_DEPTH + 0.05), z0: Q.z0 + (Q.len - RACK_LEN) / 2, x1: X0 + 0.1 + i * (RACK_DEPTH + 0.05) + RACK_DEPTH, z1: Q.z0 + (Q.len + RACK_LEN) / 2 }))]; // 세로(남북)로 서쪽 벽에 붙여 2개 나란히(사용자 2026-11-24 "격리랙 방향은 갑자기 왜 바꿨어. 다시 90도 회전해서 벽에 붙여")
       })),
       CQ: [0, 1].map((i) => ({ x0: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1), z0: R.CQ.z1 - 0.05 - RACK_DEPTH, x1: R.CQ.x0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN, z1: R.CQ.z1 - 0.05 })),
     },

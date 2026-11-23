@@ -69,7 +69,7 @@ const BUMP = { x0: 23.6, z0: CHC_BD, x1: 27.0, z1: CHC_BD + 2.04 } as const;
 /** 냉장·냉동 서쪽 벽 띠 — 폭 1.6 m(방이 좁아 1호점 3.0 보다 좁게): 북쪽 입고재고 팔레트 2 → 보충재고 랙 7 → 남쪽 격리 1평(1.4 × 2.36) */
 // 띠 폭 1.6 → 2.0 m, 입고재고 팔레트를 벽 쪽으로 — 팔레트 ~ 첫 피킹 줄 0.35 → 0.9 m(사용자 2026-11-24 "춘천mfc에 냉장냉동구역에 입고팔레트랑 그 옆에 적치랙이 너무 가까운데 간격 조정 좀"). 냉장 통로 약 1.05 m·냉동 1.75 m
 const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 2.0, mark: 1.4, z0: 1.8, reserveZ0: 4.6 } as const;
-/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 가로(동서)로 */
+/** 저온 격리 1평 — 보충재고 칸(실선) 폭 그대로(1.4 m), 보충재고 칸 끝 바로 남쪽(1호점·목포처럼, 사용자 2026-11-24 "냉장냉동 격리구역 보충재고 실선 크기 맞춰서 바로 딱 옆에 있게 해야지. 목포점처럼"). 흰 랙 2 세로로 서쪽 벽에 나란히 */
 const Q = { z0: BAND.reserveZ0 + 7 * RACK_LEN + 0.25, w: BAND.mark, len: 3.3058 / BAND.mark } as const;
  // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
 /** 화물 승강기 2대(입고·검수 북쪽 벽) + 별동 22평(10.9 × 6.66 m, 동쪽에 입고 차량 하역) */
@@ -395,7 +395,7 @@ export function buildChuncheonLayout(): Layout {
       // 저온 격리: 서쪽 벽에 세로로 2개(흰 실선 안, 사이 0.15 m)
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
-        return [id, [0, 1].map((i) => ({ x0: X0 + (Q.w - RACK_LEN) / 2, z0: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6), x1: X0 + (Q.w + RACK_LEN) / 2, z1: Q.z0 + 0.3 + i * (RACK_DEPTH + 0.6) + RACK_DEPTH }))];
+        return [id, [0, 1].map((i) => ({ x0: X0 + 0.1 + i * (RACK_DEPTH + 0.05), z0: Q.z0 + (Q.len - RACK_LEN) / 2, x1: X0 + 0.1 + i * (RACK_DEPTH + 0.05) + RACK_DEPTH, z1: Q.z0 + (Q.len + RACK_LEN) / 2 }))]; // 세로(남북)로 서쪽 벽에 붙여 2개 나란히(사용자 2026-11-24 "격리랙 방향은 갑자기 왜 바꿨어. 다시 90도 회전해서 벽에 붙여")
       })),
       // 상온 격리: 입고창고 동쪽 벽에 세로로 2개
       CQ: [0, 1].map((i) => ({ x0: R.CQ.x1 - 0.05 - RACK_DEPTH, z0: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15), x1: R.CQ.x1 - 0.05, z1: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15) + RACK_LEN })),
