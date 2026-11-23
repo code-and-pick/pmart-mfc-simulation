@@ -520,8 +520,19 @@ function Truck({ trfId }: { trfId: string }) {
     const t = sim.trucks.find((x) => x.trfId === trfId);
     // 뒷문(로컬 x=-3.2)이 truck.x - 3.2 에 오도록. 떠나는 차는 북쪽 바깥 차로로 비켜 줄 선 차 옆을 지나감(TRUCK_PASS_LANE)
     if (!t) return;
-    const zTo = sim.layout.points.truckDock.z - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
     const g = group.current;
+    const lane = sim.layout.geo.truckLaneX;
+    const dock = sim.layout.points.truckDock;
+    if (lane !== undefined) {
+      // 세로 차로(부산진구): 북쪽에서 남쪽으로 내려와 섬, 운전칸이 남쪽. 떠나는 차는 서쪽 바깥 차로로 비켜 북쪽으로
+      const xTo = lane - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
+      const x = g.userData.placed ? g.position.x + (xTo - g.position.x) * Math.min(1, dt * 2.5) : xTo;
+      g.userData.placed = true;
+      g.rotation.y = -Math.PI / 2;
+      g.position.set(x, 0, dock.z - (t.x - dock.x));
+      return;
+    }
+    const zTo = dock.z - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
     const z = g.userData.placed ? g.position.z + (zTo - g.position.z) * Math.min(1, dt * 2.5) : zTo;
     g.userData.placed = true;
     g.position.set(t.x, 0, z);

@@ -48,17 +48,24 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect(M.locations.filter((l) => l.closed).length).toBe(100);
   });
 
-  it('배치 — 고회전 F 가 패킹에서 가장 가깝고, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
-    const pk = L.stations[0].stand;
-    const d = (r: (typeof L.racks)[number]) => Math.hypot(r.cx - pk.x, r.cz - pk.z);
+  it('배치(그림대로) — 상온 동쪽 띠 C·D·E·F, 남쪽 띠 G·H, 물리 줄마다 한 코드 줄, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
     const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
-    const nearest = [...amb].sort((a, b) => d(a) - d(b)).slice(0, 6);
-    for (const r of nearest) expect(r.group[0]).toBe('F');
+    const ch2 = zr('C-H2');
+    for (const r of amb) expect('GH'.includes(r.group[0])).toBe(r.cz > ch2.z0);
+    // 같은 z·같은 묶음(1.25 m 간격으로 이어진 랙)은 같은 코드 줄, 랙 번호가 1씩 늘어남
+    const rows = new Map<string, (typeof L.racks)[number][]>();
+    for (const r of L.racks.filter((x) => !x.reserve)) rows.set(`${r.temp}:${r.cz.toFixed(3)}`, [...(rows.get(`${r.temp}:${r.cz.toFixed(3)}`) ?? []), r]);
+    for (const rs of rows.values()) {
+      rs.sort((a, b) => a.cx - b.cx);
+      for (let i = 1; i < rs.length; i++) if (Math.abs(rs[i].cx - rs[i - 1].cx - 1.25) < 1e-6 && rs[i].group === rs[i - 1].group) expect(rs[i].rackNo).toBe(rs[i - 1].rackNo + 1);
+      for (let i = 1; i < rs.length; i++) if (Math.abs(rs[i].cx - rs[i - 1].cx - 1.25) < 1e-6 && rs[i].temp !== 'AMBIENT') expect(rs[i].group).toBe(rs[i - 1].group);
+    }
     for (const [id, rs] of Object.entries(L.geo.quarantineRacks ?? {})) for (const r of rs) {
       const q = zr(id);
       expect(r.x0 >= q.x0 - 1e-6 && r.x1 <= q.x1 + 1e-6 && r.z0 >= q.z0 - 1e-6 && r.z1 <= q.z1 + 1e-6).toBe(true);
     }
-    for (const o of L.obstacles.filter((x) => x.kind === 'SHIP_RACK')) expect(o.rect.z1 <= 9.95 + 1e-6 || o.rect.z0 >= 11.25 - 1e-6).toBe(true);
+    // 인계 창(서쪽 벽 z 11.4~12.6) 안쪽 1 m 에 장애물 없음
+    for (const o of L.obstacles) expect(o.rect.x0 < 6.0 && o.rect.z1 > 11.4 && o.rect.z0 < 12.6).toBe(false);
     expect(L.reserves.filter((r) => r.role === 'BULK').length).toBe(10);
     expect(L.stations.length).toBe(8);
   });
