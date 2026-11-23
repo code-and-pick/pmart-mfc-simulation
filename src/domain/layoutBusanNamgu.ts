@@ -265,7 +265,8 @@ export function buildBusanNamguLayout(): Layout {
   // 상온 입고재고 5 → RCV-A-02
   for (let c = 0; c < 5; c++) {
     const x0 = R.WH.x0 + 0.8 + c * 1.5;
-    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 6.55, { x: x0 + P / 2, z: 8.1 }, 'RECEIVING');
+    // 입고재고 칸(실선 z 6.3~9.0) 가운데 — 사용자 2026-11-24 "상온입고재고 실선에서 북쪽으로 붙어있는데 중앙으로"
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, (6.3 + 9.0) / 2 - P / 2, { x: x0 + P / 2, z: 8.55 }, 'RECEIVING');
   }
   // 휴게·사무 테이블(북쪽 벽, 의자 남쪽 — 세종에서 사용자 "북쪽 벽으로")
   const officeTable = { x: (R.OFF.x0 + R.OFF.x1) / 2, z: R.OFF.z0 + 0.4, w: 3.6, d: 0.5, h: 0.74 };
@@ -317,7 +318,7 @@ export function buildBusanNamguLayout(): Layout {
       lines: [[WHL, 6.3, WHR, 6.3], [WHL, 9.0, WHR, 9.0]], // 대형재고 | 입고재고 | 보충재고
       texts: [
         { t: '대형재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 6.05 },
-        { t: '입고재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 8.6 },
+        { t: '입고재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 8.62 }, // 팔레트(z ~8.2)와 실선(9.0) 사이
         { t: '보충재고', x: R.WH.x0 + 3.6, z: 16.4 },
       ],
     },
