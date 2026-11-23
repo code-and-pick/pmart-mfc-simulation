@@ -42,6 +42,12 @@ describe('춘천 MFC 평면(R-42)', () => {
     const z2rows = [...new Set(L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && inZ(x, 'C-H2')).map((x) => +x.cz.toFixed(3)))].sort((a, b) => a - b);
     const gaps = z2rows.slice(1).map((z, i) => +(z - z2rows[i] - 0.45).toFixed(3)).filter((g) => g > 0.01);
     expect(new Set(gaps).size).toBe(1);
+    // 냉장·냉동 입고재고 팔레트 ~ 첫 피킹 줄 0.8 m 이상
+    for (const t of ['CHILLED', 'FROZEN'] as const) {
+      const pal = L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === t);
+      const row = Math.min(...L.racks.filter((r) => !r.reserve && r.temp === t).map((r) => r.cx - 0.225));
+      expect(row - Math.max(...pal.map((p) => p.rect.x1))).toBeGreaterThan(0.8);
+    }
     // 상온 격리는 입고창고 동쪽 벽에 붙고, 보충재고 랙과 0.8 m 넘게 떨어짐
     const cq = zr('CQ');
     expect(cq.x1).toBeGreaterThan(zr('WH').x1 - 0.2);

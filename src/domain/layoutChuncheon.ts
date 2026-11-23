@@ -67,7 +67,8 @@ const R = {
 /** 인계 돌출부 3.4 × 2.04 m = 2.1평 */
 const BUMP = { x0: 23.6, z0: CHC_BD, x1: 27.0, z1: CHC_BD + 2.04 } as const;
 /** 냉장·냉동 서쪽 벽 띠 — 폭 1.6 m(방이 좁아 1호점 3.0 보다 좁게): 북쪽 입고재고 팔레트 2 → 보충재고 랙 7 → 남쪽 격리 1평(1.4 × 2.36) */
-const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 1.6, mark: 1.4, z0: 1.8, reserveZ0: 4.6, qz0: 23.2, qz1: 26.2, qw: 1.1 } as const; // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
+// 띠 폭 1.6 → 2.0 m, 입고재고 팔레트를 벽 쪽으로 — 팔레트 ~ 첫 피킹 줄 0.35 → 0.9 m(사용자 2026-11-24 "춘천mfc에 냉장냉동구역에 입고팔레트랑 그 옆에 적치랙이 너무 가까운데 간격 조정 좀"). 냉장 통로 약 1.05 m·냉동 1.75 m
+const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 2.0, mark: 1.4, z0: 1.8, reserveZ0: 4.6, qz0: 23.2, qz1: 26.2, qw: 1.1 } as const; // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
 /** 화물 승강기 2대(입고·검수 북쪽 벽) + 별동 22평(10.9 × 6.66 m, 동쪽에 입고 차량 하역) */
 const LIFTS = [
   { x0: 16.65, x1: 19.65, door: [17.05, 19.25] as const },
@@ -286,7 +287,7 @@ export function buildChuncheonLayout(): Layout {
     obstacles.push({ rect, height: 0.15, kind: 'RESERVE' });
   };
   for (const [temp, X0, rid] of [['FROZEN', BAND.FROZEN, 'AR'], ['CHILLED', BAND.CHILLED, 'BR']] as const) {
-    [1.95, 3.2].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.25, z0, { x: X0 + 1.45, z: 3.15 }, 'RECEIVING'));
+    [1.95, 3.2].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.1, z0, { x: X0 + 1.65, z: 3.15 }, 'RECEIVING'));
   }
   // 대형재고 10(5 | 5, 맨 안쪽 북쪽 벽) → 서버 A-R2-01~10-1-01. 번호는 열마다 북쪽 → 남쪽, 서쪽 열부터
   {
