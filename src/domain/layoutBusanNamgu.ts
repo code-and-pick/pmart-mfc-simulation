@@ -180,7 +180,8 @@ export function buildBusanNamguLayout(): Layout {
     // 입고창고: 맨 안쪽(북쪽, 휴게·사무 벽) 대형재고 → 입고재고 → 보충재고 랙 3쌍(문 쪽 남쪽). 서쪽 벽 안쪽 통로 0.8 m, 동쪽은 상온 격리와 통로 0.7 m
     const xs = Array.from({ length: 6 }, (_, i) => R.WH.x0 + 0.8 + (i + 0.5) * RACK_LEN);
     const rows: { cz: number; face: 1 | -1 }[] = [];
-    for (const zz of [9.3, 11.4, 13.5]) rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
+    // 0.4 m 남쪽 — 입고재고 팔레트와 간격(사용자 2026-11-24 "보충재고 랙 위치 전부 살짝 남쪽으로. 입고재고랑 너무 붙어있네")
+    for (const zz of [9.7, 11.8, 13.9]) rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
     let n = 0;
     for (const row of rows) for (const x of xs) if (n < BUSAN_NAMGU_RACKS.reserveAmbient) reserve.push({ id: `RRA-${++n}`, temp: 'AMBIENT', group: 'R01', rackNo: n, cx: x, cz: row.cz, along: 'x', face: row.face, levels: RESERVE_SLOTS[0], slotsPerLevel: RESERVE_SLOTS[1], reserve: true });
   }
@@ -313,7 +314,7 @@ export function buildBusanNamguLayout(): Layout {
     coldArea(BAND.CHILLED, 'CHILLED'),
     {
       floor: [R.WH.x0, R.WH.z0 + 0.1, R.WH.x1, R.WH.z1],
-      lines: [[WHL, 6.3, WHR, 6.3], [WHL, 8.85, WHR, 8.85]], // 대형재고 | 입고재고 | 보충재고
+      lines: [[WHL, 6.3, WHR, 6.3], [WHL, 9.0, WHR, 9.0]], // 대형재고 | 입고재고 | 보충재고
       texts: [
         { t: '대형재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 6.05 },
         { t: '입고재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 8.6 },
