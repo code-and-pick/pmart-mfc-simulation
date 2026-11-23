@@ -323,14 +323,15 @@ export function buildChuncheonLayout(): Layout {
   ];
 
   // ── 점 ───────────────────────────────────────────────
-  // 장바구니 거치대(세로) — 패킹 동쪽, 카트 줄 북쪽 끝 = 패킹 북쪽 선(세종과 같게), 되돌릴 상품 탁자는 카트 줄 북쪽. 대기 작업자는 거치대 동쪽
-  const cartDepot = { x: R.PK.x1 + 3.1, z: R.PK.z0 + 0.7 + 0.24 };
+  // 장바구니 거치대 — 패킹 동쪽에 가로 2줄(줄마다 10대, 줄 사이 1.6 m)(사용자 2026-11-24 "장바구니 거치대 가로로 돌리고 간격 두고 2줄로").
+  // 첫 줄 = 패킹 북쪽 선 높이, 카트는 거치대 점에서 서쪽으로(x −2.0 ~ +0.7). 되돌릴 상품 탁자는 두 줄 동쪽 끝, 대기 작업자는 그 북쪽
+  const cartDepot = { x: R.PK.x1 + 3.4, z: R.PK.z0 + 0.6 + 0.32 };
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 17.4 + (i % 4) * 0.8, z: 5.6 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
-    idle: Array.from({ length: 24 }, (_, i) => ({ x: cartDepot.x + 0.9 + (i % 4) * 0.7, z: 18.6 + Math.floor(i / 4) * 0.8 })),
+    idle: Array.from({ length: 24 }, (_, i) => ({ x: R.CH2.x0 + 0.6 + (i % 8) * 0.8, z: R.CH2.z1 + 0.9 + Math.floor(i / 8) * 0.8 })), // 거치대 북쪽(상온 구역 2 남쪽 앞)
     packQueue: { x: R.PK.x1 - 0.5, z: (R.PK.z0 + R.PK.z1) / 2 },
     shipDrop: { x: (SHIP_DOOR[0] + SHIP_DOOR[1]) / 2, z: CHC_BD - 0.4 },
     riderPickup: { x: (BUMP.x0 + BUMP.x1) / 2, z: BUMP.z1 + 0.55 },
@@ -347,8 +348,10 @@ export function buildChuncheonLayout(): Layout {
     storeAreas,
     officeTable: null, // 춘천은 휴게·사무 구역이 없음(요청서 표)
     rollContainers: [21.4, 22.1].map((x) => ({ x, z: 1.6 })),
-    cartDepotVertical: true,
-    returnTable: { x: cartDepot.x - 0.6, z: R.PK.z0 - 0.7 },
+    cartDepotVertical: false,
+    cartDepotRows: 2,
+    cartDepotRowGap: 1.6,
+    returnTable: { x: cartDepot.x + 1.9, z: cartDepot.z + 0.2 },
   };
 
   return {
