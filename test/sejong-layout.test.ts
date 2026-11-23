@@ -73,7 +73,7 @@ describe('세종 MFC 평면(R-41)', () => {
     expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
     expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(16935);
     expect(reserveCells.length).toBe(1050);
-    expect(positions.some((p) => p.locationCode === 'PAK-A-06')).toBe(true);
+    expect(positions.some((p) => p.locationCode === 'PAK-A-08')).toBe(true); // 패킹대 8(4 | 4, 2026-11-24)
     if (env.WRITE_LAYOUT === '1') {
       const out = new URL('../docs/layout-export/sejong/', import.meta.url);
       fs.writeFileSync(new URL('location-positions.json', out), '[\n' + positions.map((p) => JSON.stringify(p)).join(',\n') + '\n]\n');
@@ -93,5 +93,25 @@ describe('세종 넓은 칸(R-41 PC3 계획과 같음)', () => {
     const big = L.locations.find((l) => l.code === 'H04-05-101')!;
     expect(big.dimMm).toEqual({ w: 1125, d: 450, h: 1260 });
     expect(big.span).toEqual({ slots: 5, levels: 3 });
+  });
+});
+
+describe('세종 배치 고침(2026-11-24)', () => {
+  it('상온 격리는 상온 구역 1 안, 랙과 겹치지 않음 · 패킹대 8(4 | 4) · 카트 거치대는 패킹 옆 세로', () => {
+    const L = buildSejongLayout();
+    const zr = (id: string) => L.zones.find((z) => z.id === id)!.rect;
+    const cq = zr('CQ');
+    const ch = zr('C-H');
+    expect(cq.x0 >= ch.x0 && cq.x1 <= ch.x1 && cq.z0 >= ch.z0 && cq.z1 <= ch.z1).toBe(true);
+    for (const r of L.racks) {
+      const hx = r.along === 'x' ? 0.625 : 0.225;
+      const hz = r.along === 'x' ? 0.225 : 0.625;
+      expect(r.cx + hx <= cq.x0 || r.cx - hx >= cq.x1 || r.cz + hz <= cq.z0 || r.cz - hz >= cq.z1).toBe(true);
+    }
+    expect(L.stations.length).toBe(8);
+    expect(new Set(L.stations.map((s) => s.table.z.toFixed(2))).size).toBe(2);
+    const pk = zr('PK');
+    expect(pk.z0).toBeGreaterThan(ch.z1); // 패킹이 상온 구역 1 남쪽
+    expect(L.geo.cartDepotVertical).toBe(true);
   });
 });

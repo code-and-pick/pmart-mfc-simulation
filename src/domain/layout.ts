@@ -155,6 +155,14 @@ export interface SiteGeo {
   officeTable?: { x: number; z: number; w: number; d: number; h: number };
   /** 입고·검수 롤테이너 장식 자리 */
   rollContainers?: { x: number; z: number }[];
+  /** 장바구니 거치대를 세로(남북)로 — 카트 줄이 남쪽으로 늘어서고 시작점 판은 동쪽을 본다(세종, 사용자 2026-11-24) */
+  cartDepotVertical?: boolean;
+}
+
+/** 장바구니 거치대 기준 상대 자리(가로 거치대 기준 dx·dz) → 평면 좌표. 세로 거치대는 90° 돌린다(가로 −x 줄 → 세로 +z 줄) */
+export function depotPoint(L: Pick<Layout, 'geo' | 'points'>, dx: number, dz: number): { x: number; z: number } {
+  const c = L.points.cartDepot;
+  return L.geo.cartDepotVertical ? { x: c.x + dz, z: c.z - dx } : { x: c.x + dx, z: c.z + dz };
 }
 
 export interface Layout {

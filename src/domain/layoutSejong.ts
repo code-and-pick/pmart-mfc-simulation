@@ -59,9 +59,13 @@ const R = {
   B: { x0: 0, z0: 1.8, x1: 12.45, z1: 31.8 }, // 냉장 110.9 + 격리 2
   A: { x0: 12.55, z0: 1.8, x1: 25.0, z1: 31.8 }, // 냉동 110.9 + 격리 2
   RCV: { x0: 26.4, z0: 0, x1: 38.0, z1: 6.9 }, // 24.27평 = 80.2 m²
-  CH1: { x0: 26.4, z0: 8.3, x1: 36.0, z1: 26.96 }, // 상온 구역 1
-  CQ: { x0: 26.4, z0: 29.9, x1: 29.4, z1: 32.1 }, // 상온 격리 2평
-  PK: { x0: 37.0, z0: 22.2, x1: 44.4, z1: 31.2 }, // 패킹 20.26평 = 67.0 m² — 남쪽 출하문 앞 통로(z 31.2~33.3)를 비움
+  // 가운데 남쪽 = 패킹(가로로 길게, 맨 앞) → 그 북쪽 상온 구역 1(가로로 길게) — 사용자 2026-11-24 "패킹대 남쪽으로 가로로 길게 맨 앞에 두고 그 뒤로 상온구역1 시작하게 해 그것도 지금 세로로 길게 늘려져 있는데 가로로 길게 늘려. 상온구역2는 그대로"
+  CH1: { x0: 26.4, z0: 12.4, x1: 44.4, z1: 22.95 }, // 상온 구역 1 (18.0 × 10.55 m = 구역 1 + 그 안 상온 격리 2평)
+  // 상온 격리 2평 — 상온 구역 1 안 북서쪽 모서리(비워 둔 북쪽 줄 서쪽 6랙 자리). 사용자 2026-11-24 "상온격리 구역 지금 남쪽에 있는데 북쪽으로 옮겨" → "상온 구역1 안에 있어야지"
+  CQ: { x0: 26.5, z0: 12.5, x1: 30.5, z1: 14.15 },
+  // 패킹 20.26평 = 66.6 m²(10.0 × 6.66) — 패킹대 4 | 4 두 줄(사용자 2026-11-24 "패킹구역 너무 납작해졌잖아. 4 4 이렇게 해야지"), 남쪽 출하문 앞 통로(z 31.2~33.3)는 비움
+  // 2026-11-24 "패킹구역이 좀 더 중앙으로" — 상온 구역 1 가운데(x 35.4) 아래로
+  PK: { x0: 30.4, z0: 24.54, x1: 40.4, z1: 31.2 },
   WH: { x0: 44.6, z0: 0, x1: SJ_W, z1: 19.6 }, // 상온 입고창고 51.31평 = 169.6 m²
   CH2: { x0: 44.6, z0: 19.8, x1: SJ_W, z1: 29.9 }, // 상온 구역 2 (구역 1 + 2 = 80.46평)
   OFF: { x0: 44.6, z0: 30.1, x1: SJ_W, z1: SJ_BD }, // 사무·휴게 8.15평
@@ -197,36 +201,45 @@ export function buildSejongLayout(): Layout {
   // 상온 피킹 160 = 구역 1(F·G·C·D 113) + 구역 2(E·H 47). 랙은 가로(동서)로 한 줄 6개, 등 맞댄 2줄씩.
   // 고회전 F 는 패킹·장바구니 거치대에 가까운 구역 1 남쪽 줄부터(R-40 상위 20 상품 자리), 큰 상품 H 는 구역 2 [시뮬]
   const ambient: Rack[] = [];
-  const ambientBlock = (area: Rect, groups: [string, number][], pairs: number, aisle: number, prefix: string, fromSouth: boolean) => {
+  // 칸 코드는 "6랙 묶음(unit)" 순서로 매긴다 — 한 줄에 묶음 1개(구역 2) 또는 2개(구역 1: 서쪽 6 | 가운데 통로 | 동쪽 6).
+  // 구역 1 을 가로로 바꿀 때(2026-11-24) 칸 코드·피킹 순서는 그대로 두고 자리만 옮기려고 묶음 순서를 예전 줄 순서와 같게 했다(서버에 이미 재고가 있음).
+  const ambientBlock = (area: Rect, groups: [string, number][], pairs: number, aisle: number, prefix: string, fromSouth: boolean, unitsPerRow = 1, centerGap = 0, southMargin?: number, lastRowEastFirst = false) => {
     const PER = 6;
-    const xs = Array.from({ length: PER }, (_, i) => (area.x0 + area.x1) / 2 + (i - (PER - 1) / 2) * RACK_LEN);
+    const rowW = unitsPerRow * PER * RACK_LEN + (unitsPerRow - 1) * centerGap;
+    const x0 = (area.x0 + area.x1) / 2 - rowW / 2;
+    const unitXs = Array.from({ length: unitsPerRow }, (_, u) => Array.from({ length: PER }, (_, i) => x0 + u * (PER * RACK_LEN + centerGap) + (i + 0.5) * RACK_LEN));
     const depth = pairs * 2 * RACK_DEPTH + (pairs - 1) * aisle;
-    const z0 = (area.z0 + area.z1) / 2 - depth / 2;
+    // 남쪽 여백을 주면 남쪽에 붙이고(북쪽에 빈 띠), 아니면 가운데
+    const z0 = southMargin !== undefined ? area.z1 - southMargin - depth : (area.z0 + area.z1) / 2 - depth / 2;
     const rows: { cz: number; face: 1 | -1 }[] = [];
     for (let p = 0; p < pairs; p++) {
       const zz = z0 + p * (2 * RACK_DEPTH + aisle);
       rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
     }
     if (fromSouth) rows.reverse();
-    const slots = rows.flatMap((row) => xs.map((x) => ({ x, ...row })));
+    // 마지막 줄은 동쪽 묶음부터(남는 서쪽 자리를 상온 격리로) — 칸 코드는 묶음 순서라 그대로
+    const slots = rows.flatMap((row, ri) => {
+      const order = lastRowEastFirst && ri === rows.length - 1 ? [...unitXs.keys()].reverse() : [...unitXs.keys()];
+      return order.flatMap((u) => unitXs[u].map((x) => ({ x, ...row, unit: `${row.cz.toFixed(3)}:${u}` })));
+    });
     let k = 0;
     for (const [g, n] of groups) {
-      const rowNo = new Map<number, number>();
+      const rowNo = new Map<string, number>();
       for (let i = 0; i < n; i++, k++) {
         const s = slots[k];
-        const key = Math.round(s.cz * 1000);
+        const key = s.unit;
         if (!rowNo.has(key)) rowNo.set(key, rowNo.size + 1);
         ambient.push({ id: `${prefix}-${k + 1}`, temp: 'AMBIENT', group: `${g}${String(rowNo.get(key)).padStart(2, '0')}`, rackNo: 0, cx: s.x, cz: s.cz, along: 'x', face: s.face, ...dims(g) });
       }
     }
   };
-  ambientBlock(R.CH1, [['F', SEJONG_RACKS.F], ['G', SEJONG_RACKS.G], ['C', SEJONG_RACKS.C], ['D', SEJONG_RACKS.D]], 10, 1.0, 'RC', true);
+  ambientBlock(R.CH1, [['F', SEJONG_RACKS.F], ['G', SEJONG_RACKS.G], ['C', SEJONG_RACKS.C], ['D', SEJONG_RACKS.D]], 5, 1.0, 'RC', true, 2, 1.4, 0.72, true);
   ambientBlock(R.CH2, [['E', SEJONG_RACKS.E], ['H', SEJONG_RACKS.H]], 4, 1.2, 'RC2', true);
   // 그룹(줄) 안 랙 번호 — 서쪽부터
   {
     const byGroup = new Map<string, Rack[]>();
     for (const r of ambient) byGroup.set(r.group, [...(byGroup.get(r.group) ?? []), r]);
-    for (const rs of byGroup.values()) rs.sort((a, b) => a.cx - b.cx).forEach((r, i) => (r.rackNo = i + 1));
+    for (const rs of byGroup.values()) rs.forEach((r, i) => (r.rackNo = i + 1)); // 묶음 안 서쪽부터(만든 순서)
   }
 
   // 보충재고 랙(랙당 5단 × 3 = 15) — 냉장·냉동은 서쪽 벽 띠에 등 댄 한 줄 14, 상온은 입고창고에 가로 6개씩 7줄(등 맞댄 3쌍 + 홑줄) 42
@@ -274,20 +287,20 @@ export function buildSejongLayout(): Layout {
     addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 0.6, { x: x0 + P / 2, z: 2.3 }, 'RECEIVING');
   }
   // 사무·휴게 테이블(가운데, 걸어서 피해 감)
-  const officeTable = { x: (R.OFF.x0 + R.OFF.x1) / 2 + 0.8, z: R.OFF.z1 - 0.45, w: 3.6, d: 0.5, h: 0.74 };
-  obstacles.push({ rect: { x0: officeTable.x - 1.8, z0: R.OFF.z1 - 1.35, x1: officeTable.x + 1.8, z1: R.OFF.z1 - 0.1 }, height: 0.75, kind: 'TABLE' });
+  // 테이블은 북쪽 벽에 붙이고 의자는 그 남쪽(1호점과 같은 모양) — 사용자 2026-11-24 "사무휴게 의자 벽 뚫고 나왔잖아 북쪽 벽으로 의자를 붙여야지"
+  const officeTable = { x: (R.OFF.x0 + R.OFF.x1) / 2 + 0.8, z: R.OFF.z0 + 0.4, w: 3.6, d: 0.5, h: 0.74 };
+  obstacles.push({ rect: { x0: officeTable.x - 1.8, z0: R.OFF.z0 + 0.1, x1: officeTable.x + 1.8, z1: R.OFF.z0 + 1.35 }, height: 0.75, kind: 'TABLE' });
 
   // 하차 칸: 입고·검수 안 두 블록(가운데 통로 비움)
   const dockSlots: DockSlot[] = [];
   for (const z of [2.5, 3.25, 5.0, 5.75]) for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: 27.6 + c * 0.75, z } });
 
-  // 패킹대 6(그림: 두 줄 × 3) — 위 줄은 북쪽 끝, 아래 줄은 남쪽 끝, 가운데 통로. 탁자 1.8 m
+  // 패킹대 8 = 4 | 4 두 줄(1호점과 같은 모양) — 위 줄 PS-1~4 는 북쪽 끝, 아래 줄 PS-5~8 은 남쪽 끝, 점원은 가운데 통로 쪽. 탁자 1.8 m
   const stations: PackingStation[] = [];
-  const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 3 * PACK_TABLE_W) / 2;
-  for (let i = 0; i < 6; i++) {
-    const top = i < 3;
-    const col = i % 3;
-    const tx = R.PK.x0 + 0.3 + PACK_TABLE_W / 2 + col * (PACK_TABLE_W + gap);
+  const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 4 * PACK_TABLE_W) / 3;
+  for (let i = 0; i < 8; i++) {
+    const top = i < 4;
+    const tx = R.PK.x0 + 0.3 + PACK_TABLE_W / 2 + (i % 4) * (PACK_TABLE_W + gap);
     const tz = top ? R.PK.z0 + 0.65 : R.PK.z1 - 0.65;
     stations.push({ id: `PS-${i + 1}`, index: i, table: { x: tx, z: tz }, stand: { x: tx, z: top ? tz + 1.2 : tz - 1.2 } });
     obstacles.push({ rect: { x0: tx - PACK_TABLE_W / 2, z0: tz - 0.4, x1: tx + PACK_TABLE_W / 2, z1: tz + 0.4 }, height: 0.9, kind: 'TABLE' });
@@ -330,13 +343,15 @@ export function buildSejongLayout(): Layout {
   ];
 
   // ── 점 ───────────────────────────────────────────────
-  const cartDepot = { x: 32.6, z: 28.6 }; // 상온 구역 1 남쪽 앞(패킹 서쪽 입구 가까이)
+  // 장바구니 거치대(시작점) — 상온 구역 1 남쪽 앞, 패킹 옆. 세로(남북)로 카트 줄(사용자 2026-11-24 "장바구니 거치대 시작점도 패킹대 뒤랑 상온 구역 앞 남쪽에"
+  // → "세로로 방향을 바꾸고 패킹구역이 좀 더 중앙으로"). 패킹(x 30.4~40.4) 동쪽 빈 곳, 카트는 z 24.3~29.6, 되돌릴 상품 탁자는 그 북쪽 끝 [시뮬]
+  const cartDepot = { x: 41.6, z: 25.0 };
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 39.0 + (i % 4) * 0.8, z: 4.3 + Math.floor(i / 4) * 0.9 })),
     cartDepot,
-    idle: Array.from({ length: 24 }, (_, i) => ({ x: 37.4 + (i % 8) * 0.8, z: 11.0 + Math.floor(i / 8) * 0.9 })),
+    idle: Array.from({ length: 24 }, (_, i) => ({ x: 37.4 + (i % 8) * 0.8, z: 9.6 + Math.floor(i / 8) * 0.9 })),
     packQueue: { x: R.PK.x0 + 0.5, z: (R.PK.z0 + R.PK.z1) / 2 },
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: SJ_BD - 0.4 },
     riderPickup: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: BUMP.z1 + 0.55 },
@@ -353,6 +368,7 @@ export function buildSejongLayout(): Layout {
     storeAreas,
     officeTable,
     rollContainers: [35.2, 36.1, 37.0].map((x) => ({ x, z: 5.6 })),
+    cartDepotVertical: true,
   };
 
   return {

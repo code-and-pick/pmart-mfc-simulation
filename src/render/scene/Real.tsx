@@ -1,6 +1,7 @@
 // 실서버 관찰 표시: 진행 중 PICK·RETURN 의 남은 지시 칸(바닥 고리)과 그 작업 담당자(PDA 작업자) 표시, 주문 SKU 의 실제 재고.
 // 작업자 위치는 서버가 주지 않는다 — "다음에 갈 지시 칸"에 세워 보여 줄 뿐 실제 위치가 아니다(SIM-2a 는 마지막 버튼 기준, 다음 단계).
 import { RETURN_TABLE } from './Decor';
+import { depotPoint } from '../../domain/layout';
 import { unitBoxes } from '../unitBoxes';
 import { RESERVE_CODE, placeShortName, reserveName, WORK_SHORT } from '../../domain/placeName';
 
@@ -322,11 +323,10 @@ export function RealStock() {
       const key = u.locationCode;
       // 장바구니(CRT-) 재고(취소 주문의 되돌릴 상품)는 거치대 옆 탁자 위에 그린다(사용자 2026-11-20 "장바구니 옆에 테이블 두고 거기에 올리게")
       const crt = key.startsWith('CRT-');
-      const cd = sim.layout.points.cartDepot;
       const g =
         points.get(key) ??
         (crt
-          ? { x: cd.x + RETURN_TABLE.dx, z: cd.z + RETURN_TABLE.dz, table: true, by: new Map(), tz: new Map(), pending: 0 }
+          ? { ...depotPoint(sim.layout, RETURN_TABLE.dx, RETURN_TABLE.dz), table: true, by: new Map(), tz: new Map(), pending: 0 }
           : // 인계 랙: 서버 점은 랙의 첫 칸(왼쪽 끝) — 봉투는 랙 가운데 아래 칸에
             { x: key.startsWith('DSP-') ? p.x + 0.45 : p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map(), pending: 0 });
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);

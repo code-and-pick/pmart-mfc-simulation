@@ -5,7 +5,7 @@ import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
 import { DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
-import { PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
+import { PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, depotPoint, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -591,14 +591,18 @@ export function Facility() {
       </StaticMerge>
       {/* 동쪽 끝 카트를 예전 6대 줄의 동쪽 끝(x +0.7)에 두고 서쪽으로 늘어놓는다 — 반납 탁자(x +1.7)와 겹치지 않게 */}
       <StaticMerge>
-        <CartDepot x={L.points.cartDepot.x + 0.7} z={L.points.cartDepot.z - 0.6} count={DECOR.cartDepotDrawn} />
+        <group position={[L.points.cartDepot.x, 0, L.points.cartDepot.z]} rotation={[0, L.geo.cartDepotVertical ? Math.PI / 2 : 0, 0]}>
+          <CartDepot x={0.7} z={-0.6} count={DECOR.cartDepotDrawn} />
+        </group>
       </StaticMerge>
       {/* 시작점 표지판은 카트 줄 가운데(사용자 2026-11-21 "장바구니 중앙으로") */}
-      <StartMark x={L.points.cartDepot.x + 0.7 - ((DECOR.cartDepotDrawn - 1) * 0.28) / 2} z={L.points.cartDepot.z - 0.6} />
+      <group position={[L.points.cartDepot.x, 0, L.points.cartDepot.z]} rotation={[0, L.geo.cartDepotVertical ? Math.PI / 2 : 0, 0]}>
+        <StartMark x={0.7 - ((DECOR.cartDepotDrawn - 1) * 0.28) / 2} z={-0.6} />
+      </group>
       <StaticMerge>
         <OfficeDecor />
       </StaticMerge>
-      <ReturnTable x={L.points.cartDepot.x + RETURN_TABLE.dx} z={L.points.cartDepot.z + RETURN_TABLE.dz} />
+      <ReturnTable {...depotPoint(L, RETURN_TABLE.dx, RETURN_TABLE.dz)} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
       <FreightLifts />
     </>
