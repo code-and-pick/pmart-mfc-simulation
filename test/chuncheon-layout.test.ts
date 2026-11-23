@@ -64,6 +64,14 @@ describe('춘천 MFC 평면(R-42)', () => {
     expect(picks.filter((p) => !nav.isFreeAt(p) || !nav.findPath(L.points.cartDepot, p))).toEqual([]);
     for (const st of L.stations) expect(nav.findPath(L.points.cartDepot, st.stand)).toBeTruthy();
     expect(nav.findPath(L.points.packQueue, L.points.shipDrop)).toBeTruthy();
+    // 출하문 앞은 패킹 밖, 인계 랙은 돌출부 벽에 붙어 문을 막지 않음
+    expect(zr('PK').x1).toBeLessThan(24.2);
+    for (const o of L.obstacles.filter((x) => x.kind === 'SHIP_RACK')) expect(o.rect.x1 <= 24.2 + 1e-6 || o.rect.x0 >= 26.4 - 1e-6).toBe(true);
+    // 격리 흰 랙은 격리 구역(실선) 안
+    for (const [id, rs] of Object.entries(L.geo.quarantineRacks ?? {})) for (const r of rs) {
+      const q = zr(id);
+      expect(r.x0 >= q.x0 && r.x1 <= q.x1 && r.z0 >= q.z0 && r.z1 <= q.z1).toBe(true);
+    }
     expect(nav.findPath(L.points.riderEntry, L.points.riderPickup)).toBeTruthy(); // 라이더는 앞마당에서 인계 창으로
     for (const r of L.reserves) expect(nav.findPath(L.points.truckDoor, r.stand)).toBeTruthy();
   }, 60_000);
@@ -73,7 +81,7 @@ describe('춘천 MFC 평면(R-42)', () => {
     expect(py('RCV')).toBeCloseTo(12.63, 0);
     expect(py('PK')).toBeCloseTo(12.63, 0);
     expect(Math.abs((L.width * L.buildingDepth) / 3.3058 + 2.1 - 278)).toBeLessThan(1);
-    expect(L.stations.length).toBe(8);
+    expect(L.stations.length).toBe(6); // 3 | 3(출하문 앞을 비움, 2026-11-24)
     expect(L.reserves.filter((r) => r.role === 'BULK').length).toBe(10);
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').length).toBe(6);
   });

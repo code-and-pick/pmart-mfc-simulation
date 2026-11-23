@@ -58,7 +58,8 @@ const R = {
   // 상온 구역 1(C·D·F·G) — 등 맞댄 6쌍(G 맨 앞 줄은 구역 2 앞으로), 앞(남쪽) 통로 약 3.4 m — 사용자 2026-11-24 "G랙 맨 앞 한 줄 상온구역2 앞에 붙이면 G 가로로 이어지겠네"
   CH1: { x0: 16.6, z0: 8.1, x1: 23.6, z1: 19.2 },
   CH2: { x0: 24.6, z0: 10.6, x1: 31.6, z1: 19.2 }, // 상온 구역 2(E·H 3쌍 + 맨 앞 G 한 줄 — 구역 1 맨 앞 G 줄과 같은 높이로 이어짐)
-  PK: { x0: 16.6, z0: 22.6, x1: 25.3, z1: 27.4 }, // 패킹 12.63평 = 41.8 m²(8.7 × 4.8)
+  // 패킹 12.63평 = 41.7 m²(7.4 × 5.64), 패킹대 6 = 3 | 3 — 출하문(x 24.2~26.4) 앞을 비움(사용자 2026-11-24 "냉장냉동 격리바닥 실선이랑 격리 랙이랑 안 맞잖아. 그리고 상온 격리 구역 랙 세로로 방향 돌려서 벽에 붙이라고. 인계랙 입구를 패킹대가 침범하네 패킹대 6대로 줄여주고 장바구니 거치대 조금 더 동쪽으로 … 인계랙도 세로로 돌려서 벽에 붙여줘. 입구를 막았잖아")
+  PK: { x0: 16.6, z0: 21.9, x1: 24.0, z1: 27.54 },
   SHIP: { x0: 23.7, z0: CHC_BD + 0.1, x1: 26.9, z1: CHC_BD + 1.94 }, // 인계대기 2.10평(돌출부 안)
   PARK: { x0: 19.6, z0: 33.0, x1: 30.6, z1: 36.4 }, // 라이더 대기 11.3평(건물 밖)
 } as const satisfies Record<string, Rect>;
@@ -66,7 +67,7 @@ const R = {
 /** 인계 돌출부 3.4 × 2.04 m = 2.1평 */
 const BUMP = { x0: 23.6, z0: CHC_BD, x1: 27.0, z1: CHC_BD + 2.04 } as const;
 /** 냉장·냉동 서쪽 벽 띠 — 폭 1.6 m(방이 좁아 1호점 3.0 보다 좁게): 북쪽 입고재고 팔레트 2 → 보충재고 랙 7 → 남쪽 격리 1평(1.4 × 2.36) */
-const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 1.6, mark: 1.4, z0: 1.8, reserveZ0: 4.6, qz0: 23.6, qz1: 25.96 } as const;
+const BAND = { CHILLED: 0.1, FROZEN: 7.9, width: 1.6, mark: 1.4, z0: 1.8, reserveZ0: 4.6, qz0: 23.2, qz1: 26.2, qw: 1.1 } as const; // 격리 1평 = 1.1 × 3.0(흰 랙 2개가 세로로 들어가게)
 /** 화물 승강기 2대(입고·검수 북쪽 벽) + 별동 22평(10.9 × 6.66 m, 동쪽에 입고 차량 하역) */
 const LIFTS = [
   { x0: 16.65, x1: 19.65, door: [17.05, 19.25] as const },
@@ -87,8 +88,8 @@ export function buildChuncheonLayout(): Layout {
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: R.WH, docPyeong: ZONE_PY.WH },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: R.RCV, docPyeong: ZONE_PY.RCV },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: R.PK, docPyeong: ZONE_PY.PK },
-    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: BAND.qz0, x1: BAND.FROZEN + BAND.mark, z1: BAND.qz1 }, docPyeong: 1 },
-    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: BAND.qz0, x1: BAND.CHILLED + BAND.mark, z1: BAND.qz1 }, docPyeong: 1 },
+    { id: 'AQ', kind: 'QUARANTINE', label: '냉동 격리', rect: { x0: BAND.FROZEN, z0: BAND.qz0, x1: BAND.FROZEN + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
+    { id: 'BQ', kind: 'QUARANTINE', label: '냉장 격리', rect: { x0: BAND.CHILLED, z0: BAND.qz0, x1: BAND.CHILLED + BAND.qw, z1: BAND.qz1 }, docPyeong: 1 },
     { id: 'CQ', kind: 'QUARANTINE', label: '상온 격리', rect: R.CQ, docPyeong: 1 },
     { id: 'SHIP', kind: 'SHIPPING', label: '인계', rect: R.SHIP, docPyeong: ZONE_PY.SHIP },
     { id: 'PARK', kind: 'PARKING', label: '라이더 대기', rect: R.PARK },
@@ -301,12 +302,12 @@ export function buildChuncheonLayout(): Layout {
   const dockSlots: DockSlot[] = [];
   for (const z of [2.4, 3.1, 4.2, 4.9]) for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: 17.0 + c * 0.6, z } });
 
-  // 패킹대 8 = 4 | 4 — 위 줄 PS-1~4 북쪽 끝, 아래 줄 PS-5~8 남쪽 끝, 점원은 가운데 통로 쪽
+  // 패킹대 6 = 3 | 3 — 위 줄 PS-1~3 북쪽 끝, 아래 줄 PS-4~6 남쪽 끝, 점원은 가운데 통로 쪽(처음 8대 → 출하문 앞을 막아 6대로)
   const stations: PackingStation[] = [];
-  const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 4 * PACK_TABLE_W) / 3;
-  for (let i = 0; i < 8; i++) {
-    const top = i < 4;
-    const tx = R.PK.x0 + 0.3 + PACK_TABLE_W / 2 + (i % 4) * (PACK_TABLE_W + gap);
+  const gap = (R.PK.x1 - R.PK.x0 - 0.6 - 3 * PACK_TABLE_W) / 2;
+  for (let i = 0; i < 6; i++) {
+    const top = i < 3;
+    const tx = R.PK.x0 + 0.3 + PACK_TABLE_W / 2 + (i % 3) * (PACK_TABLE_W + gap);
     const tz = top ? R.PK.z0 + 0.65 : R.PK.z1 - 0.65;
     stations.push({ id: `PS-${i + 1}`, index: i, table: { x: tx, z: tz }, stand: { x: tx, z: top ? tz + 1.2 : tz - 1.2 } });
     obstacles.push({ rect: { x0: tx - PACK_TABLE_W / 2, z0: tz - 0.4, x1: tx + PACK_TABLE_W / 2, z1: tz + 0.4 }, height: 0.9, kind: 'TABLE' });
@@ -315,9 +316,12 @@ export function buildChuncheonLayout(): Layout {
   // 인계 랙 2(돌출부 안, 출하문 양옆)
   const shippingSlots: ShippingSlot[] = [];
   const shipZ = BUMP.z0 + 0.1 + 0.25 + RACK_DEPTH / 2;
-  [24.375, 26.225].forEach((x, ri) => {
-    obstacles.push({ rect: { x0: x - RACK_LEN / 2, z0: shipZ - RACK_DEPTH / 2, x1: x + RACK_LEN / 2, z1: shipZ + RACK_DEPTH / 2 }, height: RACK_HEIGHT, kind: 'SHIP_RACK' });
-    for (let lv = 0; lv < 4; lv++) for (let s = 0; s < 4; s++) shippingSlots.push({ id: `SR${ri + 1}-${lv + 1}${s + 1}`, rackIndex: ri, pos: { x: x - 0.45 + s * 0.3, y: 0.25 + lv * 0.5, z: shipZ } });
+  // 인계 랙 2 — 세로(남북)로 돌려 돌출부 서·동 벽에 붙임(출하문 앞을 비움, 사용자 2026-11-24 "냉장냉동 격리바닥 실선이랑 격리 랙이랑 안 맞잖아. 그리고 상온 격리 구역 랙 세로로 방향 돌려서 벽에 붙이라고. 인계랙 입구를 패킹대가 침범하네 패킹대 6대로 줄여주고 장바구니 거치대 조금 더 동쪽으로 … 인계랙도 세로로 돌려서 벽에 붙여줘. 입구를 막았잖아")
+  void shipZ;
+  const shipCz = BUMP.z0 + 0.15 + RACK_LEN / 2;
+  [BUMP.x0 + 0.15 + RACK_DEPTH / 2, BUMP.x1 - 0.15 - RACK_DEPTH / 2].forEach((x, ri) => {
+    obstacles.push({ rect: { x0: x - RACK_DEPTH / 2, z0: shipCz - RACK_LEN / 2, x1: x + RACK_DEPTH / 2, z1: shipCz + RACK_LEN / 2 }, height: RACK_HEIGHT, kind: 'SHIP_RACK' });
+    for (let lv = 0; lv < 4; lv++) for (let s = 0; s < 4; s++) shippingSlots.push({ id: `SR${ri + 1}-${lv + 1}${s + 1}`, rackIndex: ri, pos: { x, y: 0.25 + lv * 0.5, z: shipCz - 0.45 + s * 0.3 } });
   });
 
   // ── 바닥 표시 ───────────────────────────────────────
@@ -354,13 +358,13 @@ export function buildChuncheonLayout(): Layout {
   // ── 점 ───────────────────────────────────────────────
   // 장바구니 거치대 — 패킹 동쪽에 가로 2줄(줄마다 10대, 줄 사이 1.6 m)(사용자 2026-11-24 "장바구니 거치대 가로로 돌리고 간격 두고 2줄로").
   // 첫 줄 = 패킹 북쪽 선 높이, 카트는 거치대 점에서 서쪽으로(x −2.0 ~ +0.7). 되돌릴 상품 탁자는 두 줄 동쪽 끝, 대기 작업자는 그 북쪽
-  const cartDepot = { x: R.PK.x1 + 3.4, z: R.PK.z0 + 0.6 + 0.32 };
+  const cartDepot = { x: 30.2, z: R.PK.z0 + 0.6 + 0.32 }; // 2026-11-24 "장바구니 거치대 조금 더 동쪽으로" — 카트 줄 x 약 27.6~30.9
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 17.4 + (i % 4) * 0.8, z: 5.6 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
-    idle: Array.from({ length: 24 }, (_, i) => ({ x: 29.9 + (i % 3) * 0.7, z: 22.3 + Math.floor(i / 3) * 0.75 })), // 거치대 동쪽
+    idle: Array.from({ length: 24 }, (_, i) => ({ x: 25.2 + (i % 8) * 0.8, z: 19.9 + Math.floor(i / 8) * 0.7 })), // 거치대 북쪽(상온 구역 2 앞 G 줄 남쪽)
     packQueue: { x: R.PK.x1 - 0.5, z: (R.PK.z0 + R.PK.z1) / 2 },
     shipDrop: { x: (SHIP_DOOR[0] + SHIP_DOOR[1]) / 2, z: CHC_BD - 0.4 },
     riderPickup: { x: (BUMP.x0 + BUMP.x1) / 2, z: BUMP.z1 + 0.55 },
@@ -377,10 +381,19 @@ export function buildChuncheonLayout(): Layout {
     storeAreas,
     officeTable: null, // 춘천은 휴게·사무 구역이 없음(요청서 표)
     rollContainers: [21.4, 22.1].map((x) => ({ x, z: 1.6 })),
+    quarantineRacks: {
+      // 저온 격리: 서쪽 벽에 세로로 2개(흰 실선 안, 사이 0.15 m)
+      ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
+        const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;
+        return [id, [0, 1].map((i) => ({ x0: X0 + 0.2, z0: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15), x1: X0 + 0.2 + RACK_DEPTH, z1: BAND.qz0 + 0.2 + i * (RACK_LEN + 0.15) + RACK_LEN }))];
+      })),
+      // 상온 격리: 입고창고 동쪽 벽에 세로로 2개
+      CQ: [0, 1].map((i) => ({ x0: R.CQ.x1 - 0.05 - RACK_DEPTH, z0: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15), x1: R.CQ.x1 - 0.05, z1: R.CQ.z0 + 0.25 + i * (RACK_LEN + 0.15) + RACK_LEN })),
+    },
     cartDepotVertical: false,
     cartDepotRows: 2,
     cartDepotRowGap: 1.6,
-    returnTable: { x: cartDepot.x - 0.9, z: cartDepot.z - 1.55 }, // 첫 카트 줄 북쪽
+    returnTable: { x: cartDepot.x - 0.9, z: cartDepot.z + 1.6 + 1.25 }, // 둘째 카트 줄 남쪽
   };
 
   return {

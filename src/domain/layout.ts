@@ -162,6 +162,8 @@ export interface SiteGeo {
   /** 장바구니 거치대 카트 줄 수(기본 1) — 줄마다 남쪽으로 cartDepotRowGap(m) 띄움(춘천, 사용자 2026-11-24 "가로로 돌리고 간격 두고 2줄로") */
   cartDepotRows?: number;
   cartDepotRowGap?: number;
+  /** 격리 구역 흰 랙 자리(구역 id → 랙 사각형들). 없으면 화면 기본(저온 서쪽 벽 세로 2개·상온 남쪽 가로 2개) */
+  quarantineRacks?: Record<string, Rect[]>;
   /** 되돌릴 상품 탁자 자리(없으면 거치대 옆 RETURN_TABLE 오프셋) */
   returnTable?: { x: number; z: number };
 }

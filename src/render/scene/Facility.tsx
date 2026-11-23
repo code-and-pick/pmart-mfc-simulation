@@ -312,7 +312,9 @@ function Obstacles({ L }: { L: Layout }) {
       {L.zones
         .filter((z) => z.kind === 'QUARANTINE')
         .flatMap((z) =>
-          [0, 1].map((i) => {
+          L.geo.quarantineRacks?.[z.id]
+            ? L.geo.quarantineRacks[z.id].map((r, i) => <ShipRack key={`qr-${z.id}-${i}`} r={r} h={RACK_HEIGHT} />)
+            : [0, 1].map((i) => {
             // 냉동·냉장 격리는 왼쪽(서쪽) 벽 쪽에 세로로 돌려(긴 쪽이 남북) 위아래로 2개 — 흰 실선(구역 끝 +0.12) 안쪽
             // (사용자 2026-11-21 "…방향을 세로로 돌려서 붙이라고 … 옆으로 돌리라고" → "격리구역 랙 오른쪽이 아니라 왼 쪽으로"). 상온은 구역 뒤쪽 그대로
             const cold = z.id === 'AQ' || z.id === 'BQ';
