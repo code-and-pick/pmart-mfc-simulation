@@ -11,7 +11,7 @@ import type { DockSlot, Layout, ReserveSpot } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
 import { Agent } from './agent';
 import type { Metrics } from './metrics';
-import { RETURN_FLOW } from '../config';
+import { INBOUND_UNLOAD, RETURN_FLOW } from '../config';
 import { QUARANTINE_OF, type ReturnItem } from './returns';
 
 /** 내려놓은 자리에 다가설 점 — 하차 칸은 통로 쪽(z 19.75 기준), 입고재고 팔레트는 그 팔레트 앞 */
@@ -170,36 +170,48 @@ export class InboundWorker extends Agent {
     truck.state = 'UNLOADING';
     this.hasCart = true; // 하차도 롤테이너로(차량문 ↔ 하차 칸)
 
+    // 롤테이너 단위 하차: 온도대별로 묶어 롤테이너 하나에 linesPerRoll 줄, 승강기 한 번에 rollsPerLift 대
     const items: DockItem[] = [];
-    for (let i = 0; i < truck.lines.length; i++) {
-      const l = truck.lines[i];
-      const sku = ctx.skuMap.get(l.sku)!;
-      this.pda.step = `하차 ${i + 1}/${truck.lines.length} · ${sku.name}`;
-      this.carrying = [sku.temp];
-      await this.wait(4);
-      const item: DockItem = {
-        id: `${truck.trfId}-${i + 1}`,
-        trfId: truck.trfId,
-        sku: l.sku,
-        qty: l.qty,
-        temp: sku.temp,
-        slot: null,
-        floorPos: { x: 32.678, z: 2.965 }, // 2026-11-22 463평 맞춤
-        state: 'ON_DOCK',
-      };
-      ctx.placeOnDock(item);
-      const spot = item.slot?.pos ?? item.floorPos;
-      await this.walkTo(approach(spot, item));
-      await this.wait(2);
-      this.carrying = [];
-      truck.unloaded = i + 1;
-      items.push(item);
+    const U = INBOUND_UNLOAD;
+    const byTemp = new Map<TemperatureZone, { l: { sku: string; qty: number }; i: number }[]>();
+    truck.lines.forEach((l, i) => {
+      const t = ctx.skuMap.get(l.sku)!.temp;
+      byTemp.set(t, [...(byTemp.get(t) ?? []), { l, i }]);
+    });
+    const rolls: { l: { sku: string; qty: number }; i: number }[][] = [];
+    for (const ls of byTemp.values()) for (let k = 0; k < ls.length; k += U.linesPerRoll) rolls.push(ls.slice(k, k + U.linesPerRoll));
+    const floorPos = ctx.layout.dockSlots[0]?.pos ?? ctx.layout.points.truckDoor;
+    for (let r = 0; r < rolls.length; r++) {
+      const roll = rolls[r];
+      if (r > 0 && r % U.rollsPerLift === 0) {
+        this.activity = `승강기 — 다음 롤테이너 ${Math.min(U.rollsPerLift, rolls.length - r)}대 올라오는 중`;
+        this.pda.step = `승강기 ${Math.floor(r / U.rollsPerLift) + 1}/${Math.ceil(rolls.length / U.rollsPerLift)}회`;
+        await this.walkTo(ctx.layout.points.truckDoor);
+        await this.wait(U.liftCycleSec);
+      }
+      const temp = ctx.skuMap.get(roll[0].l.sku)!.temp;
+      this.activity = `입고 차량 ${truck.trfId} 하차 — 롤테이너 ${r + 1}/${rolls.length}(${TEMP_KO[temp]} ${roll.length}품목)`;
+      this.pda.step = `롤테이너 ${r + 1}/${rolls.length} · ${TEMP_KO[temp]} ${roll.length}품목`;
       await this.walkTo(ctx.layout.points.truckDoor);
+      await this.wait(U.takeRollSec);
+      this.carrying = roll.map(() => temp);
+      for (const { l, i } of roll) {
+        const item: DockItem = { id: `${truck.trfId}-${i + 1}`, trfId: truck.trfId, sku: l.sku, qty: l.qty, temp, slot: null, floorPos: { ...floorPos }, state: 'ON_DOCK' };
+        ctx.placeOnDock(item);
+        const spot = item.slot?.pos ?? item.floorPos;
+        await this.walkTo(approach(spot, item));
+        await this.wait(U.dropLineSec);
+        this.carrying.pop();
+        truck.unloaded += 1;
+        items.push(item);
+      }
     }
+    this.carrying = [];
+    await this.walkTo(ctx.layout.points.truckDoor);
 
     this.activity = '수량·바코드·유통기한 검수';
     this.pda.step = '검수';
-    await this.walkTo({ x: 30.178, z: 2.965 });
+    await this.walkTo({ x: ctx.layout.points.truckDoor.x, z: ctx.layout.points.truckDoor.z + 1.5 }); // 승강기 앞 입고·검수(전엔 1호점 좌표 고정이라 다른 지점에선 엉뚱한 곳)
     await this.wait(2 * truck.lines.length);
     this.pda.step = '수령 등록 (TIN)';
     await ctx.mock.recordReceipt(
