@@ -68,7 +68,7 @@ const R = {
 /** 남쪽 띠 G·H 쌍 북쪽 면 z — 띠(냉장 남쪽 벽 20.5 ~ 건물 남쪽 벽 25.3) 가운데 */
 const SOUTH_PAIR_Z = (20.6 + BSJ_BD - 0.1) / 2 - RACK_DEPTH;
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 피킹 줄 시작 x */
-const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(7.1) } as const;
+const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(7.3) } as const;
 
 const ZONE_PY: Record<string, number> = { B: 58, A: 58, 'C-H': 41, WH: 18, RCV: 12, PK: 12, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
@@ -112,12 +112,9 @@ export function buildBusanjinLayout(): Layout {
     const a = (z1 - zA - pairs.length * 2 * RACK_DEPTH) / (pairs.length + 1);
     // 가운데 통로(x)는 모든 줄이 같은 자리, 묶음은 방 폭 가운데로
     // 가운데 통로 자리는 가장 긴 면 기준, 짧은 면은 가운데 통로 양옆에 붙임(냉동 12 = 6 | 6, 8 = 4 | 4)
-    // 가운데 통로는 방 폭 한가운데(냉동·냉장이 같은 x — 사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐"), 면마다 통로 양옆으로 같은 수(6 | 6, 5 | 5, 4 | 4)
-    const gapX = (room.x0 + room.x1) / 2 - 0.7;
-    const xAt = (i: number, n: number) => {
-      const w = Math.ceil(n / 2);
-      return i < w ? gapX - (w - i - 0.5) * RACK_LEN : gapX + 1.4 + (i - w + 0.5) * RACK_LEN;
-    };
+    // 모든 줄을 서쪽 끝(냉동·냉장 같은 x)에 맞추고 가운데 통로도 한 선 — 랙이 모자란 줄은 동쪽 끝만 짧음(사용자 2026-11-24 "이게 무슨 정돈된 거야 삐뚤빼뚤하구만" → "모든 줄을 서쪽 끝에 맞춤")
+    const W = Math.ceil(Math.max(...pairs.flat().map((r) => r.length)) / 2);
+    const xAt = (i: number, _n: number) => COLD.rowX0 + (i < W ? (i + 0.5) * RACK_LEN : W * RACK_LEN + 1.4 + (i - W + 0.5) * RACK_LEN);
     for (let k = 0; k <= pairs.length; k++) {
       const top = zA + k * (a + 2 * RACK_DEPTH);
       coldAisles[temp].push([top, top + a]);
@@ -153,20 +150,16 @@ export function buildBusanjinLayout(): Layout {
   const pitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => {
     const cz = EAST.z0 + k * pitch + RACK_DEPTH / 2;
-    // 가운데 통로 자리 고정, 7랙 줄 = 4 | 3, 6랙 줄(E) = 3 | 3 — 통로 양옆으로 붙임
-    const gap = EAST.x0 + 4 * RACK_LEN;
-    const w = row.length === 6 ? 3 : 4;
-    row.forEach((r, i) => ambient.push(place(r, i < w ? gap - (w - i - 0.5) * RACK_LEN : gap + 1.0 + (i - w + 0.5) * RACK_LEN, cz, 'x', 1)));
+    // 서쪽 끝·가운데 통로 한 선: 7랙 4 | 3, 6랙(E) 4 | 2 — 동쪽 끝만 짧음(사용자 2026-11-24 "이게 무슨 정돈된 거야 삐뚤빼뚤하구만" → "모든 줄을 서쪽 끝에 맞춤")
+    row.forEach((r, i) => ambient.push(place(r, EAST.x0 + (i < 4 ? (i + 0.5) * RACK_LEN : 4 * RACK_LEN + 1.0 + (i - 3.5) * RACK_LEN), cz, 'x', 1)));
   });
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
   const SOUTH_Z = SOUTH_PAIR_Z;
-  const sGap = (X(12.4) + X(BSJ_W) - 0.3) / 2 - 0.7;
-  const sideAt = (i: number, n: number) => {
-    const w = n / 2;
-    return i < w ? sGap - (w - i - 0.5) * RACK_LEN : sGap + 1.4 + (i - w + 0.5) * RACK_LEN;
-  };
+  // 서쪽 끝·가운데 통로 한 선: G 8 | 8, H 8 | 4 — 동쪽 끝만 짧음(사용자 2026-11-24 "이게 무슨 정돈된 거야 삐뚤빼뚤하구만" → "모든 줄을 서쪽 끝에 맞춤")
+  const sX0 = X(12.6);
+  const sideAt = (i: number, _n: number) => sX0 + (i < 8 ? (i + 0.5) * RACK_LEN : 8 * RACK_LEN + 1.4 + (i - 7.5) * RACK_LEN);
   const gNorth = [...run('G02', 1, 8), ...run('G03', 1, 8)];
-  const hSouth = [...run('H01', 1, 6), ...run('H02', 2, 6)];
+  const hSouth = [...run('H01', 1, 8), ...run('H02', 4, 4)]; // 서쪽 묶음 H01-01~08 | 동쪽 H02-04~07(넓은 칸 랙 H01-02~06·H02-07 포함)
   gNorth.forEach((r, i) => ambient.push(place(r, sideAt(i, gNorth.length), SOUTH_Z + RACK_DEPTH / 2, 'x', -1)));
   hSouth.forEach((r, i) => ambient.push(place(r, sideAt(i, hSouth.length), SOUTH_Z + 1.5 * RACK_DEPTH, 'x', 1)));
 
