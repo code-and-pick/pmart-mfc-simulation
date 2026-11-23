@@ -54,6 +54,7 @@
 ### R-41 3호점 세종 MFC(MFC-SEJ-01) 평면·칸 위치 파일 — 높음 (2026-11-23, PC1 요청 → 시뮬레이터가 위치 파일 줌)
 - **배치 확정 → 위치 갱신 요청(2026-11-24, 사용자 "확정")**: 사용자가 화면을 보며 세종 배치를 고침(상온 구역 1 가로로·피킹 통로 1.3 m, 패킹 5 | 5 = 패킹대 10, 거치대 세로, 상온 격리 구역 1 안, 입고창고 ㄱ자 = 입고재고 10·대형재고 10·보충재고 세로 3쌍, 상온 구역 2 줄 5·5·5·5·4, 사무·휴게, 인계 동쪽 3 m, 입고·검수 남쪽 문 없앰 — 일지 11-24). 같은 경로 `docs/layout-export/sejong/` 파일을 다시 씀(18,056줄).
   - **칸 코드·피킹 순서(pickSequence) 그대로** — 이미 들어간 재고 칸 코드 안 바뀜. **위치(xM·zM)만 바뀜 8,847**: 상온 선반 A-C 1,512·A-D 1,680·A-E 1,152·A-F 1,680·A-G 1,566·A-H 575, 보충재고 A-R1 630, CRT-A 40, DSP-A 2, PAK-A 6, PAK-C/F 2, QRT-A 1, RCV-A-02 1.
+  - **LAN 반영·대조 끝(11-24)**: PC3 #394 병합, PC1 layout(새 14, 실패 0)·r34(위치 8,847, 실패 0). 시뮬레이터 대조: 칸 18,056 코드·좌표 모두 위치 파일과 같음, pickSequence 그대로, ACTIVE 17,956·CLOSED 100, 재고 9,671·503 SKU 전부 STORED·온도대 어긋남 0·닫힌 칸 재고 0.
   - **새 칸 14**: 대형재고 A-R2-01~10-1-01(BULK_PALLET, `bulk-pallet-cells.json` 1100 × 1100 × 1500 — 1호점과 같음), 패킹대 PAK-A-07~10. 없어진 칸 0.
 - 요청: PC1 백엔드(사용자 "이 평면도대로 세종 MFC 1개 더 만들어줘. 필요하면 MFC 백엔드 세션이랑 mfc 시뮬레이션에 바로 보내") — pmart-backend `docs/handoff/simulator/mfc/2026-11-23-request-sejong-mfc.md`, 그림 `2026-11-23-sejong-floorplan-user.webp`. 백엔드 칸 만들기 PR #389(PC 3).
 - 시뮬레이터가 한 것: 세종 평면 `src/domain/layoutSejong.ts`(1호점 평면과 따로, 처음부터 이 좌표), 위치 파일 **`docs/layout-export/sejong/location-positions.json`**(18,042줄 = SHELF 16,935 피킹 순서 + RESERVE_RACK 1,050 + SUPPORT 57) · **`reserve-rack-cells.json`**(보충재고 1,050칸 temperatureZone·dimMm). 대형재고(BULK_PALLET)는 요청 표에 없어 없음.
