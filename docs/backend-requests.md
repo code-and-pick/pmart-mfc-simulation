@@ -51,7 +51,8 @@
 
 ## 열린 요청
 
-### R-44 5호점 부산남구 MFC(MFC-BNG-01) 평면·칸 위치 파일 — 높음 (2026-11-24, PC1 요청 → 시뮬레이터, 사용자 화면 확인 대기)
+### R-44 5호점 부산남구 MFC(MFC-BNG-01) 평면·칸 위치 파일 — 높음 (2026-11-24, PC1 요청 → 시뮬레이터, 사용자 "확정" → PC3)
+- **확정(11-24)**: 화면 보며 고침 — 입고·검수(승강기·별동) 1.4 m 동쪽(냉동과 통로 2.5 m), 입고창고 남쪽(패킹 쪽) 문 없앰, 상온 격리 = 입고창고 남쪽 벽 동쪽 끝 2.8 × 1.18 m(흰 랙 가로), 입고재고 팔레트 실선 칸 가운데, 보충재고 랙 남쪽(첫 줄 z 10.1, 쌍 사이 1.0 m). 위치 파일 13,540줄(칸 13,471 + 지원 69).
 - 요청: PC1(사용자 "mfc 하나 더 만들자. 평면도 대로 mfc 구조 설계하고, 랙수랑 평수는 아래 적은대로") — pmart-backend `docs/handoff/simulator/mfc/2026-11-24-request-busan-namgu-mfc.md`, 그림 `2026-11-24-busan-namgu-floorplan-user.png`. 그림의 상온 "피킹랙 160" 은 표(C 21·D 21·E 18·F 21·G 22·H 17 = 120, 피킹 합 321)와 안 맞아 표를 따름.
 - 시뮬레이터: `src/domain/layoutBusanNamgu.ts`(45.4 × 29.2 m + 인계 돌출부 = 404평, 별동 16평 14.7 × 3.6 m), 위치 파일 `docs/layout-export/busan-namgu/` — location-positions.json 13,540줄(SHELF 12,706·RESERVE_RACK 765·BULK_PALLET 10·SUPPORT 59), reserve-rack-cells.json 765, bulk-pallet-cells.json 10.
 - 랙: 냉장 B 109(줄 B01~B06, 줄마다 19랙), 냉동 A 92(A01~A05), 상온 C~H 120 = 줄마다 4 | 통로 1.5 m | 4, 등 맞댄 8쌍, 남쪽(패킹 쪽)부터 F → G → C → D → E → H(칸 코드 줄 = 4랙 묶음, 그룹 안 남쪽부터), 보충재고 냉장 10·냉동 10·입고창고 31 × 15.
