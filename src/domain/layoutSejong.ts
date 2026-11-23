@@ -329,7 +329,8 @@ export function buildSejongLayout(): Layout {
   }
   // 사무·휴게 테이블(가운데, 걸어서 피해 감)
   // 테이블은 북쪽 벽에 붙이고 의자는 그 남쪽(1호점과 같은 모양) — 사용자 2026-11-24 "사무휴게 의자 벽 뚫고 나왔잖아 북쪽 벽으로 의자를 붙여야지"
-  const officeTable = { x: (R.OFF.x0 + R.OFF.x1) / 2 + 0.8, z: R.OFF.z0 + 0.4, w: 3.6, d: 0.5, h: 0.74 };
+  // 가로 가운데(사용자 2026-11-24 "휴게사무 테이블 중앙으로")
+  const officeTable = { x: (R.OFF.x0 + R.OFF.x1) / 2, z: R.OFF.z0 + 0.4, w: 3.6, d: 0.5, h: 0.74 };
   obstacles.push({ rect: { x0: officeTable.x - 1.8, z0: R.OFF.z0 + 0.1, x1: officeTable.x + 1.8, z1: R.OFF.z0 + 1.35 }, height: 0.75, kind: 'TABLE' });
 
   // 하차 칸: 입고·검수 안 두 블록(가운데 통로 비움)
