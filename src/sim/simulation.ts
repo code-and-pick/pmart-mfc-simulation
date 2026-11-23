@@ -185,7 +185,7 @@ export class Simulation {
     }
 
     if (mode === 'mock') {
-      const mock = new MockBackend({ mfcId: params.mfcId, now: () => this.time, baseDate: BASE_DATE, fenceTtlSec: params.fenceTtlSec });
+      const mock = new MockBackend({ mfcId: this.centerId, now: () => this.time, baseDate: BASE_DATE, fenceTtlSec: params.fenceTtlSec });
       // 시작 재고: 칸 한도의 일부 + 일부 SKU 는 보충재고 [시뮬] (실제는 승인된 초기 보유 반입, ADR-0014)
       const stockRng = new Rng(params.seed ^ 0x1234567);
       const [f0, f1] = params.initialShelfFill;
@@ -632,8 +632,13 @@ export class Simulation {
   }
 
   /** 화면에 보일 센터 이름 — 실서버는 center-master 이름, 못 읽었으면 ID, MOCK 은 "가상 센터" (사용자 2026-11-20 "MFC 식별값 말고 이름으로") */
+  /** 보이는·MOCK 이 쓰는 센터 ID — MOCK 은 지점 mockId(부산진구 MFC-BJG-01), 실서버는 params.mfcId 그대로 */
+  get centerId(): string {
+    return this.mode === 'mock' ? (MFC_SITES.find((s) => s.id === this.params.mfcId)?.mockId ?? this.params.mfcId) : this.params.mfcId;
+  }
+
   get centerLabel(): string {
-    if (this.mode === 'mock') return `가상 ${MFC_SITES.find((s) => s.id === this.params.mfcId)?.name ?? '센터'} (${this.params.mfcId})`;
+    if (this.mode === 'mock') return `가상 ${MFC_SITES.find((s) => s.id === this.params.mfcId)?.name ?? '센터'} (${this.centerId})`;
     return this.real?.centerName ?? this.params.mfcId;
   }
 
@@ -1383,7 +1388,7 @@ export class Simulation {
     const req: ConfirmOrderRequest = {
       orderId,
       orderVersion: 1,
-      mfcId: this.params.mfcId,
+      mfcId: this.centerId,
       reservationId,
       // 알뜰배달 일부 [시뮬 비율 MOCK_BUNDLE.share] — 따로 뽑는 난수(다른 흐름의 순서를 바꾸지 않게)
       deliveryMode: this.bundleRng.next() < MOCK_BUNDLE.share ? 'BUNDLED' : 'SINGLE',
@@ -1476,7 +1481,7 @@ export class Simulation {
     }
     // 실서버: mfc-capacity 가 같은 작업자에게 PACK 을 배정할 때까지 작업 목록을 본다
     for (let i = 0; i < 120; i++) {
-      const items = await this.port.listTasks(this.params.mfcId, ['ASSIGNED']);
+      const items = await this.port.listTasks(this.centerId, ['ASSIGNED']);
       const t = items.find((x) => x.taskType === 'PACK' && x.shipmentId === shipmentId && x.assignment.workerId === workerId);
       if (t) return { taskId: t.taskId, assignmentVersion: t.assignment.assignmentVersion };
       await this.workers.find((w) => w.id === workerId)!.wait(5);

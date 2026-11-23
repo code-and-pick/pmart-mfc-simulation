@@ -275,6 +275,8 @@ export interface MfcSite {
   accountPrefix: string;
   /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
   supervisorAccount: string;
+  /** MOCK 에서 보이는 센터 ID — 없으면 id(실서버 센터 ID는 id 그대로). 사용자 2026-11-24 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔" */
+  mockId?: string;
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
   layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
 }
@@ -282,6 +284,7 @@ export interface MfcSite {
 export const MFC_SITES: readonly MfcSite[] = [
   {
     id: 'MFC-SEED-01',
+    mockId: 'MFC-BJG-01', // MOCK 만 — 실서버 센터 ID 는 MFC-SEED-01 그대로(백엔드 이름 바꿈 없이 추측해 부르지 않음)
     name: '부산진구 MFC',
     address: '부산광역시 부산진구 동천로 109, 삼한골드게이트',
     short: '부산진구',

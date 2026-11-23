@@ -100,3 +100,19 @@ describe('부산남구 지점', () => {
     expect(s.mock!.inventory.violations).toEqual([]);
   }, 120_000);
 });
+
+// 부산진구 MOCK 센터 ID(사용자 2026-11-24 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔") — 실서버 ID 는 그대로
+describe('부산진구 MOCK 센터 ID', () => {
+  afterEach(() => setActiveSite(undefined));
+  it('MOCK 은 MFC-BJG-01 로 보이고 돈다, 지점 ID(실서버)는 MFC-SEED-01', async () => {
+    const site = setActiveSite('MFC-SEED-01');
+    expect(site.id).toBe('MFC-SEED-01');
+    const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: site.id, ordersPerHour: 60 });
+    expect(s.centerId).toBe('MFC-BJG-01');
+    expect(s.centerLabel).toContain('MFC-BJG-01');
+    s.speed = 60;
+    for (let i = 0; i < 1500 && s.metrics.summary().handedOver < 3; i++) await s.advance(0.1);
+    expect(s.metrics.summary().handedOver).toBeGreaterThanOrEqual(3);
+    expect(s.metrics.apiErrors).toBe(0);
+  }, 120_000);
+});
