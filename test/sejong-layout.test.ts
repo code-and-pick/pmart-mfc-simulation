@@ -68,7 +68,8 @@ describe('세종 MFC 평면(R-41)', () => {
   });
 
   it('위치 파일 — 지원 칸까지 코드 겹침 없음', () => {
-    const { positions, reserveCells } = exportPositions(L, codes);
+    const { positions, reserveCells, bulkCells } = exportPositions(L, codes);
+    expect(bulkCells.map((b) => b.locationCode)).toEqual(Array.from({ length: 10 }, (_, i) => `A-R2-${String(i + 1).padStart(2, '0')}-1-01`));
     const nonCart = positions.filter((p) => !p.locationCode.startsWith('CRT-'));
     expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
     expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(16935);
@@ -78,6 +79,7 @@ describe('세종 MFC 평면(R-41)', () => {
       const out = new URL('../docs/layout-export/sejong/', import.meta.url);
       fs.writeFileSync(new URL('location-positions.json', out), '[\n' + positions.map((p) => JSON.stringify(p)).join(',\n') + '\n]\n');
       fs.writeFileSync(new URL('reserve-rack-cells.json', out), JSON.stringify(reserveCells) + '\n');
+      fs.writeFileSync(new URL('bulk-pallet-cells.json', out), JSON.stringify(bulkCells) + '\n');
     }
   });
 });
@@ -117,5 +119,14 @@ describe('세종 배치 고침(2026-11-24)', () => {
     expect(pk.x0).toBe(ch.x0);
     expect(L.points.cartDepot.x).toBeGreaterThan(pk.x1 + 1.5);
     for (const p of L.points.idle) expect(Math.hypot(p.x - L.points.cartDepot.x, p.z - L.points.cartDepot.z)).toBeLessThan(6);
+    // 입고창고: 대형재고(맨 안쪽 북쪽) → 입고재고 → 보충재고 랙(문 쪽)
+    const bulkZ = Math.max(...L.reserves.filter((r) => r.role === 'BULK').map((r) => r.rect.z1));
+    const wr = L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT');
+    const rackZ = Math.min(...L.racks.filter((r) => r.reserve && r.temp === 'AMBIENT').map((r) => r.cz));
+    expect(bulkZ).toBeLessThan(Math.min(...wr.map((r) => r.rect.z0)));
+    expect(Math.max(...wr.map((r) => r.rect.z1))).toBeLessThan(rackZ);
+    // 카트 줄 북쪽 끝 = 패킹 북쪽 선, 되돌릴 상품 탁자는 카트 남쪽
+    expect(L.points.cartDepot.z - 0.7 - 0.24).toBeCloseTo(pk.z0, 5);
+    expect(L.geo.returnTable!.z).toBeGreaterThan(L.points.cartDepot.z);
   });
 });

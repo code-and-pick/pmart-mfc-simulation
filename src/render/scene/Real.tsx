@@ -326,7 +326,7 @@ export function RealStock() {
       const g =
         points.get(key) ??
         (crt
-          ? { ...depotPoint(sim.layout, RETURN_TABLE.dx, RETURN_TABLE.dz), table: true, by: new Map(), tz: new Map(), pending: 0 }
+          ? { ...(sim.layout.geo.returnTable ?? depotPoint(sim.layout, RETURN_TABLE.dx, RETURN_TABLE.dz)), table: true, by: new Map(), tz: new Map(), pending: 0 }
           : // 인계 랙: 서버 점은 랙의 첫 칸(왼쪽 끝) — 봉투는 랙 가운데 아래 칸에
             { x: key.startsWith('DSP-') ? p.x + 0.45 : p.x, z: p.z, table: u.locationCode.startsWith('PAK-A'), by: new Map(), tz: new Map(), pending: 0 });
       g.by.set(u.workState, (g.by.get(u.workState) ?? 0) + u.qty);

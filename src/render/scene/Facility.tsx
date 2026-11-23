@@ -602,7 +602,7 @@ export function Facility() {
       <StaticMerge>
         <OfficeDecor />
       </StaticMerge>
-      <ReturnTable {...depotPoint(L, RETURN_TABLE.dx, RETURN_TABLE.dz)} />
+      <ReturnTable {...(L.geo.returnTable ?? depotPoint(L, RETURN_TABLE.dx, RETURN_TABLE.dz))} />
       {/* "장바구니 거치대" 이름표는 시작점 표지판에 합침(사용자 2026-11-21 "그냥 장바구니 거치대 시작점 이라고 하면 되지 않아?") */}
       <FreightLifts />
     </>

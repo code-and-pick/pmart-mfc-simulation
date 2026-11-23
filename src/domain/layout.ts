@@ -157,6 +157,8 @@ export interface SiteGeo {
   rollContainers?: { x: number; z: number }[];
   /** 장바구니 거치대를 세로(남북)로 — 카트 줄이 남쪽으로 늘어서고 시작점 판은 동쪽을 본다(세종, 사용자 2026-11-24) */
   cartDepotVertical?: boolean;
+  /** 되돌릴 상품 탁자 자리(없으면 거치대 옆 RETURN_TABLE 오프셋) */
+  returnTable?: { x: number; z: number };
 }
 
 /** 장바구니 거치대 기준 상대 자리(가로 거치대 기준 dx·dz) → 평면 좌표. 세로 거치대는 90° 돌린다(가로 −x 줄 → 세로 +z 줄) */

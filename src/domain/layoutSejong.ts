@@ -251,10 +251,10 @@ export function buildSejongLayout(): Layout {
     }
   }
   {
-    // 입고창고: 북쪽 입고재고 팔레트 줄(z 0.6~1.7) → 통로 → 보충재고 랙 3쌍(통로 2.0 m, 지게차) + 남쪽 홑줄 → 남쪽 빈 바닥(지게차 돌림·적재)
+    // 입고창고(1호점과 같은 순서): 맨 안쪽(북쪽 벽) 대형재고 → 입고재고 → 출입문 쪽(남쪽) 보충재고 랙 3쌍(통로 2.0 m) + 홑줄 — 사용자 2026-11-24 "대형재고가 맨 안 쪽에 있어야지 맨 바깥쪽에 있으면 어떡해"
     const xs = Array.from({ length: 6 }, (_, i) => (R.WH.x0 + R.WH.x1) / 2 + (i - 2.5) * RACK_LEN);
     const rows: { cz: number; face: 1 | -1 }[] = [];
-    let z = 4.2;
+    let z = 8.4;
     for (let p = 0; p < 3; p++) {
       rows.push({ cz: z + RACK_DEPTH / 2, face: -1 }, { cz: z + RACK_DEPTH * 1.5, face: 1 });
       z += 2 * RACK_DEPTH + 2.0;
@@ -282,10 +282,19 @@ export function buildSejongLayout(): Layout {
   for (const [temp, X0, rid] of [['FROZEN', BAND.FROZEN, 'AR'], ['CHILLED', BAND.CHILLED, 'BR']] as const) {
     [1.95, 3.2].forEach((z0, j) => addReserve(`${rid}-${j + 3}`, temp, X0 + 0.25, z0, { x: X0 + 2.0, z: 3.15 }, 'RECEIVING'));
   }
-  // 상온 입고재고 5자리(입고창고 북쪽 줄, 문서 6-5 "상온 5자리") → 서버 RCV-A-02. 사람은 팔레트 남쪽에서 검수
+  // 상온 입고재고 5자리(대형재고 남쪽 줄, 문서 6-5 "상온 5자리") → 서버 RCV-A-02. 사람은 팔레트 남쪽에서 검수
   for (let c = 0; c < 5; c++) {
     const x0 = R.WH.x0 + 1.0 + c * 1.5;
-    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 0.6, { x: x0 + P / 2, z: 2.3 }, 'RECEIVING');
+    addReserve(`WR-${String(c + 1).padStart(2, '0')}`, 'AMBIENT', x0, 5.3, { x: x0 + P / 2, z: 6.9 }, 'RECEIVING');
+  }
+  // 대형재고 바닥 팔레트 10(1호점과 같은 5 | 5, 서버 A-R2-01~10-1-01) — 입고창고 맨 안쪽 북쪽 벽, 두 줄 사이 통로 1.0 m. 사람은 팔레트 남쪽에서.
+  // 요청 표엔 없었지만 사용자 2026-11-24 "상온 입고 창고에 대형재고 자리 어디 갔어". 번호는 열마다 북쪽 → 남쪽, 서쪽 열부터(1호점과 같은 규칙)
+  {
+    let n = 0;
+    for (let c = 0; c < 5; c++) {
+      const x0 = R.WH.x0 + 1.0 + c * 1.5;
+      for (const z0 of [0.5, 2.6]) addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', x0, z0, { x: x0 + P / 2, z: z0 + P + 0.5 }, 'BULK');
+    }
   }
   // 사무·휴게 테이블(가운데, 걸어서 피해 감)
   // 테이블은 북쪽 벽에 붙이고 의자는 그 남쪽(1호점과 같은 모양) — 사용자 2026-11-24 "사무휴게 의자 벽 뚫고 나왔잖아 북쪽 벽으로 의자를 붙여야지"
@@ -335,10 +344,11 @@ export function buildSejongLayout(): Layout {
     coldArea(BAND.CHILLED, 'CHILLED'),
     {
       floor: [R.WH.x0, R.WH.z0 + 0.1, R.WH.x1, R.WH.z1],
-      lines: [[WHL, 3.3, WHR, 3.3]], // 입고재고 | 보충재고
+      lines: [[WHL, 4.75, WHR, 4.75], [WHL, 7.6, WHR, 7.6]], // 대형재고 | 입고재고 | 보충재고
       texts: [
-        { t: '입고재고', x: R.WH.x0 + 1.3, z: 2.4 },
-        { t: '보충재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 16.4 },
+        { t: '대형재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 4.45 },
+        { t: '입고재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 7.3 },
+        { t: '보충재고', x: (R.WH.x0 + R.WH.x1) / 2, z: 18.6 },
       ],
     },
   ];
@@ -347,7 +357,8 @@ export function buildSejongLayout(): Layout {
   // 장바구니 거치대(시작점) — 상온 구역 1 남쪽 앞, 패킹 옆. 세로(남북)로 카트 줄(사용자 2026-11-24 "장바구니 거치대 시작점도 패킹대 뒤랑 상온 구역 앞 남쪽에"
   // → "세로로 방향을 바꾸고" → 패킹을 서쪽으로 붙이고 거치대는 그 동쪽에 대기 작업자와 같이 공간을 둠). 카트 줄 x 38.0 · z 24.3~29.6,
   // 되돌릴 상품 탁자는 그 북쪽 끝, 대기 작업자는 거치대 동쪽(x 39.6~43.6). 그 남쪽은 출하문으로 가는 길로 비움 [시뮬]
-  const cartDepot = { x: 38.6, z: 25.0 };
+  // 카트 줄 북쪽 끝 = 패킹 북쪽 선(사용자 2026-11-24 "장바구니 거치대 패킹구역이랑 북쪽에서 끝나는 지점 맞춰") — 첫 카트 중심 = 거치대 z − 0.7, 카트 반폭 0.24
+  const cartDepot = { x: 38.6, z: R.PK.z0 + 0.7 + 0.24 };
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
@@ -371,6 +382,8 @@ export function buildSejongLayout(): Layout {
     officeTable,
     rollContainers: [35.2, 36.1, 37.0].map((x) => ({ x, z: 5.6 })),
     cartDepotVertical: true,
+    // 되돌릴 상품 탁자 — 카트 줄 남쪽 끝(북쪽으로 튀어나오지 않게, 사용자 2026-11-24 "그 앞에 하얀 책상이 튀어나가잖아 그건 남쪽으로 옮기고")
+    returnTable: { x: 38.0, z: R.PK.z0 + 0.24 + 19 * 0.28 + 0.24 + 0.6 },
   };
 
   return {

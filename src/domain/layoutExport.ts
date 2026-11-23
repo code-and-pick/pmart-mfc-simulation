@@ -28,9 +28,24 @@ export interface ReserveCellRow {
 const r3 = (v: number) => Math.round(v * 1000) / 1000;
 const pad2 = (n: number) => String(n).padStart(2, '0');
 
-export function exportPositions(L: Layout, codes: LocationCodeMap, cartCount = 40): { positions: PositionRow[]; reserveCells: ReserveCellRow[] } {
+export interface BulkCellRow {
+  locationCode: string;
+  sim: string;
+  temperatureZone: TemperatureZone;
+  zone: 'STORAGE';
+  reserveStock: true;
+  position: { xM: number; zM: number };
+  palletCenter: { xM: number; zM: number };
+  dimMm: { w: number; d: number; h: number };
+}
+
+/** 대형재고 팔레트 칸 치수 — 1호점 bulk-pallet-cells.json 과 같은 값(팔레트 1.1 × 1.1, 높이 1.5 m) */
+const BULK_DIM = { w: 1100, d: 1100, h: 1500 };
+
+export function exportPositions(L: Layout, codes: LocationCodeMap, cartCount = 40): { positions: PositionRow[]; reserveCells: ReserveCellRow[]; bulkCells: BulkCellRow[] } {
   const positions: PositionRow[] = [];
   const reserveCells: ReserveCellRow[] = [];
+  const bulkCells: BulkCellRow[] = [];
   const at = (code: string | null, kind: PositionRow['kind'], p: { x: number; z: number }) => {
     if (!code) throw new Error(`서버 코드 없음 (${kind} ${p.x},${p.z})`);
     positions.push({ locationCode: code, kind, xM: r3(p.x), zM: r3(p.z) });
@@ -43,7 +58,12 @@ export function exportPositions(L: Layout, codes: LocationCodeMap, cartCount = 4
     at(code, 'RESERVE_RACK', l.pick);
     reserveCells.push({ locationCode: code!, sim: l.code, rackId: l.rackId, temperatureZone: l.temp, level: l.level, slot: l.slot, position: { xM: r3(l.pick.x), zM: r3(l.pick.z) }, dimMm: l.dimMm });
   }
-  for (const rs of L.reserves) if (rs.role === 'BULK') at(codes.toBackend(rs.id), 'BULK_PALLET', rs.stand);
+  for (const rs of L.reserves) {
+    if (rs.role !== 'BULK') continue;
+    const code = codes.toBackend(rs.id);
+    at(code, 'BULK_PALLET', rs.stand);
+    bulkCells.push({ locationCode: code!, sim: rs.id, temperatureZone: rs.temp, zone: 'STORAGE', reserveStock: true, position: { xM: r3(rs.stand.x), zM: r3(rs.stand.z) }, palletCenter: { xM: r3((rs.rect.x0 + rs.rect.x1) / 2), zM: r3((rs.rect.z0 + rs.rect.z1) / 2) }, dimMm: BULK_DIM });
+  }
   // 지원 칸
   const P = L.points;
   at('RCV-A-01', 'SUPPORT', P.truckDoor);
@@ -70,5 +90,5 @@ export function exportPositions(L: Layout, codes: LocationCodeMap, cartCount = 4
     const z = L.zones.find((q) => q.id === zoneId);
     if (z) at(code, 'SUPPORT', { x: (z.rect.x0 + z.rect.x1) / 2, z: (z.rect.z0 + z.rect.z1) / 2 });
   }
-  return { positions, reserveCells };
+  return { positions, reserveCells, bulkCells };
 }
