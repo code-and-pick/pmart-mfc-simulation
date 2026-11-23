@@ -50,19 +50,20 @@ const X = (x: number) => OX + x;
 const R = {
   ANNEX: { x0: X(0), z0: 0, x1: X(5.6), z1: 5.9 }, // 승강기 별동 10평(MFC 밖)
   RCV: { x0: X(10.1), z0: 0, x1: X(25.7), z1: 2.5 }, // 입고·검수 12평(15.6 × 2.5 = 39 m²) — 동쪽 끝은 냉동 동쪽 벽 줄까지(입고창고 앞 통로 안 침범, 사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
-  A: { x0: X(5.6), z0: 2.55, x1: X(25.7), z1: 12.45 }, // 냉동 58평 + 격리
-  B: { x0: X(5.6), z0: 12.45, x1: X(25.7), z1: 22.35 }, // 냉장 58평 + 격리
+  // 냉동·냉장 서쪽을 1.0 m 줄여 패킹 구역 확보(사용자 2026-11-24 "냉장냉동 서쪽 평수 좀 줄여서 패킹 구역 확보하자") — 방마다 19.1 × 9.9 = 57평(격리 포함)
+  A: { x0: X(6.6), z0: 2.55, x1: X(25.7), z1: 12.45 },
+  B: { x0: X(6.6), z0: 12.45, x1: X(25.7), z1: 22.35 },
   WH: { x0: X(26.3), z0: 0, x1: X(37), z1: 7.4 }, // 상온 입고창고 24평(10.7 × 7.4 = 79 m²) — 상온 동쪽 줄 통로를 줄여 남쪽으로 늘림, 입고재고 팔레트 5 를 안에(사용자 2026-11-24 "상온 구역 랙 통로 줄여서 입고 창고 크기 늘리고 입고 검수구역에 팔레트 없애 … 입고검수 실선도 상온입고창고 통로쪽에 침범하지마")
   CH: { x0: X(25.7), z0: 7.4, x1: X(37), z1: 22.35 }, // 상온 동쪽 세로 띠
-  CH2: { x0: X(5.6), z0: 22.35, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 가로 띠
-  PK: { x0: X(0), z0: 14.85, x1: X(3.8), z1: BSJ_BD }, // 패킹 12평(3.8 × 10.45 = 39.7 m²) — 패킹대 2줄이 구역 안에
+  CH2: { x0: X(6.6), z0: 22.35, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 가로 띠
+  PK: { x0: X(0), z0: 14.85, x1: X(4.8), z1: BSJ_BD }, // 패킹 15평(4.8 × 10.45 = 50 m²) — 냉동·냉장 서쪽을 줄여 넓힘(사용자 2026-11-24 "냉장냉동 서쪽 평수 좀 줄여서 패킹 구역 확보하자")
   SHIP: { x0: X(1.6), z0: 9.0, x1: X(3.6), z1: 12.3 }, // 인계 대기 2평(2.0 × 3.3) — 그림처럼 서쪽 통로 가운데 따로 선 칸
   CQ: { x0: X(10.3), z0: 23.0, x1: X(11.8), z1: 25.2 }, // 상온 격리 1평(1.5 × 2.2) — 그림처럼 남쪽 띠 G·H 줄 서쪽, 남쪽 벽에 붙음(북쪽 통로는 열어 둠)
   PARK: { x0: 0.6, z0: 7.3, x1: 4.6, z1: 16.6 }, // 라이더 대기 11.3평(건물 밖 서쪽, 입고 차량 남쪽)
 } as const satisfies Record<string, Rect>;
 /** 저온 방 안: 서쪽 벽 띠(격리), 북쪽 벽 띠(보충재고 랙 7 + 입고재고 팔레트 2), 피킹 줄 시작 x */
 /** 격리는 그림처럼 서쪽 벽 북쪽(보충재고 랙 띠 바로 아래) */
-const COLD = { x0: X(5.7), bandZ: 1.2, rowX0: X(7.6), q: { x0: X(5.8), w: 1.4, len: 2.8, dz: 1.4 } } as const;
+const COLD = { x0: X(6.7), bandZ: 1.2, rowX0: X(8.6), q: { x0: X(6.8), w: 1.4, len: 2.8, dz: 1.4 } } as const;
 
 const ZONE_PY: Record<string, number> = { B: 58, A: 58, 'C-H': 41, WH: 18, RCV: 12, PK: 12, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
@@ -240,7 +241,7 @@ export function buildBusanjinLayout(): Layout {
   for (let i = 0; i < 8; i++) {
     const col = i < 4 ? 0 : 1;
     const row = i % 4;
-    const tx = X(0.95 + col * 1.9);
+    const tx = X(1.25 + col * 2.4); // 두 줄 사이 0.6 m
     const tz = R.PK.z0 + 0.9 + row * 2.6;
     stations.push({ id: `PS-${i + 1}`, index: i, table: { x: tx, z: tz }, stand: { x: tx, z: tz + 0.85 } });
     obstacles.push({ rect: { x0: tx - PACK_TABLE_W / 2, z0: tz - 0.4, x1: tx + PACK_TABLE_W / 2, z1: tz + 0.4 }, height: 0.9, kind: 'TABLE' });
@@ -314,7 +315,7 @@ export function buildBusanjinLayout(): Layout {
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: X(14.0) + (i % 4) * 0.8, z: 1.0 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
     idle: Array.from({ length: 24 }, (_, i) => ({ x: X(0.5) + (i % 8) * 0.6, z: 12.9 + Math.floor(i / 8) * 0.5 })),
-    packQueue: { x: X(4.7), z: R.PK.z0 + 0.6 },
+    packQueue: { x: X(5.7), z: R.PK.z0 + 0.6 },
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: (R.SHIP.z0 + R.SHIP.z1) / 2 },
     riderPickup: { x: X(-0.6), z: (SHIP_WINDOW[0] + SHIP_WINDOW[1]) / 2 },
     riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.2 + (i % 3) * 1.3, z: 7.9 + Math.floor(i / 3) * 3.2 })),
