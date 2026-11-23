@@ -407,9 +407,9 @@ export function StartMark({ x, z }: { x: number; z: number }) {
  * 윗면 높이 0.88 m(RealStock 탁자 자리 baseY 0.9 와 맞춤).
  */
 export const RETURN_TABLE = { dx: 1.7, dz: -0.6 };
-export function ReturnTable({ x, z }: { x: number; z: number }) {
+export function ReturnTable({ x, z, vertical = false }: { x: number; z: number; vertical?: boolean }) {
   return (
-    <group position={[x, 0, z]}>
+    <group position={[x, 0, z]} rotation={[0, vertical ? Math.PI / 2 : 0, 0]}>
       <mesh position={[0, 0.86, 0]} castShadow receiveShadow>
         <boxGeometry args={[1.1, 0.04, 0.7]} />
         <meshStandardMaterial color={0xffffff} roughness={0.5} />

@@ -164,8 +164,8 @@ export interface SiteGeo {
   cartDepotRowGap?: number;
   /** 격리 구역 흰 랙 자리(구역 id → 랙 사각형들). 없으면 화면 기본(저온 서쪽 벽 세로 2개·상온 남쪽 가로 2개) */
   quarantineRacks?: Record<string, Rect[]>;
-  /** 되돌릴 상품 탁자 자리(없으면 거치대 옆 RETURN_TABLE 오프셋) */
-  returnTable?: { x: number; z: number };
+  /** 되돌릴 상품 탁자 자리(없으면 거치대 옆 RETURN_TABLE 오프셋), vertical = 긴 쪽을 남북으로 */
+  returnTable?: { x: number; z: number; vertical?: boolean };
 }
 
 /** 장바구니 거치대 기준 상대 자리(가로 거치대 기준 dx·dz) → 평면 좌표. 세로 거치대는 90° 돌린다(가로 −x 줄 → 세로 +z 줄) */

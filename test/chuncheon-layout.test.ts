@@ -29,12 +29,15 @@ describe('춘천 MFC 평면(R-42)', () => {
     // 상온 구역 1 = C·D·F·G, 구역 2 = E·H
     const inZ = (r: (typeof L.racks)[number], id: string) => r.cx >= zr(id).x0 && r.cx <= zr(id).x1 && r.cz >= zr(id).z0 && r.cz <= zr(id).z1;
     // 단, G 맨 앞 줄(G01, 5랙)은 구역 2 앞 — 구역 1 맨 앞 줄과 같은 높이(사용자 2026-11-24 "G랙 맨 앞 한 줄 상온구역2 앞에 붙이면 G 가로로 이어지겠네")
-    const g01 = L.racks.filter((x) => x.group === 'G01');
-    expect(g01.length).toBe(5);
-    for (const r of g01) expect(inZ(r, 'C-H2')).toBe(true);
-    const z1front = Math.max(...L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && inZ(x, 'C-H')).map((x) => x.cz));
-    for (const r of g01) expect(r.cz).toBeCloseTo(z1front, 5);
-    for (const r of L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && x.group !== 'G01')) expect(inZ(r, 'CDFG'.includes(r.group[0]) ? 'C-H' : 'C-H2')).toBe(true);
+    // 맨 앞(패킹 쪽) 줄은 고회전 F — 구역 2 앞 줄 F02(5랙)이 구역 1 맨 앞 F 줄과 같은 높이(사용자 2026-11-24 "고회전F열이 패킹대에 제일 가까이")
+    const f01 = L.racks.filter((x) => x.group === 'F02');
+    expect(f01.length).toBe(5);
+    for (const r of f01) expect(inZ(r, 'C-H2')).toBe(true);
+    const z1 = L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && inZ(x, 'C-H'));
+    const z1front = Math.max(...z1.map((x) => x.cz));
+    for (const r of f01) expect(r.cz).toBeCloseTo(z1front, 5);
+    for (const r of z1.filter((x) => Math.abs(x.cz - z1front) < 1e-6)) expect(r.group[0]).toBe('F');
+    for (const r of L.racks.filter((x) => !x.reserve && x.temp === 'AMBIENT' && x.group !== 'F02')) expect(inZ(r, 'CDFG'.includes(r.group[0]) ? 'C-H' : 'C-H2')).toBe(true);
     // 상온 격리는 입고창고 동쪽 벽에 붙고, 보충재고 랙과 0.8 m 넘게 떨어짐
     const cq = zr('CQ');
     expect(cq.x1).toBeGreaterThan(zr('WH').x1 - 0.2);

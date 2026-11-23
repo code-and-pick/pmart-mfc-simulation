@@ -189,10 +189,13 @@ export function buildChuncheonLayout(): Layout {
       return rows.flatMap((row) => xs.map((x) => ({ x, ...row })));
     };
     const z1Racks = ambient.filter((r) => r.id.startsWith('RC-'));
-    const moved = z1Racks.slice(0, 5); // G01 — 구역 1 맨 앞 줄
+    // 맨 앞(패킹 쪽) 줄 = 고회전 F — 구역 2 앞 줄 F02(코드상 F 의 5랙 줄 첫째 — F01 은 3랙), 구역 1 은 남쪽부터 F01·F03·F04 → G01~G04 → D → C(사용자 2026-11-24 "고회전F열이 패킹대에 제일 가까이 있어야 해 … G G F F 이렇게 바꾸자").
+    // 칸 코드·만든 순서(피킹 순서)는 그대로, 자리만
+    const moved = z1Racks.filter((r) => r.group === 'F02'); // 구역 2 앞 줄(5랙)
+    const order = [...z1Racks.filter((r) => r.group[0] === 'F' && r.group !== 'F02'), ...z1Racks.filter((r) => r.group[0] === 'G'), ...z1Racks.filter((r) => r.group[0] === 'D'), ...z1Racks.filter((r) => r.group[0] === 'C')];
     const s1 = rowSlots(R.CH1, 6, 1.0, 0.35);
-    z1Racks.slice(5).forEach((r, k) => Object.assign(r, { cx: s1[k].x, cz: s1[k].cz, face: s1[k].face }));
-    const frontCz = s1[0].cz; // 구역 1 맨 앞(남쪽) 줄 높이
+    order.forEach((r, k) => Object.assign(r, { cx: s1[k].x, cz: s1[k].cz, face: s1[k].face }));
+    const frontCz = s1[0].cz; // 구역 1 맨 앞(남쪽) 줄 높이 — 구역 2 앞 F01 줄도 이 높이(F 가 가로로 이어짐)
     const xs2 = Array.from({ length: 5 }, (_, i) => (R.CH2.x0 + R.CH2.x1) / 2 + (i - 2) * RACK_LEN);
     moved.forEach((r, i) => Object.assign(r, { cx: xs2[i], cz: frontCz, face: 1 }));
     const s2 = rowSlots({ x0: R.CH2.x0, z0: R.CH2.z0, x1: R.CH2.x1, z1: 17.6 }, 3, 1.1, (17.6 - R.CH2.z0 - (3 * 2 * RACK_DEPTH + 2 * 1.1)) / 2);
@@ -359,7 +362,7 @@ export function buildChuncheonLayout(): Layout {
   // 장바구니 거치대 — 패킹 동쪽에 가로 2줄(줄마다 10대, 줄 사이 1.6 m)(사용자 2026-11-24 "장바구니 거치대 가로로 돌리고 간격 두고 2줄로").
   // 첫 줄 = 패킹 북쪽 선 높이, 카트는 거치대 점에서 서쪽으로(x −2.0 ~ +0.7). 되돌릴 상품 탁자는 두 줄 동쪽 끝, 대기 작업자는 그 북쪽
   // 2026-11-24 "장바구니 거치대 조금 더 동쪽으로" — 카트 줄 x 약 27.7~30.9 → "조금 남쪽으로"(첫 줄 z 23.0)
-  const cartDepot = { x: 30.2, z: 23.6 };
+  const cartDepot = { x: 29.7, z: 23.6 }; // 사용자 2026-11-24 "장바구니 거치대 안쪽 동쪽 벽에 테이블을 놔둬버려 세로로 돌려서. 그리고 장바구니 거치대 조금만 더 서쪽으로 밀어"
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
@@ -396,7 +399,8 @@ export function buildChuncheonLayout(): Layout {
     cartDepotRows: 2,
     cartDepotRowGap: 1.6,
     // 되돌릴 상품 탁자 — 첫 카트 줄(시작점) 서쪽 끝 옆에 붙임 — 사용자 2026-11-24 "테이블은 시작점 장바구니 거치대 옆에 붙여줘. 그리고 조금 남쪽으로 오게 해. 패킹구역은 아주 조금 북쪽으로 밀고"
-    returnTable: { x: cartDepot.x + 0.7 - 9 * 0.28 - 0.32 - 0.05 - 0.55, z: cartDepot.z - 0.6 },
+    // 되돌릴 상품 탁자 — 거치대 안쪽 동쪽 벽에 세로로(긴 쪽 남북) — 사용자 2026-11-24 "장바구니 거치대 안쪽 동쪽 벽에 테이블을 놔둬버려 세로로 돌려서. 그리고 장바구니 거치대 조금만 더 서쪽으로 밀어"
+    returnTable: { x: CHC_W - 0.1 - 0.4, z: cartDepot.z + 0.2, vertical: true },
   };
 
   return {
