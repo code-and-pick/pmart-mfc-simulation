@@ -185,7 +185,10 @@ async function placeOrder(gateway: string, accountId: string, mfcId: string, cho
   }
 
   // 4) 장바구니에 담기 — 이미 있는 SKU 는 건드리지 않는다
-  const cart0 = await call<Cart>('CART', 'POST', '/carts', { body: {} });
+  // 장바구니에 쇼핑 주소·담당 센터를 함께 보낸다(cart 계약 POST /carts body shoppingAddressId·mfcId). 비워 두면 앱을 한 번도 안 쓴 고객의
+  // 장바구니는 mfcId 가 null 로 남아 담은 상품이 모두 availability UNKNOWN → 전부 빼서 0원(사용자 2026-11-23 목포 "CART NOT_ENOUGH_ITEMS")
+  const cart0 = await call<Cart>('CART', 'POST', '/carts', { body: { shoppingAddressId: ctx.shoppingAddressId, mfcId } });
+  if (cart0.mfcId && cart0.mfcId !== mfcId) throw new StepError('CART', 'MFC_MISMATCH', `장바구니 센터 ${cart0.mfcId} — 화면 센터 ${mfcId} 와 다름`);
   const min = cart0.minOrderAmount;
   if (typeof min !== 'number') throw new StepError('CART', 'MIN_ORDER_UNKNOWN', '최소 주문 금액을 모릅니다(장바구니 minOrderAmount 없음)');
   const search = await anon<{ items?: ProductHit[] }>('SEARCH', 'GET', `/search/products?mfcId=${encodeURIComponent(mfcId)}&size=200`);
