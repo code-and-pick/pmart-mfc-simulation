@@ -17,7 +17,7 @@ function walkways(L: Layout): [number, number, number, number][] {
     return [
       [10.0, 1.6, 15.0, 1.6],
       [10.7, 6.6, 10.7, 24.6], // 서쪽 통로(패킹 동쪽 ~ 냉동·냉장 서쪽 벽 사이)
-      [11.5, 21.0, 41.6, 21.0],
+      [11.5, 21.45, 41.6, 21.45],
     ];
   if (L.variant === 'BUSAN_NAMGU')
     return [
