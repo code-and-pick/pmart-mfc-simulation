@@ -276,7 +276,7 @@ export interface MfcSite {
   /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
   supervisorAccount: string;
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
-  layout?: 'SEED' | 'SEJONG' | 'CHUNCHEON';
+  layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON';
 }
 export const MFC_SITES: readonly MfcSite[] = [
   {
@@ -296,6 +296,8 @@ export const MFC_SITES: readonly MfcSite[] = [
     mockAreas: ['목포시 상동', '목포시 하당동', '목포시 옥암동', '목포시 용해동', '목포시 산정동', '목포시 석현동'],
     accountPrefix: 'mfcw-mk-',
     supervisorAccount: 'claude-mfc-sup-mk',
+    // 1호점 평면 + 목포만 고친 자리(상온 F 맨 남쪽·인계 랙 벽 쪽, 2026-11-24) — layoutMokpo.ts
+    layout: 'MOKPO',
   },
   {
     // 3호점 세종(R-41, 2026-11-23 사용자 "이 평면도대로 세종 MFC 1개 더 만들어줘") — 평면이 1호점과 달라 따로 만든다(layoutSejong.ts).

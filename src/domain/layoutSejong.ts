@@ -352,7 +352,8 @@ export function buildSejongLayout(): Layout {
   // 인계 랙 2(돌출부 안, 출하문 양옆) — 랙마다 4단 × 4칸
   const shippingSlots: ShippingSlot[] = [];
   const shipZ = BUMP.z0 + 0.1 + 0.25 + RACK_DEPTH / 2;
-  [39.3 + SHIP_DX, 42.1 + SHIP_DX].forEach((x, ri) => {
+  // 돌출부 서·동 벽 쪽으로 붙여 출하문 앞을 비움 — 사용자 2026-11-24 "목포랑 세종에 인계랙 입구 가리니까 옆으로 각각 밀자"
+  [BUMP.x0 + 0.15 + RACK_LEN / 2, BUMP.x1 - 0.15 - RACK_LEN / 2].forEach((x, ri) => {
     obstacles.push({ rect: { x0: x - RACK_LEN / 2, z0: shipZ - RACK_DEPTH / 2, x1: x + RACK_LEN / 2, z1: shipZ + RACK_DEPTH / 2 }, height: RACK_HEIGHT, kind: 'SHIP_RACK' });
     for (let lv = 0; lv < 4; lv++) for (let s = 0; s < 4; s++) shippingSlots.push({ id: `SR${ri + 1}-${lv + 1}${s + 1}`, rackIndex: ri, pos: { x: x - 0.45 + s * 0.3, y: 0.25 + lv * 0.5, z: shipZ } });
   });
