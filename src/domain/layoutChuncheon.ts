@@ -381,7 +381,8 @@ export function buildChuncheonLayout(): Layout {
     returnIntake: { x: 29.0, z: 31.2 }, // 인계 창 밖 동쪽 [시뮬]
     storeAreas,
     officeTable: null, // 춘천은 휴게·사무 구역이 없음(요청서 표)
-    rollContainers: [21.4, 22.1].map((x) => ({ x, z: 1.6 })),
+    // 롤테이너 장식 — 입고·검수 남동 모서리(승강기 문 앞을 비움, 사용자 2026-11-24 "롤컨테이너 장식인 것 같은데 승강기 앞에다가 두면 어떡해")
+    rollContainers: [21.3, 22.1].map((x) => ({ x, z: 5.95 })),
     quarantineRacks: {
       // 저온 격리: 서쪽 벽에 세로로 2개(흰 실선 안, 사이 0.15 m)
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
