@@ -407,10 +407,14 @@ export const REAL_ORDER = {
   customers: [
     {
       key: 'pc1',
-      label: 'PC 1 지정 고객(사용자 Google 계정)',
+      label: '사용자 본인 계정(세종 쇼핑 주소 — 한누리대로 2130 세종시청)',
       accountId: 'CU-eae131fa-886a-4733-9eee-86a158be281a',
-      /** 쇼핑 주소 담당 센터 — 지점마다 이 센터 고객만 고른다(서버가 다르면 MFC_MISMATCH) */
-      mfcId: 'MFC-SEED-01',
+      /**
+       * 쇼핑 주소 담당 센터 — 지점마다 이 센터 고객만 고른다(서버가 다르면 MFC_MISMATCH).
+       * 2026-11-24 PC1(사용자 결정): 쇼핑 주소를 세종으로(ADR-f42967b1…, shopping-context version 37) — 그 전엔 1호점 MFC-SEED-01.
+       * 고객 한 명은 쇼핑 센터 하나라 지금 1호점용 실제 주문 고객은 없다(1호점으로 되돌리면 여기도 되돌림)
+       */
+      mfcId: 'MFC-SEJ-01',
       warn: '실제 계정 — 고객 앱 주문 내역에 보이고 배송 알림이 휴대폰으로 갑니다(결제만 시험).',
     },
     {
