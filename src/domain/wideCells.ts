@@ -2,7 +2,7 @@
 // 칸 치수(dimMm)는 백엔드 값 그대로, 그림 크기(slotW·levelH)와 칸 중심(shelf)은 합친 칸 수만큼 넓힌다. 닫힌 칸은 closed — 재고·안내·라벨에서 뺀다.
 import type { Layout, Location } from './layout';
 import type { LocationCodeMap } from './locationCodes';
-import { WIDE_CLOSED, WIDE_MERGED } from './wideCellsData';
+import { WIDE_CLOSED, WIDE_EXTRA, WIDE_MERGED } from './wideCellsData';
 
 /** 합친 칸 한 개의 자리(랙·단·칸 범위) — 칸막이·선반을 그 안에서 빼는 데 쓴다 */
 export interface WideSpan {
@@ -24,7 +24,8 @@ export function applyWideCells(layout: Layout, codes: Pick<LocationCodeMap, 'toS
     return s ? (bySim.get(s) ?? null) : null;
   };
   const spans: WideSpan[] = [];
-  for (const [code, w, d, h] of WIDE_MERGED) {
+  const extra = WIDE_EXTRA[layout.variant];
+  for (const [code, w, d, h] of [...WIDE_MERGED, ...(extra?.merged ?? [])]) {
     const loc = at(code);
     if (!loc) continue;
     const slots = Math.max(1, Math.round(w / loc.dimMm.w));
@@ -38,7 +39,7 @@ export function applyWideCells(layout: Layout, codes: Pick<LocationCodeMap, 'toS
     loc.span = { slots, levels };
     spans.push({ rackId: loc.rackId, level: loc.level, slot: loc.slot, slots, levels });
   }
-  for (const code of WIDE_CLOSED) {
+  for (const code of [...WIDE_CLOSED, ...(extra?.closed ?? [])]) {
     const loc = at(code);
     if (loc) loc.closed = true;
   }

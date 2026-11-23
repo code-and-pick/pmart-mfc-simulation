@@ -87,7 +87,11 @@ describe('세종 넓은 칸(R-41 PC3 계획과 같음)', () => {
     const { applyWideCells } = await import('../src/domain/wideCells');
     const L = buildSejongLayout();
     const spans = applyWideCells(L, buildLocationCodeMap(L));
-    expect(spans.length).toBe(58);
-    expect(L.locations.filter((l) => l.closed).length).toBe(86);
+    // + 세종 B-00000006 넓은 칸 A-H4-05-1-01(PC3 #392): 합친 칸 59, 닫힌 칸 86 + 14
+    expect(spans.length).toBe(59);
+    expect(L.locations.filter((l) => l.closed).length).toBe(100);
+    const big = L.locations.find((l) => l.code === 'H04-05-101')!;
+    expect(big.dimMm).toEqual({ w: 1125, d: 450, h: 1260 });
+    expect(big.span).toEqual({ slots: 5, levels: 3 });
   });
 });
