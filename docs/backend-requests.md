@@ -52,6 +52,9 @@
 ## 열린 요청
 
 ### R-42 4호점 춘천 MFC(MFC-CHC-01) 평면·칸 위치 파일 — 높음 (2026-11-24, PC1 요청 → 시뮬레이터가 위치 파일 줌)
+- **배치 확정 → 위치 갱신 요청(2026-11-24, 사용자 "확정")**: 화면 보며 고침(장바구니 거치대 가로 2줄·동쪽, 상온 격리 입고창고 동쪽 벽 세로, G 맨 앞 줄 G01 을 구역 2 앞으로·구역 1 6쌍, 저온 격리 1.1 × 3.0 m, 패킹대 6 = 3 | 3·출하문 앞 비움, 인계 랙 세로로 돌출부 벽에, 패킹 조금 북쪽 — 일지 11-24). `docs/layout-export/chuncheon/` 다시(9,804줄).
+  - **칸 코드·pickSequence 그대로**(재고 이동 없음). 4020670(LAN 에 만든 파일) 대비 **위치만 바뀜 4,530**: 상온 선반 A-C 810·A-D 900·A-E 624·A-F 900·A-G 918·A-H 325, CRT-A 40, DSP-A-01·02, PAK-A-01~06, PAK-C-01·PAK-F-01, QRT-A·C·F-01.
+  - **없어지는 칸 2: PAK-A-07·08**(패킹대 8 → 6) — 서버에서 닫거나 지움. 새 칸 0.
 - 요청: PC1(사용자 "mfc 하나 더 만들자. 평면도 대로 mfc 구조 설계하고, 랙수랑 평수는 아래 적은대로") — pmart-backend `docs/handoff/simulator/mfc/2026-11-24-request-chuncheon-mfc.md`, 그림 `2026-11-24-chuncheon-floorplan-user.webp`. 같은 날 바뀜(사용자 "랙마다 칸 수는 세종이랑 동일하게"): 랙 수는 표 그대로, 랙당 칸은 1호점·세종 SLOT_DESIGN.
 - 시뮬레이터: 평면 `src/domain/layoutChuncheon.ts`(31.8 × 28.68 m + 인계 돌출부 = 278평, 승강기 별동 22평 10.9 × 6.66 m), 위치 파일 **`docs/layout-export/chuncheon/`** — location-positions.json 9,806줄(SHELF 9,287 피킹 순서 = 냉동 → 냉장 → 상온, RESERVE_RACK 450, BULK_PALLET 10, SUPPORT 59: RCV-A-01·A-02·C-01·F-01, PAK-C-01·F-01, DSP-A-01·02, PAK-A-01~08, CRT-A-01~40, QRT-F/C/A-01), reserve-rack-cells.json 450, bulk-pallet-cells.json 10.
 - 랙·칸: 냉장 B 80 × 35(줄 B01~B05, 줄마다 랙 01~17), 냉동 A 67 × 30(A01~A04), 상온 구역 1 = G 17·F 15·D 15·C 15(남쪽 줄부터, 줄 5랙, 줄 번호 = 그 그룹 안 남쪽부터), 구역 2 = H 13·E 13, 보충재고 냉장 7·냉동 7(서쪽 벽 띠)·입고창고 16(4랙 × 4줄) × 15 → 피킹 235랙 9,287칸·보충 30랙 450칸·전체 9,737.
