@@ -46,7 +46,8 @@ export const BUSAN_NAMGU_RACKS = { B: 109, A: 92, C: 21, D: 21, E: 18, F: 21, G:
 const R = {
   B: { x0: 0, z0: 1.6, x1: 10.6, z1: 28.0 }, // 냉장 82.96 + 격리 1
   A: { x0: 10.7, z0: 1.6, x1: 21.3, z1: 28.0 }, // 냉동 82.96 + 격리 1
-  RCV: { x0: 22.4, z0: 0, x1: 33.4, z1: 5.25 }, // 입고·검수 17.46평 = 57.75 m²
+  // 입고·검수 17.46평 = 57.75 m² — 1.4 m 동쪽(냉동 벽과 사이 통로 1.1 → 2.5 m, 사용자 2026-11-24 "입고검수구역 동쪽으로 이동해. 입고검수랑 냉동 사이가 좁잖아"). 승강기·별동·하차 칸도 같이
+  RCV: { x0: 23.8, z0: 0, x1: 34.8, z1: 5.25 },
   CH: { x0: 23.0, z0: 7.0, x1: 34.9, z1: 23.6 }, // 상온 C~H 60.25평(11.9 × 16.6 = 197.5 m²)
   OFF: { x0: 36.8, z0: 0, x1: BNG_W, z1: 2.35 }, // 휴게·사무 6.11평(8.6 × 2.35)
   WH: { x0: 36.8, z0: 2.35, x1: BNG_W, z1: 17.05 }, // 상온 입고창고 37.34 + 상온 격리 1(8.6 × 14.7)
@@ -62,10 +63,10 @@ const BUMP = { x0: 36.2, z0: BNG_BD, x1: 41.2, z1: BNG_BD + 1.98 } as const;
 const BAND = { CHILLED: 0.1, FROZEN: 10.8, width: 2.4, mark: 1.4, z0: 1.6, reserveZ0: 4.6, qz0: 22.6, qz1: 25.6, qw: 1.1 } as const;
 /** 화물 승강기 2(입고·검수 북쪽 벽) + 별동 16평(14.7 × 3.6 m, 동쪽 하역 통로 → 입고 차량) */
 const LIFTS = [
-  { x0: 22.6, x1: 25.6, door: [23.0, 25.2] as const },
-  { x0: 25.7, x1: 28.7, door: [26.1, 28.3] as const },
+  { x0: 24.0, x1: 27.0, door: [24.4, 26.6] as const },
+  { x0: 27.1, x1: 30.1, door: [27.5, 29.7] as const },
 ] as const;
-const ANNEX = { x0: 22.4, z0: -3.6, x1: 37.1, z1: 0, truckDoor: [-3.0, -0.6] as const } as const;
+const ANNEX = { x0: 23.8, z0: -3.6, x1: 38.5, z1: 0, truckDoor: [-3.0, -0.6] as const } as const;
 
 const ZONE_PY: Record<string, number> = { B: 82.96, A: 82.96, 'C-H': 60.25, WH: 37.34, RCV: 17.46, OFF: 6.11, PK: 15.19, AQ: 1, BQ: 1, CQ: 1, SHIP: 3 };
 
@@ -269,7 +270,7 @@ export function buildBusanNamguLayout(): Layout {
   obstacles.push({ rect: { x0: officeTable.x - 1.8, z0: R.OFF.z0 + 0.1, x1: officeTable.x + 1.8, z1: R.OFF.z0 + 1.35 }, height: 0.75, kind: 'TABLE' });
 
   const dockSlots: DockSlot[] = [];
-  for (const z of [1.9, 2.6, 3.6, 4.3]) for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: 23.2 + c * 0.75, z } });
+  for (const z of [1.9, 2.6, 3.6, 4.3]) for (let c = 0; c < 9; c++) dockSlots.push({ id: `DK-${dockSlots.length + 1}`, pos: { x: 24.6 + c * 0.75, z } });
 
   // 패킹대 8 = 4 | 4
   const stations: PackingStation[] = [];
@@ -326,7 +327,7 @@ export function buildBusanNamguLayout(): Layout {
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
-    inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 29.2 + (i % 4) * 0.8, z: 4.0 + Math.floor(i / 4) * 0.7 })),
+    inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 30.6 + (i % 4) * 0.8, z: 4.0 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
     idle: Array.from({ length: 24 }, (_, i) => ({ x: 23.6 + (i % 12) * 0.9, z: 24.3 + Math.floor(i / 12) * 0.7 })),
     packQueue: { x: R.PK.x0 + 0.5, z: (R.PK.z0 + R.PK.z1) / 2 },
@@ -344,7 +345,7 @@ export function buildBusanNamguLayout(): Layout {
     returnIntake: { x: 43.0, z: 31.8 },
     storeAreas,
     officeTable,
-    rollContainers: [31.6, 32.4].map((x) => ({ x, z: 4.6 })),
+    rollContainers: [33.0, 33.8].map((x) => ({ x, z: 4.6 })),
     quarantineRacks: {
       ...Object.fromEntries((['AQ', 'BQ'] as const).map((id) => {
         const X0 = id === 'AQ' ? BAND.FROZEN : BAND.CHILLED;

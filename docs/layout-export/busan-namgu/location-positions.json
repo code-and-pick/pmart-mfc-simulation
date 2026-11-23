@@ -13480,7 +13480,7 @@
 {"locationCode":"A-R2-08-1-01","kind":"BULK_PALLET","xM":42.65,"zM":6.05},
 {"locationCode":"A-R2-09-1-01","kind":"BULK_PALLET","xM":44.15,"zM":4.15},
 {"locationCode":"A-R2-10-1-01","kind":"BULK_PALLET","xM":44.15,"zM":6.05},
-{"locationCode":"RCV-A-01","kind":"SUPPORT","xM":25.65,"zM":0.9},
+{"locationCode":"RCV-A-01","kind":"SUPPORT","xM":27.05,"zM":0.9},
 {"locationCode":"RCV-A-02","kind":"SUPPORT","xM":41.15,"zM":7.1},
 {"locationCode":"RCV-C-01","kind":"SUPPORT","xM":0.75,"zM":2.4},
 {"locationCode":"RCV-F-01","kind":"SUPPORT","xM":11.45,"zM":2.4},

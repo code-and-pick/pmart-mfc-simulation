@@ -44,6 +44,8 @@ describe('부산남구 MFC 평면(R-44)', () => {
     const rcv = zr('RCV');
     const southWall = L.walls.filter((w) => Math.abs((w.rect.z0 + w.rect.z1) / 2 - (rcv.z1 + 0.1)) < 0.01 && w.rect.x0 < rcv.x1 && w.rect.x1 > rcv.x0);
     expect(southWall.reduce((a, w) => a + Math.min(w.rect.x1, rcv.x1) - Math.max(w.rect.x0, rcv.x0), 0)).toBeCloseTo(rcv.x1 - rcv.x0, 3);
+    // 입고·검수 ~ 냉동 방 동쪽 벽 통로 2 m 이상(사용자 2026-11-24 "입고검수랑 냉동 사이가 좁잖아")
+    expect(rcv.x0 - zr('A').x1).toBeGreaterThan(2);
     // 저온 입고재고 팔레트 ~ 첫 피킹 줄 0.8 m 이상
     for (const t of ['CHILLED', 'FROZEN'] as const) {
       const pal = L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === t);

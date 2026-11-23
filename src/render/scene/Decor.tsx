@@ -15,8 +15,8 @@ function walkways(L: Layout): [number, number, number, number][] {
   // 세종(R-41): 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
   if (L.variant === 'BUSAN_NAMGU')
     return [
-      [1.2, 0.75, 22.0, 0.75],
-      [21.9, 1.2, 21.9, 28.6],
+      [1.2, 0.75, 23.4, 0.75],
+      [22.5, 1.2, 22.5, 28.6],
       [1.2, 28.6, 36.0, 28.6],
     ];
   if (L.variant === 'CHUNCHEON')
