@@ -74,7 +74,7 @@ export const WIDE_CLOSED: readonly string[] = ['A-H1-02-1-02', 'A-H1-02-1-03', '
  * 세종(R-41, PC3 #392 2026-11-24): B-00000006 이 드는 1호점 A-H2-07-1-01 이 세종 평면엔 없어(H 줄 6랙까지) H4 줄 마지막 랙 A-H4-05 의 1~3단을 같은 모양(5칸 × 3단 = 1125 × 450 × 1260)으로 합침,
  * 나머지 14칸 CLOSED. 실행은 PC1(사용자 확인 뒤).
  */
-export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
+export const WIDE_EXTRA: Partial<Record<'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU' | 'BUSANJIN', { merged: readonly (readonly [string, number, number, number, string])[]; closed: readonly string[] }>> = {
   SEJONG: {
     merged: [['A-H4-05-1-01', 1125, 450, 1260, 'B-00000006']],
     closed: [1, 2, 3].flatMap((lv) => [1, 2, 3, 4, 5].map((s) => `A-H4-05-${lv}-0${s}`)).filter((c) => c !== 'A-H4-05-1-01'),

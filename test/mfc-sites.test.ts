@@ -1,3 +1,4 @@
+import { buildLayout } from '../src/domain/layout';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, MFC_SITES, REAL_LINK, activeSite, setActiveSite } from '../src/config';
 import { passwordFileFor } from '../src/backend/http/accounts';
@@ -8,8 +9,9 @@ import { Simulation } from '../src/sim/simulation';
 describe('MFC 지점', () => {
   afterEach(() => setActiveSite(undefined));
 
-  it('목포는 평면·랙·칸·MOCK 상품 수가 1호점과 같고 센터 ID·이름만 다르다', () => {
-    const a = new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-SEED-01').id });
+  // 부산진구(1호점)는 2026-11-24 다시 설계(R-45) — 목포는 옛 1호점 평면(buildLayout) 그대로
+  it('목포는 평면·랙·칸·MOCK 상품 수가 옛 1호점 평면과 같고 센터 ID·이름만 다르다', () => {
+    const a = { layout: buildLayout(), catalog: new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-SEED-01').id }).catalog };
     const b = new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-MOKPO-01').id });
     expect(b.params.mfcId).toBe('MFC-MOKPO-01');
     expect(b.layout.racks.length).toBe(a.layout.racks.length);

@@ -164,6 +164,12 @@ export interface SiteGeo {
   cartDepotRowGap?: number;
   /** 격리 구역 흰 랙 자리(구역 id → 랙 사각형들). 없으면 화면 기본(저온 서쪽 벽 세로 2개·상온 남쪽 가로 2개) */
   quarantineRacks?: Record<string, Rect[]>;
+  /** 승강기 문 줄 z(기본 0 = 건물 북쪽 벽, 승강기는 그 북쪽). 부산진구는 별동이 건물 안이라 문이 남쪽 2.4 m(승강기 z 0~2.4) */
+  liftDoorZ?: number;
+  /** 건물 바닥 시작 x(기본 0) — 부산진구는 서쪽 밖 라이더 마당 때문에 건물이 동쪽으로 밀림 */
+  floorX0?: number;
+  /** 건물 밖 마당(라이더 대기 등) 바닥 — 남쪽 앞마당(yardX) 말고 더 */
+  outsideYards?: Rect[];
   /** 되돌릴 상품 탁자 자리(없으면 거치대 옆 RETURN_TABLE 오프셋), vertical = 긴 쪽을 남북으로 */
   returnTable?: { x: number; z: number; vertical?: boolean };
 }
@@ -176,7 +182,7 @@ export function depotPoint(L: Pick<Layout, 'geo' | 'points'>, dx: number, dz: nu
 
 export interface Layout {
   /** 어느 평면인가 — SEED = 1호점(목포 같음), SEJONG = 3호점 세종(2026-11-23 R-41) */
-  variant: 'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
+  variant: 'SEED' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU' | 'BUSANJIN';
   geo: SiteGeo;
   width: number;
   depth: number; // 외부 앞마당 포함

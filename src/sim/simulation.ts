@@ -46,6 +46,7 @@ import { buildSejongLayout } from '../domain/layoutSejong';
 import { buildChuncheonLayout } from '../domain/layoutChuncheon';
 import { applyMokpo } from '../domain/layoutMokpo';
 import { buildBusanNamguLayout } from '../domain/layoutBusanNamgu';
+import { buildBusanjinLayout } from '../domain/layoutBusanjin';
 import { nextReturnPiece } from '../domain/returnPiece';
 import { RealWorker, SIM_DEVICE_PREFIX, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
@@ -165,7 +166,7 @@ export class Simulation {
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
     // 지점 평면 — 세종(R-41)은 따로, 1호점·목포는 같은 평면
     const site = activeSite().layout;
-    this.layout = site === 'SEJONG' ? buildSejongLayout() : site === 'CHUNCHEON' ? buildChuncheonLayout() : site === 'MOKPO' ? applyMokpo(buildLayout()) : site === 'BUSAN_NAMGU' ? buildBusanNamguLayout() : buildLayout();
+    this.layout = site === 'SEJONG' ? buildSejongLayout() : site === 'CHUNCHEON' ? buildChuncheonLayout() : site === 'MOKPO' ? applyMokpo(buildLayout()) : site === 'BUSAN_NAMGU' ? buildBusanNamguLayout() : site === 'BUSANJIN' ? buildBusanjinLayout() : buildLayout();
     this.codes = buildLocationCodeMap(this.layout);
     // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18) — 칸 코드로 맞춘다. 세종도 같은 규칙(PC3 R-41 계획: 같은 코드 넓은 칸 58·닫힘 86, #390)
     applyWideCells(this.layout, this.codes);

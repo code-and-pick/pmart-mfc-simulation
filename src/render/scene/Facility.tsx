@@ -62,8 +62,8 @@ function Ground({ L }: { L: Layout }) {
         <planeGeometry args={[200, 200]} />
         <meshStandardMaterial color={SCENE.outside} roughness={1} />
       </mesh>
-      <mesh rotation={flat} position={[L.width / 2, -0.01, L.buildingDepth / 2]} receiveShadow>
-        <planeGeometry args={[L.width, L.buildingDepth]} />
+      <mesh rotation={flat} position={[(L.width + (L.geo.floorX0 ?? 0)) / 2, -0.01, L.buildingDepth / 2]} receiveShadow>
+        <planeGeometry args={[L.width - (L.geo.floorX0 ?? 0), L.buildingDepth]} />
         <meshStandardMaterial color={SCENE.floor} roughness={0.95} />
       </mesh>
       {/* 남쪽 앞마당(라이더), 동쪽 입고 차량 진입로 — 그림의 회색 도크처럼 */}
@@ -77,6 +77,13 @@ function Ground({ L }: { L: Layout }) {
         <planeGeometry args={[90 - LIFT_ANNEX.x1, 3.6 + TRUCK_PASS_LANE]} />
         <meshStandardMaterial color={SCENE.yard} roughness={1} />
       </mesh>
+      {/* 건물 밖 마당(부산진구 서쪽 라이더 대기 등) */}
+      {(L.geo.outsideYards ?? []).map((r, i) => (
+        <mesh key={`oy-${i}`} rotation={flat} position={[(r.x0 + r.x1) / 2, -0.015, (r.z0 + r.z1) / 2]} receiveShadow>
+          <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
+          <meshStandardMaterial color={SCENE.yard} roughness={1} />
+        </mesh>
+      ))}
       {/* 승강기 별동 바닥(MFC 밖·건물 안) */}
       <mesh rotation={flat} position={[(LIFT_ANNEX.x0 + LIFT_ANNEX.x1) / 2, -0.012, LIFT_ANNEX.z0 / 2]} receiveShadow>
         <planeGeometry args={[LIFT_ANNEX.x1 - LIFT_ANNEX.x0, -LIFT_ANNEX.z0]} />
@@ -660,7 +667,7 @@ function FreightLifts() {
   const DH = 2.4; // 문 높이
   const steel = { color: 0xe3e7ed, metalness: 0.55, roughness: 0.3 }; // 옅은 회색(사용자 2026-11-22 "승강기 색 좀 더 옅은 회색으로")
   return (
-    <>
+    <group position={[0, 0, sim.layout.geo.liftDoorZ ?? 0]}>
       {FREIGHT_LIFTS.map((l, i) => {
         const w = l.x1 - l.x0;
         const d = -LIFT_Z0;
@@ -737,6 +744,6 @@ function FreightLifts() {
           </group>
         );
       })}
-    </>
+    </group>
   );
 }

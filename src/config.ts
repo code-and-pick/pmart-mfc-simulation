@@ -278,7 +278,7 @@ export interface MfcSite {
   /** MOCK 에서 보이는 센터 ID — 없으면 id(실서버 센터 ID는 id 그대로). 사용자 2026-11-24 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔" */
   mockId?: string;
   /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
-  layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU';
+  layout?: 'SEED' | 'MOKPO' | 'SEJONG' | 'CHUNCHEON' | 'BUSAN_NAMGU' | 'BUSANJIN';
 }
 // 화면 이름에 'N호점' 을 붙이지 않고, 1호점은 '부산진구'(사용자 2026-11-24 "1호점2호점 아니니까 다 빼. 그리고 부산이 아니라 부산진구 라고 적어야돼")
 export const MFC_SITES: readonly MfcSite[] = [
@@ -291,6 +291,8 @@ export const MFC_SITES: readonly MfcSite[] = [
     mockAreas: ['부산진구 부전동', '부산진구 전포동', '부산진구 범천동', '동래구 온천동', '연제구 연산동', '남구 대연동'],
     accountPrefix: 'mfcw-',
     supervisorAccount: 'claude-mfc-sup',
+    // 다시 설계한 평면(R-45, 2026-11-24 사용자 "부산 진구 mfc 수정해야해. 평면 설계랑 랙갯수랑 평수 전부") — layoutBusanjin.ts. 목포는 옛 1호점 평면 그대로
+    layout: 'BUSANJIN',
   },
   {
     id: 'MFC-MOKPO-01',

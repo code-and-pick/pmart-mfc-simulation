@@ -13,6 +13,12 @@ import { SCENE } from '../colors';
 /** 통로 가운데 선(점선 + 화살표). [x0, z0, x1, z1] — 배치의 빈 띠(벽 사이)에서 */
 function walkways(L: Layout): [number, number, number, number][] {
   // 세종(R-41): 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
+  if (L.variant === 'BUSANJIN')
+    return [
+      [10.0, 1.6, 15.0, 1.6],
+      [7.6, 6.6, 7.6, 24.6],
+      [11.5, 22.85, 41.6, 22.85],
+    ];
   if (L.variant === 'BUSAN_NAMGU')
     return [
       [1.2, 0.75, 23.4, 0.75],

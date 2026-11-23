@@ -33,7 +33,8 @@ export function zoneViews(L: Layout): ZoneView[] {
     { key: 'RCV', label: '입고·검수', zoneId: 'RCV', rect: { ...z('RCV'), z0: -5.5 } },
     { key: 'PK', label: '패킹', zoneId: 'PK', rect: z('PK') },
     // 출하대기 + 라이더 앞마당(남쪽 밖) — 구역에서 계산(2026-11-21 재배치)
-    { key: 'SHIP', label: '출하대기', zoneId: 'SHIP', rect: { x0: z('PARK').x0, z0: L.buildingDepth - 1, x1: z('PARK').x1, z1: L.depth } },
+    // 부산진구(R-45)는 인계·라이더 마당이 서쪽 — 인계 구역과 라이더 대기를 합친 사각형
+    { key: 'SHIP', label: '출하대기', zoneId: 'SHIP', rect: L.geo.outsideYards ? { x0: Math.min(z('PARK').x0, z('SHIP').x0), z0: Math.min(z('PARK').z0, z('SHIP').z0), x1: Math.max(z('PARK').x1, z('SHIP').x1), z1: Math.max(z('PARK').z1, z('SHIP').z1) } : { x0: z('PARK').x0, z0: L.buildingDepth - 1, x1: z('PARK').x1, z1: L.depth } },
   ];
 }
 
