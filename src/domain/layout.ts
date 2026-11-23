@@ -4,6 +4,9 @@
 
 import type { TemperatureZone } from './contract';
 
+/** 1호점 회수 반입 화면 자리 — config BACKEND_FACTS.returnIntake 와 같은 값(순환 import 를 피해 여기 둠) */
+const BACKEND_FACTS_RETURN = { x: 42.333, z: 35.9 };
+
 export interface Rect {
   x0: number;
   z0: number;
@@ -128,7 +131,36 @@ export interface Obstacle {
   kind: 'PALLET' | 'RESERVE' | 'TABLE' | 'SHIP_RACK' | 'MATERIAL';
 }
 
+/** 바닥 표시(보충재고·입고재고·격리 띠 등) — 판 + 흰 실선 + 바닥 글. 색 이름은 ZONE_FLOOR 키(없으면 격리 바닥색) */
+export interface StoreArea {
+  floor: [x0: number, z0: number, x1: number, z1: number];
+  color?: 'FROZEN' | 'CHILLED';
+  lines: [x0: number, z0: number, x1: number, z1: number][];
+  texts: { t: string; x: number; z: number }[];
+}
+
+/** 지점마다 다른 건물 둘레 값(1호점은 아래 상수 그대로) */
+export interface SiteGeo {
+  /** 남쪽 앞마당(라이더) 울타리 안쪽 x 범위 */
+  yardX: readonly [number, number];
+  /** 승강기 별동(MFC 밖·건물 안) */
+  liftAnnex: { x0: number; z0: number; x1: number; z1: number; truckDoor: readonly [number, number] };
+  freightLifts: readonly { x0: number; x1: number; door: readonly [number, number] }[];
+  liftZ0: number;
+  /** 회수 반입 자리(RTN-A-01 화면 자리) */
+  returnIntake: { x: number; z: number };
+  /** 바닥 표시 — 없으면 1호점 표시(Stock STORE_AREAS) */
+  storeAreas?: StoreArea[];
+  /** 휴게·사무 테이블(없으면 1호점 OFFICE_TABLE) */
+  officeTable?: { x: number; z: number; w: number; d: number; h: number };
+  /** 입고·검수 롤테이너 장식 자리 */
+  rollContainers?: { x: number; z: number }[];
+}
+
 export interface Layout {
+  /** 어느 평면인가 — SEED = 1호점(목포 같음), SEJONG = 3호점 세종(2026-11-23 R-41) */
+  variant: 'SEED' | 'SEJONG';
+  geo: SiteGeo;
   width: number;
   depth: number; // 외부 앞마당 포함
   buildingDepth: number;
@@ -166,7 +198,7 @@ export interface Layout {
 export const RACK_LEN = 1.25;
 export const RACK_DEPTH = 0.45;
 export const RACK_HEIGHT = 2.1;
-const AISLE = 0.7;
+export const AISLE = 0.7;
 /** 패킹대 상판 길이(m) — 1.6 → 1.8(사용자 2026-11-22 "패킹대 공간 넓어진 만큼 패킹대 길이도 좀 길게") [시뮬] */
 export const PACK_TABLE_W = 1.8;
 /** 보충재고 랙 단·칸 — 보충 상자는 피킹 낱개보다 커서 칸을 적게 [가정] */
@@ -210,7 +242,7 @@ function mvRect(r: Rect): Rect {
 }
 
 /** 랙 블록 채우기: 등을 맞댄 두 줄(0.9m) + 통로 0.7m 를 반복한다. */
-function fillRacks(opts: {
+export function fillRacks(opts: {
   temp: TemperatureZone;
   area: Rect;
   along: 'x' | 'z';
@@ -309,7 +341,7 @@ export const SLOT_DESIGN: Record<string, readonly [levels: number, slots: number
 };
 
 /** Python round 와 같은 반올림(.5 는 짝수로) — 백엔드 등록 스크립트가 칸 폭을 이렇게 냈다(D 칸 112.5 → 112, 실서버 112) */
-function roundHalfEven(x: number): number {
+export function roundHalfEven(x: number): number {
   const f = Math.floor(x);
   const d = x - f;
   if (Math.abs(d - 0.5) < 1e-9) return f % 2 === 0 ? f : f + 1;
@@ -335,6 +367,40 @@ function ambientGroupOf(rackIndex: number): string {
     if (rackIndex < acc) return g;
   }
   return 'H';
+}
+
+/** 랙 하나의 칸(buildLayout 안 addLocations 와 같은 식) — 다른 지점 평면용 */
+export function rackLocations(r: Rack): Location[] {
+  const out: Location[] = [];
+  const off = RACK_DEPTH / 2 + AISLE / 2;
+  const pick = r.along === 'z' ? { x: r.cx + r.face * off, z: r.cz } : { x: r.cx, z: r.cz + r.face * off };
+  for (let lv = 1; lv <= r.levels; lv++) {
+    for (let s = 1; s <= r.slotsPerLevel; s++) {
+      const t = (s - 0.5) / r.slotsPerLevel - 0.5;
+      const shelfY = 0.15 + ((lv - 1) * (RACK_HEIGHT - 0.25)) / r.levels;
+      const shelf =
+        r.along === 'z'
+          ? { x: r.cx + (r.face * RACK_DEPTH) / 4, y: shelfY, z: r.cz + t * RACK_LEN * 0.9 }
+          : { x: r.cx + t * RACK_LEN * 0.9, y: shelfY, z: r.cz + (r.face * RACK_DEPTH) / 4 };
+      const loc: Location = {
+        code: `${r.reserve ? { AMBIENT: 'A', CHILLED: 'C', FROZEN: 'F' }[r.temp] : ''}${r.group}-${String(r.rackNo).padStart(2, '0')}-${lv}${String(s).padStart(2, '0')}`,
+        rackId: r.id,
+        temp: r.temp,
+        level: lv,
+        slot: s,
+        pick,
+        shelf,
+        along: r.along,
+        face: r.face,
+        slotW: (RACK_LEN * 0.9) / r.slotsPerLevel,
+        levelH: (RACK_HEIGHT - 0.25) / r.levels,
+        dimMm: { w: roundHalfEven((RACK_LEN * 900) / r.slotsPerLevel), d: Math.round(RACK_DEPTH * 1000), h: roundHalfEven((RACK_HEIGHT * 1000) / r.levels) },
+      };
+      if (r.reserve) loc.reserve = true;
+      out.push(loc);
+    }
+  }
+  return out;
 }
 
 export function buildLayout(): Layout {
@@ -691,6 +757,8 @@ export function buildLayout(): Layout {
   compact474({ zones, walls, racks, locations, reserves, obstacles, stations, shippingSlots, dockSlots, points });
 
   return {
+    variant: 'SEED',
+    geo: { yardX: YARD_X, liftAnnex: LIFT_ANNEX, freightLifts: FREIGHT_LIFTS, liftZ0: LIFT_Z0, returnIntake: { x: BACKEND_FACTS_RETURN.x, z: BACKEND_FACTS_RETURN.z } },
     width: W2,
     depth: D,
     buildingDepth: BD2,

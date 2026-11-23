@@ -275,6 +275,8 @@ export interface MfcSite {
   accountPrefix: string;
   /** 관리 탭 쓰기 계정(그 센터 MFC_SUPERVISOR) */
   supervisorAccount: string;
+  /** 평면 — 없으면 1호점 평면(목포는 1호점과 같음). SEJONG = 3호점 세종 평면(R-41) */
+  layout?: 'SEED' | 'SEJONG';
 }
 export const MFC_SITES: readonly MfcSite[] = [
   {
@@ -294,6 +296,18 @@ export const MFC_SITES: readonly MfcSite[] = [
     mockAreas: ['목포시 상동', '목포시 하당동', '목포시 옥암동', '목포시 용해동', '목포시 산정동', '목포시 석현동'],
     accountPrefix: 'mfcw-mk-',
     supervisorAccount: 'claude-mfc-sup-mk',
+  },
+  {
+    // 3호점 세종(R-41, 2026-11-23 사용자 "이 평면도대로 세종 MFC 1개 더 만들어줘") — 평면이 1호점과 달라 따로 만든다(layoutSejong.ts).
+    // 계정 [확정] 백엔드 deploy/lan/seed/mfc_test_workers.py --center sejong: mfcw-sj-pp·qc·rcv 01~10 + claude-mfc-sup-sj. 주소·좌표 center-master(PC 1)
+    id: 'MFC-SEJ-01',
+    name: '3호점 세종 MFC',
+    address: '세종특별자치시 다솜1로 36 엠브릿지 3층 (어진동 513)',
+    short: '3호점 세종',
+    mockAreas: ['세종시 어진동', '세종시 나성동', '세종시 도담동', '세종시 아름동', '세종시 종촌동', '세종시 대평동'],
+    accountPrefix: 'mfcw-sj-',
+    supervisorAccount: 'claude-mfc-sup-sj',
+    layout: 'SEJONG',
   },
 ];
 let currentSite: MfcSite = MFC_SITES[0];

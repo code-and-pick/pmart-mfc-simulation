@@ -25,6 +25,9 @@ export function passwordFileFor(account: string): string | null {
   // 2호점 목포 MFC(사용자 2026-11-22) — 백엔드 R-39 로 요청한 계정(같은 공용 비밀번호 파일, 관리자는 따로) [가정]
   if (/^mfcw-mk-(pp|qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
   if (short === 'claude-mfc-sup-mk') return 'keycloak-claude-mfc-sup-mk-password';
+  // 3호점 세종(R-41, 2026-11-23) — 백엔드 mfc_test_workers.py --center sejong(같은 공용 비밀번호, 관리자 파일은 따로 — .secrets 파일 이름 확인)
+  if (/^mfcw-sj-(pp|qc|rcv)-(0[1-9]|10)$/.test(short)) return 'keycloak-mfc-test-workers-password';
+  if (short === 'claude-mfc-sup-sj') return 'keycloak-claude-mfc-sup-sj-password';
   return null;
 }
 

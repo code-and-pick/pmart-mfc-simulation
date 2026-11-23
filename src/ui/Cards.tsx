@@ -23,7 +23,7 @@ export function ZoneBody({ zoneKey }: { zoneKey: string }) {
   const { sim: s, controller } = useApp();
   const inv = s.mock?.inventory;
   const goto = (sku: string) => controller.select({ kind: 'location', sku });
-  const temp: TemperatureZone | null = zoneKey === 'A' ? 'FROZEN' : zoneKey === 'B' ? 'CHILLED' : zoneKey === 'C-H' ? 'AMBIENT' : null;
+  const temp: TemperatureZone | null = zoneKey === 'A' ? 'FROZEN' : zoneKey === 'B' ? 'CHILLED' : zoneKey === 'C-H' || zoneKey === 'C-H2' ? 'AMBIENT' : null;
   // 실서버: 센터 전체 재고로 구역 → 랙 → 단 → 칸
   if (temp && s.board) return <RealZoneStock temp={temp} />;
   if (temp) {
@@ -189,7 +189,7 @@ function RealInboundCard() {
     if (!id) return null;
     // 이 화면의 가상 작업자면 계정 이름(검사 qc-01 등), 아니면 인사 이름, 그것도 모르면 ID 끝
     const v = s.virtualWorkers.find((w) => w.workerId === id);
-    if (v) return `${v.account.includes('-qc-') ? '검사' : v.account.includes('-rcv-') ? '적치' : ''} ${v.account.replace(/^mfcw-(mk-)?/, '')}`.trim();
+    if (v) return `${v.account.includes('-qc-') ? '검사' : v.account.includes('-rcv-') ? '적치' : ''} ${v.account.replace(/^mfcw-(mk-|sj-)?/, '')}`.trim();
     const n = real.workerName(id);
     return n === '작업자 확인 중' ? `작업자 ${id.slice(-4)}` : n.split(' · ')[0];
   };
@@ -218,7 +218,7 @@ function RealInboundCard() {
         <div className="rin-ws">
           {inb.map((w) => (
             <div key={w.account} className={w.lastProblem ? 'bad' : ''}>
-              <b>{w.account.includes('-qc-') ? '검사' : '적치'} {w.account.replace(/^mfcw-(mk-)?/, '')}</b> {w.activity}
+              <b>{w.account.includes('-qc-') ? '검사' : '적치'} {w.account.replace(/^mfcw-(mk-|sj-)?/, '')}</b> {w.activity}
               {w.lastProblem && <span> · {w.lastProblem}</span>}
             </div>
           ))}

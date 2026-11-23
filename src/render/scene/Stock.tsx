@@ -3,7 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { useApp } from '../../app/context';
-import { COLD_BAND, RACK_DEPTH } from '../../domain/layout';
+import { COLD_BAND, RACK_DEPTH, type StoreArea } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR, zoneBoxColor } from '../colors';
 import { boxTexture, palletTexture } from '../sprites';
 import { Label } from './Facility';
@@ -299,10 +299,16 @@ const STORE_AREAS = [
  *  → "냉동격리랑 보충재고랑 입고재고가 다 앞쪽 벽에 붙어있으니까 그냥 다 바닥색 냉동격리 바닥색으로 통일하고 냉동격리처럼 하얀실선으로")
  */
 export function ReserveFloors() {
+  const { sim } = useApp();
   const texts = useMemo(() => new Map(['보충재고', '입고재고', '대형재고', '보충', '입고'].map((t) => [t, floorText(t)])), []);
+  // 지점 평면에 바닥 표시가 있으면 그것(세종 R-41), 없으면 1호점 표시
+  const areas = useMemo(
+    () => sim.layout.geo.storeAreas?.map((a: StoreArea) => ({ ...a, color: a.color ? ZONE_FLOOR[a.color] : undefined })) ?? STORE_AREAS,
+    [sim.layout],
+  );
   return (
     <>
-      {STORE_AREAS.map((a, k) => {
+      {areas.map((a, k) => {
         const [fx0, fz0, fx1, fz1] = a.floor;
         return (
           <group key={k}>

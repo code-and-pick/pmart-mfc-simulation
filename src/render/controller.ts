@@ -24,7 +24,9 @@ export function zoneViews(L: Layout): ZoneView[] {
     { key: 'ALL', label: '전체', zoneId: null, rect: { x0: 0, z0: 0, x1: L.width, z1: L.depth } },
     { key: 'A', label: '냉동 A', zoneId: 'A', rect: z('A') },
     { key: 'B', label: '냉장 B', zoneId: 'B', rect: z('B') },
-    { key: 'C-H', label: '상온 C~H', zoneId: 'C-H', rect: z('C-H') },
+    { key: 'C-H', label: L.zones.some((x) => x.id === 'C-H2') ? '상온 구역 1' : '상온 C~H', zoneId: 'C-H', rect: z('C-H') },
+    // 세종(R-41)은 상온 피킹 구역이 둘
+    ...(L.zones.some((x) => x.id === 'C-H2') ? [{ key: 'C-H2', label: '상온 구역 2', zoneId: 'C-H2', rect: z('C-H2') }] : []),
     { key: 'WH', label: '입고창고', zoneId: 'WH', rect: z('WH') },
     // 입고·검수는 북쪽 차량문 밖 트럭 자리까지(2026-11-21 재배치 — 전엔 동쪽 x 57 까지)
     { key: 'RCV', label: '입고·검수', zoneId: 'RCV', rect: { ...z('RCV'), z0: -5.5 } },

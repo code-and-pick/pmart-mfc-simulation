@@ -12,7 +12,13 @@ import { SCENE } from '../colors';
 
 /** 통로 가운데 선(점선 + 화살표). [x0, z0, x1, z1] — 배치의 빈 띠(벽 사이)에서 */
 function walkways(L: Layout): [number, number, number, number][] {
-  void L;
+  // 세종(R-41): 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
+  if (L.variant === 'SEJONG')
+    return [
+      [1.2, 0.8, 26.0, 0.8],
+      [25.7, 1.2, 25.7, 32.6],
+      [1.2, 32.6, 36.6, 32.6],
+    ];
   // 2026-11-21 재배치: 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
   return [
     // 2026-11-22 474.55평 맞춤으로 옮김
@@ -273,10 +279,13 @@ export function WorkingCells() {
 /** 지게차(장식, 사용자 2026-11-20 참고 그림 "입고구역 UI도 똑같이") — 노란 몸통·검정 마스트·포크. 통행·작업과 무관 */
 /** 입고·검수 하차 자리 장식 — 롤테이너 3대(지게차 대신, 사용자 2026-11-21 "지게차 없애. 롤테이너로 옮기니까") */
 export function InboundDecor() {
+  const { sim } = useApp();
+  // 1호점: 2026-11-22 463평 맞춤 — 승강기 문 동쪽(입고·검수 북동쪽). 다른 지점은 평면의 자리
+  const spots = sim.layout.geo.rollContainers ?? [31.2, 32.1, 33.0].map((x) => ({ x, z: 5.55 }));
   return (
     <>
-      {[31.2, 32.1, 33.0].map((x) => ( // 2026-11-22 463평 맞춤 — 승강기 문 동쪽(입고·검수 북동쪽)
-        <RollContainer key={x} x={x} z={5.55} />
+      {spots.map((p) => (
+        <RollContainer key={`${p.x},${p.z}`} x={p.x} z={p.z} />
       ))}
     </>
   );
@@ -450,7 +459,8 @@ function OfficeChair({ x, z, face }: { x: number; z: number; face: 1 | -1 }) {
   );
 }
 export function OfficeDecor() {
-  const T = OFFICE_TABLE;
+  const { sim } = useApp();
+  const T = sim.layout.geo.officeTable ?? OFFICE_TABLE;
   const pitch = T.w / BAR_SEATS;
   const seatX = (k: number) => T.x - T.w / 2 + pitch * (k + 0.5);
   return (

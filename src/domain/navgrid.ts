@@ -1,5 +1,5 @@
 // 보행 격자와 A* 경로 탐색. 셀 0.25m, 8방향(모서리 끼기 금지), 시야선으로 경로 다듬기.
-import { YARD_X, type Layout, type Rect } from './layout';
+import type { Layout, Rect } from './layout';
 
 export interface P {
   x: number;
@@ -14,6 +14,7 @@ export class NavGrid {
   private readonly free: Uint8Array;
 
   constructor(layout: Layout) {
+    const YARD_X = layout.geo.yardX;
     this.cols = Math.ceil(Math.max(layout.width, YARD_X[1] + 0.5) / CELL); // 앞마당이 건물 동쪽 끝보다 넓다(2026-11-21 재배치)
     this.rows = Math.ceil(layout.depth / CELL);
     this.free = new Uint8Array(this.cols * this.rows);

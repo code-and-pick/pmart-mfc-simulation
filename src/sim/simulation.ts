@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES } from '../config';
+import { BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -42,6 +42,7 @@ import { ObservedWorker, type PackStep, type ScanCue } from './observedWorker';
 import { nextPickStop } from '../domain/pickStop';
 import { suggestCarts } from '../domain/cartSuggest';
 import { applyWideCells } from '../domain/wideCells';
+import { buildSejongLayout } from '../domain/layoutSejong';
 import { nextReturnPiece } from '../domain/returnPiece';
 import { RealWorker, SIM_DEVICE_PREFIX, tempOfCode, type RealSiteContext } from './realWorker';
 import type { SiteWorker } from './worker';
@@ -159,9 +160,10 @@ export class Simulation {
     this.bundleRng = new Rng(params.seed ^ 0x6b3d29);
     this.time = params.startHour * 3600;
     this.nextOrderAt = this.time + this.rng.exp(3600 / Math.max(1, params.ordersPerHour));
-    this.layout = buildLayout();
+    // 지점 평면 — 세종(R-41)은 따로, 1호점·목포는 같은 평면
+    this.layout = activeSite().layout === 'SEJONG' ? buildSejongLayout() : buildLayout();
     this.codes = buildLocationCodeMap(this.layout);
-    applyWideCells(this.layout, this.codes); // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18)
+    if (this.layout.variant === 'SEED') applyWideCells(this.layout, this.codes); // 넓은 칸·닫힌 칸(백엔드 layout-v3-wide, 2026-11-18 — 1호점 칸)
     this.locByCode = new Map(this.layout.locations.map((l) => [l.code, l]));
     this.nav = new NavGrid(this.layout);
     this.catalog = buildCatalog(this.layout, params.mockSkuCount, BACKEND_FACTS.slotFillRate, params.seed, MOCK_HIGH_TURNOVER_TOP);
@@ -1774,7 +1776,7 @@ export class Simulation {
       if (lines.some((l) => l.sku === s.sku)) continue;
       lines.push({ sku: s.sku, qty: this.retRng.int(1, RETURN_FLOW.maxQty) });
     }
-    const drop = { x: BACKEND_FACTS.returnIntake.x, z: BACKEND_FACTS.returnIntake.z };
+    const drop = { ...this.layout.geo.returnIntake };
     const base = this.returnItems.filter((it) => it.stage !== 'QUARANTINED' && it.stage !== 'DONE').length;
     const items: ReturnItem[] = lines.map((l, i) => ({
       id: `${arrivalId}-${i + 1}`,
@@ -1855,7 +1857,7 @@ export class Simulation {
     if (simCode === SIM_POINT.packQueueFrozen) return { x: P.packQueue.x, z: P.packQueue.z + 0.9 };
     if (simCode === SIM_POINT.cartDepot) return P.cartDepot;
     if (simCode === SIM_POINT.receiving) return P.truckDoor;
-    if (simCode === SIM_POINT.returnIntake) return { x: BACKEND_FACTS.returnIntake.x, z: BACKEND_FACTS.returnIntake.z };
+    if (simCode === SIM_POINT.returnIntake) return { ...this.layout.geo.returnIntake };
     const rs = this.reserveMap.get(simCode);
     if (rs?.role === 'RECEIVING') {
       // 저온 입고칸(RCV-C-01·RCV-F-01) = 입고재고 팔레트 2개 — 둘 사이 가운데에 쌓아 그린다

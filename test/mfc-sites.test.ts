@@ -33,3 +33,30 @@ describe('MFC 지점', () => {
     expect(REAL_LINK.virtualAccounts[0]).toBe('mfcw-pp-01');
   });
 });
+
+// 3호점 세종 MFC(R-41, 사용자 2026-11-23 "이 평면도대로 세종 MFC 1개 더 만들어줘") — 평면이 1호점과 다르다
+describe('세종 지점', () => {
+  afterEach(() => setActiveSite(undefined));
+
+  it('세종은 세종 평면, 계정은 mfcw-sj-…', () => {
+    setActiveSite('MFC-SEJ-01');
+    const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: 'MFC-SEJ-01' });
+    expect(s.layout.variant).toBe('SEJONG');
+    expect(s.layout.racks.filter((r) => !r.reserve).length).toBe(428);
+    expect(REAL_LINK.virtualAccounts[0]).toBe('mfcw-sj-pp-01');
+    expect(passwordFileFor('mfcw-sj-qc-03')).not.toBeNull();
+    expect(passwordFileFor(REAL_LINK.supervisorAccount)).toBe('keycloak-claude-mfc-sup-sj-password');
+    expect(workerShortName('mfcw-sj-pp-03')).toBe('피킹3');
+    expect(isInboundAccount('mfcw-sj-rcv-02')).toBe(true);
+  });
+
+  it('세종 MOCK 이 돈다 — 주문이 인계되고 API 오류·재고 규칙 위반 없음', async () => {
+    setActiveSite('MFC-SEJ-01');
+    const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: 'MFC-SEJ-01', ordersPerHour: 60 });
+    s.speed = 60;
+    for (let i = 0; i < 1500 && s.metrics.summary().handedOver < 5; i++) await s.advance(0.1);
+    expect(s.metrics.summary().handedOver).toBeGreaterThanOrEqual(5);
+    expect(s.metrics.apiErrors).toBe(0);
+    expect(s.mock!.inventory.violations).toEqual([]);
+  }, 120_000);
+});

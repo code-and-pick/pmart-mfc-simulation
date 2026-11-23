@@ -4,8 +4,8 @@ import { useFrame } from '@react-three/fiber';
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick } from '../../app/context';
-import { BACKEND_FACTS, DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
-import { FREIGHT_LIFTS, LIFT_ANNEX, LIFT_Z0, PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, YARD_X, type Layout } from '../../domain/layout';
+import { DECOR, MOCK_HIGH_TURNOVER_TOP } from '../../config';
+import { PACK_TABLE_W, RACK_DEPTH, RACK_HEIGHT, RACK_LEN, type Layout } from '../../domain/layout';
 import { SCENE, ZONE_FLOOR } from '../colors';
 import { makeLabel, makePillSprite } from '../sprites';
 import { makePill, ZoneNames } from './ZoneNames';
@@ -53,6 +53,8 @@ export function Label({ text, position, opts, noNudge, anchorX }: { text: string
 
 
 function Ground({ L }: { L: Layout }) {
+  const YARD_X = L.geo.yardX;
+  const LIFT_ANNEX = L.geo.liftAnnex;
   const flat: Vec3 = [-Math.PI / 2, 0, 0];
   return (
     <>
@@ -449,8 +451,8 @@ function HighTurnover({ L }: { L: Layout }) {
  * 실서버: 이 센터로 오는 회수 배송(고객 반품·오배송 회수, delivery-dispatch 0.5.0) 수 — 오는 중 / 반납됨.
  */
 function ReturnIntake() {
-  const p = BACKEND_FACTS.returnIntake;
   const { sim } = useApp();
+  const p = sim.layout.geo.returnIntake;
   useTick();
   const rp = sim.real?.returnPickups ?? [];
   const arrived = rp.filter((d) => d.state === 'RETURNED_TO_STORE' || d.state === 'COMPLETED').length;
@@ -610,6 +612,8 @@ export function Facility() {
 function FreightLifts() {
   // 승강기 코어(사용자 2026-11-22 "승강기 못생겼어") — 닫힌 밝은 콘크리트 박스 + 입고·검수 쪽 스테인리스 문틀·문 두 짝·층 표시등·호출 버튼·문 앞 노랑/검정 안전 띠
   const { sim } = useApp();
+  const FREIGHT_LIFTS = sim.layout.geo.freightLifts;
+  const LIFT_Z0 = sim.layout.geo.liftZ0;
   const doors = useRef<THREE.Group[]>([]);
   const lamps = useRef<THREE.MeshStandardMaterial[]>([]);
   const open = useRef(0);
@@ -621,7 +625,7 @@ function FreightLifts() {
     });
     for (const m of lamps.current) if (m) m.emissiveIntensity = 0.6 + open.current * 1.4;
   });
-  const tags = useMemo(() => FREIGHT_LIFTS.map((_, i) => makeLabel(`화물 승강기 ${i + 1}`, { size: 26, bg: 'rgba(31,42,68,0.85)', screenPx: 14 })), []);
+  const tags = useMemo(() => FREIGHT_LIFTS.map((_, i) => makeLabel(`화물 승강기 ${i + 1}`, { size: 26, bg: 'rgba(31,42,68,0.85)', screenPx: 14 })), [FREIGHT_LIFTS]);
   const stripe = useMemo(() => {
     const c = document.createElement('canvas');
     c.width = 256;
