@@ -52,6 +52,11 @@ describe('부산남구 MFC 평면(R-44)', () => {
       expect(r.x1 - r.x0).toBeGreaterThan(r.z1 - r.z0);
       expect(wh.z1 - r.z1).toBeLessThan(0.2);
     }
+    // 입고창고: 입고재고 팔레트 ~ 보충재고 랙 첫 줄 1.8 m 이상, 마지막 줄 ~ 상온 격리 1 m 이상
+    const whRacks = L.racks.filter((x) => x.reserve && x.temp === 'AMBIENT');
+    const wr = L.reserves.filter((x) => x.role === 'RECEIVING' && x.temp === 'AMBIENT');
+    expect(Math.min(...whRacks.map((x) => x.cz - 0.225)) - Math.max(...wr.map((x) => x.rect.z1))).toBeGreaterThan(1.8);
+    expect(zr('CQ').z0 - Math.max(...whRacks.map((x) => x.cz + 0.225))).toBeGreaterThan(1.0);
     // 입고·검수 ~ 냉동 방 동쪽 벽 통로 2 m 이상(사용자 2026-11-24 "입고검수랑 냉동 사이가 좁잖아")
     expect(rcv.x0 - zr('A').x1).toBeGreaterThan(2);
     // 저온 입고재고 팔레트 ~ 첫 피킹 줄 0.8 m 이상

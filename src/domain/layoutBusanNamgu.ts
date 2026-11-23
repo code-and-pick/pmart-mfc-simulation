@@ -181,7 +181,8 @@ export function buildBusanNamguLayout(): Layout {
     const xs = Array.from({ length: 6 }, (_, i) => R.WH.x0 + 0.8 + (i + 0.5) * RACK_LEN);
     const rows: { cz: number; face: 1 | -1 }[] = [];
     // 0.4 m 남쪽 — 입고재고 팔레트와 간격(사용자 2026-11-24 "보충재고 랙 위치 전부 살짝 남쪽으로. 입고재고랑 너무 붙어있네")
-    for (const zz of [9.7, 11.8, 13.9]) rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
+    // 다시 0.4 m 남쪽(입고재고 팔레트를 칸 가운데로 옮긴 뒤 또 "입고재고랑 너무 붙어있네") — 쌍 사이 통로 1.2 → 1.0 m 로 마지막 줄 ~ 상온 격리 1.05 m 유지
+    for (const zz of [10.1, 12.0, 13.9]) rows.push({ cz: zz + RACK_DEPTH / 2, face: -1 }, { cz: zz + RACK_DEPTH * 1.5, face: 1 });
     let n = 0;
     for (const row of rows) for (const x of xs) if (n < BUSAN_NAMGU_RACKS.reserveAmbient) reserve.push({ id: `RRA-${++n}`, temp: 'AMBIENT', group: 'R01', rackNo: n, cx: x, cz: row.cz, along: 'x', face: row.face, levels: RESERVE_SLOTS[0], slotsPerLevel: RESERVE_SLOTS[1], reserve: true });
   }
