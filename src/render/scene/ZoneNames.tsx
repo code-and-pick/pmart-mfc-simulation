@@ -190,7 +190,8 @@ export function zoneTags(L: Layout): Tag[] {
       const same = SAME_AS_FROZEN.includes(z.kind);
       // 냉동과 같은 무리: 벽 조각이 아니라 구역 폭 기준·구역 가운데(문 위로 걸쳐도 카드는 벽 위에 떠 있다)
       const room = same ? (r.x1 - r.x0) * 0.95 : (wall.x1 - wall.x0) * 0.9;
-      if (w > room && !L.geo.zoneCardFullSize?.includes(z.id)) {
+      // 상온 입고창고 카드는 모든 지점에서 줄이지 않음 — 냉장·상온 카드와 같은 크기(사용자 2026-11-24 "목포, 세종, 춘천, 부산남구 상온입고창고구역 카드가 작으니까 키워서 다른 상온냉장구역카드 크기랑 맞춰.")
+      if (w > room && z.kind !== 'INBOUND_STORE' && !L.geo.zoneCardFullSize?.includes(z.id)) {
         w = room;
         h = w / aspect;
       }
