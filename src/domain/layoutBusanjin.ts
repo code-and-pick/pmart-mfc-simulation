@@ -207,11 +207,12 @@ export function buildBusanjinLayout(): Layout {
   const thirdX0 = (k: number) => R.CQ.x0 - 1.0 - (MOVE_E + Math.max(southPairs[k][0][2].length, southPairs[k][1][2].length)) * RACK_LEN;
   // 남은 남쪽 띠 랙(쌍마다 면 12 = 서쪽·동쪽 묶음)은 4 | 4 묶음 3개씩 — 서쪽 끝 sX0 ~ 남동쪽 모서리 묶음 사이에 묶음 사이 통로를 같게
   // (사용자 2026-11-24 "남쪽에 남은 상온구역랙들 4 4 / 4 4 이렇게 배치해봐")
-  const BLK = 4;
+  const BLK = 5; // 4 | 4 · 4 | 4 · 2 | 2 → 5 | 5 · 5 | 5(사용자 2026-11-24 화면 사진 + "여기 5 5 / 5 5 이렇게 놔줘")
   southPairs.forEach(([north, south], k) => {
     const nMain = Math.max(north[0].length + north[1].length, south[0].length + south[1].length) - MOVE_E;
     const nBlk = Math.ceil(nMain / BLK);
-    const gap = (thirdX0(k) - sX0 - nMain * RACK_LEN) / nBlk;
+    // 가운데 묶음 동쪽 끝 = 냉장 동쪽 벽 바깥면(통로로 안 튀어나오게, 사용자 2026-11-24 "통로 튀어나가지 않게 냉장구역 벽이랑 4개묶음 랙 위치 일직선으로"), 묶음 사이 통로는 같게
+    const gap = (R.B.x1 + 0.1 - sX0 - nMain * RACK_LEN) / (nBlk - 1);
     const face = ([w, e, t]: Face3, cz: number, f: 1 | -1) => {
       const all = [...w, ...e];
       const main = all.slice(0, all.length - MOVE_E);
