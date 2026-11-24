@@ -51,7 +51,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   it('배치(그림대로) — 상온 동쪽 띠 C·D·E·F, 남쪽 띠 G·H, 물리 줄마다 한 코드 줄, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
     const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
     const ch2 = zr('C-H2');
-    for (const r of amb) expect('GH'.includes(r.group[0])).toBe(r.cz > ch2.z0);
+    for (const r of amb) expect('GH'.includes(r.group[0]) || r.group === 'F02' || r.group === 'F03').toBe(r.cz > ch2.z0);
     // 같은 z·같은 묶음(1.25 m 간격으로 이어진 랙)은 같은 코드 줄, 랙 번호가 1씩 늘어남
     const rows = new Map<string, (typeof L.racks)[number][]>();
     for (const r of L.racks.filter((x) => !x.reserve)) rows.set(`${r.temp}:${r.cz.toFixed(3)}`, [...(rows.get(`${r.temp}:${r.cz.toFixed(3)}`) ?? []), r]);
@@ -104,8 +104,8 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect(py('PK')).toBeGreaterThanOrEqual(12); // 사용자 "패킹 구역 확보" — 15평
     expect(py('WH')).toBeGreaterThanOrEqual(18); // 사용자 "입고 창고 크기 늘리고" — 24평
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').every((r) => r.rect.x0 >= zr('WH').x0 && r.rect.z1 <= zr('WH').z1)).toBe(true);
-    expect(py('A')).toBeCloseTo(58, 0);
-    expect(py('B')).toBeCloseTo(58, 0);
+    expect(py('A')).toBeCloseTo(52.5, 0); // 58 → 냉동·냉장 0.9 m 씩 줄여 남쪽 띠 2쌍(사용자 2026-11-24)
+    expect(py('B')).toBeCloseTo(52.5, 0);
     expect(py('CQ')).toBeCloseTo(1, 0);
     expect(py('SHIP')).toBeCloseTo(2, 0);
   });
