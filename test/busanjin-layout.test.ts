@@ -19,13 +19,13 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   const cells = (pred: (l: (typeof L.locations)[number]) => boolean) => L.locations.filter(pred).length;
   const zr = (id: string) => L.zones.find((z) => z.id === id)!.rect;
 
-  it('랙 수 = 사용자 표, 칸 = 1호점 랙당 칸 그대로(피킹 8,756 · 보충 420 — 상온 보충재고 랙 14(사용자 11-24 하나 없앰))', () => {
+  it('랙 수 = 사용자 표, 칸 = 1호점 랙당 칸 그대로(피킹 8,696 — 상온 D 13(사용자 11-24 D03-02 뺌) · 보충 420 — 상온 보충재고 랙 14(사용자 11-24 하나 없앰))', () => {
     expect(count((r) => !r.reserve && r.temp === 'CHILLED')).toBe(BUSANJIN_RACKS.B);
     expect(count((r) => !r.reserve && r.temp === 'FROZEN')).toBe(BUSANJIN_RACKS.A);
     for (const g of ['C', 'D', 'E', 'F', 'G', 'H'] as const) expect(count((r) => !r.reserve && r.temp === 'AMBIENT' && r.group[0] === g)).toBe(BUSANJIN_RACKS[g]);
-    expect(count((r) => !r.reserve)).toBe(222);
+    expect(count((r) => !r.reserve)).toBe(221);
     expect(count((r) => !!r.reserve)).toBe(28);
-    expect(cells((l) => !l.reserve)).toBe(8756);
+    expect(cells((l) => !l.reserve)).toBe(8696);
     expect(cells((l) => !!l.reserve)).toBe(420);
   });
 
@@ -115,7 +115,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     const { positions, reserveCells, bulkCells } = exportPositions(L, codes);
     const nonCart = positions.filter((p) => !p.locationCode.startsWith('CRT-'));
     expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
-    expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(8756);
+    expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(8696);
     expect(reserveCells.length).toBe(420);
     expect(bulkCells.length).toBe(10);
     if (env.WRITE_LAYOUT === '1') {

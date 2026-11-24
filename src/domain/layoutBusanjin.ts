@@ -44,7 +44,7 @@ export const BSJ_W = 37.0;
 export const BSJ_BD = 24.58;
 
 /** 사용자 표(요청서 §3) 랙 수 [확정] — 랙당 칸은 지금 1호점 SLOT_DESIGN 그대로(사용자 결정) */
-export const BUSANJIN_RACKS = { B: 76, A: 64, C: 14, D: 14, E: 12, F: 14, G: 16, H: 12, reserveChilled: 7, reserveFrozen: 7, reserveAmbient: 14 } as const; // 상온 보충재고 표 15 → 14(사용자 2026-11-24 "상온입고 구역 랙 하나 없애자 홀수네.")
+export const BUSANJIN_RACKS = { B: 76, A: 64, C: 14, D: 13, E: 12, F: 14, G: 16, H: 12, reserveChilled: 7, reserveFrozen: 7, reserveAmbient: 14 } as const; // 상온 보충재고 표 15 → 14(사용자 2026-11-24 "상온입고 구역 랙 하나 없애자 홀수네.")
 
 const X = (x: number) => OX + x;
 // 처음 그림·표로 다시(사용자 2026-11-24 "아니 설계 이게 맞냐고. 안 이상해 이게? 왜 이렇게 바꾼 거야?" → 처음 그림·표로 다시(살릴 것은 살림) "응 일단 해봐"):
@@ -182,7 +182,7 @@ export function buildBusanjinLayout(): Layout {
   // C 는 5랙씩만(C01·C02-06~07 은 남쪽 띠 남쪽 쌍 동쪽 끝으로)
   // D 는 D02·D03-03~07 5랙씩(남쪽 띠 D 묶음 동쪽 3랙씩을 옮겨 옴 — 사용자 2026-11-24 "남쪽 통로에 제일 오른쪽에 있는 랙 6개 북쪽 구역에 놔줘" → "D 묶음 동쪽 3랙씩")
   // 셋째 줄 = 남쪽 띠에서 옮긴 C01-06~07 · C02-06~07 · D02-02(사용자 2026-11-24 "남쪽 띠 C 4랙 + D02-02")
-  const eastRows = [run('C01', 1, 5), run('C02', 1, 5), [...run('C01', 6, 2), ...run('C02', 6, 2), ...run('D02', 2, 1)], run('D02', 3, 5), run('D03', 2, 6)]; // D03-02 는 남쪽 띠에서 짝이 없어 D03 줄 앞으로(6랙)
+  const eastRows = [run('C01', 1, 5), run('C02', 1, 5), [...run('C01', 6, 2), ...run('C02', 6, 2), ...run('D02', 2, 1)], run('D02', 3, 5), run('D03', 3, 5)]; // D03-02 는 뺌 — 줄마다 5랙(사용자 2026-11-24 "상온 동쪽 구역에 다 5개씩 있다가 한 줄만 6개 있으니까 그거에서 랙 1개 빼자고.")
   const ePitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, (R.CH.x0 + R.CH.x1) / 2 + (i - (row.length - 1) / 2) * RACK_LEN, EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
