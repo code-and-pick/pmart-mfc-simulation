@@ -201,16 +201,23 @@ export function buildBusanjinLayout(): Layout {
   ];
   /** 셋째 묶음 서쪽 끝 — 그 쌍 동쪽 묶음 동쪽 끝(북쪽 쌍 E 6랙, 남쪽 쌍 4랙) + 통로 1.0 m */
   // 남쪽 쌍 셋째(G03-05~06 | G03-07~08, 4랙)는 남동쪽 모서리 — 동쪽 상온 구역 앞, 상온 격리 서쪽(통로 1.0 m)(사용자 2026-11-24 "28개 24개 남동쪽 모서리, 상온구역 앞에 남쪽 구역에 있는 적치랙 2줄 묶음 랙 4개 배치")
-  const thirdX0 = (k: number) => R.CQ.x0 - 1.0 - Math.max(southPairs[k][0][2].length, southPairs[k][1][2].length) * RACK_LEN;
+  // 셋째 4 | 4 묶음의 동쪽 2 | 2(통로 앞)는 빼서 모서리 묶음 서쪽에 붙임 → 모서리 묶음 줄마다 4 | 4(8랙), 가운데 묶음 4 | 4 · 4 | 4 · 2 | 2
+  // (사용자 2026-11-24 "통로 앞은 빼게 통로앞 2 2 동쪽으로 붙여서 동쪽 묶임이 총 8개가 되게 해" + 화면 사진 E02-04~05·E03-04~05, G03-03~04·H02-06~07)
+  const MOVE_E = 2;
+  const thirdX0 = (k: number) => R.CQ.x0 - 1.0 - (MOVE_E + Math.max(southPairs[k][0][2].length, southPairs[k][1][2].length)) * RACK_LEN;
   // 남은 남쪽 띠 랙(쌍마다 면 12 = 서쪽·동쪽 묶음)은 4 | 4 묶음 3개씩 — 서쪽 끝 sX0 ~ 남동쪽 모서리 묶음 사이에 묶음 사이 통로를 같게
   // (사용자 2026-11-24 "남쪽에 남은 상온구역랙들 4 4 / 4 4 이렇게 배치해봐")
   const BLK = 4;
   southPairs.forEach(([north, south], k) => {
-    const nBlk = Math.ceil(Math.max(north[0].length + north[1].length, south[0].length + south[1].length) / BLK);
-    const gap = (thirdX0(k) - sX0 - nBlk * BLK * RACK_LEN) / nBlk;
+    const nMain = Math.max(north[0].length + north[1].length, south[0].length + south[1].length) - MOVE_E;
+    const nBlk = Math.ceil(nMain / BLK);
+    const gap = (thirdX0(k) - sX0 - nMain * RACK_LEN) / nBlk;
     const face = ([w, e, t]: Face3, cz: number, f: 1 | -1) => {
-      [...w, ...e].forEach((r, i) => ambient.push(place(r, sX0 + Math.floor(i / BLK) * (BLK * RACK_LEN + gap) + ((i % BLK) + 0.5) * RACK_LEN, cz, 'x', f)));
-      t.forEach((r, i) => ambient.push(place(r, thirdX0(k) + (i + 0.5) * RACK_LEN, cz, 'x', f)));
+      const all = [...w, ...e];
+      const main = all.slice(0, all.length - MOVE_E);
+      const corner = [...all.slice(all.length - MOVE_E), ...t];
+      main.forEach((r, i) => ambient.push(place(r, sX0 + Math.floor(i / BLK) * (BLK * RACK_LEN + gap) + ((i % BLK) + 0.5) * RACK_LEN, cz, 'x', f)));
+      corner.forEach((r, i) => ambient.push(place(r, thirdX0(k) + (i + 0.5) * RACK_LEN, cz, 'x', f)));
     };
     face(north, SOUTH_PAIR_Z(k) + RACK_DEPTH / 2, -1);
     face(south, SOUTH_PAIR_Z(k) + 1.5 * RACK_DEPTH, 1);
