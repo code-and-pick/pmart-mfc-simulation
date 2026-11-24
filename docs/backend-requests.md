@@ -51,7 +51,8 @@
 
 ## 열린 요청
 
-### R-46 부산진구 실서버 센터 ID MFC-SEED-01 → MFC-BJG-01 — 보통 (2026-11-24, 사용자 → 백엔드)
+### R-46 부산진구 실서버 센터 ID MFC-SEED-01 → MFC-BJG-01 — **해소** (2026-11-24, 사용자 → 백엔드)
+- **해소(11-24)**: PC1 백엔드 LAN 반영(서비스 DB 25개 86,896줄·설정 pmart-config ef38be5·검색 색인 503+503, 옛 ID 별칭 없음 — 옛 MFC-SEED-01 은 404·403·빈 결과, LOT ID `LOT-MFC-SEED-01-…`·이력 열은 그대로). 회신 pmart-backend docs/handoff/simulator/mfc/2026-11-24-reply-r46-center-id.md(3871061b). 시뮬레이터: src/config.ts 부산진구 지점 id·기본 mfcId → MFC-BJG-01, mockId 없앰. 대조(새 토큰, GET /locations?mfcId=MFC-BJG-01): 16,853칸, 위치 파일 9,185칸 빠짐 0·위치 차이 0, ACTIVE 9,086·CLOSED 7,767, 재고 1,334줄 9,671개 — 어긋남 0.
 - 요청: 사용자 2026-11-24 "부산진구 실서버 센터 ID 바꿔"(앞서 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔" — MOCK 만 바꿔 둠, src/config.ts mockId).
 - 시뮬레이터는 바꿀 수 없음(백엔드 읽기 전용, 계약에 없는 이름을 추측해 부르지 않음). 실서버 센터 ID 는 center-master 정본 — 백엔드가 정함.
 - 백엔드에서 MFC-SEED-01 이 쓰이는 곳(11-24 pmart-backend d1109ecd 읽어 봄): deploy/lan/seed(7 파일), deploy/lan/.config-repo(4), deploy/lan/checks(3) 등 — 그 밖에 LAN DB 의 센터 소속 데이터(위치 16,853칸·재고 1,334줄·작업·출고·주문·작업자 계정 소속 등)가 센터 ID 를 들고 있어 서비스마다 옮기기가 필요할 것으로 봄(확인은 백엔드).

@@ -57,13 +57,13 @@ export interface SimParams {
   splitOverWeightG: number;
   /** 인계 fence 유효시간. 백엔드 설정 기본 3분 [확정] (사용자 결정 D-2 2026-11-08, pmart-backend deploy/lan/.config-repo/mfc-fulfillment-service.yml handover-fence-ttl) — 계약은 fenceExpiresAt 만 정의 */
   fenceTtlSec: number;
-  /** 시작 시각(시) — 고객 주문 운영 08:00~24:00 (center-master MFC-SEED-01) */
+  /** 시작 시각(시) — 고객 주문 운영 08:00~24:00 (center-master MFC-BJG-01, 옛 MFC-SEED-01) */
   startHour: number;
   seed: number;
 }
 
 export const DEFAULT_PARAMS: SimParams = {
-  mfcId: 'MFC-SEED-01',
+  mfcId: 'MFC-BJG-01', // 2026-11-24 R-46 백엔드가 MFC-SEED-01 → MFC-BJG-01 로 바꿈(별칭 없음, pmart-backend docs/handoff/simulator/mfc/2026-11-24-reply-r46-center-id.md)
   ordersPerHour: 40,
   workers: 10,
   packingStations: 4,
@@ -283,8 +283,7 @@ export interface MfcSite {
 // 화면 이름에 'N호점' 을 붙이지 않고, 1호점은 '부산진구'(사용자 2026-11-24 "1호점2호점 아니니까 다 빼. 그리고 부산이 아니라 부산진구 라고 적어야돼")
 export const MFC_SITES: readonly MfcSite[] = [
   {
-    id: 'MFC-SEED-01',
-    mockId: 'MFC-BJG-01', // MOCK 만 — 실서버 센터 ID 는 MFC-SEED-01 그대로(백엔드 이름 바꿈 없이 추측해 부르지 않음)
+    id: 'MFC-BJG-01', // 실서버도 MFC-BJG-01(R-46, 2026-11-24 백엔드 반영 — 옛 MFC-SEED-01 은 404·403, 별칭 없음). LOT ID(LOT-MFC-SEED-01-…)는 그대로 — opaque
     name: '부산진구 MFC',
     address: '부산광역시 부산진구 동천로 109, 삼한골드게이트',
     short: '부산진구',

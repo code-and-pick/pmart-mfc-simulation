@@ -31,7 +31,7 @@ describe('입고 하차 — 롤테이너 단위', () => {
 
 describe('입고 상자가 넘칠 때', () => {
   it('입고재고 팔레트·하차 칸이 다 차도 그 자리 위로 쌓고 다른 구역(패킹)으로 안 감', () => {
-    for (const mfcId of ['MFC-SEED-01', 'MFC-SEJ-01', 'MFC-CHC-01', 'MFC-BNG-01']) {
+    for (const mfcId of ['MFC-BJG-01', 'MFC-SEJ-01', 'MFC-CHC-01', 'MFC-BNG-01']) {
       const s = new Simulation({ ...DEFAULT_PARAMS, mfcId, ordersPerHour: 0, firstInboundAfterSec: 1e9 });
       const place = (s as unknown as { placeOnDock(it: unknown): void }).placeOnDock.bind(s);
       const ok = new Set(s.layout.dockSlots.map((d) => `${d.pos.x.toFixed(2)},${d.pos.z.toFixed(2)}`));

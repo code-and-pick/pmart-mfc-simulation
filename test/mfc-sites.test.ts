@@ -11,7 +11,7 @@ describe('MFC 지점', () => {
 
   // 부산진구(1호점)는 2026-11-24 다시 설계(R-45) — 목포는 옛 1호점 평면(buildLayout) 그대로
   it('목포는 평면·랙·칸·MOCK 상품 수가 옛 1호점 평면과 같고 센터 ID·이름만 다르다', () => {
-    const a = { layout: buildLayout(), catalog: new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-SEED-01').id }).catalog };
+    const a = { layout: buildLayout(), catalog: new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-BJG-01').id }).catalog };
     const b = new Simulation({ ...DEFAULT_PARAMS, mfcId: setActiveSite('MFC-MOKPO-01').id });
     expect(b.params.mfcId).toBe('MFC-MOKPO-01');
     expect(b.layout.racks.length).toBe(a.layout.racks.length);
@@ -103,12 +103,12 @@ describe('부산남구 지점', () => {
   }, 120_000);
 });
 
-// 부산진구 MOCK 센터 ID(사용자 2026-11-24 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔") — 실서버 ID 는 그대로
+// 부산진구 센터 ID MFC-BJG-01 — MOCK(사용자 11-24) 뒤 실서버도(R-46, 11-24 백엔드 반영)
 describe('부산진구 MOCK 센터 ID', () => {
   afterEach(() => setActiveSite(undefined));
-  it('MOCK 은 MFC-BJG-01 로 보이고 돈다, 지점 ID(실서버)는 MFC-SEED-01', async () => {
-    const site = setActiveSite('MFC-SEED-01');
-    expect(site.id).toBe('MFC-SEED-01');
+  it('MOCK·실서버 모두 MFC-BJG-01 로 보이고 돈다', async () => {
+    const site = setActiveSite('MFC-BJG-01');
+    expect(site.id).toBe('MFC-BJG-01');
     const s = new Simulation({ ...DEFAULT_PARAMS, mfcId: site.id, ordersPerHour: 60 });
     expect(s.centerId).toBe('MFC-BJG-01');
     expect(s.centerLabel).toContain('MFC-BJG-01');
