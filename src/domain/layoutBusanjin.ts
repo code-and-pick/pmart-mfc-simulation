@@ -81,6 +81,9 @@ const SOUTH_AISLE = (BSJ_BD - 0.1 - (19.83 + 0.1) - 4 * RACK_DEPTH) / 3;
 const SOUTH_PAIR_Z = (k: number) => 19.83 + 0.1 + SOUTH_AISLE + k * (SOUTH_AISLE + 2 * RACK_DEPTH);
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 줄 서쪽 끝 x(저온·남쪽 띠 같은 선 — 사용자 "모든 줄을 서쪽 끝에 맞춤") */
 const COLD = { x0: X(5.7 + DW + SH), bandZ: 1.2, rowX0: X(6.4 + DW + SH) } as const;
+/** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리) 서쪽 끝 = 피킹 랙 줄 서쪽 끝(방 가운데 맞춤, 냉동·냉장 같은 폭 15.15 m)
+ *  (사용자 2026-11-24 "냉장냉동에 보충재고랙도 적치랙 시작하는 위치에 맞추게 동쪽으로 1칸 밀어서 놔.") */
+const BAND_X0 = (R.A.x0 + R.A.x1) / 2 - (6 * RACK_LEN + 1.4 + 5 * RACK_LEN) / 2;
 
 const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 24, WH: 22, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
@@ -117,8 +120,8 @@ export function buildBusanjinLayout(): Layout {
     const z0 = room.z0 + 0.1;
     const z1 = room.z1 - 0.1;
     // 북쪽 벽 띠: 보충재고 랙 7(남쪽을 봄) → 입고재고 팔레트 2
-    resRacks.forEach((r, i) => out.push(place(r, COLD.x0 + 0.1 + RACK_LEN * (i + 0.5), z0 + 0.05 + RACK_DEPTH / 2, 'x', 1)));
-    const palX = COLD.x0 + 0.1 + resRacks.length * RACK_LEN + 0.4;
+    resRacks.forEach((r, i) => out.push(place(r, BAND_X0 + RACK_LEN * (i + 0.5), z0 + 0.05 + RACK_DEPTH / 2, 'x', 1)));
+    const palX = BAND_X0 + resRacks.length * RACK_LEN + 0.4;
     [0, 1].forEach((j) => addReserve(`${rid}-${j + 3}`, temp, palX + j * (P + 0.3), z0 + 0.05, { x: palX + j * (P + 0.3) + P / 2, z: z0 + 0.05 + P + 0.4 }, 'RECEIVING'));
     const zA = z0 + COLD.bandZ;
     const a = (z1 - zA - pairs.length * 2 * RACK_DEPTH) / (pairs.length + 1);
@@ -347,7 +350,7 @@ export function buildBusanjinLayout(): Layout {
 
   // ── 바닥 표시: 저온 북쪽 벽 띠(보충 | 입고), 입고창고(대형재고 | 보충재고) ──
   const coldArea = (room: Rect, color: 'FROZEN' | 'CHILLED'): StoreArea => {
-    const z0 = room.z0 + 0.1, z1 = z0 + COLD.bandZ, x0 = COLD.x0, x1 = palEnd(), div = COLD.x0 + 0.1 + 7 * RACK_LEN + 0.2;
+    const z0 = room.z0 + 0.1, z1 = z0 + COLD.bandZ, x0 = BAND_X0 - 0.1, x1 = palEnd(), div = BAND_X0 + 7 * RACK_LEN + 0.2;
     return {
       floor: [x0, z0, x1, z1],
       color,
@@ -359,7 +362,7 @@ export function buildBusanjinLayout(): Layout {
     };
   };
   function palEnd() {
-    return COLD.x0 + 0.1 + 7 * RACK_LEN + 0.4 + 2 * P + 0.3 + 0.3;
+    return BAND_X0 + 7 * RACK_LEN + 0.4 + 2 * P + 0.3 + 0.3;
   }
   // 입고창고 칸 나눔 선: 대형재고 | 보충재고 랙·입고재고
   const WH_DIV = [3.75, 5.55] as const;
