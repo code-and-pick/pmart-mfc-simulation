@@ -12,14 +12,9 @@ import { SCENE } from '../colors';
 
 /** 통로 가운데 선(점선 + 화살표). [x0, z0, x1, z1] — 배치의 빈 띠(벽 사이)에서 */
 function walkways(L: Layout): [number, number, number, number][] {
+  if (L.geo.walkways) return L.geo.walkways;
   // 세종(R-41): 북쪽 통로(입고 → 냉장·냉동 북쪽 문), 냉동 동쪽 세로 통로, 남쪽 통로(냉장·냉동 남쪽 문 → 패킹)
-  if (L.variant === 'BUSANJIN')
-    return [
-      [16.4, 1.3, 20.4, 1.3], // 승강기 별동 ~ 입고·검수 (건물 x 10.5 부터 — layoutBusanjin BSJ_OX)
-      [15.25, 6.6, 15.25, 23.8], // 서쪽 통로(패킹 동쪽 ~ 냉동·냉장 서쪽 벽 사이)
-      [36.75, 1.0, 36.75, 21.2], // 냉동·냉장 동쪽 ~ 입고창고 세로 통로
-      [16.9, 22.19, 47.1, 22.19],
-    ];
+  // 부산진구는 geo.walkways(배치에서 계산)
   if (L.variant === 'BUSAN_NAMGU')
     return [
       [1.2, 0.75, 23.4, 0.75],

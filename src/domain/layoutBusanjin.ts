@@ -460,6 +460,18 @@ export function buildBusanjinLayout(): Layout {
     cartDepotPerRow: 18,
     shipRackFacesNorth: true,
     riderParkingAlongZ: true,
+    // 바닥 통로 점선 — 배치에서 계산(전엔 Decor 에 손으로 둔 옛 값이라 냉동·냉장 방·패킹 구역 안을 지났음)
+    walkways: (() => {
+      const westX = (R.PK.x1 + R.A.x0) / 2; // 패킹 ~ 냉동·냉장 서쪽 벽 통로 가운데
+      const eastX = (R.A.x1 + R.CH.x0) / 2; // 냉동·냉장 동쪽 벽 ~ 상온 통로 가운데
+      const southZ = SOUTH_PAIR_Z(1) - SOUTH_AISLE / 2; // 남쪽 띠 두 쌍 사이 통로 가운데
+      return [
+        [R.ANNEX.x1 + 0.3, 1.25, R.RCV.x0 - 0.2, 1.25], // 승강기 별동 ~ 입고·검수
+        [westX, R.ANNEX.z1 + 0.3, westX, southZ], // 서쪽 통로
+        [eastX, 1.0, eastX, southZ], // 동쪽 통로(입고·검수 ~ 입고창고 사이부터)
+        [westX, southZ, R.CQ.x0 - 0.3, southZ], // 남쪽 띠 가운데 통로
+      ] as [number, number, number, number][];
+    })(),
     zoneCardFullSize: ['WH', 'RCV', 'C-H'],
     zoneCardScale: { B: 0.9, 'C-H': 0.9 }, // 냉장·상온 카드 아주 조금 작게(사용자 2026-11-24 "부산진구 냉장이랑 상온 구역카드 아주 조금만 사이즈 줄여줘") // 상온 카드도(동쪽 띠 폭 7.7 m 에 맞춰 줄던 것 — 사용자 2026-11-24 "상온입고창고 구역카드보다 상온구역카드가 작으면 상온구역카드 크기도 맞춰서 키워") // 입고·검수·입고창고 카드 = 다른 큰 구역 카드 높이(구역 폭에 맞춰 줄이지 않음 — 사용자 2026-11-24 "입고검수구역카드랑 상온입고창고구역 카드 작으니까 다른 구역카드 크기랑 맞춰")
     returnTable: { x: X(0.1 + 0.05 + 0.35), z: 10.65, vertical: true }, // 재진열 대기: 거치대 줄 앞(남쪽) 서쪽 벽에 붙임
