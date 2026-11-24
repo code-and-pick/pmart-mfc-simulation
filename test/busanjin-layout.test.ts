@@ -51,7 +51,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   it('배치(그림대로) — 상온 동쪽 띠 C·D·E·F, 남쪽 띠 G·H, 물리 줄마다 한 코드 줄, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
     const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
     const ch2 = zr('C-H2');
-    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (['D02', 'D03'].includes(r.group) && r.rackNo <= 5) || (['C01', 'C02'].includes(r.group) && r.rackNo >= 6)).toBe(r.cz > ch2.z0);
+    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (['D02', 'D03'].includes(r.group) && r.rackNo <= 2) || (['C01', 'C02'].includes(r.group) && r.rackNo >= 6)).toBe(r.cz > ch2.z0);
     // 같은 z·같은 묶음(1.25 m 간격으로 이어진 랙)은 같은 코드 줄, 랙 번호가 1씩 늘어남
     const rows = new Map<string, (typeof L.racks)[number][]>();
     for (const r of L.racks.filter((x) => !x.reserve)) rows.set(`${r.temp}:${r.cz.toFixed(3)}`, [...(rows.get(`${r.temp}:${r.cz.toFixed(3)}`) ?? []), r]);
