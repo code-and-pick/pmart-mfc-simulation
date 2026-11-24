@@ -440,7 +440,8 @@ export function buildBusanjinLayout(): Layout {
     rollContainers: [X(22.8), X(23.6)].map((x) => ({ x, z: 0.7 })),
     // 구역 카드 x — 입고·검수 카드를 동쪽으로(냉동 카드와 안 겹침)
     // 냉동·냉장 카드는 서쪽으로 — 피킹 랙 서쪽 묶음(6랙) 가운데 위(사용자 2026-11-24 "냉동냉장구역 카드 서쪽으로 밀자")
-    zoneCardX: { RCV: X(21.5), A: BAND_X0 + 3 * RACK_LEN, B: BAND_X0 + 3 * RACK_LEN },
+    // 입고·검수 카드도 냉동 카드 뒤(북쪽) 같은 x 한 줄(사용자 2026-11-24 "부산진구 입고검수 구역카드도 냉동 뒤에 일렬로 위치 맞춰")
+    zoneCardX: { RCV: BAND_X0 + 3 * RACK_LEN, A: BAND_X0 + 3 * RACK_LEN, B: BAND_X0 + 3 * RACK_LEN },
     quarantineRacks: {
       ...Object.fromEntries(([['AQ', R.A], ['BQ', R.B]] as const).map(([id, room]) => {
         const r = q(room);
