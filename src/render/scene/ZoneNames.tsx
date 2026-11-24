@@ -195,6 +195,11 @@ export function zoneTags(L: Layout): Tag[] {
         w = room;
         h = w / aspect;
       }
+      const sc = L.geo.zoneCardScale?.[z.id];
+      if (sc) {
+        w *= sc;
+        h *= sc;
+      }
       const cx = L.geo.zoneCardX?.[z.id] ?? (same ? (r.x0 + r.x1) / 2 : (wall.x0 + wall.x1) / 2);
       // 냉장·냉동 카드는 방 북쪽 벽(z 1.7) 대신 건물 북쪽 외벽(z 0) 면에 — 입고·검수 카드와 한 줄(사용자 2026-11-22 "냉장냉동 구역카드도 입고검수 카드 위치에 맞게 북쪽으로 더 밀어")
       // 방이 건물 북쪽 끝에 붙은 곳만(부산진구는 냉동이 입고·검수 남쪽, 냉장이 냉동 남쪽 — 자기 북쪽 벽에, 사용자 2026-11-24 "냉동 구역카드는 어디갔니, 냉장구역카드랑 입고검수카드랑 겹치잖아")

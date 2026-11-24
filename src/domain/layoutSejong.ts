@@ -424,6 +424,9 @@ export function buildSejongLayout(): Layout {
     officeTable,
     rollContainers: [35.2, 36.1, 37.0].map((x) => ({ x, z: 5.6 })),
     cartDepotVertical: true,
+    // 상온 카드 2개는 입고창고 카드 크기로, 사무·휴게 카드는 조금 작게(사용자 2026-11-24 "세종 상온입고창고 구역카드보다 상온구역카드가 작으면 상온구역카드 크기도 맞춰서 키워. 그리고 사무휴게 구역카드 사이즈는 조금만 줄이고")
+    zoneCardFullSize: ['C-H', 'C-H2'],
+    zoneCardScale: { OFF: 0.8 },
     // 되돌릴 상품 탁자 — 카트 줄 남쪽 끝(북쪽으로 튀어나오지 않게, 사용자 2026-11-24 "그 앞에 하얀 책상이 튀어나가잖아 그건 남쪽으로 옮기고")
     returnTable: { x: R.PK.x1 + 2.0 - 0.6, z: R.PK.z0 + 0.24 + 19 * 0.28 + 0.24 + 0.6 - DEPOT_NORTH },
   };
