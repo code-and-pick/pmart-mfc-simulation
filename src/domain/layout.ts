@@ -162,6 +162,8 @@ export interface SiteGeo {
   /** 장바구니 거치대 카트 줄 수(기본 1) — 줄마다 남쪽으로 cartDepotRowGap(m) 띄움(춘천, 사용자 2026-11-24 "가로로 돌리고 간격 두고 2줄로") */
   cartDepotRows?: number;
   cartDepotRowGap?: number;
+  /** 장바구니 거치대 줄마다 그리는 카트 대수(기본 DECOR.cartDepotDrawn ÷ 줄 수) — 거치대 자리가 넓은 지점(부산진구)에서 줄을 길게 */
+  cartDepotPerRow?: number;
   /** 격리 구역 흰 랙 자리(구역 id → 랙 사각형들). 없으면 화면 기본(저온 서쪽 벽 세로 2개·상온 남쪽 가로 2개) */
   quarantineRacks?: Record<string, Rect[]>;
   /** 승강기 문 줄 z(기본 0 = 건물 북쪽 벽, 승강기는 그 북쪽). 부산진구는 별동이 건물 안이라 문이 남쪽 2.4 m(승강기 z 0~2.4) */

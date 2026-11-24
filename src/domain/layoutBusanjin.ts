@@ -61,8 +61,9 @@ const R = {
   // 냉동·냉장 각 0.9 m 씩 줄여 남쪽 띠에 등 맞댄 쌍 하나 더(사용자 2026-11-24 "남쪽 상온 랙 2줄만 있는데 거기로 2줄 더 이동 시켜봐" → "냉동·냉장 0.9 m씩")
   A: { x0: X(5.6 + DW), z0: 2.55, x1: X(25.7), z1: 11.19 }, // 냉동 47평(18.1 × 8.64 m, 격리 포함)
   B: { x0: X(5.6 + DW), z0: 11.19, x1: X(25.7), z1: 19.83 }, // 냉장 47평
-  WH: { x0: X(26.8), z0: 0, x1: X(37), z1: 8.4 }, // 상온 입고창고 26평(10.2 × 8.4): 대형재고 10 → 입고재고 5 → 보충재고 랙 8 | 7
-  CH: { x0: X(25.7), z0: 8.4, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠(가로 줄 4 — C 7랙 2줄, D 남은 2랙 2줄)
+  // 입고창고·동쪽 상온을 동쪽으로 1.0 m 밀어 입고·검수 ~ 입고창고 통로 1.1 → 2.1 m, 입고창고는 남쪽으로 늘려 26평 그대로(사용자 2026-11-24 "동쪽으로 밀고 남쪽으로 내려오게 얇게 배치해서 입고검수랑 상온 입고창고 구역 통로 늘리자" → "입고창고만 평수 유지")
+  WH: { x0: X(27.8), z0: 0, x1: X(37), z1: 9.31 }, // 상온 입고창고 26평(9.2 × 9.31): 대형재고 10 → 입고재고 5 → 보충재고 랙 5 | 5 + 5
+  CH: { x0: X(26.7), z0: 9.31, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠 33평(가로 줄 4 — C 7랙 2줄, D 남은 2랙 2줄)
   CH2: { x0: X(5.6 + DW), z0: 19.83, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 띠(등 맞댄 2쌍: F02 | F03, G | H)
   PK: { x0: X(0), z0: 13.55, x1: X(3.9 + DW), z1: BSJ_BD }, // 패킹 20평(5.9 × 11.03) — 패킹대 4 | 4 가 구역 안에
   SHIP: { x0: X(0.1), z0: 6.1, x1: X(3.4), z1: 8.1 }, // 인계 대기 2평(3.3 × 2.0) — 승강기 별동 남쪽 벽 앞(사용자 2026-11-24 "장바구니 거치대 시작점이랑 인계랙 위치 바꿔줘")
@@ -75,7 +76,7 @@ const SOUTH_PAIR_Z = (k: number) => 19.83 + 0.1 + SOUTH_AISLE + k * (SOUTH_AISLE
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 줄 서쪽 끝 x(저온·남쪽 띠 같은 선 — 사용자 "모든 줄을 서쪽 끝에 맞춤") */
 const COLD = { x0: X(5.7 + DW), bandZ: 1.2, rowX0: X(6.4 + DW) } as const;
 
-const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 41, WH: 18, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
+const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 33, WH: 18, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
 export function buildBusanjinLayout(): Layout {
   // ── 옛 1호점 랙 코드 고르기 ─────────────────────────────
@@ -151,7 +152,7 @@ export function buildBusanjinLayout(): Layout {
   // 넓은 칸 랙 H01-02~06·H02-07 이 남게 H01-01~06 + H02-02~07.
   const ambient: Rack[] = [];
   // 동쪽 띠(그림대로 가로 줄): 한 면 줄 4(남쪽을 봄), 서쪽 끝·가운데 통로 한 선 — 7랙 4 | 3. 북쪽부터 C → D(E·F 2줄씩과 D 앞 5랙씩은 남쪽 띠 북쪽 쌍으로, D02·D03-06~07 만 남음)
-  const EAST = { x0: X(26.9), z0: 8.7, z1: R.CH.z1 - 0.23 } as const;
+  const EAST = { x0: X(26.9), z0: R.CH.z0 + 0.3, z1: R.CH.z1 - 0.23 } as const;
   const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 6, 2), run('D03', 6, 2)];
   const ePitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, EAST.x0 + (i < 4 ? (i + 0.5) * RACK_LEN : 4 * RACK_LEN + 1.0 + (i - 3.5) * RACK_LEN), EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
@@ -181,16 +182,23 @@ export function buildBusanjinLayout(): Layout {
     face(south, SOUTH_PAIR_Z(k) + 1.5 * RACK_DEPTH, 1);
   });
 
-  // ── 상온 입고창고(26평): 북쪽 대형재고 10(5 × 2줄, 사이 통로) → 입고재고 팔레트 5(한 줄) → 보충재고 랙 8 | 7(등 맞댄 한 쌍, 서쪽 끝 맞춤) ──
+  // ── 상온 입고창고(26평): 북쪽 대형재고 10(5 × 2줄, 사이 통로) → 입고재고 팔레트 5(한 줄) → 보충재고 랙 5 | 5(등 맞댄 한 쌍) + 남쪽 벽 5(북쪽을 봄), 서쪽 끝 맞춤 ──
   const whReserve: Rack[] = [];
+  /** 입고창고 남쪽 벽 문 가운데 x = 동쪽 띠 가운데 통로 */
+  const WH_DOOR_X = EAST.x0 + 4 * RACK_LEN + 0.5;
   const whCol = (c: number) => (R.WH.x0 + R.WH.x1) / 2 - (5 * P + 4 * 0.15) / 2 + c * (P + 0.15);
   {
     let n = 0;
     for (const [z0, sz] of [[0.2, 1.8], [2.3, 1.8]] as const) for (let c = 0; c < 5; c++) addReserve(`WB-${String(++n).padStart(2, '0')}`, 'AMBIENT', whCol(c), z0, { x: whCol(c) + P / 2, z: sz }, 'BULK');
     const rs = resOld('AMBIENT', BUSANJIN_RACKS.reserveAmbient);
+    // 폭 9.2 m 에 8랙(10 m)이 안 들어가 5랙씩 세 면: R1~5 쌍 북쪽 면, R6~10 쌍 남쪽 면, R11~15 남쪽 벽(쌍과 마주 봄, 사이 통로 1.35 m)
     rs.forEach((r, i) => {
-      const south = i >= 8;
-      whReserve.push(place(r, R.WH.x0 + 0.1 + ((south ? i - 8 : i) + 0.5) * RACK_LEN, (south ? 6.95 : 6.5) + RACK_DEPTH / 2, 'x', south ? 1 : -1));
+      const row = Math.floor(i / 5);
+      const cz = row === 0 ? 6.5 + RACK_DEPTH / 2 : row === 1 ? 6.95 + RACK_DEPTH / 2 : R.WH.z1 - 0.1 - 0.05 - RACK_DEPTH / 2;
+      // 남쪽 벽 줄은 동쪽 띠로 가는 문(가운데 통로 x) 앞을 비움: R11~13 | 문 | R14~15
+      const c = i % 5;
+      const x = row === 2 && c >= 3 ? WH_DOOR_X + 0.75 + (c - 3 + 0.5) * RACK_LEN : R.WH.x0 + 0.1 + (c + 0.5) * RACK_LEN;
+      whReserve.push(place(r, x, cz, 'x', row === 1 ? 1 : -1));
     });
   }
   // 상온 입고재고 팔레트 5(RCV-A-02) — 대형재고 남쪽 한 줄(북쪽에서 꺼냄)
@@ -245,8 +253,8 @@ export function buildBusanjinLayout(): Layout {
   // 입고·검수 ↔ 입고창고 문, 입고창고 남쪽 문(상온 동쪽 띠 가운데 통로)
   // 입고창고 서쪽 벽: 북쪽 문(입고·검수 통로), 남쪽 끝 문(상온 동쪽 띠). 남쪽 벽은 막힘
   // 서쪽 벽 문 3: 대형재고 사이 통로(입고·검수 통로 쪽), 입고재고 앞 통로, 남쪽 보충재고 랙 끝 통로
-  vWall(R.WH.x0, 0, R.WH.z1, [[0.35, 2.25], [3.4, 4.4], [7.45, 8.3]]);
-  hWall(R.WH.z1, R.WH.x0, R.WH.x1, [door(EAST.x0 + 4 * RACK_LEN + 0.5)]);
+  vWall(R.WH.x0, 0, R.WH.z1, [[0.35, 2.25], [3.4, 4.4], [7.5, 8.65]]);
+  hWall(R.WH.z1, R.WH.x0, R.WH.x1, [[WH_DOOR_X - 0.7, WH_DOOR_X + 0.7]]); // 문 폭 1.4 m(남쪽 벽 보충재고 랙 사이)
   // 패킹 북쪽 벽은 없앰, 장바구니 거치대 북쪽에 벽 하나(서쪽 벽 ~ 거치대 동쪽 끝 — 사용자 2026-11-24 "패킹구역 북쪽에 있는벽 없애고 장바구니 거치대 북쪽으로 벽 하나 놔둬줘")
   hWall(8.9, X(0), X(3.9 + DW));
 
@@ -326,7 +334,9 @@ export function buildBusanjinLayout(): Layout {
   // 장바구니 거치대: 냉동·냉장 서쪽 벽 앞 세로(카트 줄 x ≈ OX+4.4, 냉동 서쪽 문과 냉장 서쪽 문 사이)
   // 장바구니 거치대: 승강기 별동 남쪽 문 서쪽, 가로 2줄(줄마다 카트 약 10대, 카트 x OX+0.5~3.0) — 문 앞은 비움
   // (인계 대기 칸과 자리 바꿈 — 서쪽 통로 가운데, 가로 2줄)
-  const cartDepot = { x: X(2.9 + DW / 2), z: 10.2 }; // 넓어진 거치대 자리 가운데로
+  // 넓어진 거치대 자리에 줄을 길게(줄마다 16대, 카트 x OX+0.5~4.7 — 사용자 2026-11-24 "넓어진 만큼 장바구니 거치대도 더 넓게 놓자"). 동쪽 끝 카트 = cartDepot.x + 0.7
+  // 한 줄만, 북쪽 벽(z 8.9)에서 조금 떨어지게 — 카트 줄 가운데 z 9.45(사용자 2026-11-24 "장바구니 거치대 일렬로 하나만 놓자. 앞에 줄 없애고, 벽에서 조금만 떨어지게 해.")
+  const cartDepot = { x: X(4.0), z: 10.05 }; // 동쪽 끝이 회수 반입대(X 5.4)에 안 닿게, 줄 = cartDepot.z − 0.6
   const points: Layout['points'] = {
     truckDoor: { x: X(2.15), z: 3.0 },
     truckDock: { x: 20, z: 3.0 }, // 서쪽에서 들어오는 동서 길(geo.truckFromWest, 사용자 2026-11-24 "도로가 남북쪽으로 뻗어져있는데 서쪽에서 들어오게 도로 90도로 꺾어줘") — z 는 차 가운데, x 는 길 위 거리 기준값
@@ -369,8 +379,9 @@ export function buildBusanjinLayout(): Layout {
       CQ: [0, 1].map((i) => ({ x0: R.CQ.x1 - 0.05 - RACK_DEPTH, z0: R.CQ.z0 + 0.1 + i * (RACK_LEN + 0.1), x1: R.CQ.x1 - 0.05, z1: R.CQ.z0 + 0.1 + i * (RACK_LEN + 0.1) + RACK_LEN })),
     },
     cartDepotVertical: false,
-    cartDepotRows: 2,
+    cartDepotRows: 1,
     cartDepotRowGap: 1.6,
+    cartDepotPerRow: 16,
     returnTable: { x: X(5.4), z: 9.75, vertical: true }, // 거치대 북쪽 벽이 길어져(DW) 벽 남쪽, 거치대 동쪽 끝 옆으로
   };
 

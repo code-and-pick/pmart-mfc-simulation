@@ -612,13 +612,13 @@ export function Facility() {
         <group position={[L.points.cartDepot.x, 0, L.points.cartDepot.z]} rotation={[0, L.geo.cartDepotVertical ? Math.PI / 2 : 0, 0]}>
           {/* 줄이 여럿이면(춘천 2줄) 같은 대수를 나눠 남쪽으로 띄워 놓는다 */}
           {Array.from({ length: L.geo.cartDepotRows ?? 1 }, (_, r) => (
-            <CartDepot key={r} x={0.7} z={-0.6 + r * (L.geo.cartDepotRowGap ?? 1.5)} count={Math.ceil(DECOR.cartDepotDrawn / (L.geo.cartDepotRows ?? 1))} />
+            <CartDepot key={r} x={0.7} z={-0.6 + r * (L.geo.cartDepotRowGap ?? 1.5)} count={L.geo.cartDepotPerRow ?? Math.ceil(DECOR.cartDepotDrawn / (L.geo.cartDepotRows ?? 1))} />
           ))}
         </group>
       </StaticMerge>
       {/* 시작점 표지판은 카트 줄 가운데(사용자 2026-11-21 "장바구니 중앙으로") */}
       <group position={[L.points.cartDepot.x, 0, L.points.cartDepot.z]} rotation={[0, L.geo.cartDepotVertical ? Math.PI / 2 : 0, 0]}>
-        <StartMark x={0.7 - ((Math.ceil(DECOR.cartDepotDrawn / (L.geo.cartDepotRows ?? 1)) - 1) * 0.28) / 2} z={-0.6} />
+        <StartMark x={0.7 - ((L.geo.cartDepotPerRow ?? Math.ceil(DECOR.cartDepotDrawn / (L.geo.cartDepotRows ?? 1))) - 1) * 0.28 / 2} z={-0.6} />
       </group>
       <StaticMerge>
         <OfficeDecor />

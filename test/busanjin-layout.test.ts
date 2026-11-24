@@ -102,7 +102,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect((W * L.buildingDepth) / 3.3058 - py('ANNEX_')).toBeCloseTo(265, 0);
     expect(py('RCV')).toBeCloseTo(12, 0);
     expect(py('PK')).toBeGreaterThanOrEqual(12); // 사용자 "패킹 구역 확보" — 15평
-    expect(py('WH')).toBeGreaterThanOrEqual(18); // 사용자 "입고 창고 크기 늘리고" — 24평
+    expect(py('WH')).toBeCloseTo(25.9, 0); // 사용자 "입고창고만 평수 유지"(2026-11-24) — 동쪽으로 밀고 남쪽으로 늘려도 26평
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').every((r) => r.rect.x0 >= zr('WH').x0 && r.rect.z1 <= zr('WH').z1)).toBe(true);
     expect(py('A')).toBeCloseTo(47.3, 0); // 58 → 남북 0.9 m(남쪽 띠 2쌍) → 동서 2.0 m(패킹·장바구니 거치대 넓힘)(사용자 2026-11-24)
     expect(py('B')).toBeCloseTo(47.3, 0);
