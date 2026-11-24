@@ -134,10 +134,18 @@ export function buildBusanjinLayout(): Layout {
       const top = zA + k * (a + 2 * RACK_DEPTH);
       coldAisles[temp].push([top, top + a]);
     }
+    // 동쪽 묶음 쌍 수가 서쪽보다 적으면(냉장 서쪽 4 · 동쪽 3) 동쪽 쌍은 남북으로 따로 같은 간격(사용자 2026-11-24 "냉장구역 서쪽4줄 동쪽 3줄랙 앞뒤 양옆 간격 남은 거 보고 중앙에 적절하게 재배치")
+    const eastPairs = pairs.filter(([n, s2]) => n.length > W || s2.length > W).length;
+    const aE = (z1 - zA - eastPairs * 2 * RACK_DEPTH) / (eastPairs + 1);
+    let ke = 0;
     pairs.forEach(([north, south], k) => {
       const top = zA + a + k * (a + 2 * RACK_DEPTH);
-      north.forEach((r, i) => out.push(place(r, xAt(i, north.length), top + RACK_DEPTH / 2, 'x', -1)));
-      south.forEach((r, i) => out.push(place(r, xAt(i, south.length), top + 1.5 * RACK_DEPTH, 'x', 1)));
+      const hasEast = north.length > W || south.length > W;
+      const topE = eastPairs < pairs.length && hasEast ? zA + aE + ke * (aE + 2 * RACK_DEPTH) : top;
+      if (hasEast) ke++;
+      const zOf = (i: number) => (i < W ? top : topE);
+      north.forEach((r, i) => out.push(place(r, xAt(i, north.length), zOf(i) + RACK_DEPTH / 2, 'x', -1)));
+      south.forEach((r, i) => out.push(place(r, xAt(i, south.length), zOf(i) + 1.5 * RACK_DEPTH, 'x', 1)));
     });
     return out;
   };
@@ -155,7 +163,7 @@ export function buildBusanjinLayout(): Layout {
     [run('B03', 1, 11), run('B04', 1, 11)],
     [run('B05', 1, 11), run('B06', 1, 11)],
     [run('B07', 1, 5), run('B01', 12, 5)],
-  ], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR', false, 5);
+  ], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR', true, 5); // 동서 가운데(center)
 
   // ── 상온 C~H(그림대로) ─────────────────────────────────
   // 동쪽 세로 띠: 한 면 가로 줄 8(남쪽을 봄), 줄마다 서쪽 4 | 통로 1.0 m | 동쪽 나머지, 북쪽부터 C → D → E → F.
