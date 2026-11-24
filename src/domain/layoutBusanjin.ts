@@ -424,7 +424,8 @@ export function buildBusanjinLayout(): Layout {
     officeTable: null, // 그림에 휴게·사무 없음
     rollContainers: [X(22.8), X(23.6)].map((x) => ({ x, z: 0.7 })),
     // 구역 카드 x — 입고·검수 카드를 동쪽으로(냉동 카드와 안 겹침)
-    zoneCardX: { RCV: X(21.5) },
+    // 냉동·냉장 카드는 서쪽으로 — 피킹 랙 서쪽 묶음(6랙) 가운데 위(사용자 2026-11-24 "냉동냉장구역 카드 서쪽으로 밀자")
+    zoneCardX: { RCV: X(21.5), A: BAND_X0 + 3 * RACK_LEN, B: BAND_X0 + 3 * RACK_LEN },
     quarantineRacks: {
       ...Object.fromEntries(([['AQ', R.A], ['BQ', R.B]] as const).map(([id, room]) => {
         const r = q(room);
