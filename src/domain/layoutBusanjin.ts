@@ -324,7 +324,7 @@ export function buildBusanjinLayout(): Layout {
   const cartDepot = { x: X(2.9), z: 10.2 };
   const points: Layout['points'] = {
     truckDoor: { x: X(2.15), z: 3.0 },
-    truckDock: { x: 20, z: 3.6 }, // 서쪽 마당 세로 차로(geo.truckLaneX) — z 는 서 있을 때 차 가운데, x 는 차로 위 거리 기준값
+    truckDock: { x: 20, z: 3.0 }, // 서쪽에서 들어오는 동서 길(geo.truckFromWest, 사용자 2026-11-24 "도로가 남북쪽으로 뻗어져있는데 서쪽에서 들어오게 도로 90도로 꺾어줘") — z 는 차 가운데, x 는 길 위 거리 기준값
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: X(14.0) + (i % 4) * 0.8, z: 1.0 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
     idle: Array.from({ length: 24 }, (_, i) => ({ x: X(0.5) + (i % 8) * 0.6, z: 12.9 + Math.floor(i / 8) * 0.5 })),
@@ -337,7 +337,7 @@ export function buildBusanjinLayout(): Layout {
 
   const geo: SiteGeo = {
     yardX: [0, 0.01],
-    truckLaneX: 2.5,
+    truckFromWest: { z: 3.0, rearX: X(0) - 0.15 },
     liftAnnex: { ...R.ANNEX, truckDoor: [-3.0, -0.6] },
     freightLifts: [
       { x0: X(0.2), x1: X(2.1), door: [X(0.45), X(1.85)] },

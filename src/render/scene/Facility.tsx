@@ -73,10 +73,10 @@ function Ground({ L }: { L: Layout }) {
       </mesh>
       {/* MFC 는 2층 — 북쪽 화물 승강기 별동(FreightLifts) 동쪽에 입고 차량이 대는 길(사용자 2026-11-22 "화물승강기 왼쪽이나 오른쪽에서 입고차량 들어오는 것도") */}
       {/* 차로 2개: 차량문 줄(줄 선 차) + 북쪽 바깥 차로(떠나는 차가 비켜 나감, 2026-11-24) */}
-      {L.geo.truckLaneX !== undefined ? (
-        // 세로 차로(부산진구 — 승강기 별동 서쪽): 북쪽 밖에서 차량이 서는 자리까지
-        <mesh rotation={flat} position={[L.geo.truckLaneX - TRUCK_PASS_LANE / 2, -0.014, (-60 + L.points.truckDock.z + 3.4) / 2]} receiveShadow>
-          <planeGeometry args={[3.6 + TRUCK_PASS_LANE, L.points.truckDock.z + 3.4 + 60]} />
+      {L.geo.truckFromWest ? (
+        // 서쪽에서 오는 동서 길(부산진구 — 승강기 별동 서쪽 하역): 서쪽 밖에서 건물 서쪽 벽까지
+        <mesh rotation={flat} position={[(-60 + L.geo.truckFromWest.rearX) / 2, -0.014, L.geo.truckFromWest.z - TRUCK_PASS_LANE / 2]} receiveShadow>
+          <planeGeometry args={[L.geo.truckFromWest.rearX + 60, 3.6 + TRUCK_PASS_LANE]} />
           <meshStandardMaterial color={SCENE.yard} roughness={1} />
         </mesh>
       ) : (

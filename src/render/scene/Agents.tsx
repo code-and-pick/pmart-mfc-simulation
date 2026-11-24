@@ -521,15 +521,15 @@ function Truck({ trfId }: { trfId: string }) {
     // 뒷문(로컬 x=-3.2)이 truck.x - 3.2 에 오도록. 떠나는 차는 북쪽 바깥 차로로 비켜 줄 선 차 옆을 지나감(TRUCK_PASS_LANE)
     if (!t) return;
     const g = group.current;
-    const lane = sim.layout.geo.truckLaneX;
+    const west = sim.layout.geo.truckFromWest;
     const dock = sim.layout.points.truckDock;
-    if (lane !== undefined) {
-      // 세로 차로(부산진구): 북쪽에서 남쪽으로 내려와 섬, 운전칸이 남쪽. 떠나는 차는 서쪽 바깥 차로로 비켜 북쪽으로
-      const xTo = lane - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
-      const x = g.userData.placed ? g.position.x + (xTo - g.position.x) * Math.min(1, dt * 2.5) : xTo;
+    if (west) {
+      // 서쪽에서 오는 동서 길(부산진구): 운전칸이 서쪽, 뒷문을 건물 서쪽 벽에 댐. 줄 선 차는 서쪽으로, 떠나는 차는 북쪽 바깥 차로로 비켜 서쪽으로
+      const zTo = west.z - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);
+      const z = g.userData.placed ? g.position.z + (zTo - g.position.z) * Math.min(1, dt * 2.5) : zTo;
       g.userData.placed = true;
-      g.rotation.y = -Math.PI / 2;
-      g.position.set(x, 0, dock.z - (t.x - dock.x));
+      g.rotation.y = Math.PI;
+      g.position.set(west.rearX - 3.2 - (t.x - dock.x), 0, z);
       return;
     }
     const zTo = dock.z - (t.state === 'LEAVING' ? TRUCK_PASS_LANE : 0);

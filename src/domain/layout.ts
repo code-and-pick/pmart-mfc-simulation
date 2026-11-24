@@ -166,8 +166,8 @@ export interface SiteGeo {
   quarantineRacks?: Record<string, Rect[]>;
   /** 승강기 문 줄 z(기본 0 = 건물 북쪽 벽, 승강기는 그 북쪽). 부산진구는 별동이 건물 안이라 문이 남쪽 2.4 m(승강기 z 0~2.4) */
   liftDoorZ?: number;
-  /** 입고 차량이 남북 세로 차로로(이 x) 북쪽에서 내려와 선다 — 부산진구(그림: 차량이 승강기 별동 서쪽). 없으면 북쪽 동서 길 */
-  truckLaneX?: number;
+  /** 입고 차량이 서쪽에서 동서 길로 들어와 뒷문을 건물 서쪽 벽(rearX)에 대고 선다(z = 차 가운데) — 부산진구(그림: 승강기 별동 서쪽 하역). 없으면 북쪽 동서 길(동쪽에서 옴) */
+  truckFromWest?: { z: number; rearX: number };
   /** 구역 카드 가운데 x 를 구역마다 바꿈(부산진구 입고·검수 — 냉동 카드와 겹치지 않게) */
   zoneCardX?: Record<string, number>;
   /** 건물 바닥 시작 x(기본 0) — 부산진구는 서쪽 밖 라이더 마당 때문에 건물이 동쪽으로 밀림 */
