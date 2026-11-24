@@ -70,7 +70,7 @@ const R = {
   WH: { x0: X(29.3), z0: 0, x1: X(37), z1: 11.13 }, // 상온 입고창고 26평(7.7 × 11.13): 대형재고 10 → 입고재고 5 → 보충재고 랙 5 | 5 + 5
   CH: { x0: X(29.3), z0: 11.13, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠 20평(7.7 × 8.7, 가로 줄 4 — C01·C02-01~05, D02·D03-03~07) — 서쪽 실선을 입고창고에 맞춤(사용자 2026-11-24 "동쪽에 있는 상온 구역 실선도 랙도 상온입고창고에 맞춰")
   CH2: { x0: X(5.6 + DW + SH), z0: 19.83, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 띠(등 맞댄 2쌍: F02 | F03, G | H)
-  PK: { x0: X(0), z0: 13.55, x1: X(3.9 + DW + SH), z1: BSJ_BD }, // 패킹 26평(7.9 × 11.03) — 패킹대 4 | 4 가 구역 안에
+  PK: { x0: X(0), z0: 13.55, x1: X(5.9), z1: BSJ_BD }, // 패킹 20평(5.9 × 11.03 — 사용자 2026-11-24 "패킹구역은 평수 줄여줘" 로 26 → 20) — 패킹대 4 | 4 가 구역 안에
   SHIP: { x0: X(0.1), z0: 6.1, x1: X(3.4), z1: 8.1 }, // 인계 대기 2평(3.3 × 2.0) — 승강기 별동 남쪽 벽 앞(사용자 2026-11-24 "장바구니 거치대 시작점이랑 인계랙 위치 바꿔줘")
   CQ: { x0: X(35.7), z0: BSJ_BD - 0.1 - 2.8, x1: X(36.9), z1: BSJ_BD - 0.1 }, // 상온 격리 1평(1.2 × 2.8) — 남동 모서리 동쪽 벽(사용자 2026-11-24 "상온 격리 구역 랙 오른쪽 모퉁이 동쪽 벽에 붙여")
   PARK: { x0: 0.6, z0: 7.6, x1: 9.9, z1: 11.6 }, // 라이더 대기 11.3평(9.3 × 4 m 가로, 건물 밖 서쪽 — 사용자 2026-11-24 "라이더 대기도 90도로 넓게")
@@ -81,7 +81,7 @@ const SOUTH_PAIR_Z = (k: number) => 19.83 + 0.1 + SOUTH_AISLE + k * (SOUTH_AISLE
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 줄 서쪽 끝 x(저온·남쪽 띠 같은 선 — 사용자 "모든 줄을 서쪽 끝에 맞춤") */
 const COLD = { x0: X(5.7 + DW + SH), bandZ: 1.2, rowX0: X(6.4 + DW + SH) } as const;
 
-const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 20, WH: 26, RCV: 12, PK: 26, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
+const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 20, WH: 26, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
 export function buildBusanjinLayout(): Layout {
   // ── 옛 1호점 랙 코드 고르기 ─────────────────────────────
@@ -249,7 +249,7 @@ export function buildBusanjinLayout(): Layout {
   vWall(X(BSJ_W), 0, BSJ_BD);
   // 승강기 별동: 동쪽 문(입고·검수 쪽 통로) + 남쪽 문(그림 — 서쪽 통로로 바로, 사용자 2026-11-24 "승강기에서 바로 들어올 수 있는 문이 있는데 왜 거기다가 벽을 치고 장바구니 거치대를 뒀지")
   vWall(R.ANNEX.x1, 0, R.ANNEX.z1, [[0.3, 2.3]]);
-  hWall(R.ANNEX.z1, R.ANNEX.x0, R.ANNEX.x1, [[X(3.6), X(5.45)]]);
+  // 승강기 별동 남쪽 벽(인계 랙 뒤)은 없앰(사용자 2026-11-24 "인계랙 뒤에 잊는 벽 없애줘")
   // 냉동·냉장: 문은 서쪽 문 하나씩만(사용자 2026-11-24 "냉동이랑 냉장 문은 오직 서쪽문 뿐이야 문 다 없애고 냉장냉동 격리랙 입고팔레트 옆으로 옮겨") — 셋째 통로(둘째·셋째 쌍 사이)에 맞춤
   const door = (c: number) => [c - 0.9, c + 0.9] as const;
   const fA1 = (coldAisles.FROZEN[2][0] + coldAisles.FROZEN[2][1]) / 2;
@@ -265,14 +265,15 @@ export function buildBusanjinLayout(): Layout {
   vWall(R.WH.x0, 0, R.WH.z1, [[0.35, 2.25], [3.4, 4.4], [7.5, 8.65]]);
   hWall(R.WH.z1, R.WH.x0, R.WH.x1, [[WH_DOOR_X - 0.5, WH_DOOR_X + 0.5]]); // 문 폭 1.0 m(남쪽 벽 보충재고 랙 사이)
   // 패킹 북쪽 벽은 없앰, 장바구니 거치대 북쪽에 벽 하나(서쪽 벽 ~ 거치대 동쪽 끝 — 사용자 2026-11-24 "패킹구역 북쪽에 있는벽 없애고 장바구니 거치대 북쪽으로 벽 하나 놔둬줘")
-  hWall(8.9, X(0), X(3.9 + DW + SH));
+  // 거치대 북쪽 벽은 재진열 대기 탁자(회수 반입대, 세로 0.7 m 폭) 동쪽 끝까지(사용자 2026-11-24 "장바구니 거치대 뒤에 벽을 재진열대기에 맞춰주고")
+  hWall(8.9, X(0), X(6.6 + 0.35));
 
   // ── 패킹대 8 = 서쪽 줄 4 | 동쪽 줄 4(사람은 남쪽에) ─────────────
   const stations: PackingStation[] = [];
   for (let i = 0; i < 8; i++) {
     const col = i < 4 ? 0 : 1;
     const row = i % 4;
-    const tx = X(1.6 + col * 4.0); // 넓어진 패킹 구역에 두 줄 사이 4.0 m
+    const tx = X(1.4 + col * 3.0); // 두 줄 사이 3.0 m
     const tz = R.PK.z0 + 0.9 + row * 2.4;
     stations.push({ id: `PS-${i + 1}`, index: i, table: { x: tx, z: tz }, stand: { x: tx, z: tz + 0.85 } });
     obstacles.push({ rect: { x0: tx - PACK_TABLE_W / 2, z0: tz - 0.4, x1: tx + PACK_TABLE_W / 2, z1: tz + 0.4 }, height: 0.9, kind: 'TABLE' });
@@ -352,7 +353,7 @@ export function buildBusanjinLayout(): Layout {
     inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: X(14.0) + (i % 4) * 0.8, z: 1.0 + Math.floor(i / 4) * 0.7 })),
     cartDepot,
     idle: Array.from({ length: 24 }, (_, i) => ({ x: X(0.5) + (i % 8) * 0.6, z: 11.95 + Math.floor(i / 8) * 0.45 })),
-    packQueue: { x: X(4.75 + DW + SH), z: R.PK.z0 + 0.6 }, // 패킹 구역 ~ 냉장 서쪽 벽 통로 가운데
+    packQueue: { x: (R.PK.x1 + R.A.x0) / 2, z: R.PK.z0 + 0.6 }, // 패킹 구역 ~ 냉장 서쪽 벽 통로 가운데
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: (R.SHIP.z0 + R.SHIP.z1) / 2 },
     riderPickup: { x: X(-0.6), z: (SHIP_WINDOW[0] + SHIP_WINDOW[1]) / 2 },
     riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.4 + (i % 5) * 1.8, z: 8.6 + Math.floor(i / 5) * 2.0 })),

@@ -106,7 +106,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').every((r) => r.rect.x0 >= zr('WH').x0 && r.rect.z1 <= zr('WH').z1)).toBe(true);
     expect(py('A')).toBeCloseTo(47.3, 0); // 58 → 남북 0.9 m(남쪽 띠 2쌍) → 동서 2.0 m(패킹·장바구니 거치대 넓힘)(사용자 2026-11-24)
     expect(py('B')).toBeCloseTo(47.3, 0);
-    expect(py('PK')).toBeCloseTo(26.4, 0);
+    expect(py('PK')).toBeCloseTo(19.7, 0);
     expect(py('CQ')).toBeCloseTo(1, 0);
     expect(py('SHIP')).toBeCloseTo(2, 0);
   });
