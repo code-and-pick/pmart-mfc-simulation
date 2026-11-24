@@ -48,7 +48,7 @@ import { applyMokpo } from '../domain/layoutMokpo';
 import { buildBusanNamguLayout } from '../domain/layoutBusanNamgu';
 import { buildBusanjinLayout } from '../domain/layoutBusanjin';
 import { nextReturnPiece } from '../domain/returnPiece';
-import { RealWorker, SIM_DEVICE_PREFIX, tempOfCode, type RealSiteContext } from './realWorker';
+import { RealWorker, SIM_DEVICE_PREFIX, tempOfCode, type RealSiteContext, type UnloadJob } from './realWorker';
 import type { SiteWorker } from './worker';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
@@ -362,6 +362,7 @@ export class Simulation {
         carts: this.carts,
         speedFactor: (id) => (this.real?.speedFactor(id) ?? 1) * this.speedBoost,
         pickRack: () => this.pickRack(),
+        takeUnload: () => this.unloadQueue.shift() ?? null,
         pdaInUse: (id) => this.pdaInUse(id),
         ownWork: (id) => this.ownWork(id),
         onSkipped: (account) => {
@@ -743,31 +744,71 @@ export class Simulation {
     return this.requireRealHttp().listInitialStockLoads(this.params.mfcId, ['EXPECTED']);
   }
 
-  /**
-   * 입고 예정 하나 수령(입고 차량 부르기) — 줄 온도대의 입고칸(R-31)에 승인 수량 그대로 받는다(관찰 계정, 그 센터 운영자).
-   * 그 뒤 품질검사·적치는 다음 작업 받기로 PDA 나 가상 작업자가. withVirtual 이면 입고 가상 작업자가 없을 때 하나 켠다
-   */
-  async receiveInbound(load: InitialStockLoad, withVirtual: boolean): Promise<{ units: number; at: string }> {
+  /** 하차 기다리는 입고 예정(가상 작업자가 승강기에서 입고칸으로 옮긴 뒤 수령) */
+  private unloadQueue: UnloadJob[] = [];
+  private unloading = new Set<string>();
+  /** 이 입고 예정을 지금 하차 중(또는 하차 대기) — 화면에서 수령 버튼을 막는다 */
+  isUnloading(receiptId: string): boolean {
+    return this.unloading.has(receiptId);
+  }
+
+  /** 서버 수령 한 번 — 줄 온도대의 입고칸(R-31)에 예정 수량 그대로. 저온 입고칸이 없으면(4xx) 상온 입고칸으로. 받은 위치를 돌려준다 */
+  private async postReceipt(load: InitialStockLoad, at0: string): Promise<string> {
     const h = this.requireRealHttp();
-    const temp = receiptTemp(load.lines.map((l) => l.sku), (s) => this.skuTemp(s));
     const body = load.lines.map((l) => ({ sku: l.sku, receivedQty: l.qty }));
-    let at: string = TEST_INBOUND.receivingByTemp[temp];
+    let at = at0;
     try {
       await retryUnknown(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}`));
     } catch (e) {
-      // 저온 입고칸이 아직 없으면(LAN 등록 전) 상온 입고칸으로 — 서버 확정 거절(4xx)일 때만, 결과 불명은 위에서 같은 키로 다시 보냄
       if (at === TEST_INBOUND.receivingLocation || e instanceof ResultUnknown) throw e;
       this.log(`입고 ${load.receiptId} ${at} 수령 거절(${e instanceof Error ? e.message : e}) → ${TEST_INBOUND.receivingLocation} 로`);
       at = TEST_INBOUND.receivingLocation;
       await retryUnknown(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}:${at}`));
     }
+    return at;
+  }
+
+  /**
+   * 입고 예정 하나 수령(입고 차량 부르기). 차량이 입고 차량문에 선다.
+   * withVirtual: 입고 가상 작업자가 승강기에서 롤테이너를 빼 그 온도대 입고칸으로 옮기고, 다 내린 뒤 서버 수령(사용자 2026-11-24 "입고재고 구역에서 상품이
+   * 갑자기 생기고 … 승강기에서 가져오고") — 이 함수는 하차를 맡기고 바로 돌아온다(queued). 그다음 품질검사·적치도 가상 작업자가.
+   * PDA: 사람이 하차하므로 바로 수령(관찰 계정, 그 센터 운영자) — 품질검사·적치는 PDA "다음 작업 받기"
+   */
+  async receiveInbound(load: InitialStockLoad, withVirtual: boolean): Promise<{ units: number; at: string; queued: boolean }> {
+    this.requireRealHttp();
+    const temp = receiptTemp(load.lines.map((l) => l.sku), (s) => this.skuTemp(s));
+    const at = TEST_INBOUND.receivingByTemp[temp];
     const units = load.lines.reduce((a, l) => a + l.qty, 0);
-    this.log(`입고 ${load.receiptId} — ${TEMP_KO[temp]} ${load.lines.length}품목 ${units}개 수령(${at}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
-    // 실서버엔 차량이 없다 — 수령이 서버에 들어가면 그림 차량이 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20). 수령은 서버가 이미 끝냄
-    this.trucks.push({ trfId: `입고 ${load.receiptId.slice(-6)}`, lines: load.lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: load.lines.length, scheduledAt: this.time });
+    if (this.unloading.has(load.receiptId)) return { units, at, queued: true };
+    // 실서버엔 차량이 없다 — 그림 차량이 입고 차량문까지 와서 선다(사용자 2026-11-20). 가상 작업자 하차면 다 내릴 때까지 서 있는다
+    const truck: Truck = { trfId: `입고 ${load.receiptId.slice(-6)}`, lines: load.lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: withVirtual ? 0 : load.lines.length, scheduledAt: this.time, hold: withVirtual };
+    this.trucks.push(truck);
+    if (!withVirtual) {
+      const got = await this.postReceipt(load, at);
+      this.log(`입고 ${load.receiptId} — ${TEMP_KO[temp]} ${load.lines.length}품목 ${units}개 수령(${got}) → 하차·품질검사·적치는 PDA`);
+      return { units, at: got, queued: false };
+    }
+    this.unloading.add(load.receiptId);
+    this.unloadQueue.push({
+      receiptId: load.receiptId,
+      temp,
+      at,
+      lines: load.lines.map((l) => ({ sku: l.sku, qty: l.qty, name: l.productName })),
+      receive: () => this.postReceipt(load, at),
+      onRoll: (n) => {
+        truck.unloaded += n;
+      },
+      done: (ok, why) => {
+        this.unloading.delete(load.receiptId);
+        truck.hold = false;
+        truck.scheduledAt = Math.min(truck.scheduledAt, this.time - REAL_TRUCK.dockSec + 5); // 다 내렸으면 곧 떠남
+        if (!ok) this.log(`입고 ${load.receiptId} 하차 뒤 수령 실패 — ${why}`);
+      },
+    });
+    this.log(`입고 ${load.receiptId} — ${TEMP_KO[temp]} ${load.lines.length}품목 ${units}개 하차 맡김(가상 작업자가 승강기 → ${at}, 다 내리면 수령)`);
     // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없다(사용자 2026-11-20)
-    if (withVirtual) this.ensureInboundVirtual();
-    return { units, at };
+    this.ensureInboundVirtual();
+    return { units, at, queued: true };
   }
 
   setVirtualWorkers(n: number) {
@@ -1664,7 +1705,7 @@ export class Simulation {
           t.state = 'DOCKED';
           t.scheduledAt = this.time;
         }
-      } else if (t.state === 'DOCKED' && this.time - t.scheduledAt >= REAL_TRUCK.dockSec) {
+      } else if (t.state === 'DOCKED' && !t.hold && this.time - t.scheduledAt >= REAL_TRUCK.dockSec) {
         t.state = 'LEAVING';
       } else if (t.state === 'LEAVING') {
         t.x += 7 * dt;

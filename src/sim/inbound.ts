@@ -29,6 +29,8 @@ export interface Truck {
   x: number;
   unloaded: number;
   scheduledAt: number;
+  /** 실서버 그림 차량 — 하차(승강기 → 입고칸)가 끝날 때까지 서 있는다 */
+  hold?: boolean;
 }
 
 export interface DockItem {

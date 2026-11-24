@@ -728,3 +728,54 @@ describe('RealWorker — 회수품(반입·검수·격리 이동)', () => {
     w.stop();
   });
 });
+
+describe('RealWorker — 입고 하차(승강기 → 입고칸 → 수령)', () => {
+  const job = (n: number, receive: () => Promise<string>, log: string[]) => ({
+    receiptId: 'RC-DEV-1',
+    temp: 'CHILLED' as const,
+    at: 'RCV-C-01',
+    lines: Array.from({ length: n }, (_, i) => ({ sku: `S-${i}`, qty: 2 })),
+    receive: async () => {
+      log.push('receive');
+      return receive();
+    },
+    onRoll: (k: number) => log.push(`roll ${k}`),
+    done: (ok: boolean, why?: string) => log.push(`done ${ok}${why ? ` ${why}` : ''}`),
+  });
+
+  it('입고 계정은 서버 작업보다 하차를 먼저 — 롤테이너(8줄씩)를 다 옮긴 뒤 한 번 수령', async () => {
+    const { w, be, ctx } = setup('mfcw-qc-01');
+    const log: string[] = [];
+    const jobs = [job(10, async () => 'RCV-C-01', log)];
+    ctx.takeUnload = () => jobs.shift() ?? null;
+    void w.run();
+    await runFor(w, 400);
+    expect(log).toEqual(['roll 8', 'roll 2', 'receive', 'done true']);
+    expect(be.calls.length).toBeGreaterThan(0); // 하차 뒤 서버 작업 받기로
+    w.stop();
+  });
+
+  it('수령이 거절되면 done(false) — 입고 예정은 그대로, 작업자는 다음 일로', async () => {
+    const { w, ctx } = setup('mfcw-qc-01');
+    const log: string[] = [];
+    const jobs = [job(3, async () => Promise.reject(new Error('수령 거절')), log)];
+    ctx.takeUnload = () => jobs.shift() ?? null;
+    void w.run();
+    await runFor(w, 200);
+    expect(log).toEqual(['roll 3', 'receive', 'done false 수령 거절']);
+    w.stop();
+  });
+
+  it('피킹·포장 계정은 하차를 가져가지 않는다', async () => {
+    const { w, ctx } = setup('mfcw-pp-01');
+    let asked = 0;
+    ctx.takeUnload = () => {
+      asked++;
+      return null;
+    };
+    void w.run();
+    await runFor(w, 20);
+    expect(asked).toBe(0);
+    w.stop();
+  });
+});

@@ -292,6 +292,9 @@ export function TestInboundControls() {
   };
   useEffect(() => {
     void refresh();
+    // 하차 끝나 수령되면 목록에서 빠진다 — 가끔 다시 읽는다
+    const t = setInterval(() => void refresh(), 15_000);
+    return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sim.params.mfcId]);
 
@@ -327,7 +330,11 @@ export function TestInboundControls() {
       setBusy(`수령하는 중… ${i + 1}/${loads.length}`);
       try {
         const out = await sim.receiveInbound(load, withVirtual);
-        push(`입고 ${load.receiptId.slice(-6)} ${load.lines.length}품목 ${out.units}개 수령(${out.at}) → ${withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+        push(
+          out.queued
+            ? `입고 ${load.receiptId.slice(-6)} ${load.lines.length}품목 ${out.units}개 하차 시작 — 가상 작업자가 승강기 → ${out.at}, 다 내리면 수령 → 검사·적치`
+            : `입고 ${load.receiptId.slice(-6)} ${load.lines.length}품목 ${out.units}개 수령(${out.at}) → PDA 로 하차·검사·적치`,
+        );
       } catch (e) {
         push(`입고 ${load.receiptId.slice(-6)} 수령 실패 — ${why(e)}`, true);
       }
@@ -340,6 +347,7 @@ export function TestInboundControls() {
   const exp = expected ?? [];
   const sumQty = (l: InitialStockLoad) => l.lines.reduce((a, x) => a + x.qty, 0);
   const expUnits = exp.reduce((a, l) => a + sumQty(l), 0);
+  const waiting = exp.filter((l) => !sim.isUnloading(l.receiptId));
   const recvUnits = (recv ?? []).reduce((a, l) => a + sumQty(l), 0);
   const recvItems = (recv ?? []).reduce((a, l) => a + l.lines.length, 0);
   return (
@@ -359,8 +367,8 @@ export function TestInboundControls() {
         </div>
         {exp.length > 0 && (
           // 발주는 입고 예정만 만든다 — 차량·입고 작업자는 수령을 눌러야 움직인다(사용자 2026-11-24 "입고 작업자가 움직이지도 않고 입고차량이 들어오지도 않는데")
-          <button className="inb-all" disabled={!!busy} onClick={() => setRecv(exp)}>
-            🚚 {exp.length > 1 ? `${exp.length}건 모두 ` : ''}수령 — 입고 차량 부르기
+          <button className="inb-all" disabled={!!busy || !waiting.length} onClick={() => setRecv(waiting)}>
+            🚚 {waiting.length > 1 ? `${waiting.length}건 모두 ` : ''}수령 — 입고 차량 부르기
           </button>
         )}
         {exp.map((l) => (
@@ -372,9 +380,15 @@ export function TestInboundControls() {
               <span>
                 {l.lines.length}품목 {sumQty(l)}개
               </span>
-              <button className="inb-mini" disabled={!!busy} onClick={() => setRecv([l])} title="이 건만 수령">
-                🚚 수령
-              </button>
+              {sim.isUnloading(l.receiptId) ? (
+                <span className="inb-tag" title="가상 작업자가 승강기에서 입고칸으로 옮기는 중 — 다 내리면 수령">
+                  하차 중
+                </span>
+              ) : (
+                <button className="inb-mini" disabled={!!busy} onClick={() => setRecv([l])} title="이 건만 수령">
+                  🚚 수령
+                </button>
+              )}
             </div>
             <details>
               <summary>상품 보기</summary>
@@ -408,7 +422,7 @@ export function TestInboundControls() {
             </tbody>
           </table>
           <div className="ask-warn">
-            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 예정 수량 그대로 수령합니다. 그다음 품질검사·적치를 가상 작업자(없으면 하나 켬) 또는 PDA "다음 작업 받기"로.
+            ⚠ 실서버 재고가 바뀝니다 — 차량이 서면 가상 작업자가 승강기에서 롤테이너를 빼 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})으로 옮기고, 다 내리면 예정 수량 그대로 수령 → 품질검사 → 선반 적치(없으면 하나 켬). PDA 면 바로 수령하고 하차·검사·적치는 PDA "다음 작업 받기"로.
           </div>
           <div className="ask-acts">
             <button onClick={() => setRecv(null)}>취소</button>

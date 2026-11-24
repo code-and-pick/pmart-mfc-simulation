@@ -22,7 +22,7 @@ import {
 } from '../domain/contract';
 import type { Layout, Location } from '../domain/layout';
 import type { NavGrid, P } from '../domain/navgrid';
-import { REAL_WORKERS, RETURN_FLOW } from '../config';
+import { INBOUND_UNLOAD, REAL_WORKERS, RETURN_FLOW } from '../config';
 import type { SimParams } from '../config';
 import { Agent } from './agent';
 import { cartInDetail, type CartPool } from './cartPool';
@@ -57,6 +57,25 @@ export interface RealSiteContext {
   ownWork?: (workerId: string) => boolean;
   /** 밀봉한 포장을 올릴 출하대기 랙(없으면 DSP-A-01) */
   pickRack?: () => string;
+  /** 입고 하차 한 건 가져가기(입고 가상 작업자만) — 승강기 → 입고칸으로 롤테이너를 옮긴 뒤 서버 수령 */
+  takeUnload?: () => UnloadJob | null;
+}
+
+/**
+ * 입고 하차(시뮬레이터 그림 + 서버 수령) — 사용자 2026-11-24 "왜 입고재고 구역에서 상품이 갑자기 생기고 … 승강기에서 가져오고".
+ * 서버에는 하차 작업이 없다(수령 = 입고칸에 놓인 뒤 한 번). 작업자가 승강기에서 롤테이너를 빼 그 온도대 입고칸으로 밀고 와 내린 다음 receive()로 수령한다
+ */
+export interface UnloadJob {
+  receiptId: string;
+  temp: TemperatureZone;
+  /** 수령 위치(입고칸 RCV-…) */
+  at: string;
+  lines: { sku: string; qty: number; name?: string | null }[];
+  /** 서버 수령(같은 Idempotency-Key 로 다시 보내는 것 포함) — 실제 받은 위치를 돌려준다 */
+  receive: () => Promise<string>;
+  /** 롤테이너 하나를 내렸다(그림 차량 하차 수) */
+  onRoll: (lines: number) => void;
+  done: (ok: boolean, why?: string) => void;
 }
 
 /** 가상 작업자가 작업 시작 때 보내는 기기 ID — 서버 작업 상세 activeStart.deviceId 로 돌아온다(끊긴 작업 찾기) */
@@ -235,6 +254,14 @@ export class RealWorker extends Agent {
         this.activity = '이어 하기 끝 — 퇴근';
         this.left = true;
         return;
+      }
+      // 입고 하차가 기다리면 서버 작업보다 먼저(차량이 서 있다) — 입고 계정(qc·rcv)만
+      const job = returnRoleOf(this.account) && !this.resumeOnly ? this.ctx.takeUnload?.() : null;
+      if (job) {
+        this.idle = false;
+        await this.doUnload(job);
+        this.currentTarget = null;
+        continue;
       }
       let a: CapacityAssignment | null;
       try {
@@ -790,6 +817,54 @@ export class RealWorker extends Agent {
       if (i >= REAL_WORKERS.unconfirmedResendMax) throw new ResultUnknown(`${op} 결과 불명(${r.applyStatus}) — 다음에 같은 키로 다시`);
       this.activity = `${op} 반영 확인 중 (${r.applyStatus})`;
       await this.wait(REAL_WORKERS.unconfirmedResendSec);
+    }
+  }
+
+  /** 입고 하차 — 승강기 문에서 롤테이너(같은 온도대 linesPerRoll 줄)를 빼 입고칸으로 밀고 와 내린다. 다 내리면 서버 수령 */
+  private async doUnload(job: UnloadJob) {
+    const { ctx } = this;
+    const U = INBOUND_UNLOAD;
+    const lift = ctx.layout.points.truckDoor;
+    const dest = ctx.point(job.at) ?? ctx.layout.points.inboundIdle[0];
+    const rolls: UnloadJob['lines'][] = [];
+    for (let k = 0; k < job.lines.length; k += U.linesPerRoll) rolls.push(job.lines.slice(k, k + U.linesPerRoll));
+    const units = job.lines.reduce((a, l) => a + l.qty, 0);
+    this.state = 'PICKING';
+    this.pda = { ...this.plainView(job.receiptId, 'PUTAWAY', '승강기로'), location: job.at, temp: TEMP_KO[job.temp], plannedQty: units, pickedQty: 0, progress: `하차 ${job.lines.length}품목` };
+    try {
+      for (const [r, roll] of rolls.entries()) {
+        if (r > 0 && r % U.rollsPerLift === 0) {
+          this.activity = `승강기 — 다음 롤테이너 올라오는 중`;
+          this.pda.step = `승강기 ${Math.floor(r / U.rollsPerLift) + 1}/${Math.ceil(rolls.length / U.rollsPerLift)}회`;
+          await this.walkTo(lift);
+          await this.wait(U.liftCycleSec);
+        }
+        this.activity = `하차 ${job.receiptId.slice(-6)} — 롤테이너 ${r + 1}/${rolls.length}(${TEMP_KO[job.temp]} ${roll.length}품목) 승강기에서`;
+        this.pda.step = `롤테이너 ${r + 1}/${rolls.length} 빼기`;
+        await this.walkTo(lift);
+        await this.work(U.takeRollSec);
+        this.carrying = roll.slice(0, 4).map(() => job.temp);
+        this.activity = `하차 ${job.receiptId.slice(-6)} — 롤테이너 ${r + 1}/${rolls.length} → ${job.at}`;
+        this.pda.step = `${job.at} 로 밀고 가기`;
+        await this.walkTo(dest);
+        this.pda.step = `${job.at} 에 내리기`;
+        await this.work(U.dropLineSec * roll.length);
+        this.carrying = [];
+        this.pda.pickedQty = (this.pda.pickedQty ?? 0) + roll.reduce((a, l) => a + l.qty, 0);
+        job.onRoll(roll.length);
+      }
+      this.pda.step = '수령 등록';
+      this.activity = `수령 ${job.receiptId.slice(-6)} — ${job.at}`;
+      const at = await job.receive();
+      this.pda.step = '수령 반영됨 — 품질검사 작업 생김';
+      ctx.log(`${this.account} 하차·수령 ${job.receiptId} ${TEMP_KO[job.temp]} ${job.lines.length}품목 ${units}개 → ${at}`);
+      job.done(true);
+    } catch (e) {
+      const why = e instanceof ApiProblem ? `${e.problem.status} ${e.problem.code}` : (e as Error).message;
+      this.carrying = [];
+      this.lastProblem = `수령 ${job.receiptId.slice(-6)} — ${why}`;
+      ctx.log(`${this.account} 하차 ${job.receiptId} 수령 실패 — ${why}(입고 예정은 그대로, 다시 수령 가능)`);
+      job.done(false, why);
     }
   }
 
