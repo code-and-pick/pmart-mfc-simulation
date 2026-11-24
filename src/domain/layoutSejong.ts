@@ -404,7 +404,9 @@ export function buildSejongLayout(): Layout {
   const points: Layout['points'] = {
     truckDoor: { x: (LIFTS[0].door[1] + LIFTS[1].door[0]) / 2, z: 0.9 },
     truckDock: { x: ANNEX.x1 + 0.3 + 3.2, z: (ANNEX.truckDoor[0] + ANNEX.truckDoor[1]) / 2 },
-    inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 39.0 + (i % 4) * 0.8, z: 4.3 + Math.floor(i / 4) * 0.9 })),
+    // 입고 작업자 대기 = 입고·검수 동쪽(승강기 동쪽·하차 칸 동쪽·롤테이너 장식 북쪽) — 전엔 x 39~41 로 상온 입고창고(WH2) 안이었다
+    // (사용자 2026-11-24 "세종에 입고 작업자가 입고 검수구역에 있어야지 왜 상온 입고창고구역에 있냐")
+    inboundIdle: Array.from({ length: 8 }, (_, i) => ({ x: 34.9 + (i % 4) * 0.8, z: 1.3 + Math.floor(i / 4) * 0.9 })),
     cartDepot,
     idle: Array.from({ length: 24 }, (_, i) => ({ x: R.PK.x1 + 3.0 + (i % 5) * 0.8, z: 24.6 + Math.floor(i / 5) * 0.9 })), // 장바구니 거치대 동쪽(북쪽 마당 아님)
     packQueue: { x: R.PK.x1 - 0.5, z: (R.PK.z0 + R.PK.z1) / 2 }, // 패킹 동쪽 입구(거치대 쪽)
