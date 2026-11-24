@@ -112,7 +112,7 @@ export function buildBusanjinLayout(): Layout {
   // 피킹: 그림의 가로 4줄 = 등 맞댄 4쌍(사용자 2026-11-24 "냉장냉동구역에 다 6개씩 놔두다가 왜 2줄은 5개씩 두고 내 쪽에서 랙 식별값도 안 보여?").
   //   한 쌍의 북쪽 면·남쪽 면이 같은 묶음 모양(냉동 4 | 4, 냉장 5 | 5 와 5 | 4) — 남쪽 면은 남쪽(화면 앞)을 봐 번호판이 보임.
   //   그림 한 줄 16·19랙은 랙 길이 1.25 m 로 20 m 넘어 방에 안 들어가 한 줄을 등 맞댄 두 면으로 나눔.
-  const coldRoom = (temp: 'FROZEN' | 'CHILLED', room: Rect, pairs: [Rack[], Rack[]][], resRacks: Rack[], rid: string, center = false): Rack[] => {
+  const coldRoom = (temp: 'FROZEN' | 'CHILLED', room: Rect, pairs: [Rack[], Rack[]][], resRacks: Rack[], rid: string, center = false, westW?: number): Rack[] => {
     const out: Rack[] = [];
     const z0 = room.z0 + 0.1;
     const z1 = room.z1 - 0.1;
@@ -125,7 +125,7 @@ export function buildBusanjinLayout(): Layout {
     // 가운데 통로(x)는 모든 줄이 같은 자리, 묶음은 방 폭 가운데로
     // 가운데 통로 자리는 가장 긴 면 기준, 짧은 면은 가운데 통로 양옆에 붙임(냉동 12 = 6 | 6, 8 = 4 | 4)
     // 모든 줄을 서쪽 끝(냉동·냉장 같은 x)에 맞추고 가운데 통로도 한 선 — 랙이 모자란 줄은 동쪽 끝만 짧음(사용자 2026-11-24 "이게 무슨 정돈된 거야 삐뚤빼뚤하구만" → "모든 줄을 서쪽 끝에 맞춤")
-    const W = Math.ceil(Math.max(...pairs.flat().map((r) => r.length)) / 2);
+    const W = westW ?? Math.ceil(Math.max(...pairs.flat().map((r) => r.length)) / 2);
     // center: 묶음 전체(서쪽 W | 통로 1.4 | 동쪽 가장 긴 묶음)를 방 동서 가운데에 — 양옆 빈 곳을 같게(냉동, 사용자 2026-11-24 "냉동구역 랙 앞뒤 양옆 간격 남은 거 보고 중앙에 적절하게 재배치")
     const eastMax = Math.max(...pairs.flat().map((r) => r.length - W));
     const rowX0 = center ? (room.x0 + room.x1) / 2 - (W * RACK_LEN + 1.4 + eastMax * RACK_LEN) / 2 : COLD.rowX0;
@@ -150,11 +150,12 @@ export function buildBusanjinLayout(): Layout {
   ], resOld('FROZEN', BUSANJIN_RACKS.reserveFrozen), 'AR', true);
   // 냉장 76 = 10 | 10 ×3쌍 + 8 | 8(냉동처럼 마지막 쌍만 짧게 — 10 과 9 가 섞이던 것 정돈)
   const chilled = coldRoom('CHILLED', R.B, [
-    [run('B01', 1, 10), run('B02', 1, 10)],
-    [run('B03', 1, 10), run('B04', 1, 10)],
-    [run('B05', 1, 10), run('B06', 1, 10)],
-    [run('B07', 1, 8), run('B01', 11, 8)],
-  ], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR');
+    // 면마다 서쪽 5 | 동쪽 6 / 6 / 6 / 0(사용자 2026-11-24 "냉장구역 동쪽에 2줄씩 5 5 5 3 이렇게 배치되어 있는 거 6 6 6 0 이렇게 배치해줘") — 76대 그대로
+    [run('B01', 1, 11), run('B02', 1, 11)],
+    [run('B03', 1, 11), run('B04', 1, 11)],
+    [run('B05', 1, 11), run('B06', 1, 11)],
+    [run('B07', 1, 5), run('B01', 12, 5)],
+  ], resOld('CHILLED', BUSANJIN_RACKS.reserveChilled), 'BR', false, 5);
 
   // ── 상온 C~H(그림대로) ─────────────────────────────────
   // 동쪽 세로 띠: 한 면 가로 줄 8(남쪽을 봄), 줄마다 서쪽 4 | 통로 1.0 m | 동쪽 나머지, 북쪽부터 C → D → E → F.
