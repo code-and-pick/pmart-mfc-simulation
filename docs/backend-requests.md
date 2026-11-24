@@ -51,6 +51,10 @@
 
 ## 열린 요청
 
+### R-47 부산진구 패킹대 8 위치(xM·zM) 다시 맞춤 — 낮음 (2026-11-24, 사용자 → 백엔드)
+- R-45 LAN 반영 뒤 사용자 "부산진구 패킹구역 패킹대 북쪽으로 쏠려 있는데 중앙으로" → 시뮬레이터가 패킹대 8개를 패킹 구역 가운데로 옮김. 위치 파일 `docs/layout-export/busanjin/location-positions.json` 에서 **PAK-A-01~08 8칸의 xM·zM 만** 바뀜(다른 칸 그대로).
+- 요청: MFC-BJG-01 의 PAK-A-01~08 position 을 새 파일 값으로. 반영 뒤 시뮬레이터가 다시 대조.
+
 ### R-46 부산진구 실서버 센터 ID MFC-SEED-01 → MFC-BJG-01 — **해소** (2026-11-24, 사용자 → 백엔드)
 - **해소(11-24)**: PC1 백엔드 LAN 반영(서비스 DB 25개 86,896줄·설정 pmart-config ef38be5·검색 색인 503+503, 옛 ID 별칭 없음 — 옛 MFC-SEED-01 은 404·403·빈 결과, LOT ID `LOT-MFC-SEED-01-…`·이력 열은 그대로). 회신 pmart-backend docs/handoff/simulator/mfc/2026-11-24-reply-r46-center-id.md(3871061b). 시뮬레이터: src/config.ts 부산진구 지점 id·기본 mfcId → MFC-BJG-01, mockId 없앰. 대조(새 토큰, GET /locations?mfcId=MFC-BJG-01): 16,853칸, 위치 파일 9,185칸 빠짐 0·위치 차이 0, ACTIVE 9,086·CLOSED 7,767, 재고 1,334줄 9,671개 — 어긋남 0.
 - 요청: 사용자 2026-11-24 "부산진구 실서버 센터 ID 바꿔"(앞서 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔" — MOCK 만 바꿔 둠, src/config.ts mockId).

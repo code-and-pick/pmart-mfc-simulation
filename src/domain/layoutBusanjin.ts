@@ -318,8 +318,9 @@ export function buildBusanjinLayout(): Layout {
   for (let i = 0; i < 8; i++) {
     const col = i < 4 ? 0 : 1;
     const row = i % 4;
-    const tx = X(1.4 + col * 3.0); // 두 줄 사이 3.0 m
-    const tz = R.PK.z0 + 0.9 + row * 2.4;
+    // 패킹 구역 가운데(동서·남북) — 두 줄 사이 3.0 m, 줄 안 2.4 m(사용자 2026-11-24 "부산진구 패킹구역 패킹대 북쪽으로 쏠려 있는데 중앙으로")
+    const tx = (R.PK.x0 + R.PK.x1) / 2 + (col - 0.5) * 3.0;
+    const tz = (R.PK.z0 + R.PK.z1) / 2 + (row - 1.5) * 2.4;
     stations.push({ id: `PS-${i + 1}`, index: i, table: { x: tx, z: tz }, stand: { x: tx, z: tz + 0.85 } });
     obstacles.push({ rect: { x0: tx - PACK_TABLE_W / 2, z0: tz - 0.4, x1: tx + PACK_TABLE_W / 2, z1: tz + 0.4 }, height: 0.9, kind: 'TABLE' });
   }
