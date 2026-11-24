@@ -81,6 +81,13 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     };
   }, [id, registry]);
 
+  const isWorker = kind === 'worker';
+  // 실서버 입고 가상 작업자(mfcw-qc·rcv)는 상자를 크게 — 손에 작은 것을 든 것처럼 보였다(사용자 2026-11-20)
+  const inboundAcc = isWorker && /-(qc|rcv)-\d+/.test(id);
+  const bagSize = inboundAcc ? 0.3 : isWorker ? 0.16 : 0.26;
+  const per = inboundAcc ? 2 : isWorker ? 3 : 2;
+  const roll = !isWorker || inboundAcc; // 입고 작업자(시뮬 입고·실서버 입고 가상 작업자)는 롤테이너
+
   useFrame((_, dt) => {
     const a: SiteWorker | InboundWorker | undefined =
       kind === 'worker' ? sim.siteWorkers().find((x) => x.id === id) : sim.inboundWorkers.find((x) => x.id === id);
@@ -98,7 +105,9 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     const sel = !!s && s.kind !== 'location' && s.id === id;
     const moved = last.current ? Math.hypot(a.pos.x - last.current.x, a.pos.z - last.current.z) : 0;
     last.current = { x: a.pos.x, z: a.pos.z };
-    const pushing = a.hasCart || a.carrying.length > 0;
+    // 입고 작업자는 롤테이너를 늘 밀고 다닌다 — 빈 롤테이너로 입고칸에 가서 싣고, 내려놓은 뒤에도 끌고 돌아온다
+    // (사용자 2026-11-24 "입고 작업자들 롤테이너는 어디다 갖다 버리고 맨손으로 다니는 거야?" — 전엔 작업 사이·빈 걸음에 숨김)
+    const pushing = roll || a.hasCart || a.carrying.length > 0;
     fig.current?.animate(moved > 0.5 ? 0 : moved, dt, pushing ? 'push' : 'walk'); // 순간이동(0.5 m 넘게)은 걸음으로 치지 않음
     fig.current?.highlight(sel);
     ringMat.current.opacity = sel ? 1 : 0.85;
@@ -111,12 +120,6 @@ function Person({ id, kind }: { id: string; kind: Kind }) {
     });
   });
 
-  const isWorker = kind === 'worker';
-  // 실서버 입고 가상 작업자(mfcw-qc·rcv)는 상자를 크게 — 손에 작은 것을 든 것처럼 보였다(사용자 2026-11-20)
-  const inboundAcc = isWorker && /-(qc|rcv)-\d+/.test(id);
-  const bagSize = inboundAcc ? 0.3 : isWorker ? 0.16 : 0.26;
-  const per = inboundAcc ? 2 : isWorker ? 3 : 2;
-  const roll = !isWorker || inboundAcc; // 입고 작업자(시뮬 입고·실서버 입고 가상 작업자)는 롤테이너
   return (
     <group ref={group}>
       {/* 클릭 판정(보이지 않음) — 고르기는 이 상자 하나로(Core Picker: 직계 자식 중 personId) */}
