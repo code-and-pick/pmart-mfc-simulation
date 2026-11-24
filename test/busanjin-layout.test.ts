@@ -19,14 +19,14 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   const cells = (pred: (l: (typeof L.locations)[number]) => boolean) => L.locations.filter(pred).length;
   const zr = (id: string) => L.zones.find((z) => z.id === id)!.rect;
 
-  it('랙 수 = 사용자 표, 칸 = 1호점 랙당 칸 그대로(피킹 8,756 · 보충 435)', () => {
+  it('랙 수 = 사용자 표, 칸 = 1호점 랙당 칸 그대로(피킹 8,756 · 보충 420 — 상온 보충재고 랙 14(사용자 11-24 하나 없앰))', () => {
     expect(count((r) => !r.reserve && r.temp === 'CHILLED')).toBe(BUSANJIN_RACKS.B);
     expect(count((r) => !r.reserve && r.temp === 'FROZEN')).toBe(BUSANJIN_RACKS.A);
     for (const g of ['C', 'D', 'E', 'F', 'G', 'H'] as const) expect(count((r) => !r.reserve && r.temp === 'AMBIENT' && r.group[0] === g)).toBe(BUSANJIN_RACKS[g]);
     expect(count((r) => !r.reserve)).toBe(222);
-    expect(count((r) => !!r.reserve)).toBe(29);
+    expect(count((r) => !!r.reserve)).toBe(28);
     expect(cells((l) => !l.reserve)).toBe(8756);
-    expect(cells((l) => !!l.reserve)).toBe(435);
+    expect(cells((l) => !!l.reserve)).toBe(420);
   });
 
   it('칸 코드는 모두 지금 1호점에 있는 코드(새 코드 없음), 순서도 1호점 순서', () => {
@@ -51,7 +51,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   it('배치(그림대로) — 상온 동쪽 띠 C·D·E·F, 남쪽 띠 G·H, 물리 줄마다 한 코드 줄, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
     const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
     const ch2 = zr('C-H2');
-    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (r.group === 'D02' && r.rackNo <= 1) || (r.group === 'D03' && r.rackNo <= 2)).toBe(r.cz > ch2.z0);
+    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (r.group === 'D02' && r.rackNo <= 1) || (r.group === 'D03' && r.rackNo <= 1)).toBe(r.cz > ch2.z0);
     // 같은 z·같은 묶음(1.25 m 간격으로 이어진 랙)은 같은 코드 줄, 랙 번호가 1씩 늘어남
     const rows = new Map<string, (typeof L.racks)[number][]>();
     for (const r of L.racks.filter((x) => !x.reserve)) rows.set(`${r.temp}:${r.cz.toFixed(3)}`, [...(rows.get(`${r.temp}:${r.cz.toFixed(3)}`) ?? []), r]);
@@ -116,7 +116,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     const nonCart = positions.filter((p) => !p.locationCode.startsWith('CRT-'));
     expect(new Set(nonCart.map((p) => p.locationCode)).size).toBe(nonCart.length);
     expect(positions.filter((p) => p.kind === 'SHELF').length).toBe(8756);
-    expect(reserveCells.length).toBe(435);
+    expect(reserveCells.length).toBe(420);
     expect(bulkCells.length).toBe(10);
     if (env.WRITE_LAYOUT === '1') {
       const out = new URL('../docs/layout-export/busanjin/', import.meta.url);

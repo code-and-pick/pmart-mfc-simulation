@@ -44,7 +44,7 @@ export const BSJ_W = 37.0;
 export const BSJ_BD = 24.58;
 
 /** 사용자 표(요청서 §3) 랙 수 [확정] — 랙당 칸은 지금 1호점 SLOT_DESIGN 그대로(사용자 결정) */
-export const BUSANJIN_RACKS = { B: 76, A: 64, C: 14, D: 14, E: 12, F: 14, G: 16, H: 12, reserveChilled: 7, reserveFrozen: 7, reserveAmbient: 15 } as const;
+export const BUSANJIN_RACKS = { B: 76, A: 64, C: 14, D: 14, E: 12, F: 14, G: 16, H: 12, reserveChilled: 7, reserveFrozen: 7, reserveAmbient: 14 } as const; // 상온 보충재고 표 15 → 14(사용자 2026-11-24 "상온입고 구역 랙 하나 없애자 홀수네.")
 
 const X = (x: number) => OX + x;
 // 처음 그림·표로 다시(사용자 2026-11-24 "아니 설계 이게 맞냐고. 안 이상해 이게? 왜 이렇게 바꾼 거야?" → 처음 그림·표로 다시(살릴 것은 살림) "응 일단 해봐"):
@@ -173,11 +173,13 @@ export function buildBusanjinLayout(): Layout {
   // 동쪽 띠(그림대로 가로 줄): 한 면 줄 4(남쪽을 봄), 서쪽 끝 한 선(입고창고 랙과 같은 x) — 5랙 한 묶음. 북쪽부터 C → D(E·F 2줄씩과 D 앞 2랙씩은 남쪽 띠 북쪽 쌍, C 6~7 은 남쪽 쌍으로)
   // 줄마다 한 묶음(5랙 6.25 m)을 구역 가운데에(입고창고 보충재고 랙과 같은 x — 사용자 2026-11-24 "북동쪽 상온랙 5개씩 배치한 거 왼쪽에 치우쳐져있잖아 중앙에 배치해야지").
   // 첫 줄은 입고창고 남쪽 벽에서 띄워(통로 1.2 m) 문에서 바로 들어옴
-  const EAST = { x0: R.WH.x0 + 0.1, z0: R.CH.z0 + 1.2, z1: R.CH.z1 - 0.23 } as const;
+  // 남북: 입고창고 남쪽 벽 면 ~ 구역 남쪽 끝 사이에 줄 앞뒤 빈 곳을 모두 같게(사용자 2026-11-24 "동쪽 상온구역랙 남북 간격에서 중앙 남쪽으로 붙어있는 거 중앙으로 간격 조정")
+  const EAST_GAP = (R.CH.z1 - (R.CH.z0 + 0.1) - 5 * RACK_DEPTH) / 6;
+  const EAST = { x0: R.WH.x0 + 0.1, z0: R.CH.z0 + 0.1 + EAST_GAP, z1: R.CH.z1 - EAST_GAP } as const;
   // C 는 5랙씩만(C01·C02-06~07 은 남쪽 띠 남쪽 쌍 동쪽 끝으로)
   // D 는 D02·D03-03~07 5랙씩(남쪽 띠 D 묶음 동쪽 3랙씩을 옮겨 옴 — 사용자 2026-11-24 "남쪽 통로에 제일 오른쪽에 있는 랙 6개 북쪽 구역에 놔줘" → "D 묶음 동쪽 3랙씩")
   // 셋째 줄 = 남쪽 띠에서 옮긴 C01-06~07 · C02-06~07 · D02-02(사용자 2026-11-24 "남쪽 띠 C 4랙 + D02-02")
-  const eastRows = [run('C01', 1, 5), run('C02', 1, 5), [...run('C01', 6, 2), ...run('C02', 6, 2), ...run('D02', 2, 1)], run('D02', 3, 5), run('D03', 3, 5)];
+  const eastRows = [run('C01', 1, 5), run('C02', 1, 5), [...run('C01', 6, 2), ...run('C02', 6, 2), ...run('D02', 2, 1)], run('D02', 3, 5), run('D03', 2, 6)]; // D03-02 는 남쪽 띠에서 짝이 없어 D03 줄 앞으로(6랙)
   const ePitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, (R.CH.x0 + R.CH.x1) / 2 + (i - (row.length - 1) / 2) * RACK_LEN, EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
@@ -191,11 +193,13 @@ export function buildBusanjinLayout(): Layout {
   //   면마다 [서쪽 묶음, 동쪽 묶음] — 서쪽 묶음은 서쪽 끝부터, 동쪽 묶음은 가운데 통로 동쪽부터(G·H 와 같은 선)
   //   북쪽 쌍 동쪽 끝(통로 1.0 m 뒤) 셋째 묶음에 D02-01~02 | D03-01~02(처음 5랙, 동쪽 3랙씩은 다시 동쪽 상온으로)(사용자 2026-11-24 "남쪽 통로 동쪽에 상온 랙 더 올 수 있겠는데?" → "D 5랙씩만 옮김")
   const southPairs: [Face3, Face3][] = [
-    [[run('F02', 1, 7), run('E02', 1, 6), run('D02', 1, 1)], [run('F03', 1, 7), run('E03', 1, 6), run('D03', 1, 2)]],
-    [[gNorth.slice(0, 8), gNorth.slice(8), []], [hSouth.slice(0, 8), hSouth.slice(8), []]],
+    // 남쪽 띠 랙은 모두 앞뒤 짝(사용자 2026-11-24 "남쪽 상온구역랙 하나씩 있는 것들은 앞뒤로 짝 지어서 배치해줘"):
+    //   D02-01 | D03-01, G03-01~04 | H02-04~07, 셋째 묶음 G03-05~06 | G03-07~08. 짝 없던 D03-02 는 동쪽 상온 D03 줄로(남쪽 띠 랙 수가 홀수라)
+    [[run('F02', 1, 7), run('E02', 1, 6), run('D02', 1, 1)], [run('F03', 1, 7), run('E03', 1, 6), run('D03', 1, 1)]],
+    [[gNorth.slice(0, 8), gNorth.slice(8, 12), gNorth.slice(12, 14)], [hSouth.slice(0, 8), hSouth.slice(8), gNorth.slice(14, 16)]],
   ];
-  /** 셋째 묶음 서쪽 끝 — 동쪽 묶음 동쪽 끝(북쪽 쌍 E 6랙, 남쪽 쌍 G03 8랙) + 통로 1.0 m. 남쪽 쌍 셋째는 지금 비어 있음(C 4랙은 동쪽 상온으로) */
-  const thirdX0 = (k: number) => sX0 + 8 * RACK_LEN + 1.4 + (k === 0 ? 6 : 8) * RACK_LEN + 1.0;
+  /** 셋째 묶음 서쪽 끝 — 그 쌍 동쪽 묶음 동쪽 끝(북쪽 쌍 E 6랙, 남쪽 쌍 4랙) + 통로 1.0 m */
+  const thirdX0 = (k: number) => sX0 + 8 * RACK_LEN + 1.4 + Math.max(southPairs[k][0][1].length, southPairs[k][1][1].length) * RACK_LEN + 1.0;
   southPairs.forEach(([north, south], k) => {
     const face = ([w, e, t]: Face3, cz: number, f: 1 | -1) => {
       w.forEach((r, i) => ambient.push(place(r, sideAt(i, w.length), cz, 'x', f)));
@@ -221,8 +225,9 @@ export function buildBusanjinLayout(): Layout {
     // (사용자 2026-11-24 "상온입고창고에 보충재고 5 5 5 이렇게 간격 균일하게 재배치")
     rs.forEach((r, i) => {
       const row = Math.floor(i / 5);
+      const inRow = Math.min(5, rs.length - row * 5); // 5 / 5 / 4 — 줄마다 가운데
       const cz = RES_Z0 + resAisle * (row + 1) + RACK_DEPTH * (row + 0.5);
-      whReserve.push(place(r, (R.WH.x0 + R.WH.x1) / 2 + ((i % 5) - 2) * RACK_LEN, cz, 'x', -1)); // 입고창고 가운데(사용자 2026-11-24 "상온 입고 보충랙 왼쪽에 치우쳐져있잖아 중앙에 배치해야지") — 양 끝 0.6 m 로 줄 앞 통로가 이어짐
+      whReserve.push(place(r, (R.WH.x0 + R.WH.x1) / 2 + ((i % 5) - (inRow - 1) / 2) * RACK_LEN, cz, 'x', -1)); // 입고창고 가운데(사용자 2026-11-24 "상온 입고 보충랙 왼쪽에 치우쳐져있잖아 중앙에 배치해야지") — 양 끝 0.6 m 로 줄 앞 통로가 이어짐
     });
   }
   // 상온 입고재고 팔레트 5(RCV-A-02) — 대형재고 남쪽 한 줄(북쪽에서 꺼냄)
