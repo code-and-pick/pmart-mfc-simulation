@@ -55,6 +55,7 @@
 - 요청: 사용자 2026-11-24 "부산진구 실서버 센터 ID 바꿔"(앞서 "부산진구도 목업에 MFC-SEED-01 이 아니라 MFC-BJG-01 이렇게 바꿔" — MOCK 만 바꿔 둠, src/config.ts mockId).
 - 시뮬레이터는 바꿀 수 없음(백엔드 읽기 전용, 계약에 없는 이름을 추측해 부르지 않음). 실서버 센터 ID 는 center-master 정본 — 백엔드가 정함.
 - 백엔드에서 MFC-SEED-01 이 쓰이는 곳(11-24 pmart-backend d1109ecd 읽어 봄): deploy/lan/seed(7 파일), deploy/lan/.config-repo(4), deploy/lan/checks(3) 등 — 그 밖에 LAN DB 의 센터 소속 데이터(위치 16,853칸·재고 1,334줄·작업·출고·주문·작업자 계정 소속 등)가 센터 ID 를 들고 있어 서비스마다 옮기기가 필요할 것으로 봄(확인은 백엔드).
+- **PC1 백엔드 답(11-24)**: 센터 ID 를 들고 있는 서비스 DB 23개(mfc-*·order·claim·cart·delivery-* 5·rider·center-master·storefront·review·notification 등) + 직원 토큰 센터 소속(Keycloak·employee-auth·hr)·Kafka 사건 키·설정 저장소·LAN 스크립트 99파일. 센터 ID 바꾸는 API 없음 → 그대로 바꾸려면 서비스마다 DB 직접 수정. 방식은 PC1 쪽 사용자에게 묻는 중, 정해지기 전엔 아무것도 안 바꿈.
 - 바뀐 뒤 시뮬레이터 할 일: src/config.ts 부산진구 지점 id(실서버 센터 ID) MFC-SEED-01 → MFC-BJG-01, mockId 제거, 위치 파일·문서의 센터 ID 표기, LAN 대조 다시. 백엔드가 바꾼 날·방식(옛 ID 별칭 유지 여부)을 알려 주면 맞춤.
 
 ### R-45 1호점 부산진구(MFC-SEED-01) 다시 설계 — 높음 (2026-11-24, PC1 요청 → 시뮬레이터, **사용자 확정 11-24**)
