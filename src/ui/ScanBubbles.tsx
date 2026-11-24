@@ -4,7 +4,7 @@
 // 선택 취소("선택취소하는 기능도"): 말풍선의 ✕, Esc, 고른 주문 줄 다시 누르기, 바코드 탭 "선택 취소".
 // 순서는 PDA 앱과 같다(domain/pickStop): ① 카트 → ② 칸 위치 → ③ 상품(× 집을 양). 서버에 집품이 확정되면 다음 칸으로 걸어간다.
 // 위치는 매 프레임(requestAnimationFrame) 카메라로 바꿔 DOM 에 바로 쓴다 — React 상태로 올리지 않는다.
-import { workerShortName, workerRoleName } from '../domain/workerName';
+import { workerRoleName } from '../domain/workerName';
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useApp, useTick, useView } from '../app/context';
@@ -231,6 +231,12 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   );
 }
 
+/** 말풍선 머리 이름 — 서버에서 읽은 지금 이름(처음 만들 때 못 읽었어도 나중에 읽으면 그 이름), 모르면 "PDA 작업자" */
+function nameOf(sim: ReturnType<typeof useApp>['sim'], w: ObservedWorker, state?: string): string {
+  const n = sim.board?.workerName(w.workerId);
+  return n && n !== '작업자 확인 중' ? n.split(' · ')[0] : workerRoleName(w.id, state);
+}
+
 function Bubble({ w }: { w: ObservedWorker }) {
   const { sim, controller } = useApp();
   const c = w.cue!;
@@ -238,10 +244,10 @@ function Bubble({ w }: { w: ObservedWorker }) {
     return (
       <>
         <div className="sb-head">
-          {workerShortName(w.id)} · ① 카트 찍기 <span className="sub">다음 칸 {c.next.location}</span>
+          {nameOf(sim, w)} · ① 카트 찍기 <span className="sub">다음 칸 {c.next.location}</span>
           <Close />
         </div>
-        <Barcode value={c.cart} caption={`카트 ${c.cart} (PDA 는 어느 카트든 받음 — 찍은 카트가 이 주문의 장바구니)`} height={40} />
+        <Barcode value={c.cart} caption={`카트 ${c.cart}`} height={40} />
         <button className="btn" onClick={() => sim.passCart(w.workerId)} title="서버는 카트 스캔을 모릅니다 — 찍었으면 눌러 첫 칸으로. 첫 집품이 서버에 오면 저절로 넘어갑니다">
           카트 찍음 → 카트 들고 첫 칸으로
         </button>
@@ -253,7 +259,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
     return (
       <>
         <div className="sb-head">
-          {workerShortName(w.id)} · 피킹 끝 <span className="sub">패킹 배정 전</span>
+          {nameOf(sim, w)} · 피킹 끝 <span className="sub">패킹 배정 전</span>
           <Close />
         </div>
         <div className="note">
@@ -271,7 +277,7 @@ function Bubble({ w }: { w: ObservedWorker }) {
   return (
     <>
       <div className="sb-head">
-        {workerShortName(w.id)} · {index}/{total} · {l.productName ?? l.sku} × {stop.qty}
+        {nameOf(sim, w)} · {index}/{total} · {l.productName ?? l.sku} × {stop.qty}
         <Close />
       </div>
       <Barcode value={stop.location} caption="② 칸 위치" height={36} onGo={() => controller.focusBackendCode(stop.location)} />
@@ -297,7 +303,7 @@ function ReturnBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind:
   return (
     <>
       <div className="sb-head">
-        {workerShortName(w.id)} · 복귀 {c.index}/{c.total} · {l.productName ?? l.sku} × {p.left}
+        {nameOf(sim, w)} · 복귀 {c.index}/{c.total} · {l.productName ?? l.sku} × {p.left}
         <Close />
       </div>
       {c.step === 'FROM' ? (
@@ -356,7 +362,7 @@ function PackBubble({ w, c }: { w: ObservedWorker; c: Extract<ScanCue, { kind: '
   const { sim, controller } = useApp();
   const head = (t: string) => (
     <div className="sb-head">
-      {workerRoleName(w.id, 'PACKING')} · 포장 {t}
+      {nameOf(sim, w, 'PACKING')} · 포장 {t}
       <Close />
     </div>
   );

@@ -32,6 +32,11 @@ export function workerShortName(id: string): string {
   const mi = /^IB0*(\d+)$/.exec(id);
   if (mi) return `입고${mi[1]}`;
   if (/^OP-[0-9a-f-]{8,}$/i.test(id)) return `OP·${id.replace(/-/g, '').slice(-4)}`;
+  // 실제 PDA 작업자(ObservedWorker id = "PDA {이름}") — 이름을 아직 못 읽었으면 "PDA 작업자"(전엔 끝 6글자를 잘라 "…자 확인 중", 사용자 2026-11-24 "…자 확인 중이 뭔데")
+  if (id.startsWith('PDA ')) {
+    const n = id.slice(4).split(' · ')[0].trim();
+    return !n || n === '작업자 확인 중' ? 'PDA 작업자' : n;
+  }
   return id.length > 8 ? `…${id.slice(-6)}` : id;
 }
 

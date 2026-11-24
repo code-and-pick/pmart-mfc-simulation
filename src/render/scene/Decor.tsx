@@ -262,7 +262,7 @@ export function WorkingCells() {
       // 카드
       // 가상 작업자(mfcw-…)는 짧은 이름, 실제 PDA 작업자는 현황판 이름 첫 토막
       const bn = w.id.startsWith('mfcw-') ? null : sim.board?.workerName((w as { workerId?: string }).workerId ?? '');
-      const who = bn && bn !== '작업자 확인 중' && bn !== '미배정' ? bn.split(' · ')[0] : w.id;
+      const who = bn && bn !== '작업자 확인 중' && bn !== '미배정' ? bn.split(' · ')[0] : workerShortName(w.id);
       const key = `${loc.code}|${who}`;
       live.add(w.id);
       let c = cards.current.get(w.id);

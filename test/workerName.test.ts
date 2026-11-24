@@ -13,6 +13,10 @@ describe('workerShortName', () => {
     expect(workerShortName('OP-72be6776-21ca-4210-b65d-5ee07318d053')).toBe('OP·d053');
     expect(workerShortName('W1')).toBe('피킹1');
   });
+  it('실제 PDA 작업자는 이름, 이름을 못 읽었으면 "PDA 작업자"(끝을 잘라 "…자 확인 중" 이 되지 않게)', () => {
+    expect(workerShortName('PDA 작업자 확인 중')).toBe('PDA 작업자');
+    expect(workerShortName('PDA 김민수 · 1234')).toBe('김민수');
+  });
 });
 
 describe('입고 번호', () => {

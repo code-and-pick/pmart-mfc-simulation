@@ -1160,3 +1160,11 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-load-h { display: flex; align-items: center; gap: 8px; }
 .inb-load-h span:nth-child(2) { flex: 1; text-align: right; color: var(--muted); }
 .inb-load details summary { cursor: pointer; color: var(--muted); font-size: 11px; }
+
+/* 말풍선 안 바코드는 말풍선 폭 안에 — LOT 라벨(GS1-128, 늘 1차원)이 길어 420px 를 넘어 밖으로 튀어나가던 것(사용자 2026-11-24 "피킹할 때 팝업창에 뜨는 바코드 다 튀어나가잖아").
+   넘치면 막대를 가로로 줄여 맞춘다(찍기 어려우면 "크게"). 긴 원문 글자·설명은 줄을 바꾼다 */
+.scan-bubble .bc { display: block; max-width: 100%; box-sizing: border-box; }
+.scan-bubble .bc-img { overflow: hidden; }
+.scan-bubble .bc-img svg { max-width: 100%; }
+.scan-bubble .bc-cap, .scan-bubble .bc-val { overflow-wrap: anywhere; }
+.scan-bubble .bc-val { flex-wrap: wrap; letter-spacing: 0; }
