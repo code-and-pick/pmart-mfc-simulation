@@ -208,7 +208,8 @@ export function buildBusanjinLayout(): Layout {
   const MOVE_E = 2;
   // 모서리 묶음 서쪽 1랙씩은 가운데 둘째 묶음으로(5 | 6, 사용자 2026-11-24 "동쪽에 있는 6묶음에서 1개씩 떼와서 5 6 / 5 6 이렇게 붙이자" → "남동쪽 모서리 4|4 두 줄") — 모서리는 줄마다 3 | 3
   const TAKE = 1;
-  const thirdX0 = (k: number) => R.CQ.x0 - 1.0 - (MOVE_E - TAKE + Math.max(southPairs[k][0][2].length, southPairs[k][1][2].length)) * RACK_LEN;
+  // 모서리 묶음 서쪽 끝 = 동쪽 상온 D02 줄 D02-03(5랙 줄 가운데 맞춤의 서쪽 끝)(사용자 2026-11-24 "남동쪽 모서리에 있는 랙 시작 위치 묶음 D02-03 위치에 맞춰줘")
+  const thirdX0 = (_k: number) => (R.CH.x0 + R.CH.x1) / 2 - 2.5 * RACK_LEN;
   // 남은 남쪽 띠 랙(쌍마다 면 10)은 BLK 랙 묶음으로
   // (사용자 2026-11-24 "남쪽에 남은 상온구역랙들 4 4 / 4 4 이렇게 배치해봐")
   const BLK = 5; // 4 | 4 · 4 | 4 · 2 | 2 → 5 | 5 · 5 | 5(사용자 2026-11-24 화면 사진 + "여기 5 5 / 5 5 이렇게 놔줘")
