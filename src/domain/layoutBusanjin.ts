@@ -439,7 +439,7 @@ export function buildBusanjinLayout(): Layout {
     cartDepotRowGap: 1.6,
     cartDepotPerRow: 18,
     shipRackFacesNorth: true,
-    zoneCardMatch: [['WH', 'RCV']], // 상온 입고창고 카드 = 입고·검수 카드 크기(사용자 2026-11-24 "상온입고창고 구역카드 크기 입고검수구역카드 크기랑 맞춰")
+    zoneCardFullSize: ['WH', 'RCV'], // 입고·검수·입고창고 카드 = 다른 큰 구역 카드 높이(구역 폭에 맞춰 줄이지 않음 — 사용자 2026-11-24 "입고검수구역카드랑 상온입고창고구역 카드 작으니까 다른 구역카드 크기랑 맞춰")
     returnTable: { x: X(0.1 + 0.05 + 0.35), z: 10.65, vertical: true }, // 재진열 대기: 거치대 줄 앞(남쪽) 서쪽 벽에 붙임
   };
 
