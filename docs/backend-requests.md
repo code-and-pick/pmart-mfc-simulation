@@ -51,7 +51,8 @@
 
 ## 열린 요청
 
-### R-47 부산진구 패킹대 8 위치(xM·zM) 다시 맞춤 — 낮음 (2026-11-24, 사용자 → 백엔드)
+### R-47 부산진구 패킹대 8 위치(xM·zM) 다시 맞춤 — **해소** (2026-11-24, 사용자 → 백엔드)
+- **해소(11-24)**: PC1 백엔드 PAK-A-01~08 PUT 200(위치만), 백엔드 사본 docs/simulator/mfc/layout-busanjin-r45/location-positions.json 도 맞춤. 시뮬레이터 대조(GET /locations MFC-BJG-01): 9,185칸 빠짐 0·위치 차이 0.
 - R-45 LAN 반영 뒤 사용자 "부산진구 패킹구역 패킹대 북쪽으로 쏠려 있는데 중앙으로" → 시뮬레이터가 패킹대 8개를 패킹 구역 가운데로 옮김. 위치 파일 `docs/layout-export/busanjin/location-positions.json` 에서 **PAK-A-01~08 8칸의 xM·zM 만** 바뀜(다른 칸 그대로).
 - 요청: MFC-BJG-01 의 PAK-A-01~08 position 을 새 파일 값으로. 반영 뒤 시뮬레이터가 다시 대조.
 
