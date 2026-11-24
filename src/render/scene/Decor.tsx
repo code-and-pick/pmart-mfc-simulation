@@ -146,7 +146,8 @@ export function ParkingDecor() {
   });
   const lines = useMemo(() => {
     const out: { x: number; z: number; sx: number; sz: number }[] = [];
-    const half = 0.6;
+    // 칸 폭 = 칸 사이 거리(기본 1.2 m, 부산진구 1.0 m)
+    const half = bays.length > 1 ? Math.min(0.6, Math.abs(bays[1].x - bays[0].x) / 2) : 0.6;
     for (const b of bays) {
       out.push({ x: b.x - half, z: b.z, sx: 0.06, sz: 2.0 });
     }

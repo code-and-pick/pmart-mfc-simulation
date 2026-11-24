@@ -402,7 +402,8 @@ export function buildBusanjinLayout(): Layout {
     packQueue: { x: (R.PK.x1 + R.A.x0) / 2, z: R.PK.z0 + 0.6 }, // 패킹 구역 ~ 냉장 서쪽 벽 통로 가운데
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: (R.SHIP.z0 + R.SHIP.z1) / 2 },
     riderPickup: { x: X(-0.6), z: (SHIP_WINDOW[0] + SHIP_WINDOW[1]) / 2 },
-    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.4 + (i % 5) * 1.8, z: 8.6 + Math.floor(i / 5) * 2.0 })),
+    // 한 줄 9칸(칸 폭 1.0 m, 오토바이는 줄에 직각으로 댐 — 다른 지점과 같은 그림)(사용자 2026-11-24 "라이더 대기 주차 그림이 오토바이를 90도 회전해서 댈 수 있게 일직선으로 그려")
+    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.25 + i * 1.0, z: (R.PARK.z0 + R.PARK.z1) / 2 })),
     riderEntry: { x: 5.0, z: BSJ_BD + 0.3 },
   };
 
