@@ -11,7 +11,7 @@
 import { assignInboundNumbers } from '../domain/workerName';
 import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
-import { inboundCandidates, inboundLines, receiptTemp, splitOrder, type InboundTemp, type OrderDraftLine } from '../domain/testInbound';
+import { inboundCandidates, inboundLines, receiptTemp, splitOrder, type InboundTemp, type OrderDraftLine, type SearchHit } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
 import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
@@ -692,12 +692,14 @@ export class Simulation {
   /** 발주표에 넣을 수 있는 상품 — 센터 취급·판매 중지 아님(search 색인 사본, 한 번 읽고 둔다) */
   async inboundCatalog(): Promise<{ sku: string; name: string }[]> {
     const h = this.requireRealHttp();
-    if (this.catalogCache?.mfcId !== this.params.mfcId) {
-      this.catalogCache = { mfcId: this.params.mfcId, items: inboundCandidates(await h.searchProducts(this.params.mfcId), Number.POSITIVE_INFINITY, () => 0.5) };
-    }
-    return this.catalogCache.items;
+    return inboundCandidates(await this.searchHits(h), Number.POSITIVE_INFINITY, () => 0.5);
   }
-  private catalogCache: { mfcId: string; items: { sku: string; name: string }[] } | null = null;
+  /** search 원본(판매 상태·취급 여부 포함) — 센터마다 한 번 읽고 둔다. 추천은 품절 먼저 고르려고 원본으로 거른다 */
+  private async searchHits(h: HttpBackend): Promise<SearchHit[]> {
+    if (this.searchCache?.mfcId !== this.params.mfcId) this.searchCache = { mfcId: this.params.mfcId, hits: await h.searchProducts(this.params.mfcId) };
+    return this.searchCache.hits;
+  }
+  private searchCache: { mfcId: string; hits: SearchHit[] } | null = null;
 
   /** 직접 넣은 상품 한 줄 — 지금 재고·온도대를 읽어 채운다 */
   async manualOrderLine(sku: string, name: string, qty: number): Promise<OrderDraftLine> {
@@ -711,8 +713,9 @@ export class Simulation {
    * 백엔드 발주 수량 추천 API(R-48)가 열리면 그 값으로 바꾼다
    */
   async recommendInbound(): Promise<OrderDraftLine[]> {
-    this.requireRealHttp();
-    const cands = inboundCandidates(await this.inboundCatalog(), TEST_INBOUND.readMax, Math.random);
+    const h = this.requireRealHttp();
+    // 원본(search 응답)으로 — 정리한 목록({sku,name})을 다시 거르면 취급 여부가 없어 다 빠졌다(11-24 사용자 "추천할 상품을 못 찾았습니다")
+    const cands = inboundCandidates(await this.searchHits(h), TEST_INBOUND.readMax, Math.random);
     const read: { sku: string; name: string; available: number | null; temp: InboundTemp }[] = [];
     for (const c of cands) read.push({ ...c, ...(await this.readSkuForOrder(c.sku)) });
     const tempBy = new Map(read.map((r) => [r.sku, r.temp]));

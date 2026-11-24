@@ -410,10 +410,18 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('GET', `/mfcs/${enc(mfcId)}/lot-labels/${enc(lotId)}`);
   }
 
-  /** search searchProducts(익명 가능) — 센터 취급 상품(시험 입고 후보). 판매 상태는 색인 사본 */
-  async searchProducts(mfcId: string): Promise<{ representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null }[]> {
-    const r: { items?: { representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null }[] } = await this.request('GET', `/search/products?mfcId=${enc(mfcId)}&size=200`);
-    return r.items ?? [];
+  /** search searchProducts(익명 가능) — 센터 취급 상품(입고 발주 후보). 판매 상태는 색인 사본. 쪽(200)을 끝까지(최대 maxPages) — 부산진구 503개 */
+  async searchProducts(mfcId: string, maxPages = 10): Promise<{ representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null }[]> {
+    type Hit = { representativeSku?: string; name?: string; saleState?: string; carried?: boolean | null };
+    const out: Hit[] = [];
+    let cursor: string | null | undefined;
+    for (let i = 0; i < maxPages; i++) {
+      const r: { items?: Hit[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/search/products?mfcId=${enc(mfcId)}&size=200${cursor ? `&cursor=${enc(cursor)}` : ''}`);
+      out.push(...(r.items ?? []));
+      cursor = r.page?.nextCursor;
+      if (!cursor) break;
+    }
+    return out;
   }
 
   /** mfc-inbound createDevInitialStockLoad(0.14.0, MI-3·R-23) — [LAN 시험 전용] 승인 없이 입고 예정(EXPECTED) 하나. 설정 꺼진 곳 404 */
