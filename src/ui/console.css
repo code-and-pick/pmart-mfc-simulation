@@ -1168,3 +1168,4 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .scan-bubble .bc-img svg { max-width: 100%; }
 .scan-bubble .bc-cap, .scan-bubble .bc-val { overflow-wrap: anywhere; }
 .scan-bubble .bc-val { flex-wrap: wrap; letter-spacing: 0; }
+.inb-note { width: 100%; box-sizing: border-box; margin: 6px 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; }

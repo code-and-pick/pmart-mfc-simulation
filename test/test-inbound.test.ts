@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { TEST_INBOUND } from '../src/config';
-import { clampOrderQty, inboundCandidates, inboundLines, orderTotals, receiptTemp, splitOrder, upsertLine } from '../src/domain/testInbound';
+import { INBOUND_ORDER } from '../src/config';
+import { clampOrderQty, inboundCandidates, orderTotals, receiptTemp, recommendationLines, splitOrder, upsertLine } from '../src/domain/testInbound';
+import type { SupplyRecommendation } from '../src/domain/contract';
 
-describe('시험 입고 줄 고르기(MI-3·R-23)', () => {
+describe('입고 발주 후보', () => {
   it('취급·판매 중지 아님만, 품절 먼저, 중복 없이, readMax 까지', () => {
     const hits = [
       { representativeSku: 'A', saleState: 'ON_SALE', carried: true },
@@ -18,39 +19,15 @@ describe('시험 입고 줄 고르기(MI-3·R-23)', () => {
     expect(c.map((x) => x.sku).sort()).toEqual(['A', 'B', 'E']);
     expect(inboundCandidates(hits, 2, () => 0.5)).toHaveLength(2);
   });
-
-  it('판매 가능이 적은 순, 목표까지 모자란 만큼(최소·최대 안), 못 읽은 것은 뒤', () => {
-    const opt = { lines: 3, targetQty: 20, minQty: 5, maxQty: 15 };
-    const lines = inboundLines(
-      [
-        { sku: 'X', name: 'x', available: null },
-        { sku: 'Y', name: 'y', available: 18 },
-        { sku: 'Z', name: 'z', available: 0 },
-        { sku: 'W', name: 'w', available: 9 },
-      ],
-      opt,
-    );
-    expect(lines.map((l) => [l.sku, l.qty])).toEqual([
-      ['Z', 15],
-      ['W', 11],
-      ['Y', 5],
-    ]);
-  });
-
-  it('설정 값이 계약 범위 안(줄 1~40, SKU 당 1~500)', () => {
-    expect(TEST_INBOUND.lines).toBeGreaterThanOrEqual(1);
-    expect(TEST_INBOUND.lines).toBeLessThanOrEqual(40);
-    expect(TEST_INBOUND.minQty).toBeGreaterThanOrEqual(1);
-    expect(TEST_INBOUND.maxQty).toBeLessThanOrEqual(500);
-  });
 });
 
 describe('입고 발주표(사용자 지정·추천 채움·입고 전 수량)', () => {
   const L = (sku: string, qty: number, temp: 'AMBIENT' | 'CHILLED' | 'FROZEN' = 'AMBIENT', source: 'RECOMMEND' | 'MANUAL' = 'MANUAL') => ({ sku, name: sku, available: 3, qty, temp, source });
 
-  it('수량은 1~500 정수', () => {
+  it('수량은 1~화면 한도 정수', () => {
     expect(clampOrderQty(0)).toBe(1);
-    expect(clampOrderQty(999)).toBe(500);
+    expect(clampOrderQty(999, 500)).toBe(500);
+    expect(clampOrderQty(999)).toBe(999);
     expect(clampOrderQty(12.6)).toBe(13);
     expect(clampOrderQty(Number.NaN)).toBe(1);
   });
@@ -63,12 +40,13 @@ describe('입고 발주표(사용자 지정·추천 채움·입고 전 수량)',
     ls = upsertLine(ls, L('A', 7, 'AMBIENT', 'RECOMMEND'), true);
     expect(ls[0]).toMatchObject({ qty: 7, source: 'RECOMMEND' });
     expect(upsertLine(ls, L('A', 490), false)[0].qty).toBe(497);
-    expect(upsertLine(ls, L('A', 600), false)[0].qty).toBe(500);
+    expect(upsertLine(ls, L('A', 600), false)[0].qty).toBe(607);
   });
 
-  it('온도대마다, 40줄씩 입고 예정으로 나눈다', () => {
+  it('온도대마다, 발주 한 건 줄 한도(계약 200)씩 나눈다', () => {
+    expect(INBOUND_ORDER.linesPerRequest).toBe(200);
     const ls = [...Array.from({ length: 45 }, (_, i) => L(`A${i}`, 1)), L('C1', 2, 'CHILLED'), L('F1', 3, 'FROZEN')];
-    const parts = splitOrder(ls);
+    const parts = splitOrder(ls, 40);
     expect(parts.map((p) => [p.temp, p.lines.length])).toEqual([
       ['AMBIENT', 40],
       ['AMBIENT', 5],
@@ -86,5 +64,31 @@ describe('입고 발주표(사용자 지정·추천 채움·입고 전 수량)',
     const t = (s: string) => (s.startsWith('F') ? 'FROZEN' : s.startsWith('C') ? 'CHILLED' : 'AMBIENT') as 'AMBIENT' | 'CHILLED' | 'FROZEN';
     expect(receiptTemp(['F1', 'F2', 'A1'], t)).toBe('FROZEN');
     expect(receiptTemp([], t)).toBe('AMBIENT');
+  });
+});
+
+describe('서버 발주 추천 → 발주표(MI-4, R-48)', () => {
+  const R = (sku: string, o: Partial<SupplyRecommendation>): SupplyRecommendation => ({ sku, missingPolicyFields: [], historyDays: 7, expectedQty: 0, pendingRequestedQty: 0, ...o });
+  it('추천 0 초과만 줄로, 0 은 세기만, null 은 0 으로 채우지 않고 사유별로', () => {
+    const r = recommendationLines(
+      [
+        R('A', { recommendedQty: 12, storageType: 'CHILLED', availableQty: 3, forecastDailyQty: 5, reviewDays: 1, leadDays: 1, safetyDays: 1, targetQty: 15, shortfallQty: 12, productName: '우유' }),
+        R('B', { recommendedQty: 0 }),
+        R('C', { recommendedQty: null, reason: 'INSUFFICIENT_HISTORY' }),
+        R('D', { reason: 'INSUFFICIENT_HISTORY' }),
+        R('E', { recommendedQty: null, reason: 'POLICY_MISSING', missingPolicyFields: ['leadDays'] }),
+        R('F', { recommendedQty: 4, storageType: null }),
+      ],
+      (s) => `이름${s}`,
+      () => 'FROZEN',
+    );
+    expect(r.lines.map((l) => [l.sku, l.qty, l.temp, l.name, l.source])).toEqual([
+      ['A', 12, 'CHILLED', '우유', 'RECOMMEND'],
+      ['F', 4, 'FROZEN', '이름F', 'RECOMMEND'],
+    ]);
+    expect(r.zero).toBe(1);
+    expect(r.skipped).toEqual({ INSUFFICIENT_HISTORY: 2, POLICY_MISSING: 1 });
+    expect(r.lines[0].available).toBe(3);
+    expect(r.lines[0].basis).toContain('목표 15');
   });
 });

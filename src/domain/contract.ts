@@ -673,6 +673,68 @@ export interface InitialStockLoad {
   lines: { sku: string; productName?: string | null; qty: number; receivedQty?: number | null }[];
 }
 
+/** mfc-inbound SupplyRequestState — (0.21.0, MI-4) APPROVED·REJECTED = 센터 관리자 승인·거절 */
+export type SupplyRequestState = 'DRAFT' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'WITHDRAWN' | 'APPROVED' | 'REJECTED';
+
+/** mfc-inbound SupplyRequestBody — 센터 발주(여러 줄) */
+export interface SupplyRequestBody {
+  mfcId: string;
+  requestedReadyAt: string;
+  urgency: 'NORMAL' | 'URGENT';
+  reason: string;
+  recommendationRef?: string;
+  lines: { sku: string; qty: number }[];
+}
+
+/** mfc-inbound SupplyRequest — 승인하면 linkedReceiptId 입고 예정(EXPECTED, approvalId = supplyRequestId) */
+export interface SupplyRequest extends SupplyRequestBody {
+  supplyRequestId: string;
+  version: number;
+  state: SupplyRequestState;
+  submittedBy?: string;
+  submittedAt?: string;
+  approvedLines?: { sku: string; requestedQty: number; approvedQty: number }[];
+  decidedBy?: string | null;
+  decidedAt?: string | null;
+  decisionNote?: string | null;
+  rejectReason?: string | null;
+  linkedReceiptId?: string | null;
+}
+
+/** mfc-inbound SupplyRecommendation(0.21.0, MI-4) — recommendedQty null 이면 추천 안 함(reason). null 을 0 으로 채우지 않는다 */
+export interface SupplyRecommendation {
+  sku: string;
+  productName?: string | null;
+  storageType?: string | null;
+  recommendedQty?: number | null;
+  /** POLICY_MISSING · STORAGE_TYPE_UNKNOWN · INSUFFICIENT_HISTORY · AVAILABILITY_UNKNOWN · SKU_NOT_HANDLED */
+  reason?: string | null;
+  missingPolicyFields: string[];
+  forecastDailyQty?: number | null;
+  historyDays: number;
+  availableQty?: number | null;
+  expectedQty: number;
+  pendingRequestedQty: number;
+  inventoryPosition?: number | null;
+  safetyStockQty?: number | null;
+  targetQty?: number | null;
+  shortfallQty?: number | null;
+  reviewDays?: number | null;
+  leadDays?: number | null;
+  safetyDays?: number | null;
+  orderMultiple?: number | null;
+  minOrderQty?: number | null;
+  policySource?: string | null;
+}
+
+export interface SupplyRecommendations {
+  mfcId: string;
+  calculatedAt: string;
+  availabilityAsOf?: string | null;
+  salesThrough: string;
+  items: SupplyRecommendation[];
+}
+
 export interface InboundTask {
   taskId: string;
   /** (inbound 0.17.0) QUARANTINE_MOVE = 격리품을 격리 구역 칸으로(담당 = 반입한 사람·검수자·보고자) */

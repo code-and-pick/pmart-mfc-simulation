@@ -6,10 +6,10 @@ import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, TEST_INBOUND } from '../config';
+import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, INBOUND_ORDER, TEST_INBOUND } from '../config';
 import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
-import { clampOrderQty, orderTotals, splitOrder, upsertLine, type OrderDraftLine } from '../domain/testInbound';
-import type { InitialStockLoad } from '../domain/contract';
+import { clampOrderQty, RECOMMEND_REASON_KO, orderTotals, splitOrder, upsertLine, type OrderDraftLine } from '../domain/testInbound';
+import type { InitialStockLoad, SupplyRequest } from '../domain/contract';
 import { fmtClock } from '../sim/metrics';
 import type { HttpSettings } from '../sim/simulation';
 import { Help } from './Help';
@@ -267,7 +267,8 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
 }
 
 // ───────── 실서버: 입고 발주(시험 입고 MI-3·R-23) — 사용자 2026-11-24 "사용자 지정 발주·추천값 자동 채움·입고 전 수량 보기" ─────────
-// 발주 넣기 = 입고 예정(EXPECTED)만 만든다 → "입고 예정" 목록에서 수량을 보고 → 입고 차량 부르기(수령). 추천은 백엔드 API(R-48) 전까지 시뮬 임시 규칙.
+// 발주 넣기 = 센터 발주(SUBMITTED) → "승인 대기"에서 센터 관리자가 승인(줄이기·사유)·거절 → 승인하면 입고 예정(EXPECTED) → 수령(입고 차량).
+// 추천 = 백엔드 발주 수량 추천(mfc-inbound 0.21.0 MI-4, R-48) 그대로. 추천 안 한 상품은 사유만(0 으로 채우지 않음).
 
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
@@ -277,6 +278,8 @@ export function TestInboundControls() {
   useTick();
   const [draft, setDraft] = useState<OrderDraftLine[] | null>(null);
   const [expected, setExpected] = useState<InitialStockLoad[] | null>(null);
+  const [pending, setPending] = useState<SupplyRequest[] | null>(null);
+  const [decide, setDecide] = useState<{ req: SupplyRequest; mode: 'APPROVE' | 'REJECT' } | null>(null);
   const [recv, setRecv] = useState<InitialStockLoad[] | null>(null);
   const [busy, setBusy] = useState('');
   const [log, setLog] = useState<OrderLog[]>([]);
@@ -289,6 +292,11 @@ export function TestInboundControls() {
     } catch (e) {
       push(`입고 예정 읽기 실패 — ${why(e)}`, true);
     }
+    try {
+      setPending(await sim.pendingSupply());
+    } catch (e) {
+      push(`승인 대기 발주 읽기 실패 — ${why(e)}`, true);
+    }
   };
   useEffect(() => {
     void refresh();
@@ -299,11 +307,17 @@ export function TestInboundControls() {
   }, [sim.params.mfcId]);
 
   const recommend = async (base: OrderDraftLine[]) => {
-    setBusy('재고 적은 상품 찾는 중…');
+    setBusy('서버 발주 추천 읽는 중…');
     try {
       const rec = await sim.recommendInbound();
-      if (!rec.length) push('추천할 상품을 못 찾았습니다(센터 취급 상품 없음)', true);
-      setDraft(rec.reduce((ls, l) => upsertLine(ls, l, true), base));
+      const skip = Object.entries(rec.skipped)
+        .map(([k, n]) => `${RECOMMEND_REASON_KO[k] ?? k} ${n}`)
+        .join(' · ');
+      push(
+        `추천 ${rec.lines.length}줄(상품 ${rec.asked}개 물음${rec.zero ? ` · 지금 필요 없음 ${rec.zero}` : ''}${skip ? ` · 추천 안 함: ${skip}` : ''}${rec.salesThrough ? ` · 판매 ${rec.salesThrough}까지` : ''})`,
+        !rec.lines.length,
+      );
+      setDraft(rec.lines.reduce((ls, l) => upsertLine(ls, l, true), base));
     } catch (e) {
       push(`추천 읽기 실패 — ${why(e)}`, true);
     }
@@ -311,11 +325,11 @@ export function TestInboundControls() {
   };
   const order = async (lines: OrderDraftLine[]) => {
     setDraft(null);
-    setBusy('입고 예정 만드는 중…');
+    setBusy('발주 넣는 중…');
     try {
-      const loads = await sim.placeInboundOrder(lines);
+      const reqs = await sim.placeInboundOrder(lines);
       const t = orderTotals(lines);
-      push(`발주 ${t.items}품목 ${t.units}개 → 입고 예정 ${loads.length}건(수령 전) — 아래 "수령"을 누르면 차량이 오고 검사·적치가 시작됩니다`);
+      push(`발주 ${t.items}품목 ${t.units}개 → ${reqs.length}건 승인 대기 — 아래 "승인"을 누르면 입고 예정이 생깁니다`);
       await refresh();
     } catch (e) {
       push(`발주 실패 — ${why(e)}`, true);
@@ -351,12 +365,47 @@ export function TestInboundControls() {
   const recvUnits = (recv ?? []).reduce((a, l) => a + sumQty(l), 0);
   const recvItems = (recv ?? []).reduce((a, l) => a + l.lines.length, 0);
   return (
-    <Sec title="입고 발주" aside="시험 입고">
+    <Sec title="입고 발주" aside="센터 발주">
       <div className="act-split">
         <Act icon="🧮" title="추천으로 채우기" sub="재고 적은 상품 자동" disabled={!!busy} onClick={() => recommend([])} />
         <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
       </div>
       {busy && <div className="busy">{busy}</div>}
+      <div className="inb-exp">
+        <div className="inb-exp-h">
+          <b>승인 대기(발주)</b>
+          <span>{pending === null ? '…' : `${pending.length}건 · ${pending.reduce((a, r) => a + r.lines.reduce((b, l) => b + l.qty, 0), 0)}개`}</span>
+        </div>
+        {(pending ?? []).map((r) => (
+          <div key={r.supplyRequestId} className="inb-load">
+            <div className="inb-load-h">
+              <span title={r.supplyRequestId}>발주 {r.supplyRequestId.slice(-6)}</span>
+              <span>
+                {r.lines.length}품목 {r.lines.reduce((a, l) => a + l.qty, 0)}개
+              </span>
+              <button className="inb-mini" disabled={!!busy} onClick={() => setDecide({ req: r, mode: 'APPROVE' })} title="센터 관리자 승인 — 줄마다 줄일 수 있음">
+                ✅ 승인
+              </button>
+              <button className="inb-mini" disabled={!!busy} onClick={() => setDecide({ req: r, mode: 'REJECT' })} title="센터 관리자 거절 — 사유 필수">
+                거절
+              </button>
+            </div>
+            <details>
+              <summary>상품 보기</summary>
+              <table className="ask-tbl">
+                <tbody>
+                  {r.lines.map((x) => (
+                    <tr key={x.sku}>
+                      <td title={x.sku}>{sim.productName(x.sku)}</td>
+                      <td>{x.qty}개</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </div>
+        ))}
+      </div>
       <div className="inb-exp">
         <div className="inb-exp-h">
           <b>입고 예정(수령 전)</b>
@@ -406,6 +455,18 @@ export function TestInboundControls() {
           </div>
         ))}
       </div>
+      {decide && (
+        <Decide
+          req={decide.req}
+          mode={decide.mode}
+          onClose={() => setDecide(null)}
+          onDone={(text, warn) => {
+            setDecide(null);
+            push(text, warn);
+            void refresh();
+          }}
+        />
+      )}
       {draft && <OrderDraft initial={draft} busy={!!busy} onRecommend={recommend} onOrder={order} onClose={() => setDraft(null)} />}
       {recv && (
         <Ask title={`${recv.length > 1 ? `입고 예정 ${recv.length}건 · ` : ''}${recvItems}품목 ${recvUnits}개를 수령할까요?`} onClose={() => setRecv(null)}>
@@ -437,6 +498,88 @@ export function TestInboundControls() {
       )}
       <ResultLog rows={log} />
     </Sec>
+  );
+}
+
+/** 발주 승인·거절(센터 관리자) — 승인은 줄마다 0~요청 수량, 줄였으면 사유 필수. 모두 0 이면 거절로(서버 400) */
+function Decide({ req, mode, onClose, onDone }: { req: SupplyRequest; mode: 'APPROVE' | 'REJECT'; onClose: () => void; onDone: (text: string, warn?: boolean) => void }) {
+  const { sim } = useApp();
+  const [qty, setQty] = useState<Record<string, number>>(() => Object.fromEntries(req.lines.map((l) => [l.sku, l.qty])));
+  const [note, setNote] = useState('');
+  const [msg, setMsg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const cut = req.lines.some((l) => qty[l.sku] !== l.qty);
+  const all0 = req.lines.every((l) => qty[l.sku] === 0);
+  const units = req.lines.reduce((a, l) => a + qty[l.sku], 0);
+  const go = async () => {
+    if (mode === 'APPROVE' && all0) return setMsg('모두 0 이면 거절로 하세요');
+    if ((mode === 'REJECT' || cut) && !note.trim()) return setMsg(mode === 'REJECT' ? '거절 사유를 적으세요' : '줄인 사유를 적으세요');
+    setBusy(true);
+    setMsg('');
+    try {
+      if (mode === 'APPROVE') {
+        const r = await sim.approveSupply(req, qty, note);
+        onDone(`발주 ${req.supplyRequestId.slice(-6)} 승인 ${units}개 → 입고 예정 ${r.linkedReceiptId?.slice(-6) ?? ''} — 아래 "수령"으로 차량 부르기`);
+      } else {
+        await sim.rejectSupply(req, note.trim());
+        onDone(`발주 ${req.supplyRequestId.slice(-6)} 거절 — ${note.trim()}`);
+      }
+    } catch (e) {
+      setMsg(`못 함 — ${(e as Error).message}`);
+      setBusy(false);
+    }
+  };
+  return (
+    <Ask title={`발주 ${req.supplyRequestId.slice(-6)} ${mode === 'APPROVE' ? '승인' : '거절'}`} onClose={onClose}>
+      <table className="ask-tbl">
+        <thead>
+          <tr>
+            <th>상품</th>
+            <th>요청</th>
+            {mode === 'APPROVE' && <th>승인</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {req.lines.map((l) => (
+            <tr key={l.sku}>
+              <td title={l.sku}>{sim.productName(l.sku)}</td>
+              <td>{l.qty}</td>
+              {mode === 'APPROVE' && (
+                <td>
+                  <input
+                    className="inb-qty"
+                    type="number"
+                    min={0}
+                    max={l.qty}
+                    value={qty[l.sku]}
+                    aria-label={`${sim.productName(l.sku)} 승인 수량`}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setQty((q) => ({ ...q, [l.sku]: Number.isFinite(v) ? Math.max(0, Math.min(l.qty, Math.round(v))) : l.qty }));
+                    }}
+                  />
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <input
+        className="inb-note"
+        placeholder={mode === 'REJECT' ? '거절 사유(필수)' : cut ? '줄인 사유(필수)' : '메모(선택)'}
+        value={note}
+        maxLength={500}
+        onChange={(e) => setNote(e.target.value)}
+      />
+      {msg && <div className="busy">{msg}</div>}
+      <div className="ask-warn">{mode === 'APPROVE' ? `⚠ 실서버 — 승인하면 ${units}개 입고 예정(수령 전)이 생깁니다.` : '⚠ 실서버 — 거절하면 되돌릴 수 없습니다(다시 발주).'}</div>
+      <div className="ask-acts">
+        <button onClick={onClose}>취소</button>
+        <button className={mode === 'APPROVE' ? 'go' : 'red'} disabled={busy} onClick={() => void go()}>
+          {mode === 'APPROVE' ? '✅ 승인' : '거절'}
+        </button>
+      </div>
+    </Ask>
   );
 }
 
@@ -481,14 +624,12 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
             <option key={c.sku} value={label(c)} />
           ))}
         </datalist>
-        <input type="number" min={1} max={500} value={qty} onChange={(e) => setQty(clampOrderQty(Number(e.target.value)))} aria-label="수량" />
+        <input type="number" min={1} max={INBOUND_ORDER.maxQty} value={qty} onChange={(e) => setQty(clampOrderQty(Number(e.target.value)))} aria-label="수량" />
         <button onClick={() => void add()}>추가</button>
       </div>
       <button className="inb-rec" disabled={props.busy} onClick={() => props.onRecommend(lines)}>
         🧮 추천값으로 채우기{' '}
-        <Tip
-          text={`지금은 시뮬 임시 규칙 — 취급 상품 중 판매 가능이 적은 ${TEST_INBOUND.lines}개를 ${TEST_INBOUND.targetQty}개까지(줄마다 ${TEST_INBOUND.minQty}~${TEST_INBOUND.maxQty}). 백엔드 발주 추천 API(R-48)가 열리면 그 값으로 바뀝니다. 직접 넣은 줄은 그대로 둡니다`}
-        />
+        <Tip text="서버 발주 수량 추천 — 하루 판매(인계 실적 평균) × (주기 + 납기 + 안전 일수) = 목표, 목표 − (지금 판매 가능 + 입고 예정) 만큼. 추천 0 은 빼고, 추천 안 한 상품(인계 실적 7일 미만 등)은 사유만 아래 기록에. 직접 넣은 줄은 그대로 둡니다" />
       </button>
       {msg && <div className="busy">{msg}</div>}
       {lines.length > 0 && (
@@ -507,7 +648,11 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
             {lines.map((l) => (
               <tr key={l.sku}>
                 <td title={l.sku}>
-                  {l.source === 'RECOMMEND' && <span className="inb-tag">추천</span>}
+                  {l.source === 'RECOMMEND' && (
+                    <span className="inb-tag" title={l.basis ?? '서버 추천'}>
+                      추천
+                    </span>
+                  )}
                   {l.name}
                 </td>
                 <td>{TEMP_KO[l.temp]}</td>
@@ -517,7 +662,7 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
                     className="inb-qty"
                     type="number"
                     min={1}
-                    max={500}
+                    max={INBOUND_ORDER.maxQty}
                     value={l.qty}
                     aria-label={`${l.name} 입고 수량`}
                     onChange={(e) => {
@@ -553,10 +698,10 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
           <b>
             {t.items}품목 {t.units}개
           </b>{' '}
-          · 입고 예정 {parts}건
+          · 발주 {parts}건(온도대마다)
         </dd>
       </dl>
-      {confirm && <div className="ask-warn">⚠ 실서버에 입고 예정(EXPECTED)을 만듭니다. 재고는 아직 그대로이고, 수령(입고 차량 부르기)할 때 들어옵니다.</div>}
+      {confirm && <div className="ask-warn">⚠ 실서버에 센터 발주를 넣습니다(승인 대기). 승인하면 입고 예정이 생기고, 재고는 수령(입고 차량 부르기)할 때 들어옵니다. 같은 상품의 승인 전 발주가 있으면 서버가 거절합니다.</div>}
       <div className="ask-acts">
         <button onClick={props.onClose}>취소</button>
         <button className="go" disabled={!lines.length || props.busy} onClick={() => (confirm ? props.onOrder(lines) : setConfirm(true))}>

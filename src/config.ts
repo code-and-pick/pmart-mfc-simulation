@@ -504,16 +504,19 @@ export const INBOUND_UNLOAD = {
 };
 
 /** 시험 입고(MI-3·R-23 — mfc-inbound 0.14.0 POST /dev-initial-stock-loads, LAN 설정 켠 곳만). 재고만 채우는 시험 입구 */
+/** 입고 발주(센터 발주·승인, mfc-inbound 0.21.0 MI-4 — R-48) */
+export const INBOUND_ORDER = {
+  /** 발주 한 건 줄 수 — 계약 SupplyRequest 줄 1~200 [확정] */
+  linesPerRequest: 200,
+  /** 한 줄 수량 화면 한도(계약은 1 이상만) [시뮬] */
+  maxQty: 9999,
+  /** 추천 한 번에 묻는 SKU 수 — 계약 supply-recommendations sku 1~100 [확정] */
+  recommendBatch: 100,
+  /** 희망 사용준비 시각 = 지금 + 이만큼(시간) — 계약 requestedReadyAt 필수, 업무 문서에 값 없음 [시뮬] */
+  readyAfterHours: 24,
+};
+
 export const TEST_INBOUND = {
-  /** 한 번에 넣는 SKU 줄 수(계약 1~40) [시뮬] */
-  lines: 8,
-  /** 판매 가능 수량을 이만큼까지 채운다 [시뮬] */
-  targetQty: 20,
-  /** 줄마다 최소·최대 수량(계약 SKU 당 1~500) [시뮬] */
-  minQty: 5,
-  maxQty: 40,
-  /** 재고를 읽어 볼 후보 SKU 수 — 품절(TEMPORARILY_SOLD_OUT) 먼저, 그다음 무작위 [시뮬] */
-  readMax: 30,
   /** 수령 위치(입고·검수 구역, mfc-location) — locationCodes SIM_POINT.receiving [확정] */
   receivingLocation: 'RCV-A-01',
   /**

@@ -9,9 +9,9 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
+import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, INBOUND_ORDER, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
-import { inboundCandidates, inboundLines, receiptTemp, splitOrder, type InboundTemp, type OrderDraftLine, type SearchHit } from '../domain/testInbound';
+import { inboundCandidates, receiptTemp, recommendationLines, splitOrder, type InboundTemp, type OrderDraftLine, type SearchHit } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
 import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
@@ -24,7 +24,7 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { InboundTask, InitialStockLoad } from '../domain/contract';
+import type { InboundTask, InitialStockLoad, SupplyRequest } from '../domain/contract';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -273,6 +273,7 @@ export class Simulation {
       const supTokens = new TokenSource(REAL_LINK.supervisorAccount, REAL_LINK.tokenRefreshMarginSec);
       const sup = new HttpBackend({ baseUrl: http?.baseUrl ?? '/api/v1', token: () => supTokens.get(), sourceSystem: 'mfc-simulator-admin', now: () => this.time, timeoutMs: 8000 });
       sup.onApi((r) => this.push(this.apiLog, { ...r, note: '관리자' }));
+      this.supHttp = sup;
       (this as { admin: AdminDesk | null }).admin = new AdminDesk(h, sup, params.mfcId, () => Date.now(), REAL_LINK.historyMaxPages, () => supTokens.operatorId, async (ids) => {
         const need = ids.filter((id) => !this.real?.labels.has(id));
         for (let i = 0; i < need.length; i += 50) for (const l of await h.getEmployeeLabels(need.slice(i, i + 50))) this.real?.labels.set(l.operatorId, l);
@@ -384,6 +385,8 @@ export class Simulation {
   private virtualTarget = 0;
   /** 관찰 계정 어댑터(실서버 모드) — 시험 입고처럼 사용자가 누른 쓰기에만 쓴다 */
   private realHttp: HttpBackend | null = null;
+  /** 센터 관리자 계정(REAL_LINK.supervisorAccount) — 발주·승인·거절(MFC_SUPERVISOR) */
+  private supHttp: HttpBackend | null = null;
   /** MOCK 화면용 관찰판 — 실서버 화면(주문 카드·구역 재고·바코드)을 MOCK 에서도 보게. 시뮬 동작은 쓰지 않음(사용자 2026-11-20) */
   private mockBoard: RealBoard | null = null;
   /** 3D 라이더 이름표 — 실서버면 라이더 번호·가린 이름(ADR-0070), 모르면 그대로(사용자 2026-11-20 "RD-… 왜 또 이렇게 뜨냐", PC 5 요청) */
@@ -709,34 +712,76 @@ export class Simulation {
     return { sku, name, qty, available: r.available, temp: r.temp, source: 'MANUAL' };
   }
 
-  /**
-   * 추천으로 채우기 — 지금은 시뮬레이터 임시 규칙(취급 상품 중 판매 가능이 적은 순, 목표 TEST_INBOUND.targetQty 까지 모자란 만큼).
-   * 백엔드 발주 수량 추천 API(R-48)가 열리면 그 값으로 바꾼다
-   */
-  async recommendInbound(): Promise<OrderDraftLine[]> {
-    const h = this.requireRealHttp();
-    // 원본(search 응답)으로 — 정리한 목록({sku,name})을 다시 거르면 취급 여부가 없어 다 빠졌다(11-24 사용자 "추천할 상품을 못 찾았습니다")
-    const cands = inboundCandidates(await this.searchHits(h), TEST_INBOUND.readMax, Math.random);
-    const read: { sku: string; name: string; available: number | null; temp: InboundTemp }[] = [];
-    for (const c of cands) read.push({ ...c, ...(await this.readSkuForOrder(c.sku)) });
-    const tempBy = new Map(read.map((r) => [r.sku, r.temp]));
-    return inboundLines(read, TEST_INBOUND).map((l) => ({ ...l, temp: tempBy.get(l.sku) ?? 'AMBIENT', source: 'RECOMMEND' as const }));
+  private requireSupHttp(): HttpBackend {
+    this.requireRealHttp();
+    if (!this.supHttp) throw new Error('센터 관리자 계정이 없습니다');
+    return this.supHttp;
+  }
+
+  /** 상품 이름(search 사본) — 발주 줄은 SKU·수량만 와서 */
+  productName(sku: string): string {
+    return this.searchCache?.hits.find((h) => h.representativeSku === sku)?.name ?? sku;
   }
 
   /**
-   * 발주 넣기 — 온도대마다(40줄씩) 입고 예정(EXPECTED)만 만든다. 수령은 receiveInbound 로 따로(사용자 2026-11-24 "입고 전에 입고 수량을 볼 수 있게").
-   * 응답이 없으면 같은 Idempotency-Key 로 다시(같은 키 = 같은 입고 예정)
+   * 추천으로 채우기 — 백엔드 발주 수량 추천(mfc-inbound 0.21.0 MI-4, R-48)을 센터 취급 상품 전부에 묻는다(100개씩).
+   * 추천 0 초과만 줄로, 추천 안 함(null)은 사유별 개수만(0 으로 채우지 않음). 시뮬 임시 규칙은 지움(11-24)
    */
-  async placeInboundOrder(lines: readonly OrderDraftLine[]): Promise<InitialStockLoad[]> {
+  async recommendInbound(): Promise<{ lines: OrderDraftLine[]; zero: number; skipped: Record<string, number>; asked: number; salesThrough: string | null }> {
     const h = this.requireRealHttp();
+    const skus = inboundCandidates(await this.searchHits(h), Number.POSITIVE_INFINITY, () => 0.5).map((c) => c.sku);
+    const items = [];
+    let salesThrough: string | null = null;
+    for (let i = 0; i < skus.length; i += INBOUND_ORDER.recommendBatch) {
+      const r = await h.listSupplyRecommendations(this.params.mfcId, skus.slice(i, i + INBOUND_ORDER.recommendBatch));
+      items.push(...r.items);
+      salesThrough = r.salesThrough;
+    }
+    return { ...recommendationLines(items, (s) => this.productName(s), (s) => this.skuTemp(s)), asked: skus.length, salesThrough };
+  }
+
+  /**
+   * 발주 넣기 — 센터 관리자 계정으로 온도대마다(200줄씩) 발주(SUBMITTED). 승인(approveSupply)하면 서버가 입고 예정(EXPECTED)을 만든다.
+   * 온도대마다 따로 = 입고 예정 하나가 입고칸 하나(R-31). 응답이 없으면 같은 Idempotency-Key 로 다시
+   */
+  async placeInboundOrder(lines: readonly OrderDraftLine[]): Promise<SupplyRequest[]> {
+    const h = this.requireSupHttp();
     const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    const out: InitialStockLoad[] = [];
+    const ready = new Date(Date.now() + INBOUND_ORDER.readyAfterHours * 3600_000).toISOString();
+    const out: SupplyRequest[] = [];
     for (const [i, part] of splitOrder(lines).entries()) {
-      const load = await retryUnknown(() => h.createDevInitialStockLoad(this.params.mfcId, part.lines.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}:${part.temp}:${i}`));
-      out.push(load);
-      this.log(`입고 발주 ${load.receiptId} — ${TEMP_KO[part.temp]} ${part.lines.length}품목 ${part.lines.reduce((a, l) => a + l.qty, 0)}개 입고 예정`);
+      const rec = part.lines.filter((l) => l.source === 'RECOMMEND').length;
+      const reason = `시뮬레이터 입고 발주 ${TEMP_KO[part.temp]} — 추천 ${rec}줄 · 직접 ${part.lines.length - rec}줄`;
+      const body = { mfcId: this.params.mfcId, requestedReadyAt: ready, urgency: 'NORMAL' as const, reason, lines: part.lines.map((l) => ({ sku: l.sku, qty: l.qty })) };
+      const req = await retryUnknown(() => h.createSupplyRequest(body, `sim-sr:${tag}:${part.temp}:${i}`));
+      out.push(req);
+      this.log(`입고 발주 ${req.supplyRequestId} — ${TEMP_KO[part.temp]} ${part.lines.length}품목 ${part.lines.reduce((a, l) => a + l.qty, 0)}개 승인 대기`);
     }
     return out;
+  }
+
+  /** 승인 대기 발주(SUBMITTED) */
+  async pendingSupply(): Promise<SupplyRequest[]> {
+    return this.requireSupHttp().listSupplyRequests(this.params.mfcId, ['SUBMITTED']);
+  }
+
+  /** 승인 — 줄인 줄만 보낸다(없는 줄 = 요청 수량 그대로). 줄였으면 note 필수(서버 400). 승인하면 입고 예정이 생긴다 */
+  async approveSupply(req: SupplyRequest, approved: Record<string, number>, note: string): Promise<SupplyRequest> {
+    const h = this.requireSupHttp();
+    const cut = req.lines.filter((l) => approved[l.sku] !== undefined && approved[l.sku] !== l.qty).map((l) => ({ sku: l.sku, approvedQty: approved[l.sku] }));
+    const body = { ...(cut.length ? { lines: cut } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
+    const key = `sim-sr-ok:${req.supplyRequestId}:${cut.map((c) => `${c.sku}=${c.approvedQty}`).join(',')}`;
+    const r = await retryUnknown(() => h.approveSupplyRequest(req.supplyRequestId, req.version, body, key));
+    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → 입고 예정 ${r.linkedReceiptId ?? '?'}`);
+    return r;
+  }
+
+  /** 거절(사유 필수) */
+  async rejectSupply(req: SupplyRequest, reason: string): Promise<SupplyRequest> {
+    const h = this.requireSupHttp();
+    const r = await retryUnknown(() => h.rejectSupplyRequest(req.supplyRequestId, req.version, reason, `sim-sr-no:${req.supplyRequestId}`));
+    this.log(`발주 ${req.supplyRequestId} 거절 — ${reason}`);
+    return r;
   }
 
   /** 수령 전 입고 예정 목록(이 센터 EXPECTED — 시험 발주·정식 승인 모두) */

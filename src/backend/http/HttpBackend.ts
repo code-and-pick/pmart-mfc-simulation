@@ -20,6 +20,10 @@ import {
   type HandoverCommitResult,
   type InboundTask,
   type InitialStockLoad,
+  type SupplyRequest,
+  type SupplyRequestBody,
+  type SupplyRequestState,
+  type SupplyRecommendations,
   type InboundTaskExecution,
   type ReturnArrival,
   type ReturnInspectionLine,
@@ -427,6 +431,36 @@ export class HttpBackend implements FulfillmentPort {
   /** mfc-inbound createDevInitialStockLoad(0.14.0, MI-3·R-23) — [LAN 시험 전용] 승인 없이 입고 예정(EXPECTED) 하나. 설정 꺼진 곳 404 */
   createDevInitialStockLoad(mfcId: string, lines: { sku: string; qty: number }[], idempotencyKey: string): Promise<InitialStockLoad> {
     return this.request('POST', '/dev-initial-stock-loads', { body: { mfcId, lines }, idempotencyKey });
+  }
+
+  // ── 센터 발주·승인·추천(mfc-inbound 0.21.0, MI-4 — R-48) ──
+
+  /** createSupplyRequest — 발주(줄 1~200) → SUBMITTED. 같은 센터·SKU 미해결 요청이 있으면 409 DUPLICATE_OPEN_REQUEST */
+  createSupplyRequest(body: SupplyRequestBody, idempotencyKey: string): Promise<SupplyRequest> {
+    return this.request('POST', '/supply-requests', { body, idempotencyKey });
+  }
+
+  /** listSupplyRequests — 그 센터 발주 목록(state 비우면 끝나지 않은 것). 한 쪽(≤200)만 */
+  async listSupplyRequests(mfcId: string, states: SupplyRequestState[] = []): Promise<SupplyRequest[]> {
+    const q = [`mfcId=${enc(mfcId)}`, 'size=200', ...states.map((s) => `state=${s}`)].join('&');
+    const r: { items?: SupplyRequest[] } = await this.request('GET', `/supply-requests?${q}`);
+    return r.items ?? [];
+  }
+
+  /** approveSupplyRequest — [센터 관리자] SUBMITTED → APPROVED + 입고 예정. lines 에 없는 줄은 요청 수량 그대로, 줄이면 note 필수 */
+  approveSupplyRequest(id: string, version: number, body: { lines?: { sku: string; approvedQty: number }[]; note?: string }, idempotencyKey: string): Promise<SupplyRequest> {
+    return this.request('POST', `/supply-requests/${enc(id)}/approvals`, { body, idempotencyKey, expectedVersion: version });
+  }
+
+  /** rejectSupplyRequest — [센터 관리자] SUBMITTED → REJECTED(사유 필수) */
+  rejectSupplyRequest(id: string, version: number, reason: string, idempotencyKey: string): Promise<SupplyRequest> {
+    return this.request('POST', `/supply-requests/${enc(id)}/rejections`, { body: { reason }, idempotencyKey, expectedVersion: version });
+  }
+
+  /** listSupplyRecommendations — SKU 1~100 의 발주 수량 추천과 근거(저장 안 함, 부를 때마다 계산) */
+  listSupplyRecommendations(mfcId: string, skus: readonly string[]): Promise<SupplyRecommendations> {
+    const q = [`mfcId=${enc(mfcId)}`, ...skus.map((s) => `sku=${enc(s)}`)].join('&');
+    return this.request('GET', `/supply-recommendations?${q}`);
   }
 
   /** mfc-inbound listInitialStockLoads(0.12.0, MB-1) — 센터의 입고 예정(기본 EXPECTED·PENDING, 오래된 순). 그 센터 운영자. 한 쪽(≤200)만 */
