@@ -184,7 +184,6 @@ export function buildBusanjinLayout(): Layout {
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, (R.CH.x0 + R.CH.x1) / 2 + (i - (row.length - 1) / 2) * RACK_LEN, EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
   // 서쪽 끝·가운데 통로 한 선: G 8 | 8, H 8 | 4 — 동쪽 끝만 짧음(사용자 2026-11-24 "이게 무슨 정돈된 거야 삐뚤빼뚤하구만" → "모든 줄을 서쪽 끝에 맞춤")
-  const sX0 = COLD.rowX0;
   const gNorth = [...run('G02', 1, 8), ...run('G03', 1, 8)];
   const hSouth = [...run('H01', 1, 8), ...run('H02', 4, 4)]; // 서쪽 묶음 H01-01~08 | 동쪽 H02-04~07(넓은 칸 랙 H01-02~06·H02-07 포함)
   // 북쪽 쌍 = 동쪽 띠에서 옮긴 F02(북쪽 면) | F03(남쪽 면), 7랙씩 서쪽 묶음에(사용자 2026-11-24 "남쪽 상온 랙 2줄만 있는데 거기로 2줄 더 이동 시켜봐")
@@ -205,19 +204,19 @@ export function buildBusanjinLayout(): Layout {
   // (사용자 2026-11-24 "통로 앞은 빼게 통로앞 2 2 동쪽으로 붙여서 동쪽 묶임이 총 8개가 되게 해" + 화면 사진 E02-04~05·E03-04~05, G03-03~04·H02-06~07)
   const MOVE_E = 2;
   const thirdX0 = (k: number) => R.CQ.x0 - 1.0 - (MOVE_E + Math.max(southPairs[k][0][2].length, southPairs[k][1][2].length)) * RACK_LEN;
-  // 남은 남쪽 띠 랙(쌍마다 면 12 = 서쪽·동쪽 묶음)은 4 | 4 묶음 3개씩 — 서쪽 끝 sX0 ~ 남동쪽 모서리 묶음 사이에 묶음 사이 통로를 같게
+  // 남은 남쪽 띠 랙(쌍마다 면 10)은 BLK 랙 묶음으로
   // (사용자 2026-11-24 "남쪽에 남은 상온구역랙들 4 4 / 4 4 이렇게 배치해봐")
   const BLK = 5; // 4 | 4 · 4 | 4 · 2 | 2 → 5 | 5 · 5 | 5(사용자 2026-11-24 화면 사진 + "여기 5 5 / 5 5 이렇게 놔줘")
   southPairs.forEach(([north, south], k) => {
-    const nMain = Math.max(north[0].length + north[1].length, south[0].length + south[1].length) - MOVE_E;
-    const nBlk = Math.ceil(nMain / BLK);
-    // 가운데 묶음 동쪽 끝 = 냉장 동쪽 벽 바깥면(통로로 안 튀어나오게, 사용자 2026-11-24 "통로 튀어나가지 않게 냉장구역 벽이랑 4개묶음 랙 위치 일직선으로"), 묶음 사이 통로는 같게
-    const gap = (R.B.x1 + 0.1 - sX0 - nMain * RACK_LEN) / (nBlk - 1);
+    // 두 묶음을 냉장 피킹 랙 선에 맞춤 — 서쪽 묶음 = 냉장 서쪽 묶음(5랙) 자리, 사이 통로 1.4 m = 냉장 가운데 통로
+    // (사용자 2026-11-24 "서쪽랙은 동쪽으로 밀고 동쪽랙은 서쪽으로 밀어 둘이 공간이 너무 멀잖아" — 전엔 동쪽 끝 = 냉장 동쪽 벽, 사이 4.9 m)
+    const gap = 1.4;
+    const bX0 = (R.B.x0 + R.B.x1) / 2 - (5 * RACK_LEN + 1.4 + 6 * RACK_LEN) / 2;
     const face = ([w, e, t]: Face3, cz: number, f: 1 | -1) => {
       const all = [...w, ...e];
       const main = all.slice(0, all.length - MOVE_E);
       const corner = [...all.slice(all.length - MOVE_E), ...t];
-      main.forEach((r, i) => ambient.push(place(r, sX0 + Math.floor(i / BLK) * (BLK * RACK_LEN + gap) + ((i % BLK) + 0.5) * RACK_LEN, cz, 'x', f)));
+      main.forEach((r, i) => ambient.push(place(r, bX0 + Math.floor(i / BLK) * (BLK * RACK_LEN + gap) + ((i % BLK) + 0.5) * RACK_LEN, cz, 'x', f)));
       corner.forEach((r, i) => ambient.push(place(r, thirdX0(k) + (i + 0.5) * RACK_LEN, cz, 'x', f)));
     };
     face(north, SOUTH_PAIR_Z(k) + RACK_DEPTH / 2, -1);
