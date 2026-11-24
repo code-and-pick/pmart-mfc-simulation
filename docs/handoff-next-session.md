@@ -1,161 +1,204 @@
-# 다음 세션 인계 — PMart MFC 가상 현장 (2026-11-21 기준)
+# 다음 세션 인계 — PMart MFC 가상 현장 (2026-11-24 기준)
 
-새 세션은 이 파일부터 읽는다. 그다음 `CLAUDE.md`(절대 규칙), `docs/backend-requests.md`(백엔드 요청 R-xx 상태), `docs/worklog/2026-11-20.md`·`2026-11-21.md`(무엇을 왜 바꿨는지)를 본다.
-최신 커밋: `c8c7ff5`(main, origin 푸시 완료, 작업 트리 깨끗). typecheck·vitest 138·build 통과.
+다른 계정의 새 세션은 **이 파일부터** 읽는다. 앞 세션의 Claude 메모리(`~/.claude/.../memory`)는 새 계정에 없으므로, 메모리에 있던 규칙·사용자 성향·진행 상태를 모두 여기 옮겼다.
+
+그다음 읽을 것:
+- `CLAUDE.md`(절대 규칙)
+- `docs/backend-requests.md`(백엔드 요청 R-xx 상태)
+- `docs/worklog/2026-11-24.md`(오늘 무엇을 왜 바꿨는지, 사용자 원문 포함)
+
+기준 시점:
+- 최신 커밋 = 이 문서를 넣은 커밋(main).
+- 원격(origin/main)은 `6929e03`까지다. 그 뒤 커밋은 **미푸시**다(아래 5절).
+- 시험: vitest 210, typecheck, build 통과(11-24, 이 세션이 직접 돌림).
 
 ---
 
 ## 1. 프로젝트 한눈에
 
-- **무엇**: PMart MFC(부산진구 시험 센터 `MFC-SEED-01`)의 3D 디지털 트윈. Vite 6 + React 19 + react-three-fiber 9(Three 0.169) + Vitest.
-- **두 모드**
-  - **MOCK**: 브라우저 안 가짜 백엔드(`src/backend/mock`)로 주문·피킹·패킹·입고를 돌린다.
-  - **실서버**: 공용 LAN 백엔드(게이트웨이)를 개발 서버 프록시로 읽고, 가상 작업자·시험 입고·관리 탭은 쓰기도 한다.
-- **실행**: `npm run dev` → http://localhost:5180. LAN 공개 주소는 http://192.168.0.32:5180(이 PC = PC1 화면).
-- **쓰기 허용 기기**: PC1(이 PC)과 D603-15(192.168.0.222, `REAL_LINK.lanViewers`, 사용자 결정). 다른 기기는 조회만.
+- **무엇**: PMart(퀵커머스) MFC 의 피킹·패킹·입고·적치·인계를 3D 로 돌리는 **디지털 트윈**이다.
+  - 사용자는 PMart 실제 시스템을 만드는 중이고, 이 저장소는 백엔드와 연동하는 가상 현장이다.
+  - 스택: Vite 6 + TS + React 19 + react-three-fiber 9(Three 0.169) + Vitest.
+- **두 모드**(머리줄 스위치)
+  - **MOCK**: 브라우저 안 가짜 백엔드(`src/backend/mock`).
+  - **실서버**: 공용 LAN 백엔드 게이트웨이를 개발 서버 프록시로 읽는다. 가상 작업자·입고 발주·관리 탭은 **실서버에 쓴다**.
+- **실행**: `npm run dev` → http://localhost:5180.
+  - LAN 공개 주소는 http://192.168.0.32:5180(PC1).
+  - 쓰기 허용 기기는 `REAL_LINK.lanViewers`(192.168.0.101·192.168.0.222)와 PC1. 다른 기기는 조회만 한다.
+- **지점 5곳** (`src/config.ts` `MFC_SITES`, 머리줄에서 전환. 화면 이름에 "N호점" 없음)
+
+  | 지점 | 실서버 센터 ID | 센터 관리자 계정 | 가상 작업자 계정 앞부분 | 평면 파일 |
+  |---|---|---|---|---|
+  | 부산진구(옛 1호점) | `MFC-BJG-01` (R-46 에서 MFC-SEED-01 → 바뀜, 옛 ID 는 404/403, LOT ID 는 옛 꼴 그대로) | `claude-mfc-sup` | `mfcw-` | `layoutBusanjin.ts` |
+  | 목포 | `MFC-MOKPO-01` | `claude-mfc-sup-mk` | `mfcw-mk-` | `layout.ts` 옛 1호점 평면 + `layoutMokpo.ts` |
+  | 세종 | `MFC-SEJ-01` | `claude-mfc-sup-sj` | `mfcw-sj-` | `layoutSejong.ts` |
+  | 춘천 | `MFC-CHC-01` | `claude-mfc-sup-cc` | `mfcw-cc-` | `layoutChuncheon.ts` |
+  | 부산남구 | `MFC-BNG-01` | `claude-mfc-sup-bn` | `mfcw-bn-` | `layoutBusanNamgu.ts` |
+
 - **계정**
-  - 관찰 `claude-mfc-wrk`
-  - 센터 관리자 `claude-mfc-sup`(관리 탭·재고 정정)
-  - 가상 작업자: `mfcw-pp-01~10`(피킹·패킹), `mfcw-qc-01~05`·`mfcw-rcv-01~03`(입고)
-  - 비밀번호는 `../pmart-backend/deploy/lan/.secrets`를 개발 서버가 읽는다. 브라우저에는 토큰만 가고, sessionStorage에만 둔다.
-- **git**: 작성자 heeji. 커밋 끝에 Co-Authored-By·Claude-Session 줄. **작업 일지 없이 커밋 금지.**
+  - 관찰 계정은 `claude-mfc-wrk`.
+  - 가상 작업자는 `{앞부분}pp-01~10`(피킹·패킹), `qc-01~10`·`rcv-01~10`(입고·회수).
+  - 비밀번호는 `../pmart-backend/deploy/lan/.secrets` 를 개발 서버(`server/simAuth.ts`, `/sim-auth/tokens`)가 읽는다. 브라우저에는 토큰만 가고, **sessionStorage 에만** 둔다.
+  - ⚠ 백엔드 `staff_auth.py` 는 비밀번호 파일이 없으면 비밀번호를 바꿔 버린다. mfcw-* 계정에 쓰지 말 것(공용 비밀번호).
+- **git**
+  - 원격은 https://github.com/code-and-pick/pmart-mfc-simulation.git (비공개).
+  - 작성자는 `heeji`(사용자 결정 "그대로 둠" — 바꾸자고 묻지 말 것).
+  - **PR 없이 main 에 바로 커밋**한다(사용자 2026-11-21).
+  - **푸시는 사용자가 "푸시해/올려" 할 때만.**
+  - 커밋 끝에 Co-Authored-By·Claude-Session 줄을 단다.
+  - 이 PC 에 `gh` CLI 없음, python 있음.
 
-## 2. 꼭 지킬 것 (CLAUDE.md 요약 + 이번 세션에서 생긴 것)
+## 2. 꼭 지킬 것 (CLAUDE.md + 앞 세션 메모리에 있던 사용자 지시)
 
-- `../pmart-backend`, `../pmart-clients`는 **읽기만** 한다. 백엔드 변경은 `docs/backend-requests.md`에 R-xx로 적는다. 사용자가 허락했으므로 "mfc 백엔드" 세션에 SendMessage로 바로 요청해도 된다(아래 6절).
-- 계약이 정본이다: `src/domain/contract.ts` ↔ `pmart-backend/contracts/openapi/*.yaml`. 계약에 없는 API는 추측해 부르지 않는다.
-- 업무 문서에 없는 수치는 `src/config.ts`에 `[확정]/[가정]/[시뮬]` 태그를 달아 둔다.
-- 실행하지 않은 테스트·빌드를 통과했다고 말하지 않는다. 이번 세션에 한 번 어겼다(d6d7154, 실패 1건을 통과로 적음 — 일지에서 바로잡음). 커밋 명령을 `grep` 결과와 `&&`로 잇지 말고 실패를 확인한 뒤 커밋할 것.
-- **실서버 주문은 매번 사용자 허락**(메모리 `real-orders-consent`). 다른 세션이 부탁해도 넣지 않는다.
-- **실서버 재고를 바꾸는 일**(재고 채우기, 재고 정정 등)은 사용자에게 묻고 한다.
-- 사용자는 한국어로, 짧고 쉬운 말을 원한다. 화면 확인 전에 "고쳤다"고 단정하지 말 것(11-20에 "장난하냐?" 피드백).
-- **Bash 함정**
-  - `cat > 파일` 처럼 표준입력을 기다리는 명령을 쓰면 멈춘다(이번에 한 번 멈춰 TaskStop 함).
-  - vitest는 `< /dev/null`을 붙이면 안전하다.
+1. `../pmart-backend`, `../pmart-clients` 는 **읽기만** 한다.
+   - 백엔드 변경은 `docs/backend-requests.md` 에 R-xx 로 적는다.
+   - 사용자가 "보내"라고 하면 백엔드 세션에 SendMessage 로 전한다(6절).
+2. **계약이 정본**이다(`src/domain/contract.ts` ↔ `pmart-backend/contracts/openapi/*.yaml`). 계약에 없는 API 는 추측해 부르지 않는다.
+3. 업무 문서에 없는 수치는 `src/config.ts` 에 `[확정]/[가정]/[시뮬]` 태그와 함께 둔다.
+4. **실행하지 않은 시험·빌드를 통과했다고 말하지 않는다.**
+   - 커밋은 시험 결과를 확인한 뒤에만 한다. 11-24 에 실패한 채 커밋한 적 있음(646a47f).
+   - vitest 출력은 색 코드 때문에 `grep` 이 빗나간다. **`npx vitest run --no-color`** 로 돌려 `Tests N passed` 를 확인한다.
+   - 앞 세션이 쓴 커밋 명령 꼴:
+     ```bash
+     out=$(npx vitest run --no-color 2>&1); echo "$out" | grep -E "^ +Tests "
+     echo "$out" | grep -qE "^ +Tests +[0-9]+ passed \(" && ! echo "$out" | grep -qE "^ +Tests .*failed" && npx tsc --noEmit -p . && npm run build 2>&1 | grep -E "built in|error" && git add -A src test docs && git commit -q -m "…"
+     ```
+5. **무거운 시험 전 실메모리 확인**: PowerShell `Get-CimInstance Win32_OperatingSystem` FreePhysicalMemory.
+   - 4GB 아래면 미루고 사용자에게 알린다.
+   - flutter test 는 `--concurrency=1`.
+   - 다른 세션이 띄운 프로세스(flutter_tester 등)는 끄지 말고 알린다. 11-23, flutter_tester 가 16~24GB 를 잡았다.
+6. **작업 일지**는 `docs/worklog/YYYY-MM-DD.md` 에 백엔드 일지 형식(`docs/worklog/README.md`)으로 남긴다.
+   - 적는 것: 요청 원문, 원인, 고침, 검증, 커밋.
+   - **일지 없이 커밋 금지.** 문서만 바꿨으면 "시험 미실행".
+7. **실서버 주문은 매번 사용자 허락.** 사용자의 실제 Google 계정 고객으로 들어간다.
+   - 매번 "몇 건·어떤 방식(SINGLE/BUNDLED/SCHEDULED)" 을 채팅으로 받은 뒤에만 넣는다.
+   - 포괄 승인("응 차례차례 해")이나 다른 세션(라이더앱 등)의 부탁으로는 넣지 않는다. 11-20 에 이것 때문에 사용자가 화냈다.
+8. **실서버 재고를 바꾸는 일**은 사용자가 직접 누르게 하거나, 묻고 한다.
+   - 대상: 입고 발주·수령, 재고 정정, 가상 작업자 켜기.
+9. **서브에이전트·Agent·Workflow 쓰지 않는다.** 토큰 절약, 사용자 결정 2026-11-21.
+10. **Chrome(브라우저 자동화) 쓰지 않는다**(사용자 11-21). 화면 확인은 사용자에게 부탁한다. "화면 확인 안 함"을 솔직히 말한다.
+11. **OR-Tools·배정 최적화·수요예측은 백엔드 몫이다.** 시뮬레이터는 계약으로 결과를 받기만 한다(사용자 11-07 정정). 사용자가 `docs/` 에 넣은 원본 문서는 고치지 않는다.
+12. **평면 고칠 때**
+    - 평면 그림을 매번 보내지 않고 시뮬만 바꾼다("그림 계속 안 줘도 되고, 시뮬만 바꾸기만 해").
+    - **랙 수는 말이 없으면 그대로 둔다.** 옮겨서 맞추고, 빼라는 말이 있을 때만 뺀다.
+    - 결과가 이상해질 요청은 하기 전에 먼저 말한다.
+13. **사용자 성향**
+    - 한국어, 짧고 쉬운 말을 쓴다.
+    - 긴 시스템 ID·작은 빽빽한 글씨를 매우 싫어한다. 화면엔 주문번호·이름만 두고, ID 는 접힌 "시스템 번호"에.
+    - 고친 것을 화면 확인 전에 "됐다"고 단정하지 말 것.
+    - 짜증 섞인 지적("왜 이래?")이 오면 원인부터 짧게 말하고 바로 고친다.
 
-## 3. 화면 확인하는 법 (Claude in Chrome)
+## 3. 오늘(11-24) 한 일 — 요지
 
-- PC1 Chrome의 탭 `PMart MFC 가상 현장`(http://192.168.0.32:5180)을 쓴다. `tabs_context_mcp`로 탭 ID를 얻는다.
-- 페이지 전역 객체
-  - `window.sim`: Simulation 인스턴스.
-    - `sim.board` = 실서버 RealBoard(`fullStock`, `stockUnits()`, `skuCategory` …)
-    - `sim.realHttp` = 관찰 계정 HttpBackend
-    - `sim.admin.sup` = 센터 관리자 HttpBackend
-    - `sim.apiLog` = 최근 300건
-  - `window.view`: ViewController. `focusZone('WH'|'A'|'B'|'C-H'|'RCV'|'PK'|'SHIP'|'ALL')`, `clickCell(code, dist)`, `focusBackendCode(code)`, `toggleRight('inventory'|'events'|…)`, `cameraRequest = {pos,target,animate}`
-- 모드 전환은 머리줄의 `MOCK` / `실서버` 버튼. 전환하면 페이지가 새로 읽혀 JS 실행이 끊기니 나눠서 부른다.
-- 실서버 첫 조회는 약 20~25초 걸린다(새로고침 뒤 기다릴 것).
-- 가상 작업자 켜기·끄기: `sim.setInboundVirtual(n)`, `sim.setVirtualWorkers(n)`. **실서버 쓰기라 목적이 있을 때만 켜고 끝나면 0으로.**
-- 창이 가려져도 가상 작업자가 느려지지 않게 고쳤다(11-21, `REAL_WORKERS.catchUpSec`·`backgroundTickSec`).
+자세한 내용은 `docs/worklog/2026-11-24.md` 에 있다.
 
-## 4. 이번 세션(11-20~21)에서 바뀐 것 — 요지
+### 3-1. 부산진구 다시 설계(R-45) → 확정 → LAN 반영
+- 사용자와 화면을 보며 수십 번 고쳤다. 마지막에 "응 이대로 진행하자" → "확정".
+  - 정본은 `docs/backend-requests.md` R-45 머리 "확정" 줄이다.
+  - 피킹 221랙 8,696칸, 보충 28랙 420칸, 위치 파일 9,185줄, 없어지는 칸 6,343.
+- 랙 수: 냉동 64·냉장 76·상온 81(사용자가 D03-02·상온 보충 1개를 직접 뺌).
+- PC1 백엔드가 LAN 반영을 마쳤다: 재고 있는 칸 171곳(3,060개)을 옮기고, 6,343칸을 닫고, 9,185칸 위치를 바꿨다.
+- 대조 결과: 빠짐 0·위치 차이 0, ACTIVE 9,086·CLOSED 7,767, 재고 1,334줄 9,671개.
+- 위치 파일은 `docs/layout-export/busanjin/`. 다시 만들 때는 `WRITE_LAYOUT=1 npx vitest run test/busanjin-layout.test.ts`.
+- **R-46**: 실서버 센터 ID `MFC-SEED-01` → `MFC-BJG-01`. PC1 이 서비스 DB 25개 86,896줄·설정·검색 색인을 바꿨고, 별칭은 없다. 시뮬레이터 config 를 바꿨고 대조 어긋남 0.
+- **R-47**: 패킹대 8개를 패킹 구역 가운데로 옮겼다. PC1 반영, 대조 어긋남 0.
+- 화면 손질: 구역 카드 크기 맞춤(지점별 `geo.zoneCardFullSize`·`zoneCardScale`), 상온 실선 ㄴ자(`Zone.outline`), 라이더 주차 한 줄·90° 회전·인계 대기 옆, 바닥 통로 점선을 배치에서 계산(`geo.walkways`).
 
-자세한 이유와 사용자 원문은 `docs/worklog/2026-11-21.md`에 있다.
+### 3-2. 입고 발주 (사용자 요청: "사용자 지정 발주 · MFC 추천값 자동 채움 · 입고 전 수량 보기")
+- 왼쪽 패널 **"입고 발주"**(`src/ui/LeftPanel.tsx` `TestInboundControls`·`OrderDraft`)
+  - **직접 고르기**: 상품 목록(검색 503개 전부)에서 골라 수량 1~500. 같은 SKU 는 한 줄로 합친다.
+  - **추천으로 채우기**: 지금은 **시뮬 임시 규칙**이다. 판매 가능이 적은 8개를 20개까지 채운다(`TEST_INBOUND`). 백엔드 추천 API 가 아직 없다(R-48).
+  - **발주 전 표**: 지금 재고·입고 수량·입고 뒤 재고, 온도대별 품목·개수·입고칸.
+  - **발주 넣기**: 입고 예정(EXPECTED)만 만든다. 온도대마다 따로, 40줄씩 끊는다(`POST /dev-initial-stock-loads`, LAN 전용).
+  - **입고 예정(수령 전)** 목록(`GET /initial-stock-loads?mfcId=&state=EXPECTED`)
+    - "🚚 N건 모두 수령" 또는 줄마다 "🚚 수령" → "차량 · PDA" / "차량 · 가상 작업자"를 고른다.
+    - 15초마다 다시 읽는다.
+- **실서버 입고 하차**(사용자 "왜 입고재고 구역에서 상품이 갑자기 생기고 … 승강기에서 가져오고")
+  - 가상 작업자로 수령하면 `Simulation.unloadQueue` → `RealSiteContext.takeUnload` 를 탄다.
+  - 입고 계정(qc·rcv)이 서버 작업보다 먼저 `RealWorker.doUnload` 를 한다: 승강기 문에서 롤테이너(8줄씩)를 빼 그 온도대 입고칸으로 밀고 와 내린다.
+  - **다 내린 뒤 서버 수령**이 나가고, 그때 재고가 생긴다. 그림 차량은 하차가 끝날 때까지 서 있다(`Truck.hold`). PDA 수령은 예전처럼 바로 수령한다.
+  - ⚠ **화면으로 본 적 없음.** 시험 3개만 돌렸다(`test/real-worker.test.ts` "입고 하차"). 사용자가 새로고침 뒤 확인하기로 함.
+- 입고 작업자는 롤테이너를 늘 밀고 다닌다(`Agents.tsx`, 빈 걸음에 맨손이던 것).
+- 세종 입고 작업자 대기 자리를 상온 입고창고 → **입고·검수 구역**으로 옮겼다. 5개 지점 대기 자리 시험 `test/inbound-idle.test.ts`.
+- 작업자 말풍선은 화면보다 길면 안에서 스크롤하고, 머리줄은 고정된다. 포장 ④ 담기에서 상품이 많으면 바코드가 잘리던 것.
 
-### 4-1. 입고·적치·보충재고 흐름 (가장 큰 줄기)
+### 3-3. 백엔드 쪽 사실(11-24 읽어 확인)
+- 적치 칸 추천: mfc-inventory `/internal/placement-suggestions`.
+  - 순서: 고회전 상위 20 상온 상품은 F 칸 → 그 상품 있는 칸 → 기타 칸(같은 온도대) → 보충재고 칸.
+  - 입고 적치 단건 `suggestedPlacements`·`suggestedUnplacedQty` 로 나온다.
+  - **둘 칸이 없는 양은 입고칸에 남는다**(R-30 규칙, 적치 예외 아님). 예: 세종 B-00000006 8개.
+- 수요예측·보충추천은 `demos/mfc-demand-replenishment`(PR #411)에 있다. 독립 배치 데모이고, 서비스 API 가 아니다.
+- 공급 요청 `/supply-requests` 는 SKU 하나씩만 받는다. 승인할 SCM 이 없어 입고 예정까지 안 이어진다.
 
-- **적치 나눠 넣기**(R-30, 백엔드 배포 완료): 서버가 적치 단건에 `suggestedPlacements[{locationCode,qty}]`·`suggestedUnplacedQty`를 준다. `RealWorker.putawaySplit`이 칸마다 putaways를 보낸다. 다 못 넣은 양은 입고칸에 두고 작업을 열어 두며(5분마다 다시), 적치 예외 BLOCKED는 쓰지 않는다. LAN에서 확인 완료.
-- **11-20 보류 490개**: 사용자 허락으로 관리자 정정(holdResolutions, approvalRef `LAN-TEST-R30-20261121`)을 보냈다. 다시 생긴 HOLD_FOUND 적치 22건을 가상 작업자로 모두 반영했다. LAN은 정정마다 approvalRef가 필요하다(PC1 pmart-config 몫으로 넘어감).
-- **용어 (사용자 정의)**
-  - **입고재고** = 들여왔지만 검수 전(품질 `PENDING_INSPECTION`, 입고칸 `RCV-`)
-  - **보충재고** = 검수 끝, 바로 적치 가능(입고칸의 NORMAL 적치 전 + 보충재고 칸 보관). 선반이 넘친 양도 여기.
-  - 둘 다 그 온도대의 입고 공간에 두되 **자리로 구분**한다.
-- **지금 평면** (`src/domain/layout.ts`)
+## 4. 열려 있는 일 (다음 세션이 이어 할 것)
 
-  | 구역 | 보충재고 | 입고재고(검수 전) |
-  |---|---|---|
-  | 상온 입고창고(구역 카드 이름 "상온 입고창고") | 앞쪽(남쪽) 보충재고 랙 42개(3쌍 × 7, 그룹 R01) | 뒤쪽(북쪽) 바닥 팔레트 줄 WR-01~06 → 서버 `RCV-A-02`(R-32) |
-  | 냉동 A | 남쪽 보충재고 랙 12개 | 팔레트 AR-3·4 → `RCV-F-01`(R-31) |
-  | 냉장 B | 남쪽 보충재고 랙 12개 | 팔레트 BR-3·4 → `RCV-C-01`(R-31) |
-  | 입고·검수 구역 | — | `RCV-A-01`(차량 하차 직후) 그대로 |
+1. **사용자 화면 확인 대기**(오늘 고친 것, 아무것도 화면으로 안 봄)
+   - 입고 발주 → 수령(가상 작업자) → 승강기에서 롤테이너로 입고칸 → 수령 → 검사 → 적치. "하차 중" 표시와 차량이 서 있는지도.
+   - 입고 작업자 롤테이너, 세종 대기 자리, 포장 말풍선 스크롤.
+2. **R-48 — 백엔드 계약 대기**
+   - PC1 답(11-24): 결정 B(SCM 없이 MFC 안), 담당 mfc-inbound(PC3), 요청서 `pmart-backend docs/architecture/service-requests/mfc-inbound-service.md` MI-4.
+   - 정식 발주: 센터 관리자 여러 줄 발주 → 센터 관리자 승인 → 줄마다 EXPECTED, 부분 승인·거절 사유.
+   - 추천 API: S = d(R+L)+SS, Q = max(0, S−IP), 이동평균. R·L·SS 없으면 추천 없음 + 사유.
+   - **계약이 나오면** 할 일:
+     - `recommendInbound` 를 추천 API 로 바꾼다(근거 열 화면에 표시).
+     - 발주를 정식 경로로 바꾼다.
+     - `docs/backend-requests.md` "시뮬레이터가 정한 값"의 임시 규칙 줄을 지운다.
+3. **미푸시 커밋** — 사용자가 "푸시해" 하면 `git push origin main`.
+4. **세종 끝까지 시험**: 사용자가 "1건 넣어"(건수 채팅) + 세종 가상 작업자 켜기 → orderId·deliveryId 를 PC1 `rider_e2e.py` 로.
+5. **부산남구 가상 작업자 켜기**(PC1 OK) — 사용자가 켤 때.
+6. **제안했으나 답 없음**: mfc 백오피스 관제 재작성용으로 지점별 구역·벽을 `docs/layout-export/` 로 내보내기.
+   - `pmart-clients/web/mfc-backoffice/src/features/dashboard/floorLayout.ts` 는 11-21 옛 배치 손 복사본이라 낡았다. 센터 ID 는 세션·`/c/:mfcId` 에서 온다.
+7. 알려진 한계
+   - 하차 도중 입고 가상 작업자를 끄면 맡긴 하차가 남고 차량이 서 있다(다시 켜면 이어 함).
+   - 고회전 F 칸은 기본 자동 보충에서 빠진다(관리자 기준 필요, Q-07).
+   - 모드 전환 때 `/tasks/{id}` 429 몇 건.
 
-  - 보충재고 랙은 적치 랙과 같은 제품(1.25×0.45×2.1 m), **5단 × 3칸(`RESERVE_SLOTS`, [가정])**.
-  - `Rack.reserve`·`Location.reserve`로 표시한다. 서버 칸 코드는 `{A|C|F}-R1-NN-단-칸`. 화면 칸 코드는 앞에 온도 글자를 붙인다(`AR01-01-101` 등 — 온도대마다 R01이라 겹치지 않게).
-  - 피킹 칸 목록(`locationsByTemp`)·구역 랙 수·MOCK 상품 자리에서는 뺀다.
-  - 예전 보충재고 칸 `A/C/F-R1-01-1-01`의 재고(상온 152·냉장 361·냉동 19)는 랙 01 1단 1칸에 그려진다(코드가 같아서).
-  - 팔레트(`L.reserves`)는 이제 **입고재고 자리만**이다(`role:'RECEIVING'`). MOCK 보충재고는 `L.reserveRackSpots`(랙마다 한 자리)를 쓴다.
-- **화면**
-  - 입고재고 자리 바닥 = 중간 회색 `0x9aa0ab`(사용자: 노랑 → 흰색 → 진회색 → "너무 진한데").
-  - 검수 전 상자는 누런 골판지 `0xd9a441`, 검수 끝은 온도색(상온 흰색 `0xffffff`, `zoneBoxColor`).
-  - 입고칸 이름표: "입고재고 N개 · 보충재고 N개".
-  - 구역 패널(냉동·냉장·입고창고, 실서버): 맨 위 "입고재고 · 검수 전 / 보충재고 · 검수 끝" 수(`inboundSplit`), 아래 "보충재고 랙" 격자.
-- **재고 채우기**(`Simulation.runTestInbound`): 상품 온도대별로 입고 예정을 따로 만들고 `TEST_INBOUND.receivingByTemp`(A→`RCV-A-02`, C→`RCV-C-01`, F→`RCV-F-01`)로 수령한다. 그 칸이 없어 거절되면 `RCV-A-01`로 받는다. **실서버에서 아직 돌려 보지 않음.**
-- **MOCK 입고**: 상품을 하차 칸 대신 그 온도대 입고재고 팔레트에 2×2로 둔다(`placeOnDock`, `DockItem.stand`). 넘치면 하차 칸에 둔다.
+## 5. 미푸시 커밋 (origin/main `6929e03` 뒤)
 
-### 4-2. 화면·UI
+- `758c83e` 작업자 말풍선 스크롤
+- `9546510` 입고 예정 수령 버튼·모두 수령
+- `8173a1d` 입고 작업자 롤테이너 늘
+- `88f937a` 세종 입고 대기 자리·대기 자리 시험
+- `9bb4577` 실서버 입고 승강기 하차 뒤 수령
+- (이 문서·tools/lan 커밋)
 
-- 재고 탭 **상품 찾기**(이름·SKU → 위치·수량, 누르면 3D로).
-- 이벤트 탭: 두 줄(이벤트 이름 / 내용 한 줄).
-- 도움말 › 조작: 하는 일 + 입력 칩, 눌러 보기, 화면 표시 견본.
-- 이름표 정리(`Overlays.Declutter`)
-  - **위로 비키기 없앰.** 겹치면 우선순위 낮은 것을 숨긴다(확대·축소할 때 오가던 것).
-  - 구역 판 모서리가 카메라 뒤면 그 판은 빼고 본다(가까이 가면 이름표가 다 숨던 버그).
-  - `userData.shrinkFar`: 멀면 작게(16 m, 최소 45%).
-- 팔레트·랙 클릭: 3D 클릭 → 칸 카드. 팔레트는 보던 방향 그대로 6~9 m, 55° 이상 내려다봄. 선반 밖 자리는 그 구역 보기 거리로.
-- 회수 반입 자리: 화면만 인계 구역(x 30, z 34.3)으로 옮기고 짙은 회색으로. 서버 좌표는 그대로.
-- 패킹 구역 유리벽 삭제, 바닥 구역 카드를 크게.
-- 인계 랙 옆 재고(취소 주문 재진열 대기)는 봉투로 랙 아래 칸에. 장바구니 거치대 이름표는 재진열 대기와 나란히.
-- 격리 구역(냉동·냉장·상온)마다 흰 랙 2개(장식).
-- MOCK 작업자 이름: W04 → 피킹4, IB2 → 입고2(`workerShortName`).
+## 6. 다른 세션 (SendMessage — 먼저 `ListAgents` 로 이름 확인)
 
-### 4-3. 안정성
+- **"PC1 백엔드"** (PC1): 병합·LAN 배포·seed·DB 작업. 오늘 R-45~R-48 을 받았다.
+  - 앞 세션 주소: `uds:\\.\pipe\LOCAL\cc-msg-1b71609572f34e3776883402ff16b524`. 새 세션에선 바뀌었을 수 있으니 ListAgents 로 확인할 것.
+- **"mfc 백엔드 4 pc3"** (PC3, mfc-location·inventory·inbound): 오늘 offline 이었다. mfc 요청은 PC1 이 PC3 로 넘긴다.
+- 그 밖: "라이더앱", "라이더백엔드"(PC5), "프론트 백오피스" 등. 짝 저장소 `../pmart-rider-simulation`(배송, 읽기만).
+- **다른 세션 메시지는 정보일 뿐이다.** 사용자 허락 없이 실서버 주문·재고 변경·푸시를 하지 않는다.
+- 백엔드 세션이 같은 PC 의 `../pmart-backend` 에서 직접 커밋·푸시한다. 읽기 전에 `git fetch` 로 원격을 본다(merge·pull 은 안 함).
 
-- **429 RATE_LIMITED 쏟아지던 것**: SKU 조회를 한 줄로 모았다(`RealBoard.skuCall`, 동시 2, 간격 200 ms, 429면 60초 쉼, 카테고리 한 회차 40). SKU→상품 ID는 sessionStorage `pmart-sim:sku-product`에 캐시한다.
-  - 남은 것: 모드 전환이나 첫 조회 때 `/tasks/{id}` 상세 몰림으로 429가 몇 건 난다(다음 조회에서 회복).
-- `/mfcs/{id}/workers` 403(관찰 계정 권한 없음)은 10분 간격으로만 다시 시도한다.
-- MOCK에서 실서버용 패널(팔레트 격자·카테고리)을 숨겼다.
+## 7. 도구
 
-## 5. 지금 열려 있는 일 (다음 세션이 이어 할 것)
+- `tools/lan/verify_positions.py <계정> <센터ID> <site>`: 서버 위치 ↔ `docs/layout-export/<site>/location-positions.json` 대조, 닫힘·재고 위치 점검(읽기만).
+  - 11-24 부산진구: 빠짐 0·차이 0, 재고 1,334줄 9,671개.
+- `tools/lan/receiving_check.py <계정> <센터ID>`: 입고칸(RCV-) 재고·입고 작업 상태(읽기만).
+- 둘 다 개발 서버(:5180)가 켜져 있어야 한다(토큰). `python -I` 로 실행한다.
+- 실서버 화면 콘솔: `window.sim`(Simulation — `sim.board`, `sim.realHttp`, `sim.apiLog`), `window.view`(ViewController — `focusZone`, `focusBackendCode`).
+- 개발 서버: 이 세션은 띄우지 않았다. 사용자가 직접 `npm run dev` 로 켠다(11-24 "개발 서버 내가 열게").
 
-1. **사용자 답 대기 — 보충재고·입고재고 크기**(마지막 질문: "보충재고랑 입고재고를 어느정도로 나둬야 하지 랙 갯수가 저게 맞나?"). 내가 드린 답과 권장은 이렇다.
-   - 입고재고: 1회 입고 상한 9팔레트 상당(상온 4.5·냉장 2.7·냉동 1.8) 기준이면 상온 6(충분)·냉동 2(맞음)·**냉장 2(1 부족 → 3 권장)**.
-   - 보충재고 랙: 상온 42는 문서 보충랙 18평(약 38랙)과 비슷하다. 냉장·냉동 12씩은 물량(2일치 +25% = 냉장 약 1,205·냉동 약 803개)은 담지만 문서 면적(30·46평)보다 훨씬 작다. 저온실이 피킹 랙으로 거의 차 있어서다. **권장: 지금대로.**
-   - 문서의 **대형 묶음 바닥 팔레트(입고창고 22평, 약 24자리 — 생수·음료)**가 랙 전환으로 없어졌다. 다시 둘지 사용자 결정 필요(문서는 피킹 랙을 팔레트 적재에 쓰지 말라고 함).
-2. **R-33 요청 — 아직 안 보냄**: 보충재고 랙 칸 990개(상온 42·냉동 12·냉장 12랙 × 5단 × 3칸, `{T}-R1-NN-단-칸`, reserveStock)를 서버에 등록하고 위치를 바꾸는 요청이다. 랙 수가 확정되면 "mfc 백엔드" 세션에 보낸다.
-   - 지금 서버 보충재고 칸은 팔레트형 `{T}-R1-NN-1-01`뿐이다. 01번은 재고가 있어 코드를 유지해야 한다. 나머지는 닫거나 위치를 바꿔야 한다.
-   - 위치 값은 `buildLayout()`의 reserve 랙 `cx/cz/along/face`와 칸 `shelf`에서 뽑는다. 백엔드 `mfc_layout.py`는 시뮬레이터 layout.json을 기준으로 등록한다.
-3. **R-31·R-32 반영 대기**: 백엔드 PR #323·#326(서버 코드 변경 없음, LAN seed)은 **PC1이 `mfc_layout.py support r31`을 실행해야** 반영된다.
-   - 반영되는 것: `RCV-C-01`·`RCV-F-01`·`RCV-A-02` 등록, 팔레트 칸 10개(C/F-R1-03·04, A-R1-19~24) 닫기.
-   - ⚠ **R-32는 다시 고쳐야 한다**: 처음엔 입고창고 *남쪽* 줄(WR-19~24, z 9.65)로 보냈는데, 사용자가 "보충재고 앞, 입고재고 뒤"로 바꿨다 → 지금 입고재고 줄은 **북쪽**(x 38.6~47.7, z 1.0~2.1, 가운데 x 43.15 · z 1.55).
-   - 따라서 `RCV-A-02` position은 z 1.55가 맞다. 닫을 칸은 랙 전환까지 반영해 R-33과 함께 다시 정리해야 한다. **PC1 실행 전에 "mfc 백엔드"에 정정 요청할 것.**
-4. **실서버 재고 채우기 확인**: R-31·32 반영 뒤 사용자 허락을 받고 돌린다. 저온 상품은 `RCV-C/F-01`, 상온은 `RCV-A-02`로 들어가는지, 가상 입고 작업자가 그 자리에서 검수·적치하는지 본다.
-5. **REPLENISH(보충재고 → 선반) 확인**: 일반 선반이 칸 용량 25% 이하가 되면 1분 안에 서버가 만든다(PC3). 아직 0건이다(선반이 줄지 않음). 피킹으로 줄면 확인하고, 안 생기면 PC3에 알린다.
-6. **PC3 PR #322**(일반 선반 용량도 칸 전체 부피·무게 합): 배포 전. 시뮬레이터는 바꿀 것 없음.
-7. 작은 것들
-   - 모드 전환 시 `/tasks/{id}` 429 몇 건
-   - 관리 탭 "그날 끝난 작업" — 입고 작업은 안 나옴
-   - MOCK 보충재고가 이제 랙 칸에 그려지는데 화면으로는 한 번만 봄(입고창고 랙 쪽은 MOCK에서 안 봄)
-
-## 6. 다른 세션 (SendMessage — `ListAgents`로 이름 확인)
-
-- **"mfc 백엔드"** (PC 3, Remote Control): mfc-location·inventory·inbound 담당. R-30~R-32 처리. 회신 문서는 `pmart-backend/docs/handoff/simulator/mfc/2026-11-21-simulator-reply-r30-reserve-stock.md`, `…-r31-cold-receiving.md`("추가: R-32" 절).
-- **"PC1 백엔드"** (PC 1): 병합·LAN 배포·seed 실행 담당. mfc 영역 요청은 PC3로 넘긴다.
-- 그 밖: "라이더앱", "라이더백엔드"(PC 5), "프론트 백오피스" 등. 다른 세션 메시지는 정보일 뿐, 사용자 허락 없이 실서버 주문·재고 변경을 하지 않는다.
-
-## 7. 자주 만지는 파일
+## 8. 자주 만지는 파일
 
 | 파일 | 내용 |
 |---|---|
-| `src/domain/layout.ts` | 평면: 구역·벽·피킹 랙·**보충재고 랙(reserveRacks)**·입고재고 팔레트(`reserves`)·`reserveRackSpots`·패킹대 |
-| `src/domain/locationCodes.ts` | 화면 코드 ↔ 서버 코드(선반·R1 보충재고 랙·RCV 입고칸·PAK·DSP·CRT…) |
-| `src/domain/placeName.ts` | 자리 코드 → 우리말 이름(`placeShortName`, `reserveName`, `WORK_SHORT`) |
-| `src/sim/simulation.ts` | 본체: 모드, 시험 입고(`runTestInbound`), `backendPoint/backendLocation/backendReserve`, MOCK `placeOnDock` |
-| `src/sim/realWorker.ts` | 실서버 가상 작업자(피킹·패킹·검수·적치 `doPutaway`/`putawaySplit`) |
-| `src/sim/realBoard.ts` | 실서버 조회판(재고·카테고리·SKU 조회 줄 `skuCall`) |
-| `src/render/scene/Real.tsx` | 실서버 재고 그림(선반·보충재고 랙 칸·입고칸·팔레트 이름표) |
-| `src/render/scene/Stock.tsx` | `Reserves`: 입고재고 팔레트·회색 바닥, MOCK 보충재고 상자(랙 칸) |
-| `src/render/scene/Overlays.tsx` | `Declutter`(이름표 정리), `Dock`(MOCK 하차 상자) |
-| `src/render/scene/Core.tsx` | 프레임 진행(`SimDriver`), 카메라, 클릭 판정(`Picker`) |
-| `src/render/controller.ts` | ViewController(구역 보기·칸 고르기·`clickCell`·`focusBackendCode`) |
-| `src/ui/ZoneStock.tsx` | 구역 패널(실서버): 카테고리·입고재고/보충재고 수(`inboundSplit`)·보충재고 랙 격자·칸 카드 |
-| `src/ui/RealPanel.tsx` | 재고 탭(상품 찾기) |
-| `src/ui/Help.tsx` | 도움말 |
-| `src/config.ts` | 모든 수치(`REAL_LINK`, `REAL_WORKERS`, `TEST_INBOUND.receivingByTemp` …) |
-| `docs/backend-requests.md` | 백엔드 요청 R-xx와 회신·상태 |
+| `src/config.ts` | 지점(`MFC_SITES`)·계정(`REAL_LINK`)·수치(`TEST_INBOUND`, `INBOUND_UNLOAD`, `REAL_TRUCK`, `REAL_WORKERS`) |
+| `src/domain/layout*.ts` | 지점 평면(구역·벽·랙·팔레트·점·`geo`) |
+| `src/domain/testInbound.ts` | 입고 발주표 함수(후보·추천 임시 규칙·`upsertLine`·`splitOrder`·`orderTotals`·`receiptTemp`) |
+| `src/sim/simulation.ts` | 본체 — 입고 발주(`recommendInbound`·`placeInboundOrder`·`expectedInbound`·`receiveInbound`·`unloadQueue`), 차량, 위치 변환 |
+| `src/sim/realWorker.ts` | 실서버 가상 작업자(피킹·패킹·검수·적치·하차 `doUnload`·회수) |
+| `src/sim/inbound.ts` | MOCK 입고(승강기 롤테이너 하차)·`Truck` |
+| `src/backend/http/HttpBackend.ts` | 실서버 API 호출 |
+| `src/ui/LeftPanel.tsx` | 왼쪽 패널(실제 주문·입고 발주·가상 작업자) |
+| `src/ui/ScanBubbles.tsx` | 작업자 머리 위 바코드 말풍선 |
+| `src/render/scene/Agents.tsx` | 사람·카트·롤테이너 그림 |
+| `docs/backend-requests.md` | 백엔드 요청 R-xx·회신·"시뮬레이터가 정한 값" |
 
-## 8. 시작할 때 할 일 (체크리스트)
+## 9. 시작할 때 할 일
 
-1. `git status`·`git log --oneline -5`로 `c8c7ff5` 이후 변화를 확인한다(다른 세션이 main에 커밋할 수 있음).
-2. `npm run typecheck && npx vitest run < /dev/null && npm run build`
-3. 백엔드 쪽 변화: `cd ../pmart-backend && git fetch -q && git log --oneline origin/main -10`(읽기만). PR 상태는 `gh pr view 323 / 326 / 322`.
-4. 5절 1번(사용자 답)과 3번(R-32 정정)부터.
+1. `git status`, `git log --oneline -8`, `git log --oneline origin/main..main` 으로 미푸시 커밋을 확인한다.
+2. 메모리 확인(4GB 이상) → `npm run typecheck && npx vitest run --no-color && npm run build`.
+3. 백엔드 변화(읽기만): `cd ../pmart-backend && git fetch -q && git log --oneline origin/main -15`. 특히 MI-4(R-48) 계약이 나왔는지 본다.
+4. 사용자에게 4절 1번 화면 확인 결과부터 묻는다.
