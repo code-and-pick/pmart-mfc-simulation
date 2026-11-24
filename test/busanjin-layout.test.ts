@@ -51,7 +51,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   it('배치(그림대로) — 상온 동쪽 띠 C·D·E·F, 남쪽 띠 G·H, 물리 줄마다 한 코드 줄, 격리 랙은 구역 안, 인계 창 앞 비움, 대형재고 10', () => {
     const amb = L.racks.filter((r) => !r.reserve && r.temp === 'AMBIENT');
     const ch2 = zr('C-H2');
-    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (['D02', 'D03'].includes(r.group) && r.rackNo <= 2) || (['C01', 'C02'].includes(r.group) && r.rackNo >= 6)).toBe(r.cz > ch2.z0);
+    for (const r of amb) expect('GH'.includes(r.group[0]) || ['F02', 'F03', 'E02', 'E03'].includes(r.group) || (r.group === 'D02' && r.rackNo <= 1) || (r.group === 'D03' && r.rackNo <= 2)).toBe(r.cz > ch2.z0);
     // 같은 z·같은 묶음(1.25 m 간격으로 이어진 랙)은 같은 코드 줄, 랙 번호가 1씩 늘어남
     const rows = new Map<string, (typeof L.racks)[number][]>();
     for (const r of L.racks.filter((x) => !x.reserve)) rows.set(`${r.temp}:${r.cz.toFixed(3)}`, [...(rows.get(`${r.temp}:${r.cz.toFixed(3)}`) ?? []), r]);
@@ -102,7 +102,7 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
     expect((W * L.buildingDepth) / 3.3058 - py('ANNEX_')).toBeCloseTo(265, 0);
     expect(py('RCV')).toBeCloseTo(12, 0);
     expect(py('PK')).toBeGreaterThanOrEqual(12); // 사용자 "패킹 구역 확보" — 15평
-    expect(py('WH')).toBeCloseTo(25.9, 0); // 사용자 "입고창고만 평수 유지"(2026-11-24) — 동쪽으로 밀고 남쪽으로 늘려도 26평
+    expect(py('WH')).toBeCloseTo(22.4, 0); // 26평 → 북쪽으로 줄여 동쪽 상온 5랙 한 줄 더(사용자 2026-11-24)
     expect(L.reserves.filter((r) => r.role === 'RECEIVING' && r.temp === 'AMBIENT').every((r) => r.rect.x0 >= zr('WH').x0 && r.rect.z1 <= zr('WH').z1)).toBe(true);
     expect(py('A')).toBeCloseTo(47.3, 0); // 58 → 남북 0.9 m(남쪽 띠 2쌍) → 동서 2.0 m(패킹·장바구니 거치대 넓힘)(사용자 2026-11-24)
     expect(py('B')).toBeCloseTo(47.3, 0);
