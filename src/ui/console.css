@@ -1155,3 +1155,6 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-load summary { display: flex; justify-content: space-between; cursor: pointer; }
 .inb-acts { display: flex; gap: 6px; margin-top: 6px; }
 .inb-acts button { flex: 1; }
+/* 작업자 말풍선 — 화면보다 길면 안에서 스크롤, 머리줄(✕)은 위에 붙어 있게(2026-11-24) */
+.scan-bubble { overflow-y: auto; overscroll-behavior: contain; }
+.scan-bubble > .sb-head { position: sticky; top: -6px; z-index: 1; margin-top: -6px; padding-top: 6px; background: inherit; }

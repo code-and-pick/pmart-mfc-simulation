@@ -44,6 +44,8 @@ export function ScanBubbles() {
           // 화면 밖으로 잘리지 않게 — 위쪽이 모자라면 머리 아래로 내리고, 좌우는 안쪽으로 민다
           const x = ((v.x + 1) / 2) * cameraTap.width;
           const y = ((1 - v.y) / 2) * cameraTap.height;
+          // 상품이 많으면(포장 ④ 담기) 말풍선이 화면보다 길어진다 — 화면 안 높이로 자르고 안에서 스크롤(사용자 2026-11-24 "스크롤 못해서 밑에 있는 바코드 못 찍잖아")
+          el.style.maxHeight = `${Math.max(160, cameraTap.height - EDGE_TOP - 16)}px`;
           const bw = el.offsetWidth || 300;
           const bh = el.offsetHeight || 200;
           const below = y - bh - 14 < EDGE_TOP;
