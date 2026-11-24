@@ -92,7 +92,14 @@ describe('부산진구 MFC 다시 설계(R-45)', () => {
   }, 60_000);
 
   it('구역 넓이(평)', () => {
-    const py = (id: string) => ((zr(id).x1 - zr(id).x0) * (zr(id).z1 - zr(id).z0)) / 3.3058;
+    const py = (id: string) => {
+      const r = id === 'ANNEX_' ? L.geo.liftAnnex : zr(id);
+      return ((r.x1 - r.x0) * (r.z1 - r.z0)) / 3.3058;
+    };
+    // 건물 = MFC 265평 + 승강기 별동 10.1평 = 275.1평(사용자 그림 표, 2026-11-24 "처음 준 게 265평이었잖아")
+    const W = L.width - (L.geo.floorX0 ?? 0);
+    expect((W * L.buildingDepth) / 3.3058).toBeCloseTo(275.1, 0);
+    expect((W * L.buildingDepth) / 3.3058 - py('ANNEX_')).toBeCloseTo(265, 0);
     expect(py('RCV')).toBeCloseTo(12, 0);
     expect(py('PK')).toBeGreaterThanOrEqual(12); // 사용자 "패킹 구역 확보" — 15평
     expect(py('WH')).toBeGreaterThanOrEqual(18); // 사용자 "입고 창고 크기 늘리고" — 24평

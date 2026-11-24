@@ -16,8 +16,8 @@ function walkways(L: Layout): [number, number, number, number][] {
   if (L.variant === 'BUSANJIN')
     return [
       [15.5, 1.6, 20.5, 1.6], // (건물 x 10.5 부터 — layoutBusanjin BSJ_OX)
-      [16.2, 6.6, 16.2, 24.6], // 서쪽 통로(패킹 동쪽 ~ 냉동·냉장 서쪽 벽 사이)
-      [17.0, 21.45, 47.1, 21.45],
+      [16.2, 6.6, 16.2, 24.0], // 서쪽 통로(패킹 동쪽 ~ 냉동·냉장 서쪽 벽 사이)
+      [17.0, 21.35, 47.1, 21.35],
     ];
   if (L.variant === 'BUSAN_NAMGU')
     return [
