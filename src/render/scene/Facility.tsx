@@ -319,7 +319,7 @@ function Obstacles({ L }: { L: Layout }) {
     <>
       {ship.map((o, i) => (
         // 랙 앞면 아래(라이더 쪽) — 위에 뜨는 랙 말풍선에 가리지 않게. 다른 랙 번호판과 같은 파란 판·흰 글자(사용자 2026-11-20 "인계랙 식별값 … 왜 지혼자 노란배경에 검정 글씨")
-        <primitive key={`sr${i}`} object={shipTags[i]} position={[(o.rect.x0 + o.rect.x1) / 2, 0.55, o.rect.z1 + 0.15]} />
+        <primitive key={`sr${i}`} object={shipTags[i]} position={[(o.rect.x0 + o.rect.x1) / 2, 0.55, L.geo.shipRackFacesNorth ? o.rect.z0 - 0.15 : o.rect.z1 + 0.15]} />
       ))}
       {ship.map((o, i) => (
         <ShipRack key={`srk${i}`} r={o.rect} h={o.height} />
