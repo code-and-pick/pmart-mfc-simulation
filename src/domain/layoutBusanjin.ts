@@ -62,8 +62,9 @@ const R = {
   A: { x0: X(5.6 + DW), z0: 2.55, x1: X(25.7), z1: 11.19 }, // 냉동 47평(18.1 × 8.64 m, 격리 포함)
   B: { x0: X(5.6 + DW), z0: 11.19, x1: X(25.7), z1: 19.83 }, // 냉장 47평
   // 입고창고·동쪽 상온을 동쪽으로 1.0 m 밀어 입고·검수 ~ 입고창고 통로 1.1 → 2.1 m, 입고창고는 남쪽으로 늘려 26평 그대로(사용자 2026-11-24 "동쪽으로 밀고 남쪽으로 내려오게 얇게 배치해서 입고검수랑 상온 입고창고 구역 통로 늘리자" → "입고창고만 평수 유지")
-  WH: { x0: X(27.8), z0: 0, x1: X(37), z1: 9.31 }, // 상온 입고창고 26평(9.2 × 9.31): 대형재고 10 → 입고재고 5 → 보충재고 랙 5 | 5 + 5
-  CH: { x0: X(27.8), z0: 9.31, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠 29평(9.2 × 10.52, 가로 줄 4 — C 7랙 2줄, D 남은 2랙 2줄) — 서쪽 실선을 입고창고에 맞춤(사용자 2026-11-24 "동쪽에 있는 상온 구역 실선도 랙도 상온입고창고에 맞춰")
+  // 한 번 더 1.0 m 동쪽으로(통로 2.1 → 3.1 m), 입고창고는 남쪽으로 늘려 26평 그대로(사용자 2026-11-24 "이거 조금 더 하자" + "동쪽 상온구역 랙이 7개씩 배치되어있는데 5개씩 배치하고 나머지는 남쪽 앞쪽에 배치하면 되잖아")
+  WH: { x0: X(28.8), z0: 0, x1: X(37), z1: 10.45 }, // 상온 입고창고 26평(8.2 × 10.45): 대형재고 10 → 입고재고 5 → 보충재고 랙 5 | 5 + 5
+  CH: { x0: X(28.8), z0: 10.45, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠 23평(8.2 × 9.38, 가로 줄 4 — C 7랙 2줄, D 남은 2랙 2줄) — 서쪽 실선을 입고창고에 맞춤(사용자 2026-11-24 "동쪽에 있는 상온 구역 실선도 랙도 상온입고창고에 맞춰")
   CH2: { x0: X(5.6 + DW), z0: 19.83, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 띠(등 맞댄 2쌍: F02 | F03, G | H)
   PK: { x0: X(0), z0: 13.55, x1: X(3.9 + DW), z1: BSJ_BD }, // 패킹 20평(5.9 × 11.03) — 패킹대 4 | 4 가 구역 안에
   SHIP: { x0: X(0.1), z0: 6.1, x1: X(3.4), z1: 8.1 }, // 인계 대기 2평(3.3 × 2.0) — 승강기 별동 남쪽 벽 앞(사용자 2026-11-24 "장바구니 거치대 시작점이랑 인계랙 위치 바꿔줘")
@@ -76,7 +77,7 @@ const SOUTH_PAIR_Z = (k: number) => 19.83 + 0.1 + SOUTH_AISLE + k * (SOUTH_AISLE
 /** 저온 방 북쪽 벽 띠(보충재고 랙 7 → 입고재고 팔레트 2 → 격리), 줄 서쪽 끝 x(저온·남쪽 띠 같은 선 — 사용자 "모든 줄을 서쪽 끝에 맞춤") */
 const COLD = { x0: X(5.7 + DW), bandZ: 1.2, rowX0: X(6.4 + DW) } as const;
 
-const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 29, WH: 18, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
+const ZONE_PY: Record<string, number> = { B: 47, A: 47, 'C-H': 23, WH: 18, RCV: 12, PK: 20, AQ: 1, BQ: 1, CQ: 1, SHIP: 2 };
 
 export function buildBusanjinLayout(): Layout {
   // ── 옛 1호점 랙 코드 고르기 ─────────────────────────────
@@ -152,10 +153,11 @@ export function buildBusanjinLayout(): Layout {
   // 넓은 칸 랙 H01-02~06·H02-07 이 남게 H01-01~06 + H02-02~07.
   const ambient: Rack[] = [];
   // 동쪽 띠(그림대로 가로 줄): 한 면 줄 4(남쪽을 봄), 서쪽 끝 한 선(입고창고 랙과 같은 x) — 7랙 한 묶음. 북쪽부터 C → D(E·F 2줄씩과 D 앞 5랙씩은 남쪽 띠 북쪽 쌍으로, D02·D03-06~07 만 남음)
-  // 랙 서쪽 끝 = 입고창고 보충재고 랙 서쪽 끝(R.WH.x0 + 0.1). 폭 9.2 m 에 4 | 3 + 통로(9.75 m)가 안 들어가 7랙을 한 묶음(8.75 m)으로.
+  // 랙 서쪽 끝 = 입고창고 보충재고 랙 서쪽 끝(R.WH.x0 + 0.1). 줄마다 한 묶음(C 5랙 6.25 m).
   // 첫 줄은 입고창고 남쪽 벽에서 띄워(통로 1.2 m) 문에서 바로 들어옴
   const EAST = { x0: R.WH.x0 + 0.1, z0: R.CH.z0 + 1.2, z1: R.CH.z1 - 0.23 } as const;
-  const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 6, 2), run('D03', 6, 2)];
+  // C 는 5랙씩만(C01·C02-06~07 은 남쪽 띠 남쪽 쌍 동쪽 끝으로)
+  const eastRows = [run('C01', 1, 5), run('C02', 1, 5), run('D02', 6, 2), run('D03', 6, 2)];
   const ePitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, EAST.x0 + (i + 0.5) * RACK_LEN, EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
@@ -170,15 +172,15 @@ export function buildBusanjinLayout(): Layout {
   //   북쪽 쌍 동쪽 끝(통로 1.0 m 뒤) 셋째 묶음에 D02-01~05 | D03-01~05 — 7랙은 상온 격리에 막혀 5랙만(사용자 2026-11-24 "남쪽 통로 동쪽에 상온 랙 더 올 수 있겠는데?" → "D 5랙씩만 옮김")
   const southPairs: [Face3, Face3][] = [
     [[run('F02', 1, 7), run('E02', 1, 6), run('D02', 1, 5)], [run('F03', 1, 7), run('E03', 1, 6), run('D03', 1, 5)]],
-    [[gNorth.slice(0, 8), gNorth.slice(8), []], [hSouth.slice(0, 8), hSouth.slice(8), []]],
+    [[gNorth.slice(0, 8), gNorth.slice(8), run('C01', 6, 2)], [hSouth.slice(0, 8), hSouth.slice(8), run('C02', 6, 2)]],
   ];
-  /** 셋째 묶음 서쪽 끝 — 동쪽 묶음(E 6랙) 동쪽 끝 + 통로 1.0 m */
-  const thirdX0 = sX0 + 8 * RACK_LEN + 1.4 + 6 * RACK_LEN + 1.0;
+  /** 셋째 묶음 서쪽 끝 — 동쪽 묶음 동쪽 끝(북쪽 쌍 E 6랙, 남쪽 쌍 G03 8랙) + 통로 1.0 m. 남쪽 쌍 셋째 = C01-06~07 | C02-06~07 */
+  const thirdX0 = (k: number) => sX0 + 8 * RACK_LEN + 1.4 + (k === 0 ? 6 : 8) * RACK_LEN + 1.0;
   southPairs.forEach(([north, south], k) => {
     const face = ([w, e, t]: Face3, cz: number, f: 1 | -1) => {
       w.forEach((r, i) => ambient.push(place(r, sideAt(i, w.length), cz, 'x', f)));
       e.forEach((r, i) => ambient.push(place(r, sideAt(8 + i, e.length), cz, 'x', f)));
-      t.forEach((r, i) => ambient.push(place(r, thirdX0 + (i + 0.5) * RACK_LEN, cz, 'x', f)));
+      t.forEach((r, i) => ambient.push(place(r, thirdX0(k) + (i + 0.5) * RACK_LEN, cz, 'x', f)));
     };
     face(north, SOUTH_PAIR_Z(k) + RACK_DEPTH / 2, -1);
     face(south, SOUTH_PAIR_Z(k) + 1.5 * RACK_DEPTH, 1);
@@ -187,7 +189,7 @@ export function buildBusanjinLayout(): Layout {
   // ── 상온 입고창고(26평): 북쪽 대형재고 10(5 × 2줄, 사이 통로) → 입고재고 팔레트 5(한 줄) → 보충재고 랙 5 | 5(등 맞댄 한 쌍) + 남쪽 벽 5(북쪽을 봄), 서쪽 끝 맞춤 ──
   const whReserve: Rack[] = [];
   /** 입고창고 남쪽 벽 문 가운데 x = 동쪽 띠 가운데 통로 */
-  const WH_DOOR_X = X(32.4);
+  const WH_DOOR_X = R.WH.x0 + 0.1 + 3 * RACK_LEN + 0.75; // 남쪽 벽 R13 과 R14 사이
   const whCol = (c: number) => (R.WH.x0 + R.WH.x1) / 2 - (5 * P + 4 * 0.15) / 2 + c * (P + 0.15);
   {
     let n = 0;
