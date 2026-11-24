@@ -277,7 +277,7 @@ export function TestInboundControls() {
   useTick();
   const [draft, setDraft] = useState<OrderDraftLine[] | null>(null);
   const [expected, setExpected] = useState<InitialStockLoad[] | null>(null);
-  const [recv, setRecv] = useState<{ load: InitialStockLoad; withVirtual: boolean } | null>(null);
+  const [recv, setRecv] = useState<InitialStockLoad[] | null>(null);
   const [busy, setBusy] = useState('');
   const [log, setLog] = useState<OrderLog[]>([]);
   const push = (text: string, warn = false) => setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn }, ...l].slice(0, 12));
@@ -312,32 +312,36 @@ export function TestInboundControls() {
     try {
       const loads = await sim.placeInboundOrder(lines);
       const t = orderTotals(lines);
-      push(`발주 ${t.items}품목 ${t.units}개 → 입고 예정 ${loads.length}건(수령 전)`);
+      push(`발주 ${t.items}품목 ${t.units}개 → 입고 예정 ${loads.length}건(수령 전) — 아래 "수령"을 누르면 차량이 오고 검사·적치가 시작됩니다`);
       await refresh();
     } catch (e) {
       push(`발주 실패 — ${why(e)}`, true);
     }
     setBusy('');
   };
-  const receive = async () => {
+  const receive = async (withVirtual: boolean) => {
     if (!recv) return;
-    const r = recv;
+    const loads = recv;
     setRecv(null);
-    setBusy('수령하는 중…');
-    try {
-      const out = await sim.receiveInbound(r.load, r.withVirtual);
-      push(`입고 ${r.load.receiptId.slice(-6)} ${r.load.lines.length}품목 ${out.units}개 수령(${out.at}) → ${r.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
-      controller.focusZone('RCV');
-      await refresh();
-    } catch (e) {
-      push(`수령 실패 — ${why(e)}`, true);
+    for (const [i, load] of loads.entries()) {
+      setBusy(`수령하는 중… ${i + 1}/${loads.length}`);
+      try {
+        const out = await sim.receiveInbound(load, withVirtual);
+        push(`입고 ${load.receiptId.slice(-6)} ${load.lines.length}품목 ${out.units}개 수령(${out.at}) → ${withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+      } catch (e) {
+        push(`입고 ${load.receiptId.slice(-6)} 수령 실패 — ${why(e)}`, true);
+      }
     }
+    controller.focusZone('RCV');
+    await refresh();
     setBusy('');
   };
 
   const exp = expected ?? [];
   const sumQty = (l: InitialStockLoad) => l.lines.reduce((a, x) => a + x.qty, 0);
   const expUnits = exp.reduce((a, l) => a + sumQty(l), 0);
+  const recvUnits = (recv ?? []).reduce((a, l) => a + sumQty(l), 0);
+  const recvItems = (recv ?? []).reduce((a, l) => a + l.lines.length, 0);
   return (
     <Sec title="입고 발주" aside="시험 입고">
       <div className="act-split">
@@ -353,59 +357,66 @@ export function TestInboundControls() {
             ↻
           </button>
         </div>
+        {exp.length > 0 && (
+          // 발주는 입고 예정만 만든다 — 차량·입고 작업자는 수령을 눌러야 움직인다(사용자 2026-11-24 "입고 작업자가 움직이지도 않고 입고차량이 들어오지도 않는데")
+          <button className="inb-all" disabled={!!busy} onClick={() => setRecv(exp)}>
+            🚚 {exp.length > 1 ? `${exp.length}건 모두 ` : ''}수령 — 입고 차량 부르기
+          </button>
+        )}
         {exp.map((l) => (
-          <details key={l.receiptId} className="inb-load">
-            <summary>
+          <div key={l.receiptId} className="inb-load">
+            <div className="inb-load-h">
               <span title={l.receiptId}>
                 {l.approvalId.startsWith('DEV-') ? '시험' : '정식'} {l.receiptId.slice(-6)}
               </span>
               <span>
                 {l.lines.length}품목 {sumQty(l)}개
               </span>
-            </summary>
-            <table className="ask-tbl">
-              <tbody>
-                {l.lines.map((x) => (
-                  <tr key={x.sku}>
-                    <td title={x.sku}>{x.productName ?? x.sku}</td>
-                    <td>{x.qty}개</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            <div className="inb-acts">
-              <button disabled={!!busy} onClick={() => setRecv({ load: l, withVirtual: false })}>
-                🚚 수령 · PDA
-              </button>
-              <button disabled={!!busy} onClick={() => setRecv({ load: l, withVirtual: true })}>
-                🤖 수령 · 가상 작업자
+              <button className="inb-mini" disabled={!!busy} onClick={() => setRecv([l])} title="이 건만 수령">
+                🚚 수령
               </button>
             </div>
-          </details>
+            <details>
+              <summary>상품 보기</summary>
+              <table className="ask-tbl">
+                <tbody>
+                  {l.lines.map((x) => (
+                    <tr key={x.sku}>
+                      <td title={x.sku}>{x.productName ?? x.sku}</td>
+                      <td>{x.qty}개</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </details>
+          </div>
         ))}
       </div>
       {draft && <OrderDraft initial={draft} busy={!!busy} onRecommend={recommend} onOrder={order} onClose={() => setDraft(null)} />}
       {recv && (
-        <Ask title={`${recv.load.lines.length}품목 ${sumQty(recv.load)}개를 수령할까요?`} onClose={() => setRecv(null)}>
+        <Ask title={`${recv.length > 1 ? `입고 예정 ${recv.length}건 · ` : ''}${recvItems}품목 ${recvUnits}개를 수령할까요?`} onClose={() => setRecv(null)}>
           <table className="ask-tbl">
             <tbody>
-              {recv.load.lines.map((x) => (
-                <tr key={x.sku}>
-                  <td title={x.sku}>{x.productName ?? x.sku}</td>
-                  <td>+{x.qty}</td>
-                </tr>
-              ))}
+              {recv.flatMap((l) =>
+                l.lines.map((x) => (
+                  <tr key={`${l.receiptId}:${x.sku}`}>
+                    <td title={x.sku}>{x.productName ?? x.sku}</td>
+                    <td>+{x.qty}</td>
+                  </tr>
+                )),
+              )}
             </tbody>
           </table>
           <div className="ask-warn">
-            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 예정 수량 그대로 수령하고,{' '}
-            {recv.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
+            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 예정 수량 그대로 수령합니다. 그다음 품질검사·적치를 가상 작업자(없으면 하나 켬) 또는 PDA "다음 작업 받기"로.
           </div>
           <div className="ask-acts">
             <button onClick={() => setRecv(null)}>취소</button>
-            {/* 확인 버튼 이름 = 입고 차량 부르기(사용자 2026-11-20) */}
-            <button className="red" onClick={receive}>
-              🚚 입고 차량 부르기
+            <button className="go" onClick={() => void receive(false)} title="품질검사·적치는 PDA 로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)">
+              🚚 차량 · PDA
+            </button>
+            <button className="red" onClick={() => void receive(true)}>
+              🤖 차량 · 가상 작업자
             </button>
           </div>
         </Ask>

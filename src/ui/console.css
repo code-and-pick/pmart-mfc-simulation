@@ -1143,7 +1143,7 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-add input { min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; }
 .inb-add input:first-child { flex: 1; }
 .inb-add input[type='number'] { width: 64px; }
-.inb-add button, .inb-rec, .inb-acts button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+.inb-add button, .inb-rec { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
 .inb-rec { width: 100%; margin-bottom: 8px; text-align: left; }
 .inb-qty { width: 54px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; text-align: right; }
 .inb-mini { padding: 0 6px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px; }
@@ -1152,9 +1152,11 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-exp-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
 .inb-exp-h span { flex: 1; color: var(--muted); }
 .inb-load { border-top: 1px solid var(--line); padding: 4px 0; }
-.inb-load summary { display: flex; justify-content: space-between; cursor: pointer; }
-.inb-acts { display: flex; gap: 6px; margin-top: 6px; }
-.inb-acts button { flex: 1; }
 /* 작업자 말풍선 — 화면보다 길면 안에서 스크롤, 머리줄(✕)은 위에 붙어 있게(2026-11-24) */
 .scan-bubble { overflow-y: auto; overscroll-behavior: contain; }
 .scan-bubble > .sb-head { position: sticky; top: -6px; z-index: 1; margin-top: -6px; padding-top: 6px; background: inherit; }
+.inb-all { width: 100%; margin: 4px 0 6px; padding: 7px 10px; border-radius: 8px; border: 1px solid #e5484d; background: #e5484d; color: #fff; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+.inb-all:disabled { opacity: 0.5; cursor: default; }
+.inb-load-h { display: flex; align-items: center; gap: 8px; }
+.inb-load-h span:nth-child(2) { flex: 1; text-align: right; color: var(--muted); }
+.inb-load details summary { cursor: pointer; color: var(--muted); font-size: 11px; }
