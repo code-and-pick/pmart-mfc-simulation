@@ -187,7 +187,7 @@ export function zoneTags(L: Layout): Tag[] {
       // (2026-11-21: 휴게·사무도 냉동과 같은 크기로 — 전엔 작게 "휴게사무는 구역카드 사이즈 줄여")
       let h = big ? WALL_CARD_H_BIG : WALL_CARD_H;
       let w = h * aspect;
-      const same = SAME_AS_FROZEN.includes(z.kind);
+      const same = SAME_AS_FROZEN.includes(z.kind) || !!L.geo.zoneCardMatch?.some(([a]) => a === z.id);
       // 냉동과 같은 무리: 벽 조각이 아니라 구역 폭 기준·구역 가운데(문 위로 걸쳐도 카드는 벽 위에 떠 있다)
       const room = same ? (r.x1 - r.x0) * 0.95 : (wall.x1 - wall.x0) * 0.9;
       if (w > room) {
@@ -215,6 +215,17 @@ export function zoneTags(L: Layout): Tag[] {
       }
       const pz = coldQ ? r.z1 - 0.5 : z.id === 'CQ' ? (r.z0 + r.z1 - 0.65) / 2 : (r.z0 + r.z1) / 2;
       out.push({ id: z.id, tex, pos: [(fx0 + fx1) / 2, 0.03, pz], rotX: -Math.PI / 2, w, h });
+    }
+  }
+  // 카드 크기 맞춤(geo.zoneCardMatch): 두 카드 높이를 작은 쪽에 맞춤, 너비는 글 비율대로, 큰 카드 높이 기준 y 도 다시
+  for (const [a, b] of L.geo.zoneCardMatch ?? []) {
+    const pair = [out.find((t) => t.id === a), out.find((t) => t.id === b)];
+    if (!pair[0] || !pair[1]) continue;
+    const h = Math.min(pair[0].h, pair[1].h);
+    for (const t of pair as Tag[]) {
+      t.w *= h / t.h;
+      t.pos = [t.pos[0], t.pos[1] - t.h / 2 + h / 2, t.pos[2]];
+      t.h = h;
     }
   }
   return out;

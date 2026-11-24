@@ -166,6 +166,8 @@ export interface SiteGeo {
   cartDepotPerRow?: number;
   /** 인계 랙 앞면이 북쪽이면 true(번호판을 북쪽에) — 기본은 남쪽(부산진구는 남쪽 벽에 붙임, 사용자 2026-11-24) */
   shipRackFacesNorth?: boolean;
+  /** 구역 카드 크기 맞춤 [구역 id, 기준 구역 id] — 둘 다 같은 높이(작은 쪽에 맞춤), 앞 구역은 벽 조각이 아니라 구역 폭 기준(부산진구 입고창고 = 입고·검수, 사용자 2026-11-24) */
+  zoneCardMatch?: [string, string][];
   /** 격리 구역 흰 랙 자리(구역 id → 랙 사각형들). 없으면 화면 기본(저온 서쪽 벽 세로 2개·상온 남쪽 가로 2개) */
   quarantineRacks?: Record<string, Rect[]>;
   /** 승강기 문 줄 z(기본 0 = 건물 북쪽 벽, 승강기는 그 북쪽). 부산진구는 별동이 건물 안이라 문이 남쪽 2.4 m(승강기 z 0~2.4) */
