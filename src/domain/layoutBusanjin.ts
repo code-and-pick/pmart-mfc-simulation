@@ -10,7 +10,7 @@
 // 위(북)에서 본 배치(그림 그대로):
 //   북서 = 승강기 별동(화물 승강기 2 — 입고 차량은 건물 북쪽 길) → 입고·검수(북쪽 가운데) | 북동 = 상온 입고창고(대형재고 10·보충재고 랙 15)
 //   가운데 위 = 냉동, 가운데 아래 = 냉장(방마다 북쪽 벽 보충재고 랙 7·입고재고 팔레트 2, 서쪽 벽 격리, 피킹 랙 가로 줄 등 맞댄 3쌍)
-//   동쪽 세로 띠 + 남쪽 가로 띠 = 상온 C~H(동쪽 한 면 가로 줄 6 C·D·E, 남쪽 등 맞댄 2쌍 F02|F03 · G|H) + 상온 격리(남동 모서리)
+//   동쪽 세로 띠 + 남쪽 가로 띠 = 상온 C~H(동쪽 한 면 가로 줄 4 C·D, 남쪽 등 맞댄 2쌍 F02 E02|F03 E03 · G|H) + 상온 격리(남동 모서리)
 //   서쪽 = 인계(서쪽 벽 인계 창 → 건물 밖 라이더 대기), 장바구니 거치대(냉동·냉장 서쪽 벽), 패킹 8(4 | 4, 남서)
 
 import type { TemperatureZone } from './contract';
@@ -57,7 +57,7 @@ const R = {
   A: { x0: X(5.6), z0: 2.55, x1: X(25.7), z1: 11.19 }, // 냉동 53평(20.1 × 8.64 m, 격리 포함)
   B: { x0: X(5.6), z0: 11.19, x1: X(25.7), z1: 19.83 }, // 냉장 53평
   WH: { x0: X(26.8), z0: 0, x1: X(37), z1: 8.4 }, // 상온 입고창고 26평(10.2 × 8.4): 대형재고 10 → 입고재고 5 → 보충재고 랙 8 | 7
-  CH: { x0: X(25.7), z0: 8.4, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠(가로 줄 6)
+  CH: { x0: X(25.7), z0: 8.4, x1: X(37), z1: 19.83 }, // 상온 동쪽 띠(가로 줄 4)
   CH2: { x0: X(5.6), z0: 19.83, x1: X(37), z1: BSJ_BD }, // 상온 남쪽 띠(등 맞댄 2쌍: F02 | F03, G | H)
   PK: { x0: X(0), z0: 13.55, x1: X(3.9), z1: BSJ_BD }, // 패킹 13평(3.9 × 11.03) — 패킹대 4 | 4 가 구역 안에
   SHIP: { x0: X(0.1), z0: 6.1, x1: X(3.4), z1: 8.1 }, // 인계 대기 2평(3.3 × 2.0) — 승강기 별동 남쪽 벽 앞(사용자 2026-11-24 "장바구니 거치대 시작점이랑 인계랙 위치 바꿔줘")
@@ -145,9 +145,9 @@ export function buildBusanjinLayout(): Layout {
   // 남쪽 가로 띠: 등 맞댄 한 쌍 — 북쪽 줄 G, 남쪽 줄 H(+ G 2), 서쪽 묶음 6 | (가운데 빈 곳 — 그림의 구역 이름 자리) | 동쪽 묶음 8(동쪽 벽까지).
   // 넓은 칸 랙 H01-02~06·H02-07 이 남게 H01-01~06 + H02-02~07.
   const ambient: Rack[] = [];
-  // 동쪽 띠(그림대로 가로 줄): 한 면 줄 6(남쪽을 봄), 서쪽 끝·가운데 통로 한 선 — 7랙 4 | 3, E 6랙 4 | 2. 북쪽부터 C → D → E(F 2줄은 남쪽 띠로)
+  // 동쪽 띠(그림대로 가로 줄): 한 면 줄 4(남쪽을 봄), 서쪽 끝·가운데 통로 한 선 — 7랙 4 | 3. 북쪽부터 C → D(E·F 2줄씩은 남쪽 띠 북쪽 쌍으로)
   const EAST = { x0: X(26.9), z0: 8.7, z1: R.CH.z1 - 0.23 } as const;
-  const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 1, 7), run('D03', 1, 7), run('E02', 1, 6), run('E03', 1, 6)];
+  const eastRows = [run('C01', 1, 7), run('C02', 1, 7), run('D02', 1, 7), run('D03', 1, 7)];
   const ePitch = (EAST.z1 - EAST.z0 - RACK_DEPTH) / (eastRows.length - 1);
   eastRows.forEach((row, k) => row.forEach((r, i) => ambient.push(place(r, EAST.x0 + (i < 4 ? (i + 0.5) * RACK_LEN : 4 * RACK_LEN + 1.0 + (i - 3.5) * RACK_LEN), EAST.z0 + k * ePitch + RACK_DEPTH / 2, 'x', 1))));
   // 남쪽 띠 정돈: 등 맞댄 한 쌍을 띠 가운데(남·북 통로 같게), 북쪽 면 G 8 | 8, 남쪽 면 H 6 | 6 — 같은 가운데 통로 양옆(사용자 2026-11-24 "지금 평수에서 랙 정돈되게 다시 배치해봐")
@@ -157,10 +157,19 @@ export function buildBusanjinLayout(): Layout {
   const gNorth = [...run('G02', 1, 8), ...run('G03', 1, 8)];
   const hSouth = [...run('H01', 1, 8), ...run('H02', 4, 4)]; // 서쪽 묶음 H01-01~08 | 동쪽 H02-04~07(넓은 칸 랙 H01-02~06·H02-07 포함)
   // 북쪽 쌍 = 동쪽 띠에서 옮긴 F02(북쪽 면) | F03(남쪽 면), 7랙씩 서쪽 묶음에(사용자 2026-11-24 "남쪽 상온 랙 2줄만 있는데 거기로 2줄 더 이동 시켜봐")
-  const southPairs: [Rack[], Rack[]][] = [[run('F02', 1, 7), run('F03', 1, 7)], [gNorth, hSouth]];
+  //   가운데 통로 동쪽에도 E02 | E03(6랙씩)을 둠 — 동쪽 띠에서 옮겨 상온 랙 수는 그대로(사용자 2026-11-24 "북쪽 아래 통로동쪽에도 2줄 더 놔둬야지. 서쪽에만 추가됐잖아. 상온 랙 갯수는 그대로여야 하는 거 알지?")
+  //   면마다 [서쪽 묶음, 동쪽 묶음] — 서쪽 묶음은 서쪽 끝부터, 동쪽 묶음은 가운데 통로 동쪽부터(G·H 와 같은 선)
+  const southPairs: [[Rack[], Rack[]], [Rack[], Rack[]]][] = [
+    [[run('F02', 1, 7), run('E02', 1, 6)], [run('F03', 1, 7), run('E03', 1, 6)]],
+    [[gNorth.slice(0, 8), gNorth.slice(8)], [hSouth.slice(0, 8), hSouth.slice(8)]],
+  ];
   southPairs.forEach(([north, south], k) => {
-    north.forEach((r, i) => ambient.push(place(r, sideAt(i, north.length), SOUTH_PAIR_Z(k) + RACK_DEPTH / 2, 'x', -1)));
-    south.forEach((r, i) => ambient.push(place(r, sideAt(i, south.length), SOUTH_PAIR_Z(k) + 1.5 * RACK_DEPTH, 'x', 1)));
+    const face = ([w, e]: [Rack[], Rack[]], cz: number, f: 1 | -1) => {
+      w.forEach((r, i) => ambient.push(place(r, sideAt(i, w.length), cz, 'x', f)));
+      e.forEach((r, i) => ambient.push(place(r, sideAt(8 + i, e.length), cz, 'x', f)));
+    };
+    face(north, SOUTH_PAIR_Z(k) + RACK_DEPTH / 2, -1);
+    face(south, SOUTH_PAIR_Z(k) + 1.5 * RACK_DEPTH, 1);
   });
 
   // ── 상온 입고창고(26평): 북쪽 대형재고 10(5 × 2줄, 사이 통로) → 입고재고 팔레트 5(한 줄) → 보충재고 랙 8 | 7(등 맞댄 한 쌍, 서쪽 끝 맞춤) ──
