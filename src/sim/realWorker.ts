@@ -179,6 +179,7 @@ export class RealWorker extends Agent {
   ) {
     super(account, home, ctx.nav, ctx.params.walkSpeed);
     this.home = home;
+    this.pushesCart = returnRoleOf(account) !== null; // 입고 계정(qc·rcv)은 롤테이너를 늘 민다(Agents.tsx 그림과 같음)
   }
 
   private key(op: string, id: string, extra = ''): string {
@@ -820,12 +821,31 @@ export class RealWorker extends Agent {
     }
   }
 
+  /**
+   * 서버 위치로 걸어갈 점 — 팔레트 자리(입고칸·보충재고)는 팔레트 위(막힌 곳)가 아니라 그 팔레트 앞(stand).
+   * 저온 입고칸은 팔레트 2개 사이 가운데라 가장 가까운 입고재고 팔레트 앞으로. 그 밖은 point 그대로
+   */
+  private spotOf(code: string): P | null {
+    const p = this.ctx.point(code);
+    if (!p) return null;
+    const R = this.ctx.layout.reserves;
+    const inRect = R.find((s) => p.x >= s.rect.x0 && p.x <= s.rect.x1 && p.z >= s.rect.z0 && p.z <= s.rect.z1);
+    if (inRect) return inRect.stand;
+    if (!code.startsWith('RCV-') || this.ctx.nav.isFreeAt(p)) return p; // RCV-A-01 = 승강기 앞(빈 곳) 그대로
+    let best: P | null = null;
+    for (const s of R) if (s.role === 'RECEIVING' && (!best || Math.hypot(s.stand.x - p.x, s.stand.z - p.z) < Math.hypot(best.x - p.x, best.z - p.z))) best = s.stand;
+    return best ?? p;
+  }
+
   /** 입고 하차 — 승강기 문에서 롤테이너(같은 온도대 linesPerRoll 줄)를 빼 입고칸으로 밀고 와 내린다. 다 내리면 서버 수령 */
   private async doUnload(job: UnloadJob) {
     const { ctx } = this;
     const U = INBOUND_UNLOAD;
     const lift = ctx.layout.points.truckDoor;
-    const dest = ctx.point(job.at) ?? ctx.layout.points.inboundIdle[0];
+    // 내릴 자리 = 그 온도대 입고재고 팔레트 앞(stand), 롤테이너마다 다음 팔레트 — 전엔 팔레트 묶음 한가운데(팔레트 위라 막힌 곳)로 가서
+    // 가까운 빈 칸(벽 앞)에 서서 롤테이너를 벽에 박은 채 내렸다(사용자 2026-11-24 "입고랙에 적재할 때 롤테이너를 한참이나 벽에 박고 있더라")
+    const stands = ctx.layout.reserves.filter((s) => s.role === 'RECEIVING' && s.temp === job.temp).map((s) => s.stand);
+    const destOf = (r: number) => stands[r % stands.length] ?? this.spotOf(job.at) ?? ctx.layout.points.inboundIdle[0];
     const rolls: UnloadJob['lines'][] = [];
     for (let k = 0; k < job.lines.length; k += U.linesPerRoll) rolls.push(job.lines.slice(k, k + U.linesPerRoll));
     const units = job.lines.reduce((a, l) => a + l.qty, 0);
@@ -846,7 +866,7 @@ export class RealWorker extends Agent {
         this.carrying = roll.slice(0, 4).map(() => job.temp);
         this.activity = `하차 ${job.receiptId.slice(-6)} — 롤테이너 ${r + 1}/${rolls.length} → ${job.at}`;
         this.pda.step = `${job.at} 로 밀고 가기`;
-        await this.walkTo(dest);
+        await this.walkTo(destOf(r));
         this.pda.step = `${job.at} 에 내리기`;
         await this.work(U.dropLineSec * roll.length);
         this.carrying = [];
@@ -876,7 +896,7 @@ export class RealWorker extends Agent {
     this.state = 'PICKING';
     this.activity = `품질검사 → ${t.locationCode}`;
     this.pda = this.inboundView(t, 'INSPECT', `${t.locationCode} 로 이동`, qty);
-    await this.walkTo(ctx.point(t.locationCode) ?? ctx.layout.points.inboundIdle[0]);
+    await this.walkTo(this.spotOf(t.locationCode) ?? ctx.layout.points.inboundIdle[0]);
     this.pda.step = '라벨·기한 확인';
     this.activity = `품질검사 ${t.sku} ${qty}개`;
     // 상자를 들고 라벨을 본다(사용자 2026-11-20 "한참 가만히 서있다가 한 손에 폰 같은 거 들고간다") — 그림만
@@ -921,7 +941,7 @@ export class RealWorker extends Agent {
     this.pda.progress = `격리 이동 ${t.sku}`;
     this.activity = `격리 이동 ${t.locationCode} → ${dest}`;
     // 반품 위치(RTN-)는 인계 창 밖이라 창 안쪽에서 받는다
-    const from = t.locationCode.startsWith('RTN-') ? RETURN_FLOW.windowInside : (ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    const from = t.locationCode.startsWith('RTN-') ? RETURN_FLOW.windowInside : (this.spotOf(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
     await this.walkTo(from);
     await this.work(4);
     this.carrying = [temp];
@@ -1094,7 +1114,7 @@ export class RealWorker extends Agent {
     this.pda.nextLocation = to;
     this.pda.temp = temp ? TEMP_KO[temp] : null;
     this.pda.step = `${t.locationCode} 스캔 → 상품 싣기`;
-    await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    await this.walkTo(this.spotOf(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
     await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * qty);
     // 상자를 카트에 싣고 민다(전엔 손에 작은 것 — "스마트폰 든 것 마냥", 사용자 2026-11-20)
     this.hasCart = true;
@@ -1182,7 +1202,7 @@ export class RealWorker extends Agent {
     this.pda.nextLocation = first.code;
     this.pda.temp = temp ? TEMP_KO[temp] : null;
     const carry = qty - left;
-    await this.walkTo(ctx.point(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
+    await this.walkTo(this.spotOf(t.locationCode) ?? ctx.location(t.locationCode)?.pick ?? ctx.layout.points.inboundIdle[0]);
     await this.work(REAL_WORKERS.shelveBaseSec + REAL_WORKERS.shelveSecPerUnit * carry);
     this.hasCart = true;
     for (let i = 0; i < Math.min(4, Math.ceil(carry / 6)); i++) this.carrying.push(temp ?? 'AMBIENT');

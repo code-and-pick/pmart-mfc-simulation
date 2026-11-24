@@ -31,8 +31,11 @@ export abstract class Agent {
     return this.pending?.kind === 'walk' && this.path.length > 0;
   }
 
+  /** 롤테이너를 늘 밀고 다닌다(입고 작업자) — 롤테이너 폭만큼 넓은 길로 걷고, 멈추면 롤테이너가 벽·랙에 박히지 않는 쪽으로 선다 */
+  protected pushesCart = false;
+
   walkTo(target: P): Promise<void> {
-    const p = this.nav.findPath(this.pos, target) ?? [target];
+    const p = this.nav.findPath(this.pos, target, { cart: this.pushesCart }) ?? [target];
     this.path = p;
     return new Promise((resolve) => {
       this.pending = { kind: 'walk', resolve, remaining: 0 };
@@ -80,7 +83,10 @@ export abstract class Agent {
         budget = 0;
       }
     }
-    if (this.path.length === 0) this.settle();
+    if (this.path.length === 0) {
+      if (this.pushesCart) this.heading = this.nav.cartHeading(this.pos, this.heading);
+      this.settle();
+    }
   }
 
   stop() {

@@ -104,6 +104,7 @@ export class InboundWorker extends Agent {
     private readonly ctx: InboundContext,
   ) {
     super(id, home, ctx.nav, 1.0);
+    this.pushesCart = true;
   }
 
   get idle(): boolean {
