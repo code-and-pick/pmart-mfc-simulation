@@ -37,7 +37,7 @@ import {
 } from './layout';
 
 /** 건물 서쪽 밖 마당 폭(라이더 대기) */
-export const BSJ_OX = 5.0;
+export const BSJ_OX = 10.5; // 라이더 대기를 가로로 넓게(9.3 × 4 m) 놓으려고 서쪽 마당을 10.5 m 로(사용자 2026-11-24 "라이더 대기도 90도로 넓게 배치하게 바꿔야지")
 const OX = BSJ_OX;
 /** 건물 37.0 × 25.3 m = 936 m² ≈ 283평(MFC 265 + 별동 10 + 벽·기둥 오차) */
 export const BSJ_W = 37.0;
@@ -64,7 +64,7 @@ const R = {
   PK: { x0: X(0), z0: 14.85, x1: X(4.8), z1: BSJ_BD }, // 패킹 15평(4.8 × 10.45 = 50 m²) — 냉동·냉장 서쪽을 줄여 넓힘(사용자 2026-11-24 "냉장냉동 서쪽 평수 좀 줄여서 패킹 구역 확보하자")
   SHIP: { x0: X(0.1), z0: 6.1, x1: X(3.4), z1: 8.1 }, // 인계 대기 2평(3.3 × 2.0) — 장바구니 거치대 자리와 바꿈(승강기 별동 남쪽 벽 앞, 사용자 2026-11-24 "상온입고창고에 보충재고랑 입고재고 위치 바꾸고, 장바구니 거치대 시작점이랑 인계랙 위치 바꿔줘")
   CQ: { x0: X(10.3), z0: 22.05, x1: X(11.8), z1: 24.25 }, // 상온 격리 1평(1.5 × 2.2) — 남쪽 띠 G·H 쌍 서쪽, 쌍과 같은 높이
-  PARK: { x0: 0.6, z0: 7.3, x1: 4.6, z1: 16.6 }, // 라이더 대기 11.3평(건물 밖 서쪽, 입고 차량 남쪽)
+  PARK: { x0: 0.6, z0: 7.6, x1: 9.9, z1: 11.6 }, // 라이더 대기 11.3평(9.3 × 4 m 가로, 건물 밖 서쪽 — 입고 차량 길 남쪽, 인계 창 바로 앞)
 } as const satisfies Record<string, Rect>;
 /** 저온 방 안: 서쪽 벽 띠(격리), 북쪽 벽 띠(보충재고 랙 7 + 입고재고 팔레트 2), 피킹 줄 시작 x */
 /** 남쪽 띠 G·H 쌍 북쪽 면 z — 띠(냉장 남쪽 벽 20.5 ~ 건물 남쪽 벽 25.3) 가운데 */
@@ -323,8 +323,8 @@ export function buildBusanjinLayout(): Layout {
     packQueue: { x: X(5.7), z: R.PK.z0 + 0.6 },
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: (R.SHIP.z0 + R.SHIP.z1) / 2 },
     riderPickup: { x: X(-0.6), z: (SHIP_WINDOW[0] + SHIP_WINDOW[1]) / 2 },
-    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.2 + (i % 3) * 1.3, z: 7.9 + Math.floor(i / 3) * 3.2 })),
-    riderEntry: { x: 2.5, z: BSJ_BD + 0.3 },
+    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.4 + (i % 5) * 1.8, z: 8.6 + Math.floor(i / 5) * 2.0 })),
+    riderEntry: { x: 5.0, z: BSJ_BD + 0.3 },
   };
 
   const geo: SiteGeo = {
