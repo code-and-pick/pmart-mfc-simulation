@@ -147,7 +147,19 @@ export function ParkingDecor() {
   const lines = useMemo(() => {
     const out: { x: number; z: number; sx: number; sz: number }[] = [];
     // 칸 폭 = 칸 사이 거리(기본 1.2 m, 부산진구 1.0 m)
-    const half = bays.length > 1 ? Math.min(0.6, Math.abs(bays[1].x - bays[0].x) / 2) : 0.6;
+    const alongZ = !!L.geo.riderParkingAlongZ;
+    const step = bays.length > 1 ? (alongZ ? Math.abs(bays[1].z - bays[0].z) : Math.abs(bays[1].x - bays[0].x)) : 1.2;
+    const half = Math.min(0.6, step / 2);
+    if (alongZ) {
+      // 남북 한 줄: 칸마다 가로선, 뒤(서쪽) 세로선
+      for (const b of bays) out.push({ x: b.x, z: b.z - half, sx: 2.0, sz: 0.06 });
+      if (bays.length) {
+        const last = bays[bays.length - 1];
+        out.push({ x: last.x, z: last.z + half, sx: 2.0, sz: 0.06 });
+        out.push({ x: bays[0].x - 1.0, z: (bays[0].z + last.z) / 2, sx: 0.06, sz: last.z - bays[0].z + 2 * half });
+      }
+      return out;
+    }
     for (const b of bays) {
       out.push({ x: b.x - half, z: b.z, sx: 0.06, sz: 2.0 });
     }
@@ -157,7 +169,7 @@ export function ParkingDecor() {
       out.push({ x: (bays[0].x + last.x) / 2, z: bays[0].z + 1.0, sx: last.x - bays[0].x + 2 * half, sz: 0.06 });
     }
     return out;
-  }, [bays]);
+  }, [bays, L.geo.riderParkingAlongZ]);
   return (
     <>
       {lines.map((l, i) => (
@@ -170,6 +182,7 @@ export function ParkingDecor() {
         <group
           key={i}
           position={[b.x, 0, b.z]}
+          rotation={[0, L.geo.riderParkingAlongZ ? Math.PI / 2 : 0, 0]}
           ref={(g) => {
             if (g) scooters.current[i] = g;
           }}

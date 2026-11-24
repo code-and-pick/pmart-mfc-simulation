@@ -74,7 +74,7 @@ const R = {
   PK: { x0: X(0), z0: 13.55, x1: X(5.9), z1: BSJ_BD }, // 패킹 20평(5.9 × 11.03 — 사용자 2026-11-24 "패킹구역은 평수 줄여줘" 로 26 → 20) — 패킹대 4 | 4 가 구역 안에
   SHIP: { x0: X(0.1), z0: 6.8, x1: X(3.4), z1: 8.8 }, // 인계 대기 2평(3.3 × 2.0) — 거치대 북쪽 벽(z 8.9) 앞, 인계 랙은 그 벽에 붙임(사용자 2026-11-24 "인계랙 남쪽 벽에 붙여")
   CQ: { x0: X(35.7), z0: BSJ_BD - 0.1 - 2.8, x1: X(36.9), z1: BSJ_BD - 0.1 }, // 상온 격리 1평(1.2 × 2.8) — 남동 모서리 동쪽 벽(사용자 2026-11-24 "상온 격리 구역 랙 오른쪽 모퉁이 동쪽 벽에 붙여")
-  PARK: { x0: 0.6, z0: 7.6, x1: 9.9, z1: 11.6 }, // 라이더 대기 11.3평(9.3 × 4 m 가로, 건물 밖 서쪽 — 사용자 2026-11-24 "라이더 대기도 90도로 넓게")
+  PARK: { x0: 1.0, z0: 7.0, x1: 5.0, z1: 16.3 }, // 라이더 대기 11.3평(4 × 9.3 m 세로, 건물 밖 서쪽 — 사용자 2026-11-24 "라이더대기 주차장을 지금 그린 거에서 90도 돌려", 전엔 9.3 × 4 가로)
 } as const satisfies Record<string, Rect>;
 /** 남쪽 띠 등 맞댄 2쌍 — 띠 안쪽(냉장 남쪽 벽 ~ 건물 남쪽 벽)에 통로 3개를 같은 폭으로, 쌍 k 북쪽 면 z */
 const SOUTH_AISLE = (BSJ_BD - 0.1 - (19.83 + 0.1) - 4 * RACK_DEPTH) / 3;
@@ -402,8 +402,8 @@ export function buildBusanjinLayout(): Layout {
     packQueue: { x: (R.PK.x1 + R.A.x0) / 2, z: R.PK.z0 + 0.6 }, // 패킹 구역 ~ 냉장 서쪽 벽 통로 가운데
     shipDrop: { x: (R.SHIP.x0 + R.SHIP.x1) / 2, z: (R.SHIP.z0 + R.SHIP.z1) / 2 },
     riderPickup: { x: X(-0.6), z: (SHIP_WINDOW[0] + SHIP_WINDOW[1]) / 2 },
-    // 한 줄 9칸(칸 폭 1.0 m, 오토바이는 줄에 직각으로 댐 — 다른 지점과 같은 그림)(사용자 2026-11-24 "라이더 대기 주차 그림이 오토바이를 90도 회전해서 댈 수 있게 일직선으로 그려")
-    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: 1.25 + i * 1.0, z: (R.PARK.z0 + R.PARK.z1) / 2 })),
+    // 남북 한 줄 9칸(칸 폭 1.0 m, 오토바이는 동서로 댐 — geo.riderParkingAlongZ)(사용자 2026-11-24 "…일직선으로 그려" → "지금 그린 거에서 90도 돌려")
+    riderParking: Array.from({ length: 9 }, (_, i) => ({ x: (R.PARK.x0 + R.PARK.x1) / 2, z: R.PARK.z0 + 0.65 + i * 1.0 })),
     riderEntry: { x: 5.0, z: BSJ_BD + 0.3 },
   };
 
@@ -441,6 +441,7 @@ export function buildBusanjinLayout(): Layout {
     cartDepotRowGap: 1.6,
     cartDepotPerRow: 18,
     shipRackFacesNorth: true,
+    riderParkingAlongZ: true,
     zoneCardFullSize: ['WH', 'RCV'], // 입고·검수·입고창고 카드 = 다른 큰 구역 카드 높이(구역 폭에 맞춰 줄이지 않음 — 사용자 2026-11-24 "입고검수구역카드랑 상온입고창고구역 카드 작으니까 다른 구역카드 크기랑 맞춰")
     returnTable: { x: X(0.1 + 0.05 + 0.35), z: 10.65, vertical: true }, // 재진열 대기: 거치대 줄 앞(남쪽) 서쪽 벽에 붙임
   };
