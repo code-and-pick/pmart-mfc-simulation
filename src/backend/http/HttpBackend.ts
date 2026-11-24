@@ -421,6 +421,13 @@ export class HttpBackend implements FulfillmentPort {
     return this.request('POST', '/dev-initial-stock-loads', { body: { mfcId, lines }, idempotencyKey });
   }
 
+  /** mfc-inbound listInitialStockLoads(0.12.0, MB-1) — 센터의 입고 예정(기본 EXPECTED·PENDING, 오래된 순). 그 센터 운영자. 한 쪽(≤200)만 */
+  async listInitialStockLoads(mfcId: string, states: InitialStockLoad['state'][] = ['EXPECTED']): Promise<InitialStockLoad[]> {
+    const q = [`mfcId=${enc(mfcId)}`, 'size=200', ...states.map((s) => `state=${s}`)].join('&');
+    const r: { items?: InitialStockLoad[] } = await this.request('GET', `/initial-stock-loads?${q}`);
+    return r.items ?? [];
+  }
+
   /** mfc-inbound receiveInitialStock — 입고 예정의 현장 수령(상품·수량만, LOT·기한은 품질검사). 202 → 전기 뒤 품질검사 작업 */
   receiveInitialStock(receiptId: string, toLocationCode: string, lines: { sku: string; receivedQty: number }[], idempotencyKey: string): Promise<CommandResponse> {
     return this.request('POST', `/initial-stock-loads/${enc(receiptId)}/receipts`, { body: { toLocationCode, lines }, idempotencyKey });

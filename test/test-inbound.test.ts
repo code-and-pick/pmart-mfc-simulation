@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TEST_INBOUND } from '../src/config';
-import { inboundCandidates, inboundLines } from '../src/domain/testInbound';
+import { clampOrderQty, inboundCandidates, inboundLines, orderTotals, receiptTemp, splitOrder, upsertLine } from '../src/domain/testInbound';
 
 describe('시험 입고 줄 고르기(MI-3·R-23)', () => {
   it('취급·판매 중지 아님만, 품절 먼저, 중복 없이, readMax 까지', () => {
@@ -42,5 +42,49 @@ describe('시험 입고 줄 고르기(MI-3·R-23)', () => {
     expect(TEST_INBOUND.lines).toBeLessThanOrEqual(40);
     expect(TEST_INBOUND.minQty).toBeGreaterThanOrEqual(1);
     expect(TEST_INBOUND.maxQty).toBeLessThanOrEqual(500);
+  });
+});
+
+describe('입고 발주표(사용자 지정·추천 채움·입고 전 수량)', () => {
+  const L = (sku: string, qty: number, temp: 'AMBIENT' | 'CHILLED' | 'FROZEN' = 'AMBIENT', source: 'RECOMMEND' | 'MANUAL' = 'MANUAL') => ({ sku, name: sku, available: 3, qty, temp, source });
+
+  it('수량은 1~500 정수', () => {
+    expect(clampOrderQty(0)).toBe(1);
+    expect(clampOrderQty(999)).toBe(500);
+    expect(clampOrderQty(12.6)).toBe(13);
+    expect(clampOrderQty(Number.NaN)).toBe(1);
+  });
+
+  it('같은 SKU 는 한 줄 — 직접 넣으면 더하고, 추천으로 다시 채우면 바꾼다', () => {
+    let ls = upsertLine([], L('A', 10), false);
+    ls = upsertLine(ls, L('A', 5), false);
+    expect(ls).toHaveLength(1);
+    expect(ls[0].qty).toBe(15);
+    ls = upsertLine(ls, L('A', 7, 'AMBIENT', 'RECOMMEND'), true);
+    expect(ls[0]).toMatchObject({ qty: 7, source: 'RECOMMEND' });
+    expect(upsertLine(ls, L('A', 490), false)[0].qty).toBe(497);
+    expect(upsertLine(ls, L('A', 600), false)[0].qty).toBe(500);
+  });
+
+  it('온도대마다, 40줄씩 입고 예정으로 나눈다', () => {
+    const ls = [...Array.from({ length: 45 }, (_, i) => L(`A${i}`, 1)), L('C1', 2, 'CHILLED'), L('F1', 3, 'FROZEN')];
+    const parts = splitOrder(ls);
+    expect(parts.map((p) => [p.temp, p.lines.length])).toEqual([
+      ['AMBIENT', 40],
+      ['AMBIENT', 5],
+      ['CHILLED', 1],
+      ['FROZEN', 1],
+    ]);
+  });
+
+  it('입고 전 합계 — 온도대별 품목·개수', () => {
+    const t = orderTotals([L('A', 10), L('B', 5), L('C', 2, 'CHILLED')]);
+    expect(t).toMatchObject({ items: 3, units: 17, byTemp: { AMBIENT: { items: 2, units: 15 }, CHILLED: { items: 1, units: 2 }, FROZEN: { items: 0, units: 0 } } });
+  });
+
+  it('입고 예정 수령 칸 온도대 = 줄에 가장 많은 온도대, 없으면 상온', () => {
+    const t = (s: string) => (s.startsWith('F') ? 'FROZEN' : s.startsWith('C') ? 'CHILLED' : 'AMBIENT') as 'AMBIENT' | 'CHILLED' | 'FROZEN';
+    expect(receiptTemp(['F1', 'F2', 'A1'], t)).toBe('FROZEN');
+    expect(receiptTemp([], t)).toBe('AMBIENT');
   });
 });

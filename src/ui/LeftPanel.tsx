@@ -1,14 +1,15 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
 // 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
 import { workerShortName, workerRoleName } from '../domain/workerName';
-import { lazy, Suspense, useRef, useState, type ReactNode } from 'react';
+import { Fragment as Frag, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, TEST_INBOUND } from '../config';
 import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
-import type { InboundPlanLine } from '../domain/testInbound';
+import { clampOrderQty, orderTotals, splitOrder, upsertLine, type OrderDraftLine } from '../domain/testInbound';
+import type { InitialStockLoad } from '../domain/contract';
 import { fmtClock } from '../sim/metrics';
 import type { HttpSettings } from '../sim/simulation';
 import { Help } from './Help';
@@ -79,10 +80,10 @@ function Act({ icon, title, sub, onClick, primary, disabled }: { icon: string; t
 }
 
 /** 두 번 묻는 창 — 왼쪽 패널 옆에 뜬다. 패널(backdrop-filter)이 fixed 를 가두므로 body 로 뺀다 */
-function Ask({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function Ask({ title, children, onClose, wide }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   return createPortal(
     <div className="ask-back" onClick={onClose}>
-      <div className="ask" role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
+      <div className={wide ? "ask wide" : "ask"} role="dialog" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <h5>{title}</h5>
         {children}
       </div>
@@ -265,79 +266,145 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
   );
 }
 
-// ───────── 실서버: 재고 채우기(시험 입고 MI-3·R-23) — 계획을 보여 주고 한 번 더 묻기 ─────────
+// ───────── 실서버: 입고 발주(시험 입고 MI-3·R-23) — 사용자 2026-11-24 "사용자 지정 발주·추천값 자동 채움·입고 전 수량 보기" ─────────
+// 발주 넣기 = 입고 예정(EXPECTED)만 만든다 → "입고 예정" 목록에서 수량을 보고 → 입고 차량 부르기(수령). 추천은 백엔드 API(R-48) 전까지 시뮬 임시 규칙.
+
+const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
 /** 입고·검수 구역 카드(Cards)에서도 쓴다 — 사용자 2026-11-20 "왼쪽에 있다는 문구 없애고 버튼 만들어" */
 export function TestInboundControls() {
   const { sim, controller } = useApp();
   useTick();
-  const [plan, setPlan] = useState<{ lines: InboundPlanLine[]; withVirtual: boolean } | null>(null);
+  const [draft, setDraft] = useState<OrderDraftLine[] | null>(null);
+  const [expected, setExpected] = useState<InitialStockLoad[] | null>(null);
+  const [recv, setRecv] = useState<{ load: InitialStockLoad; withVirtual: boolean } | null>(null);
   const [busy, setBusy] = useState('');
   const [log, setLog] = useState<OrderLog[]>([]);
   const push = (text: string, warn = false) => setLog((l) => [{ at: new Date().toLocaleTimeString(), text, warn }, ...l].slice(0, 12));
   const why = (e: unknown) => ((e as Error).message ?? String(e)).slice(0, 90);
 
-  const start = async (withVirtual: boolean) => {
+  const refresh = async () => {
+    try {
+      setExpected(await sim.expectedInbound());
+    } catch (e) {
+      push(`입고 예정 읽기 실패 — ${why(e)}`, true);
+    }
+  };
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sim.params.mfcId]);
+
+  const recommend = async (base: OrderDraftLine[]) => {
     setBusy('재고 적은 상품 찾는 중…');
     try {
-      const lines = await sim.planTestInbound();
-      if (!lines.length) push('채울 상품을 못 찾았습니다(센터 취급 상품 없음)', true);
-      else setPlan({ lines, withVirtual });
+      const rec = await sim.recommendInbound();
+      if (!rec.length) push('추천할 상품을 못 찾았습니다(센터 취급 상품 없음)', true);
+      setDraft(rec.reduce((ls, l) => upsertLine(ls, l, true), base));
     } catch (e) {
-      push(`상품 찾기 실패 — ${why(e)}`, true);
+      push(`추천 읽기 실패 — ${why(e)}`, true);
     }
     setBusy('');
   };
-  const go = async () => {
-    if (!plan) return;
-    const p = plan;
-    setPlan(null);
-    setBusy('입고 예정 만들고 수령하는 중…');
+  const order = async (lines: OrderDraftLine[]) => {
+    setDraft(null);
+    setBusy('입고 예정 만드는 중…');
     try {
-      const r = await sim.runTestInbound(p.lines, p.withVirtual);
-      push(`시험 입고 ${p.lines.length}품목 ${r.units}개 수령 → ${p.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
-      controller.focusZone('RCV');
+      const loads = await sim.placeInboundOrder(lines);
+      const t = orderTotals(lines);
+      push(`발주 ${t.items}품목 ${t.units}개 → 입고 예정 ${loads.length}건(수령 전)`);
+      await refresh();
     } catch (e) {
-      push(`시험 입고 실패 — ${why(e)}`, true);
+      push(`발주 실패 — ${why(e)}`, true);
     }
     setBusy('');
   };
-  const units = plan?.lines.reduce((a, l) => a + l.qty, 0) ?? 0;
+  const receive = async () => {
+    if (!recv) return;
+    const r = recv;
+    setRecv(null);
+    setBusy('수령하는 중…');
+    try {
+      const out = await sim.receiveInbound(r.load, r.withVirtual);
+      push(`입고 ${r.load.receiptId.slice(-6)} ${r.load.lines.length}품목 ${out.units}개 수령(${out.at}) → ${r.withVirtual ? '가상 작업자가 검사·적치' : 'PDA 로 검사·적치'}`);
+      controller.focusZone('RCV');
+      await refresh();
+    } catch (e) {
+      push(`수령 실패 — ${why(e)}`, true);
+    }
+    setBusy('');
+  };
+
+  const exp = expected ?? [];
+  const sumQty = (l: InitialStockLoad) => l.lines.reduce((a, x) => a + x.qty, 0);
+  const expUnits = exp.reduce((a, l) => a + sumQty(l), 0);
   return (
-    <Sec title="재고 채우기" aside="시험 입고">
+    <Sec title="입고 발주" aside="시험 입고">
       <div className="act-split">
-        <Act icon="📦" title="입고 예정만" sub="검사·적치는 PDA" disabled={!!busy} onClick={() => start(false)} />
-        <Act icon="🤖" title="가상 작업자로" sub="수령→검사→적치" disabled={!!busy} onClick={() => start(true)} />
+        <Act icon="🧮" title="추천으로 채우기" sub="재고 적은 상품 자동" disabled={!!busy} onClick={() => recommend([])} />
+        <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
       </div>
       {busy && <div className="busy">{busy}</div>}
-      {plan && (
-        <Ask title={`${plan.lines.length}품목 ${units}개를 입고할까요?`} onClose={() => setPlan(null)}>
+      <div className="inb-exp">
+        <div className="inb-exp-h">
+          <b>입고 예정(수령 전)</b>
+          <span>{expected === null ? '…' : `${exp.length}건 · ${expUnits}개`}</span>
+          <button className="inb-mini" disabled={!!busy} onClick={() => void refresh()} title="다시 읽기">
+            ↻
+          </button>
+        </div>
+        {exp.map((l) => (
+          <details key={l.receiptId} className="inb-load">
+            <summary>
+              <span title={l.receiptId}>
+                {l.approvalId.startsWith('DEV-') ? '시험' : '정식'} {l.receiptId.slice(-6)}
+              </span>
+              <span>
+                {l.lines.length}품목 {sumQty(l)}개
+              </span>
+            </summary>
+            <table className="ask-tbl">
+              <tbody>
+                {l.lines.map((x) => (
+                  <tr key={x.sku}>
+                    <td title={x.sku}>{x.productName ?? x.sku}</td>
+                    <td>{x.qty}개</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="inb-acts">
+              <button disabled={!!busy} onClick={() => setRecv({ load: l, withVirtual: false })}>
+                🚚 수령 · PDA
+              </button>
+              <button disabled={!!busy} onClick={() => setRecv({ load: l, withVirtual: true })}>
+                🤖 수령 · 가상 작업자
+              </button>
+            </div>
+          </details>
+        ))}
+      </div>
+      {draft && <OrderDraft initial={draft} busy={!!busy} onRecommend={recommend} onOrder={order} onClose={() => setDraft(null)} />}
+      {recv && (
+        <Ask title={`${recv.load.lines.length}품목 ${sumQty(recv.load)}개를 수령할까요?`} onClose={() => setRecv(null)}>
           <table className="ask-tbl">
-            <thead>
-              <tr>
-                <th>상품</th>
-                <th>지금</th>
-                <th>입고</th>
-              </tr>
-            </thead>
             <tbody>
-              {plan.lines.map((l) => (
-                <tr key={l.sku}>
-                  <td title={l.sku}>{l.name}</td>
-                  <td>{l.available ?? '?'}</td>
-                  <td>+{l.qty}</td>
+              {recv.load.lines.map((x) => (
+                <tr key={x.sku}>
+                  <td title={x.sku}>{x.productName ?? x.sku}</td>
+                  <td>+{x.qty}</td>
                 </tr>
               ))}
             </tbody>
           </table>
           <div className="ask-warn">
-            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 수령까지 하고,{' '}
-            {plan.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
+            ⚠ 실서버 재고가 바뀝니다 — 온도대별 입고칸(상온 {TEST_INBOUND.receivingByTemp.AMBIENT}·냉장 {TEST_INBOUND.receivingByTemp.CHILLED}·냉동 {TEST_INBOUND.receivingByTemp.FROZEN})에 예정 수량 그대로 수령하고,{' '}
+            {recv.withVirtual ? '품질검사·적치는 가상 작업자가(없으면 하나 켬)' : '품질검사·적치는 PDA "다음 작업 받기"로(가상 작업자가 켜져 있으면 그쪽이 받을 수도)'}
           </div>
           <div className="ask-acts">
-            <button onClick={() => setPlan(null)}>취소</button>
-            {/* 확인 버튼 이름 = 입고 차량 부르기(사용자 2026-11-20 "입고하기 버튼을 없애고 거기에 입고차량 부르기 버튼을 넣어") */}
-            <button className="red" onClick={go}>
+            <button onClick={() => setRecv(null)}>취소</button>
+            {/* 확인 버튼 이름 = 입고 차량 부르기(사용자 2026-11-20) */}
+            <button className="red" onClick={receive}>
               🚚 입고 차량 부르기
             </button>
           </div>
@@ -345,6 +412,133 @@ export function TestInboundControls() {
       )}
       <ResultLog rows={log} />
     </Sec>
+  );
+}
+
+/** 발주표 — 상품 더하기·수량 고치기·빼기, 추천값으로 채우기, 넣기 전 온도대별 합계(입고 뒤 재고) */
+function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecommend: (base: OrderDraftLine[]) => void; onOrder: (lines: OrderDraftLine[]) => void; onClose: () => void }) {
+  const { sim } = useApp();
+  const [lines, setLines] = useState(props.initial);
+  const [catalog, setCatalog] = useState<{ sku: string; name: string }[] | null>(null);
+  const [pick, setPick] = useState('');
+  const [qty, setQty] = useState(10);
+  const [msg, setMsg] = useState('');
+  const [confirm, setConfirm] = useState(false);
+  useEffect(() => setLines(props.initial), [props.initial]);
+  useEffect(() => {
+    sim.inboundCatalog().then(setCatalog, (e: Error) => setMsg(`상품 목록 읽기 실패 — ${e.message}`));
+  }, [sim]);
+  const label = (c: { sku: string; name: string }) => `${c.name} · ${c.sku}`;
+  const add = async () => {
+    const c = catalog?.find((x) => label(x) === pick || x.sku === pick.trim());
+    if (!c) {
+      setMsg('목록에 있는 상품을 고르세요(센터 취급·판매 중)');
+      return;
+    }
+    setMsg('재고 읽는 중…');
+    try {
+      const l = await sim.manualOrderLine(c.sku, c.name, qty);
+      setLines((ls) => upsertLine(ls, l, false));
+      setPick('');
+      setMsg('');
+    } catch (e) {
+      setMsg(`못 넣음 — ${(e as Error).message}`);
+    }
+  };
+  const t = orderTotals(lines);
+  const parts = splitOrder(lines).length;
+  return (
+    <Ask title="입고 발주" onClose={props.onClose} wide>
+      <div className="inb-add">
+        <input list="inb-catalog" placeholder={catalog ? `상품 이름·SKU (${catalog.length}개)` : '상품 목록 읽는 중…'} value={pick} onChange={(e) => setPick(e.target.value)} />
+        <datalist id="inb-catalog">
+          {catalog?.map((c) => (
+            <option key={c.sku} value={label(c)} />
+          ))}
+        </datalist>
+        <input type="number" min={1} max={500} value={qty} onChange={(e) => setQty(clampOrderQty(Number(e.target.value)))} aria-label="수량" />
+        <button onClick={() => void add()}>추가</button>
+      </div>
+      <button className="inb-rec" disabled={props.busy} onClick={() => props.onRecommend(lines)}>
+        🧮 추천값으로 채우기{' '}
+        <Tip
+          text={`지금은 시뮬 임시 규칙 — 취급 상품 중 판매 가능이 적은 ${TEST_INBOUND.lines}개를 ${TEST_INBOUND.targetQty}개까지(줄마다 ${TEST_INBOUND.minQty}~${TEST_INBOUND.maxQty}). 백엔드 발주 추천 API(R-48)가 열리면 그 값으로 바뀝니다. 직접 넣은 줄은 그대로 둡니다`}
+        />
+      </button>
+      {msg && <div className="busy">{msg}</div>}
+      {lines.length > 0 && (
+        <table className="ask-tbl">
+          <thead>
+            <tr>
+              <th>상품</th>
+              <th>온도</th>
+              <th>지금</th>
+              <th>입고</th>
+              <th>입고 뒤</th>
+              <th />
+            </tr>
+          </thead>
+          <tbody>
+            {lines.map((l) => (
+              <tr key={l.sku}>
+                <td title={l.sku}>
+                  {l.source === 'RECOMMEND' && <span className="inb-tag">추천</span>}
+                  {l.name}
+                </td>
+                <td>{TEMP_KO[l.temp]}</td>
+                <td>{l.available ?? '?'}</td>
+                <td>
+                  <input
+                    className="inb-qty"
+                    type="number"
+                    min={1}
+                    max={500}
+                    value={l.qty}
+                    aria-label={`${l.name} 입고 수량`}
+                    onChange={(e) => {
+                      const q = clampOrderQty(Number(e.target.value));
+                      setLines((ls) => ls.map((x) => (x.sku === l.sku ? { ...x, qty: q, source: 'MANUAL' } : x)));
+                    }}
+                  />
+                </td>
+                <td>{l.available === null ? '?' : l.available + l.qty}</td>
+                <td>
+                  <button className="inb-mini" onClick={() => setLines((ls) => ls.filter((x) => x.sku !== l.sku))} aria-label="빼기">
+                    ✕
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      <dl className="ask-sum">
+        {(['AMBIENT', 'CHILLED', 'FROZEN'] as const)
+          .filter((k) => t.byTemp[k].items)
+          .map((k) => (
+            <Frag key={k}>
+              <dt>{TEMP_KO[k]}</dt>
+              <dd>
+                {t.byTemp[k].items}품목 {t.byTemp[k].units}개 → {TEST_INBOUND.receivingByTemp[k]}
+              </dd>
+            </Frag>
+          ))}
+        <dt>합계</dt>
+        <dd>
+          <b>
+            {t.items}품목 {t.units}개
+          </b>{' '}
+          · 입고 예정 {parts}건
+        </dd>
+      </dl>
+      {confirm && <div className="ask-warn">⚠ 실서버에 입고 예정(EXPECTED)을 만듭니다. 재고는 아직 그대로이고, 수령(입고 차량 부르기)할 때 들어옵니다.</div>}
+      <div className="ask-acts">
+        <button onClick={props.onClose}>취소</button>
+        <button className="go" disabled={!lines.length || props.busy} onClick={() => (confirm ? props.onOrder(lines) : setConfirm(true))}>
+          {confirm ? '📋 정말 발주 넣기' : '📋 발주 넣기'}
+        </button>
+      </div>
+    </Ask>
   );
 }
 

@@ -11,7 +11,7 @@
 import { assignInboundNumbers } from '../domain/workerName';
 import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
-import { inboundCandidates, inboundLines, type InboundPlanLine } from '../domain/testInbound';
+import { inboundCandidates, inboundLines, receiptTemp, splitOrder, type InboundTemp, type OrderDraftLine } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
 import { ResultUnknown, type ConfirmOrderRequest, type Package, type PackageContentLine, type TemperatureZone } from '../domain/contract';
 import { buildLayout, type DockSlot, type Layout, type Location, type ReserveSpot } from '../domain/layout';
@@ -24,7 +24,7 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { InboundTask } from '../domain/contract';
+import type { InboundTask, InitialStockLoad } from '../domain/contract';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -54,6 +54,19 @@ import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
 import { Worker } from './worker';
 import { InboundWorker, type DockItem, type InboundContext, type InboundJob, type Truck } from './inbound';
+
+const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
+
+/** 결과 불명(응답 없음)이면 같은 호출(같은 Idempotency-Key)을 두 번까지 다시 — 서버 확정 거절은 그대로 던진다 */
+async function retryUnknown<T>(f: () => Promise<T>): Promise<T> {
+  for (let i = 0; ; i++) {
+    try {
+      return await f();
+    } catch (e) {
+      if (!(e instanceof ResultUnknown) || i >= 2) throw e;
+    }
+  }
+}
 
 const BASE_DATE = '2026-11-02';
 const SUBSTEP = 0.25;
@@ -643,83 +656,115 @@ export class Simulation {
     return this.real?.centerName ?? this.params.mfcId;
   }
 
-  /** 시험 입고 계획(MI-3·R-23) — 취급 상품 중 판매 가능이 적은 SKU 를 관찰 계정으로 읽어서 고른다(읽기만) */
-  async planTestInbound(): Promise<InboundPlanLine[]> {
+  /** 입고 발주표 — 상품 하나의 판매 가능 수량·온도대를 관찰 계정으로 읽는다(읽기만). 못 읽으면 available null */
+  private async readSkuForOrder(sku: string): Promise<{ available: number | null; temp: InboundTemp }> {
+    const h = this.realHttp;
+    let available: number | null = null;
+    let temp: InboundTemp | null = null;
+    try {
+      const st = await h!.getCenterStock(this.params.mfcId, sku);
+      available = st.lots.reduce((a, l) => a + l.available, 0);
+      for (const u of st.units) temp ??= this.backendLocation(u.locationCode)?.temp ?? null;
+    } catch {
+      /* 못 읽은 SKU 는 뒤로 */
+    }
+    return { available, temp: temp ?? this.skuTemp(sku) };
+  }
+
+  /** 상품 온도대 = 센터 재고 줄 값, 없으면 그 상품이 놓인 선반 칸의 온도대, 모르면 상온 */
+  private skuTemp(sku: string): InboundTemp {
+    for (const u of this.real?.fullStock ?? []) {
+      if (u.sku !== sku) continue;
+      const z = u.temperatureZone;
+      if (z === 'AMBIENT' || z === 'CHILLED' || z === 'FROZEN') return z;
+      const t = this.backendLocation(u.locationCode)?.temp;
+      if (t) return t;
+    }
+    return 'AMBIENT';
+  }
+
+  private requireRealHttp(): HttpBackend {
     const h = this.realHttp;
     if (!h || this.realTokens?.serverInjected) throw new Error('이 화면(실서버 모드)에서만');
-    const cands = inboundCandidates(await h.searchProducts(this.params.mfcId), TEST_INBOUND.readMax, Math.random);
-    const read: { sku: string; name: string; available: number | null }[] = [];
-    for (const c of cands) {
-      let available: number | null = null;
-      try {
-        available = (await h.getCenterStock(this.params.mfcId, c.sku)).lots.reduce((a, l) => a + l.available, 0);
-      } catch {
-        /* 못 읽은 SKU 는 뒤로 */
-      }
-      read.push({ ...c, available });
+    return h;
+  }
+
+  /** 발주표에 넣을 수 있는 상품 — 센터 취급·판매 중지 아님(search 색인 사본, 한 번 읽고 둔다) */
+  async inboundCatalog(): Promise<{ sku: string; name: string }[]> {
+    const h = this.requireRealHttp();
+    if (this.catalogCache?.mfcId !== this.params.mfcId) {
+      this.catalogCache = { mfcId: this.params.mfcId, items: inboundCandidates(await h.searchProducts(this.params.mfcId), Number.POSITIVE_INFINITY, () => 0.5) };
     }
-    return inboundLines(read, TEST_INBOUND);
+    return this.catalogCache.items;
+  }
+  private catalogCache: { mfcId: string; items: { sku: string; name: string }[] } | null = null;
+
+  /** 직접 넣은 상품 한 줄 — 지금 재고·온도대를 읽어 채운다 */
+  async manualOrderLine(sku: string, name: string, qty: number): Promise<OrderDraftLine> {
+    this.requireRealHttp();
+    const r = await this.readSkuForOrder(sku);
+    return { sku, name, qty, available: r.available, temp: r.temp, source: 'MANUAL' };
   }
 
   /**
-   * 시험 입고 넣기 — 입고 예정(EXPECTED) 만들기 → 수령 위치에 수령(관찰 계정, 계약상 그 센터 운영자). 그 뒤 품질검사·적치 작업은
-   * 다음 작업 받기로 PDA 나 가상 작업자가 받는다. withVirtual 이면 가상 작업자가 하나도 없을 때 하나 켠다.
-   * 응답이 없으면 같은 Idempotency-Key 로 다시(같은 키 = 같은 입고 예정).
+   * 추천으로 채우기 — 지금은 시뮬레이터 임시 규칙(취급 상품 중 판매 가능이 적은 순, 목표 TEST_INBOUND.targetQty 까지 모자란 만큼).
+   * 백엔드 발주 수량 추천 API(R-48)가 열리면 그 값으로 바꾼다
    */
-  async runTestInbound(lines: readonly InboundPlanLine[], withVirtual: boolean): Promise<{ receiptId: string; units: number }> {
-    const h = this.realHttp;
-    if (!h || this.realTokens?.serverInjected) throw new Error('이 화면(실서버 모드)에서만');
-    const again = async <T>(f: () => Promise<T>): Promise<T> => {
-      for (let i = 0; ; i++) {
-        try {
-          return await f();
-        } catch (e) {
-          if (!(e instanceof ResultUnknown) || i >= 2) throw e;
-        }
-      }
-    };
+  async recommendInbound(): Promise<OrderDraftLine[]> {
+    this.requireRealHttp();
+    const cands = inboundCandidates(await this.inboundCatalog(), TEST_INBOUND.readMax, Math.random);
+    const read: { sku: string; name: string; available: number | null; temp: InboundTemp }[] = [];
+    for (const c of cands) read.push({ ...c, ...(await this.readSkuForOrder(c.sku)) });
+    const tempBy = new Map(read.map((r) => [r.sku, r.temp]));
+    return inboundLines(read, TEST_INBOUND).map((l) => ({ ...l, temp: tempBy.get(l.sku) ?? 'AMBIENT', source: 'RECOMMEND' as const }));
+  }
+
+  /**
+   * 발주 넣기 — 온도대마다(40줄씩) 입고 예정(EXPECTED)만 만든다. 수령은 receiveInbound 로 따로(사용자 2026-11-24 "입고 전에 입고 수량을 볼 수 있게").
+   * 응답이 없으면 같은 Idempotency-Key 로 다시(같은 키 = 같은 입고 예정)
+   */
+  async placeInboundOrder(lines: readonly OrderDraftLine[]): Promise<InitialStockLoad[]> {
+    const h = this.requireRealHttp();
     const tag = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-    // 온도대마다 입고 예정을 따로 만들어 그 온도대 입고칸(입고재고 자리)에서 받는다(R-31, PC 3 회신 (가) — 초기 보유 수령은 수령 하나에 칸 하나).
-    // 상품 온도대 = 센터 재고 줄 값, 없으면 그 상품이 놓인 선반 칸의 온도대, 모르면 상온
-    const tempOf = (sku: string): TemperatureZone => {
-      for (const u of this.real?.fullStock ?? []) {
-        if (u.sku !== sku) continue;
-        const z = u.temperatureZone;
-        if (z === 'AMBIENT' || z === 'CHILLED' || z === 'FROZEN') return z;
-        const t = this.backendLocation(u.locationCode)?.temp;
-        if (t) return t;
-      }
-      return 'AMBIENT';
-    };
-    const groups = new Map<TemperatureZone, InboundPlanLine[]>();
-    for (const l of lines) {
-      const t = tempOf(l.sku);
-      groups.set(t, [...(groups.get(t) ?? []), l]);
+    const out: InitialStockLoad[] = [];
+    for (const [i, part] of splitOrder(lines).entries()) {
+      const load = await retryUnknown(() => h.createDevInitialStockLoad(this.params.mfcId, part.lines.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}:${part.temp}:${i}`));
+      out.push(load);
+      this.log(`입고 발주 ${load.receiptId} — ${TEMP_KO[part.temp]} ${part.lines.length}품목 ${part.lines.reduce((a, l) => a + l.qty, 0)}개 입고 예정`);
     }
-    const receipts: string[] = [];
-    for (const [temp, ls] of groups) {
-      const load = await again(() => h.createDevInitialStockLoad(this.params.mfcId, ls.map((l) => ({ sku: l.sku, qty: l.qty })), `sim-inb:${tag}:${temp}`));
-      const body = ls.map((l) => ({ sku: l.sku, receivedQty: l.qty }));
-      let at: string = TEST_INBOUND.receivingByTemp[temp];
-      try {
-        await again(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}`));
-      } catch (e) {
-        // 저온 입고칸이 아직 없으면(PC 1 LAN 등록 전) 상온 입고칸으로 — 서버 확정 거절(4xx)일 때만, 결과 불명은 위에서 같은 키로 다시 보냄
-        if (at === TEST_INBOUND.receivingLocation || e instanceof ResultUnknown) throw e;
-        this.log(`시험 입고 ${load.receiptId} ${at} 수령 거절(${e instanceof Error ? e.message : e}) → ${TEST_INBOUND.receivingLocation} 로`);
-        at = TEST_INBOUND.receivingLocation;
-        await again(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}:${at}`));
-      }
-      receipts.push(load.receiptId);
-      this.log(`시험 입고 ${load.receiptId} — ${({ AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const)[temp]} ${ls.length}품목 ${ls.reduce((a, l) => a + l.qty, 0)}개 수령(${at}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
+    return out;
+  }
+
+  /** 수령 전 입고 예정 목록(이 센터 EXPECTED — 시험 발주·정식 승인 모두) */
+  async expectedInbound(): Promise<InitialStockLoad[]> {
+    return this.requireRealHttp().listInitialStockLoads(this.params.mfcId, ['EXPECTED']);
+  }
+
+  /**
+   * 입고 예정 하나 수령(입고 차량 부르기) — 줄 온도대의 입고칸(R-31)에 승인 수량 그대로 받는다(관찰 계정, 그 센터 운영자).
+   * 그 뒤 품질검사·적치는 다음 작업 받기로 PDA 나 가상 작업자가. withVirtual 이면 입고 가상 작업자가 없을 때 하나 켠다
+   */
+  async receiveInbound(load: InitialStockLoad, withVirtual: boolean): Promise<{ units: number; at: string }> {
+    const h = this.requireRealHttp();
+    const temp = receiptTemp(load.lines.map((l) => l.sku), (s) => this.skuTemp(s));
+    const body = load.lines.map((l) => ({ sku: l.sku, receivedQty: l.qty }));
+    let at: string = TEST_INBOUND.receivingByTemp[temp];
+    try {
+      await retryUnknown(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}`));
+    } catch (e) {
+      // 저온 입고칸이 아직 없으면(LAN 등록 전) 상온 입고칸으로 — 서버 확정 거절(4xx)일 때만, 결과 불명은 위에서 같은 키로 다시 보냄
+      if (at === TEST_INBOUND.receivingLocation || e instanceof ResultUnknown) throw e;
+      this.log(`입고 ${load.receiptId} ${at} 수령 거절(${e instanceof Error ? e.message : e}) → ${TEST_INBOUND.receivingLocation} 로`);
+      at = TEST_INBOUND.receivingLocation;
+      await retryUnknown(() => h.receiveInitialStock(load.receiptId, at, body, `sim-inb-rcv:${load.receiptId}:${at}`));
     }
-    const load = { receiptId: receipts.join(', ') };
-    const units = lines.reduce((a, l) => a + l.qty, 0);
-    // 실서버엔 차량이 없다 — 입고가 서버에 들어가면 그림 차량이 도로에서 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20 "입고차량 부르기 했는데 입고차량이 안 오잖아"). 수령은 서버가 이미 끝냄
-    this.trucks.push({ trfId: `입고 ${receipts[0]?.slice(-6) ?? ''}`, lines: lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: lines.length, scheduledAt: this.time });
-    // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없어 아무도 못 받았다(사용자 2026-11-20)
+    const units = load.lines.reduce((a, l) => a + l.qty, 0);
+    this.log(`입고 ${load.receiptId} — ${TEMP_KO[temp]} ${load.lines.length}품목 ${units}개 수령(${at}) → 품질검사·적치 작업은 ${withVirtual ? '가상 작업자' : 'PDA'}`);
+    // 실서버엔 차량이 없다 — 수령이 서버에 들어가면 그림 차량이 입고 차량문까지 와서 잠시 섰다 떠난다(사용자 2026-11-20). 수령은 서버가 이미 끝냄
+    this.trucks.push({ trfId: `입고 ${load.receiptId.slice(-6)}`, lines: load.lines.map((l) => ({ sku: l.sku, qty: l.qty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: load.lines.length, scheduledAt: this.time });
+    // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없다(사용자 2026-11-20)
     if (withVirtual) this.ensureInboundVirtual();
-    return { receiptId: load.receiptId, units };
+    return { units, at };
   }
 
   setVirtualWorkers(n: number) {

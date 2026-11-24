@@ -1137,3 +1137,21 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .bk-short .bk-i, .bk-short .bk-q { color: var(--bad); }
 .bk-todo { opacity: 0.6; }
 .bk-empty { font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+/* 입고 발주(2026-11-24) — 발주표·입고 예정 목록 */
+.ask.wide { width: 480px; max-height: calc(100vh - 160px); overflow: auto; }
+.inb-add { display: flex; gap: 6px; margin-bottom: 8px; }
+.inb-add input { min-width: 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; }
+.inb-add input:first-child { flex: 1; }
+.inb-add input[type='number'] { width: 64px; }
+.inb-add button, .inb-rec, .inb-acts button { padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); cursor: pointer; font: inherit; font-size: 12px; }
+.inb-rec { width: 100%; margin-bottom: 8px; text-align: left; }
+.inb-qty { width: 54px; padding: 2px 4px; border-radius: 6px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; text-align: right; }
+.inb-mini { padding: 0 6px; border-radius: 6px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font: inherit; font-size: 11px; }
+.inb-tag { display: inline-block; margin-right: 4px; padding: 0 4px; border-radius: 4px; background: var(--accent); color: #fff; font-size: 10px; }
+.inb-exp { margin-top: 10px; font-size: 12px; }
+.inb-exp-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.inb-exp-h span { flex: 1; color: var(--muted); }
+.inb-load { border-top: 1px solid var(--line); padding: 4px 0; }
+.inb-load summary { display: flex; justify-content: space-between; cursor: pointer; }
+.inb-acts { display: flex; gap: 6px; margin-top: 6px; }
+.inb-acts button { flex: 1; }
