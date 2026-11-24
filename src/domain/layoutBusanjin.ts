@@ -341,8 +341,23 @@ export function buildBusanjinLayout(): Layout {
   const zones: Zone[] = [
     { id: 'A', kind: 'FROZEN', label: '냉동 A', rect: R.A, docPyeong: ZONE_PY.A },
     { id: 'B', kind: 'CHILLED', label: '냉장 B', rect: R.B, docPyeong: ZONE_PY.B },
-    { id: 'C-H', kind: 'AMBIENT', label: '상온 C~H', rect: R.CH, docPyeong: ZONE_PY['C-H'] },
-    { id: 'C-H2', kind: 'AMBIENT', label: '상온 C~H', rect: R.CH2, noTag: true },
+    // 상온 동쪽 띠 + 남쪽 띠 = 실선 하나(ㄴ자)(사용자 2026-11-24 "실선이 상온구역 2개로 나눠놨네. ㄴ자로 합쳐")
+    {
+      id: 'C-H',
+      kind: 'AMBIENT',
+      label: '상온 C~H',
+      rect: R.CH,
+      docPyeong: ZONE_PY['C-H'],
+      outline: [
+        { x: R.CH.x0, z: R.CH.z0 },
+        { x: R.CH.x1, z: R.CH.z0 },
+        { x: R.CH2.x1, z: R.CH2.z1 },
+        { x: R.CH2.x0, z: R.CH2.z1 },
+        { x: R.CH2.x0, z: R.CH2.z0 },
+        { x: R.CH.x0, z: R.CH2.z0 },
+      ],
+    },
+    { id: 'C-H2', kind: 'AMBIENT', label: '상온 C~H', rect: R.CH2, noTag: true, noOutline: true },
     { id: 'WH', kind: 'INBOUND_STORE', label: '상온 입고창고', rect: R.WH, docPyeong: ZONE_PY.WH },
     { id: 'RCV', kind: 'RECEIVING', label: '입고·검수', rect: R.RCV, docPyeong: ZONE_PY.RCV },
     { id: 'PK', kind: 'PACKING', label: '패킹', rect: R.PK, docPyeong: ZONE_PY.PK },

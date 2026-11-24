@@ -35,6 +35,10 @@ export interface Zone {
   docPyeong?: number;
   /** 같은 구역의 덧붙은 바닥(ㄱ자 구역 등) — 이름표를 따로 달지 않는다 */
   noTag?: boolean;
+  /** 바닥 실선을 사각형 대신 이 다각형(축 나란한 꼭짓점, 순서대로)으로 — 두 구역을 한 테두리로(부산진구 상온 ㄴ자, 사용자 2026-11-24 "실선이 상온구역 2개로 나눠놨네. ㄴ자로 합쳐") */
+  outline?: { x: number; z: number }[];
+  /** 바닥 실선 안 그림(outline 을 가진 다른 구역에 합쳐짐) */
+  noOutline?: boolean;
 }
 
 export interface Rack {

@@ -101,6 +101,41 @@ function Ground({ L }: { L: Layout }) {
   );
 }
 
+/** 바닥 흰 실선 다각형(축 나란한 꼭짓점) — 안쪽으로 inset 만큼 들여 그림(ㄴ자 구역) */
+function SolidPoly({ pts, inset, width }: { pts: { x: number; z: number }[]; inset: number; width: number }) {
+  const n = pts.length;
+  let area = 0;
+  for (let i = 0; i < n; i++) area += pts[i].x * pts[(i + 1) % n].z - pts[(i + 1) % n].x * pts[i].z;
+  const s = area > 0 ? 1 : -1;
+  // 변마다 안쪽 법선, 꼭짓점 = 두 변의 법선만큼 들임(직각 다각형)
+  const nrm = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+    const dx = Math.sign(b.x - a.x);
+    const dz = Math.sign(b.z - a.z);
+    return { x: -dz * s, z: dx * s };
+  };
+  const q = pts.map((p, i) => {
+    const n1 = nrm(pts[(i - 1 + n) % n], p);
+    const n2 = nrm(p, pts[(i + 1) % n]);
+    return { x: p.x + (n1.x + n2.x) * inset, z: p.z + (n1.z + n2.z) * inset };
+  });
+  const y = 0.013;
+  return (
+    <>
+      {q.map((a, i) => {
+        const b = q[(i + 1) % n];
+        const horiz = Math.abs(a.z - b.z) < 1e-6;
+        const len = horiz ? Math.abs(b.x - a.x) + width : Math.abs(b.z - a.z) + width;
+        return (
+          <mesh key={i} position={[(a.x + b.x) / 2, y, (a.z + b.z) / 2]} raycast={() => null}>
+            <boxGeometry args={[horiz ? len : width, 0.004, horiz ? width : len]} />
+            <meshBasicMaterial color={0xffffff} />
+          </mesh>
+        );
+      })}
+    </>
+  );
+}
+
 /** 바닥 흰 실선 사각형(구역 경계) — 빛을 받지 않는 흰색이라 옅은 바닥 위에서 또렷하다 */
 function SolidRect({ x0, z0, x1, z1, width }: { x0: number; z0: number; x1: number; z1: number; width: number }) {
   const w = x1 - x0;
@@ -150,7 +185,7 @@ function Zones({ L }: { L: Layout }) {
               <meshStandardMaterial color={z.id === 'AQ' ? ZONE_FLOOR.FROZEN : z.id === 'BQ' ? ZONE_FLOOR.CHILLED : ZONE_FLOOR[z.kind]} roughness={0.95} />
             </mesh>
             {/* 구역 경계 — 바닥 흰 실선(사용자 2026-11-20 "구역 나눠놓은게 잘 안보여. 하얀 실선으로 바닥에 확실하게") */}
-            {z.kind !== 'PARKING' && <SolidRect x0={r.x0 + 0.12} z0={r.z0 + 0.12} x1={r.x1 - 0.12} z1={r.z1 - 0.12} width={z.kind === 'QUARANTINE' ? 0.1 : 0.16} />}
+            {z.kind !== 'PARKING' && !z.noOutline && (z.outline ? <SolidPoly pts={z.outline} inset={0.12} width={0.16} /> : <SolidRect x0={r.x0 + 0.12} z0={r.z0 + 0.12} x1={r.x1 - 0.12} z1={r.z1 - 0.12} width={z.kind === 'QUARANTINE' ? 0.1 : 0.16} />)}
           </group>
         );
       })}
