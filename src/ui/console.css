@@ -1169,3 +1169,37 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .scan-bubble .bc-cap, .scan-bubble .bc-val { overflow-wrap: anywhere; }
 .scan-bubble .bc-val { flex-wrap: wrap; letter-spacing: 0; }
 .inb-note { width: 100%; box-sizing: border-box; margin: 6px 0; padding: 6px 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--soft); color: var(--text); font: inherit; font-size: 12px; }
+
+/* 재고 변동 탭 — 위 연결 상태·큰 숫자 4개, 아래 바뀐 재고(새 것이 위) */
+.sfd { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 10px; }
+.sfd-st { font-size: 13px; color: var(--muted); }
+.sfd-st.ok { color: var(--ok); }
+.sfd-st.bad { color: var(--bad); }
+.sfd-st span { color: var(--muted); }
+.sfd-st .gap { color: var(--warn); }
+.sfd-tiles { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.sfd-tile { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 2px; }
+.sfd-tile b { font-size: 22px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.sfd-tile span { font-size: 13.5px; font-weight: 600; }
+.sfd-tile small { font-size: 12px; color: var(--muted); }
+.sfd-tile.k-ORDER b, .sfd-tile.k-HANDOVER b { color: var(--bad); }
+.sfd-tile.k-CANCEL b, .sfd-tile.k-RETURN_OK b { color: var(--ok); }
+.sfd-f { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.sfd-f button { font: inherit; font-size: 13px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+.sfd-f button.on { background: var(--btn); border-color: var(--accent); color: #fff; }
+.sfd-f label { margin-left: auto; font-size: 13px; color: var(--muted); display: inline-flex; align-items: center; gap: 4px; }
+.sfd-r { background: var(--card); border: 1px solid var(--line); border-left: 4px solid var(--line-strong); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.sfd-r.k-ORDER, .sfd-r.k-HANDOVER { border-left-color: var(--bad); }
+.sfd-r.k-CANCEL, .sfd-r.k-RETURN_OK, .sfd-r.k-CANCEL_RETURN, .sfd-r.k-INBOUND { border-left-color: var(--ok); }
+.sfd-r.k-RETURN_IN { border-left-color: var(--warn); }
+.sfd-r1 { display: flex; align-items: baseline; gap: 8px; }
+.sfd-t { font: 12px/1 Consolas, monospace; color: var(--muted); }
+.sfd-c { font-size: 13.5px; font-weight: 700; }
+.sfd-d { margin-left: auto; font-size: 17px; font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sfd-d small { font-size: 12px; font-weight: 400; color: var(--muted); }
+.sfd-d.up { color: var(--ok); }
+.sfd-d.dn { color: var(--bad); }
+.sfd-r2 { display: flex; align-items: baseline; gap: 8px; font-size: 13px; }
+.sfd-r2 .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sfd-r2 .now { color: var(--muted); white-space: nowrap; }
+.sfd-r2 .now b { color: var(--text); }

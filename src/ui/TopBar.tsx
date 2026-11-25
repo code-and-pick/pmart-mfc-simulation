@@ -15,7 +15,7 @@ const WALLS: { o: number; text: string }[] = [
   { o: 0.32, text: '벽' },
   { o: 0, text: '벽 숨김' },
 ];
-const VIEW_KO: Record<RightView, string> = { orders: '실제 주문', inventory: '재고', scan: '바코드', api: 'API 호출', events: '계약 이벤트', logs: '현장 흐름', admin: '관리' };
+const VIEW_KO: Record<RightView, string> = { orders: '실제 주문', inventory: '재고', stock: '재고 변동', scan: '바코드', api: 'API 호출', events: '계약 이벤트', logs: '현장 흐름', admin: '관리' };
 
 export function TopBar() {
   const { sim, ticker } = useApp();

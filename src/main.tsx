@@ -54,6 +54,7 @@ const app: AppCtx = {
 };
 
 createRoot(document.getElementById('root')!).render(<App app={app} />);
+sim.startLive();
 
 // 개발 중 콘솔에서 상태를 볼 수 있게
 Object.assign(window as unknown as Record<string, unknown>, { sim, view: app.controller });

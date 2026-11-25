@@ -300,6 +300,10 @@ export class RealBoard {
   /** 재고가 바뀔 때마다 올라간다 — 화면이 다시 그릴지 판단 */
   stockVersion = 0;
   private readonly staleSkus = new Set<string>();
+  /** 재고 스트림이 바뀌었다고 알린 SKU — 들고 있는 것만 다음 조회에 먼저 다시 읽는다 */
+  markStale(sku: string) {
+    if (this.stock.has(sku)) this.staleSkus.add(sku);
+  }
   /** 출고 조회 결과 (shipmentId → 응답·읽은 시각·그때의 작업 version 서명) */
   readonly shipmentInfo = new Map<string, { data: Shipment; readMs: number; sig: string }>();
   /** 주문 ID → 정방향 배송(최신) */

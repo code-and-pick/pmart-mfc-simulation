@@ -8,6 +8,7 @@ const REAL_RIGHT: [RightView, string, string][] = [
   ['logs', '☰', '현장'],
   ['admin', '⚑', '관리'],
   ['inventory', '▦', '재고'],
+  ['stock', '⇅', '재고 변동'],
   ['scan', '▥', '바코드'],
   ['api', '⧉', 'API'],
 ];

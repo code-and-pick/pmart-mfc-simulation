@@ -53,6 +53,8 @@ import type { SiteWorker } from './worker';
 import { Rider } from './rider';
 import { ShippingRack, StationPool } from './site';
 import { Worker } from './worker';
+import { StockFeed } from './stockFeed';
+import { StockStream } from '../backend/http/stockStream';
 import { InboundWorker, type DockItem, type InboundContext, type InboundJob, type Truck } from './inbound';
 
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
@@ -296,6 +298,19 @@ export class Simulation {
       this.time = wallClockSec();
       this.speed = 1;
       this.realBaseUrl = http?.baseUrl ?? '/api/v1';
+      // 재고 변동 탭 — 재고 실시간 스트림(mfc-inventory 0.46.0). 바뀐 SKU 는 주문 재고도 먼저 다시 읽는다
+      const feed = new StockFeed();
+      this.stockFeed = feed;
+      this.stockStream = new StockStream({
+        url: `${this.realBaseUrl}/stock-stream?${new URLSearchParams({ mfcId: params.mfcId })}`,
+        token: () => tokens.get(),
+        onUnauthorized: () => tokens.invalidate(),
+        onState: (st, why) => feed.setState(st, why),
+        onEvent: (e) => {
+          feed.apply(e);
+          for (const it of e.items ?? []) this.real?.markStale(it.sku);
+        },
+      });
     }
 
     this.ctx = {
@@ -387,6 +402,13 @@ export class Simulation {
   private realHttp: HttpBackend | null = null;
   /** 센터 관리자 계정(REAL_LINK.supervisorAccount) — 발주·승인·거절(MFC_SUPERVISOR) */
   private supHttp: HttpBackend | null = null;
+  /** 재고 변동(실서버만) — startLive() 가 스트림을 연다 */
+  stockFeed: StockFeed | null = null;
+  private stockStream: StockStream | null = null;
+  /** 화면이 뜬 뒤 한 번 — 재고 실시간 스트림 연결(시험은 부르지 않음) */
+  startLive() {
+    this.stockStream?.start();
+  }
   /** MOCK 화면용 관찰판 — 실서버 화면(주문 카드·구역 재고·바코드)을 MOCK 에서도 보게. 시뮬 동작은 쓰지 않음(사용자 2026-11-20) */
   private mockBoard: RealBoard | null = null;
   /** 3D 라이더 이름표 — 실서버면 라이더 번호·가린 이름(ADR-0070), 모르면 그대로(사용자 2026-11-20 "RD-… 왜 또 이렇게 뜨냐", PC 5 요청) */

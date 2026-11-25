@@ -74,7 +74,7 @@ export interface CameraRequest {
 export type LabelMode = 'all' | 'rack' | 'off';
 
 /** 오른쪽 패널 화면(왼쪽 아이콘 메뉴로 고름) */
-export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'scan' | 'admin';
+export type RightView = 'orders' | 'api' | 'events' | 'logs' | 'inventory' | 'stock' | 'scan' | 'admin';
 /** 왼쪽 패널 화면 */
 /** 왼쪽 패널 — 설정 · 구역(구역 정보·재고, 2026-11-20 떠 있는 카드에서 옮김) · 도움말 */
 export type LeftView = 'settings' | 'zone' | 'help' | 'perf'; // perf = 개발용 성능(npm run dev 에서만 탭이 보임)

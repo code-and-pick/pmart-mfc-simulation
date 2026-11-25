@@ -982,3 +982,22 @@ export interface RiderDisplayName {
   riderNumber: string | null;
   nameMasked: string | null;
 }
+
+/** mfc-inventory 0.46.0 GET /stock-stream(SSE) 이벤트 data — 재고 수량이 바뀐 확정 단위 하나 = stock-changed 하나(커밋 뒤) */
+export interface StockStreamEvent {
+  type: 'ready' | 'stock-changed' | 'summary-changed' | 'resync';
+  eventId?: string;
+  mfcId?: string;
+  commitId?: string;
+  /** 확정 단위 종류(commitType) — TIN·TASK_EXECUTION·RESERVE·RELEASE·EXPIRE·RESECURE·CANCEL_RETURN·HANDOVER·SHORTAGE·STOCK_EXCEPTION·CORRECTION·COUNT_ADJ·QUALITY_*·MOVE_* … 새 값이 늘 수 있다 */
+  cause?: string;
+  occurredAt?: string;
+  resumed?: boolean;
+  mfcIds?: string[];
+  reason?: string;
+  skus?: string[];
+  /** 바뀐 뒤 센터 값(H·Q·E·R·A) */
+  items?: { sku: string; onHandQty: number; quarantinedQty: number; sellableQty: number; reservedQty: number; availableQty: number; availableDelta: number; version: number }[];
+  units?: { sku: string; lotId: string; locationCode: string; qualityState: string; workState: string; delta: number }[];
+  holds?: { sku: string; lotId: string; locationCode: string; delta: number }[];
+}
