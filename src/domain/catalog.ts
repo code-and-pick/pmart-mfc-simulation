@@ -3,6 +3,7 @@
 import type { TemperatureZone } from './contract';
 import type { Layout, Location } from './layout';
 import { Rng } from '../util/rng';
+import { ean13CheckDigit } from './barcode';
 
 export interface Sku {
   sku: string;
@@ -123,26 +124,28 @@ export function buildCatalog(layout: Layout, count: Record<TemperatureZone, numb
     };
     const reserves = layout.reserveRackSpots.filter((r) => r.temp === t); // 보충재고 = 보충재고 랙(입고재고 팔레트는 아님)
     // 먼저 상품(인기 가중치 포함)을 만들고, 인기 순으로 칸을 고른다 — 상위 highTurnoverTop 개 상온 상품이 F 를 먼저 갖는다
-    const made: { base: string; isB: boolean; code: string; weightG: number; unit: { w: number; d: number; h: number }; weight: number; i: number }[] = [];
+    const made: { base: string; isB: boolean; code: string; sn: number; weightG: number; unit: { w: number; d: number; h: number }; weight: number; i: number }[] = [];
     for (let i = 0; i < n; i++) {
       const [base, w] = rng.pick(NAMES[t]);
       const isB = rng.next() < 0.12;
       const code = `${isB ? 'B' : 'E'}-${String(serial).padStart(8, '0')}`;
+      const sn = serial;
       serial += 1;
       const weightG = isB ? w * 4 : w;
-      made.push({ base, isB, code, weightG, unit: unitOf(weightG), weight: 1 / Math.pow(rng.int(1, Math.max(1, n)), 0.9), i });
+      made.push({ base, isB, code, sn, weightG, unit: unitOf(weightG), weight: 1 / Math.pow(rng.int(1, Math.max(1, n)), 0.9), i });
     }
     const hot = new Set(t === 'AMBIENT' ? [...made].sort((a, b) => b.weight - a.weight || a.i - b.i).slice(0, highTurnoverTop).map((m) => m.i) : []);
     const locOf = new Map<number, Location>();
     for (const m of [...made].sort((a, b) => Number(hot.has(b.i)) - Number(hot.has(a.i)) || a.i - b.i)) locOf.set(m.i, pickSlot(mm(m.unit), hot.has(m.i)));
-    for (const { base, isB, code, weightG, unit, weight, i } of made) {
+    for (const { base, isB, code, sn, weightG, unit, weight, i } of made) {
       const loc = locOf.get(i)!;
       const shelfCap = Math.max(1, slotCapacity(loc.dimMm, mm(unit), fill));
       skus.push({
         sku: code,
         name: `${base}${isB ? ' 묶음' : ''} #${i + 1}`,
         temp: t,
-        barcode: `880${String(10_000_000 + serial * 7919).slice(-9)}${serial % 10}`,
+        // 상품마다 다른 EAN-13(880 + 9자리 + 검사 숫자) — 예전엔 온도대 끝 serial 을 써서 같은 온도대가 다 같은 12자리였다(2026-11-25 말풍선 캡처로 발견)
+        barcode: ((b) => `${b}${ean13CheckDigit(b)}`)(`880${String((sn * 7919) % 1_000_000_000).padStart(9, '0')}`),
         weightG,
         location: loc,
         reserveId: reserves[i % reserves.length].id,

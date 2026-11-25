@@ -23,4 +23,14 @@ describe('고회전 구역 F 배치(MOCK)', () => {
   it('한 칸에 한 상품', () => {
     expect(new Set(cat.map((s) => s.location.code)).size).toBe(cat.length);
   });
+
+  it('MOCK 상품 바코드는 상품마다 다르고 EAN-13(검사 숫자 맞음)', async () => {
+    const { ean13CheckDigit } = await import('../src/domain/barcode');
+    const codes = cat.map((s) => s.barcode);
+    expect(new Set(codes).size).toBe(codes.length);
+    for (const c of codes) {
+      expect(c).toMatch(/^880\d{10}$/);
+      expect(Number(c[12])).toBe(ean13CheckDigit(c.slice(0, 12)));
+    }
+  });
 });
