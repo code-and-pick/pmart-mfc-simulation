@@ -126,3 +126,15 @@ describe('MOCK 원장 → 재고 변동(실서버 스트림과 같은 모양)', 
     expect(inv.violations).toEqual([]);
   });
 });
+
+describe('셈 시작 합계(큰 숫자 앞 "N개 중")', () => {
+  it('첫 스냅샷이 끝날 때 합계, 그 전에 스트림으로 센 양은 되돌려 시작 값으로', () => {
+    const f = new StockFeed(500, () => 0);
+    f.apply({ type: 'stock-changed', eventId: '1', cause: 'RESERVE', items: [{ sku: 'A', onHandQty: 10, quarantinedQty: 0, sellableQty: 10, reservedQty: 2, availableQty: 8, availableDelta: -2, version: 5 }] });
+    f.setSnapshot('B', [{ onHand: 5, quarantined: 0, sellable: 5, reserved: 0, available: 5 }], -1);
+    f.snapshotState('done');
+    expect(f.base).toEqual({ A: 15, H: 15 });
+    f.snapshotState('done'); // 다시 읽어도 시작 값은 그대로
+    expect(f.base).toEqual({ A: 15, H: 15 });
+  });
+});

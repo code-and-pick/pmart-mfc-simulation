@@ -1235,3 +1235,6 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .sfd-tbl td .nm { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.35; }
 .sfd-tbl th:not(:first-child), .sfd-tbl td.n { width: 44px; padding-left: 2px; padding-right: 4px; }
 .sfd-tbl th:nth-child(2), .sfd-tbl td.n:nth-child(2) { width: 58px; }
+
+.sfd-tv { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
+.sfd-tv .base { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }

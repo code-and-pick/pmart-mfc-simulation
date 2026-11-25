@@ -12,11 +12,12 @@ const GROUPS: [string, string, FeedKind[] | null][] = [
 ];
 
 /** 위 큰 숫자 4개 — 연결 뒤 합계 */
-const TILES: [FeedKind, string, string][] = [
-  ['ORDER', '주문 예약', '판매 가능 ↓'],
-  ['HANDOVER', '라이더 인계', '보유 ↓'],
-  ['CANCEL', '주문 취소', '판매 가능 ↑'],
-  ['RETURN_OK', '회수 검수 정상', '판매 가능 ↑'],
+/** [묶음, 제목, 설명, 앞에 붙일 시작 합계(판매 가능 A / 보유 H)] */
+const TILES: [FeedKind, string, string, 'A' | 'H'][] = [
+  ['ORDER', '주문 예약', '판매 가능 ↓', 'A'],
+  ['HANDOVER', '라이더 인계', '보유 ↓', 'H'],
+  ['CANCEL', '주문 취소', '판매 가능 ↑', 'A'],
+  ['RETURN_OK', '회수 검수 정상', '판매 가능 ↑', 'A'],
 ];
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
@@ -65,11 +66,20 @@ export function StockChanges() {
         {feed.gapAtMs && <span className="gap"> · {hhmmss(feed.gapAtMs)}에 놓친 변동이 있을 수 있음</span>}
       </div>
       <div className="sfd-tiles">
-        {TILES.map(([k, t, sub]) => {
+        {TILES.map(([k, t, sub, on]) => {
           const v = feed.totals.get(k);
+          const base = feed.base?.[on];
+          const units = v?.units ?? 0;
           return (
             <div key={k} className={`sfd-tile k-${k}`}>
-              <b>{v ? sign(v.units) : '0'}</b>
+              <div className="sfd-tv">
+                {base !== undefined && (
+                  <span className="base" title={`셈 시작 때 센터 ${on === 'A' ? '판매 가능' : '보유'} 합계`}>
+                    처음 {base.toLocaleString()}개 {units < 0 ? "중" : "에"}
+                  </span>
+                )}
+                <b>{units ? sign(units) : '0'}</b>
+              </div>
               <span>{t}</span>
               <small>
                 {v?.n ?? 0}번 · {sub}

@@ -92,6 +92,8 @@ export class StockFeed {
   readonly skus = new Map<string, SkuNow>();
   /** 스냅샷 읽기 — null 안 읽음, 'busy', 끝난 시각(ms) */
   snapshot: { state: 'busy' | 'done' | 'error'; atMs: number; why?: string } | null = null;
+  /** 셈 시작 때 센터 합계(첫 스냅샷이 끝난 때) — 탭 큰 숫자 "15,004개 중 −153" 의 앞 숫자(사용자 2026-11-25) */
+  base: { A: number; H: number } | null = null;
   /** ready(이어 받기 아님)·resync 뒤 스냅샷을 다시 읽으라는 표시 — 시뮬레이션이 본다 */
   needSnapshot = false;
 
@@ -108,6 +110,20 @@ export class StockFeed {
 
   snapshotState(state: 'busy' | 'done' | 'error', why?: string) {
     this.snapshot = { state, atMs: this.nowMs(), why };
+    // 셈 시작 합계 = 첫 스냅샷 값에서 그 사이 스트림으로 이미 센 양을 되돌린 것(판매 가능·보유)
+    if (state === 'done' && !this.base) {
+      let A = 0;
+      let H = 0;
+      for (const x of this.skus.values()) {
+        A += x.A;
+        H += x.H;
+      }
+      for (const r of this.rows) {
+        A -= r.availableDelta;
+        H -= r.onHandDelta;
+      }
+      this.base = { A, H };
+    }
     this.version++;
   }
 
