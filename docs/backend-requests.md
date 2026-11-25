@@ -51,7 +51,7 @@
 
 ## 열린 요청
 
-### R-48 MFC 입고 발주 — 발주 수량 추천 API·사용자 지정 발주 정식 경로 — **계약 나옴·시뮬레이터 맞춤**(추천 API 는 LAN 500 대기) (2026-11-24, 사용자 → 백엔드)
+### R-48 MFC 입고 발주 — 발주 수량 추천 API·사용자 지정 발주 정식 경로 — **계약 나옴·시뮬레이터 맞춤**(추천 API LAN 200 확인 11-25, 지금은 전부 INSUFFICIENT_HISTORY) (2026-11-24, 사용자 → 백엔드)
 - **회신(11-24, PC1 "PR 백엔드" 메시지 + pmart-backend `docs/handoff/simulator/mfc/2026-11-24-simulator-reply-r48-supply-order.md`, origin/main `075b069f` mfc-inbound 0.21.0 MI-4 · `7fce390e` 게이트웨이 경로)**: LAN 반영.
   - 발주 `POST /supply-requests`(줄 1~200, 그 센터 MFC_SUPERVISOR) → SUBMITTED. 같은 센터·SKU 미해결 요청 있으면 409 DUPLICATE_OPEN_REQUEST.
   - 승인 `POST /supply-requests/{id}/approvals`(줄마다 0~요청, 줄였으면 note 필수, 전부 0 이면 400) → APPROVED + 입고 예정(`linkedReceiptId`, approvalId = 발주 ID). 거절 `…/rejections`(사유 필수). 둘 다 X-Expected-Version.

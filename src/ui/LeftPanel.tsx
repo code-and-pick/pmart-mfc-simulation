@@ -313,13 +313,24 @@ export function TestInboundControls() {
       const skip = Object.entries(rec.skipped)
         .map(([k, n]) => `${RECOMMEND_REASON_KO[k] ?? k} ${n}`)
         .join(' · ');
-      push(
-        `추천 ${rec.lines.length}줄(상품 ${rec.asked}개 물음${rec.zero ? ` · 지금 필요 없음 ${rec.zero}` : ''}${skip ? ` · 추천 안 함: ${skip}` : ''}${rec.salesThrough ? ` · 판매 ${rec.salesThrough}까지` : ''})`,
-        !rec.lines.length,
-      );
-      setDraft(rec.lines.reduce((ls, l) => upsertLine(ls, l, true), base));
+      if (!rec.lines.length) {
+        // 오류가 아니라 서버가 아직 추천을 안 낸 것 — 빨간 글로 보이면 고장으로 읽힘(사용자 2026-11-25 "계속 에러나던데")
+        const hist = rec.skipped.INSUFFICIENT_HISTORY ?? 0;
+        push(
+          hist === rec.asked
+            ? `서버 추천이 아직 없습니다 — 상품 ${rec.asked}개 모두 판매 기록이 7일이 안 됨(서버는 7일 쌓여야 추천). 지금은 "직접 고르기"로 발주하세요`
+            : rec.zero === rec.asked
+              ? `지금 더 시킬 상품이 없습니다(상품 ${rec.asked}개 모두 추천 0)`
+              : `추천할 상품이 없습니다(상품 ${rec.asked}개 물음${rec.zero ? ` · 지금 필요 없음 ${rec.zero}` : ''}${skip ? ` · 추천 안 함: ${skip}` : ''})`,
+        );
+        if (base.length) setDraft(base);
+      } else {
+        push(`추천 ${rec.lines.length}줄(상품 ${rec.asked}개 물음${rec.zero ? ` · 지금 필요 없음 ${rec.zero}` : ''}${skip ? ` · 추천 안 함: ${skip}` : ''}${rec.salesThrough ? ` · 판매 ${rec.salesThrough}까지` : ''})`);
+        setDraft(rec.lines.reduce((ls, l) => upsertLine(ls, l, true), base));
+      }
     } catch (e) {
-      push(`추천 읽기 실패 — ${why(e)}`, true);
+      const m = why(e);
+      push(`추천 읽기 실패 — ${/500|50[234]/.test(m) ? `서버 오류(${m}), 잠시 뒤 다시 눌러 보세요` : m}`, true);
     }
     setBusy('');
   };
@@ -367,7 +378,7 @@ export function TestInboundControls() {
   return (
     <Sec title="입고 발주" aside="센터 발주">
       <div className="act-split">
-        <Act icon="🧮" title="추천으로 채우기" sub="재고 적은 상품 자동" disabled={!!busy} onClick={() => recommend([])} />
+        <Act icon="🧮" title="추천으로 채우기" sub="서버 발주 추천" disabled={!!busy} onClick={() => recommend([])} />
         <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
       </div>
       {busy && <div className="busy">{busy}</div>}

@@ -83,10 +83,11 @@ export class HttpBackend implements FulfillmentPort {
   private async request<T>(
     method: 'GET' | 'POST',
     path: string,
-    init: { body?: unknown; idempotencyKey?: string; expectedVersion?: number } = {},
+    init: { body?: unknown; idempotencyKey?: string; expectedVersion?: number; anonymous?: boolean } = {},
   ): Promise<T> {
     const headers: Record<string, string> = { Accept: 'application/json' };
-    const token = await this.opt.token();
+    // anonymous = 계약 security: [] (search) — 토큰 없이 부른다(11-25 토큰 붙은 요청만 1분쯤 500 이던 때 추천 채우기가 search 에서 막힘)
+    const token = init.anonymous ? null : await this.opt.token();
     if (token) headers.Authorization = `Bearer ${token}`;
     if (method === 'POST') {
       headers['Content-Type'] = 'application/json';
@@ -428,7 +429,7 @@ export class HttpBackend implements FulfillmentPort {
     const out: Hit[] = [];
     let cursor: string | null | undefined;
     for (let i = 0; i < maxPages; i++) {
-      const r: { items?: Hit[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/search/products?mfcId=${enc(mfcId)}&size=200${cursor ? `&cursor=${enc(cursor)}` : ''}`);
+      const r: { items?: Hit[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/search/products?mfcId=${enc(mfcId)}&size=200${cursor ? `&cursor=${enc(cursor)}` : ''}`, { anonymous: true });
       out.push(...(r.items ?? []));
       cursor = r.page?.nextCursor;
       if (!cursor) break;

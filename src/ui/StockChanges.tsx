@@ -13,10 +13,10 @@ const GROUPS: [string, string, FeedKind[] | null][] = [
 
 /** 위 큰 숫자 4개 — 연결 뒤 합계 */
 const TILES: [FeedKind, string, string][] = [
-  ['ORDER', '주문 예약', '판매 가능에서 빠짐'],
-  ['HANDOVER', '라이더 인계', '보유에서 빠짐'],
-  ['CANCEL', '주문 취소', '판매 가능으로 돌아옴'],
-  ['RETURN_OK', '회수 검수 정상', '판매 가능으로 늘어남'],
+  ['ORDER', '주문 예약', '판매 가능 ↓'],
+  ['HANDOVER', '라이더 인계', '보유 ↓'],
+  ['CANCEL', '주문 취소', '판매 가능 ↑'],
+  ['RETURN_OK', '회수 검수 정상', '판매 가능 ↑'],
 ];
 
 const sign = (n: number) => (n > 0 ? `+${n}` : `${n}`);
