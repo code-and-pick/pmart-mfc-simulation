@@ -64,7 +64,7 @@ export function LotLabel({ l, p, height }: { l: TaskLine; p: TaskPick; height: n
   if (!p.lotNo) return <div className="note">LOT 번호 없음(fulfillment 0.11.0 전 작업이거나 재고 조회 실패) — LOT 라벨을 그릴 수 없습니다</div>;
   const v = lotGs1(l.barcodes?.length ? l.barcodes : l.barcode ? [l.barcode] : [], p.lotNo, p.expiresOn);
   if (!v) return <div className="note">숫자 상품 바코드가 없어 LOT 라벨(GS1)을 만들 수 없습니다 — LOT {p.lotNo}</div>;
-  return <Barcode value={v} kind="gs1" caption={`LOT 라벨 ${p.lotNo}${p.expiresOn ? ` · 기한 ${p.expiresOn}` : ''} (PDA 전환 뒤 — C-2)`} height={height} />;
+  return <Barcode value={v} kind="gs1" caption={`LOT ${p.lotNo}${p.expiresOn ? ` · 기한 ${p.expiresOn}` : ''}`} height={height} />;
 }
 
 /** 작업 하나의 찍을 바코드 — PICK: 방문 순서별 지시 칸 + 상품, PACK: 포장 위치 + 출하대기 랙 */
