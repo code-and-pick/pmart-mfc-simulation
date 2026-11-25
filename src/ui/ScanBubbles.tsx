@@ -146,6 +146,9 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
   const [pick, setPick] = useState<string | null>(null);
   // "외 N개"를 누르면 이 랙의 포장을 다 펼친다(사용자 2026-11-20 "4개가 더 쌓여있다는 거야? 그럼 그 4개는 어떻게 확인해?")
   const [all, setAll] = useState(false);
+  // 펼친 줄이 카드 밖으로 나가 있으면 한 번만 끌어온다(펼칠 때만 — 4Hz 다시 그릴 때마다 스크롤을 뺏지 않게)
+  const openRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => openRef.current?.scrollIntoView({ block: 'nearest' }), [pick]);
   const real = sim.board;
   const list = (real?.shipments() ?? [])
     .filter((r) => r.info && (r.info.state === 'READY' || r.info.state === 'PARTIALLY_HANDED_OVER') && sim.onRack(r.shipmentId) && sim.rackFor(r.shipmentId) === rack)
@@ -171,7 +174,8 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
         </button>
       </div>
       {open && (
-        <div className="rk">
+        // 줄을 펼치면 목록 높이 제한을 풀고(큰 QR 이 잘려 안에서 스크롤해야 보이던 것, 사용자 2026-11-25) 펼친 줄이 다 보이게 끌어온다
+        <div className={`rk ${pick ? 'open' : ''}`}>
           {list.slice(0, all ? list.length : RACK_MAX).map(({ r, p }, i) => {
             const t = p.temperatureZone ?? 'AMBIENT';
             const on = pick === p.packageId;
@@ -196,7 +200,7 @@ function RackBubble({ rack, innerRef, shipmentId }: { rack: string; innerRef: (e
                   </span>
                 </button>
                 {on && (
-                  <div className="rk-d">
+                  <div className="rk-d" ref={openRef}>
                     <Barcode value={p.qrCode} height={32} showValue={false} />
                     <div className="rk-kv">
                       <span>봉투</span>

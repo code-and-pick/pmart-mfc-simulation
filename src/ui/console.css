@@ -1238,3 +1238,6 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 
 .sfd-tv { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; }
 .sfd-tv .base { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* 인계 랙 카드 — 줄을 펼치면 목록 높이 제한 없이(카드 전체 높이 60vh 안) */
+.rk.open { max-height: none; overflow: visible; }
