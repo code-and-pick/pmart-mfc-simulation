@@ -51,7 +51,7 @@ export function StockChanges() {
   }
   const st =
     feed.state === 'open'
-      ? ['ok', '● 실시간 연결됨']
+      ? ['ok', sim.mode === 'mock' ? '● MOCK 재고 원장 — 바뀌면 바로' : '● 실시간 연결됨']
       : feed.state === 'connecting'
         ? ['wait', '○ 연결 중…']
         : feed.state === 'retry'
@@ -86,7 +86,7 @@ export function StockChanges() {
           변동 기록
         </button>
       </div>
-      {view === 'all' ? <AllStock feed={feed} q={q} setQ={setQ} nameOf={nameOf} /> : (
+      {view === 'all' ? <AllStock feed={feed} q={q} setQ={setQ} nameOf={nameOf} now={sim.nowMs()} mock={sim.mode === 'mock'} /> : (
       <>
       <div className="sfd-f">
         {GROUPS.map(([k, t]) => (
@@ -135,8 +135,7 @@ export function StockChanges() {
 const FRESH_MS = 60_000;
 
 /** 전체 재고 — 센터 합계 + 상품마다 지금 값. 최근 바뀐 상품이 위(바뀐 양·원인), 나머지는 이름 순 */
-function AllStock({ feed, q, setQ, nameOf }: { feed: StockFeed; q: string; setQ: (v: string) => void; nameOf: (sku: string) => string }) {
-  const now = Date.now();
+function AllStock({ feed, q, setQ, nameOf, now, mock }: { feed: StockFeed; q: string; setQ: (v: string) => void; nameOf: (sku: string) => string; now: number; mock: boolean }) {
   const all = [...feed.skus.values()];
   const tot = all.reduce((a, x) => ({ H: a.H + x.H, A: a.A + x.A, R: a.R + x.R, Q: a.Q + x.Q, out: a.out + (x.A <= 0 ? 1 : 0) }), { H: 0, A: 0, R: 0, Q: 0, out: 0 });
   const needle = q.trim().toLowerCase();
@@ -173,7 +172,7 @@ function AllStock({ feed, q, setQ, nameOf }: { feed: StockFeed; q: string; setQ:
       <div className="sfd-snap">
         {all.length}개 상품
         {snap?.state === 'busy' && ' · 센터 재고 읽는 중…'}
-        {snap?.state === 'done' && ` · ${hhmmss(snap.atMs)}에 읽은 뒤 실시간`}
+        {snap?.state === 'done' && (mock ? ' · 시작 재고에서 바로 반영' : ` · ${hhmmss(snap.atMs)}에 읽은 뒤 실시간`)}
         {snap?.state === 'error' && <span className="bad"> · 센터 재고 읽기 실패({snap.why}) — 바뀐 상품만 보임</span>}
       </div>
       <input className="stk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품 찾기 — 이름 또는 SKU" />

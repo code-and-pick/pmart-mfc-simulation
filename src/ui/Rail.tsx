@@ -17,6 +17,7 @@ const MOCK_RIGHT: [RightView, string, string][] = [
   ['api', '⧉', 'API'],
   ['events', '⇄', '이벤트'],
   ['inventory', '▦', '재고'],
+  ['stock', '⇅', '재고 변동'],
   ['scan', '▥', '바코드'],
 ];
 const LEFT: [LeftView, string, string][] = [

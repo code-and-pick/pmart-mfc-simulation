@@ -213,6 +213,25 @@ export class Simulation {
       mock.onApi((r) => this.push(this.apiLog, r));
       mock.onEvent((e) => this.onEvent(e));
       this.mock = mock;
+      // 재고 변동 탭(MOCK) — 원장이 바뀔 때마다 실서버 스트림과 같은 모양으로. 처음 값은 시작 재고
+      const feed = new StockFeed(500, () => this.nowMs());
+      this.stockFeed = feed;
+      feed.setState('open');
+      for (const s of this.catalog) {
+        const b = mock.inventory.get(s.sku)!;
+        feed.setSnapshot(s.sku, [{ onHand: b.H, quarantined: b.Q, sellable: b.E, reserved: b.R, available: b.E - b.R }], 0, s.name);
+      }
+      feed.snapshotState('done');
+      mock.inventory.onChange = (c) =>
+        feed.apply({
+          type: 'stock-changed',
+          eventId: c.commitId,
+          commitId: c.commitId,
+          cause: c.cause,
+          occurredAt: new Date(this.nowMs()).toISOString(),
+          items: c.items.map((i) => ({ sku: i.sku, onHandQty: i.H, quarantinedQty: i.Q, sellableQty: i.E, reservedQty: i.R, availableQty: i.E - i.R, availableDelta: i.dA, version: i.version })),
+          units: c.items.map((i) => ({ sku: i.sku, lotId: 'MOCK', locationCode: c.loc, qualityState: 'NORMAL', workState: 'STORED', delta: i.dH })),
+        });
       this.mockBoard = new RealBoard(
         new MockReader(mock, {
           workers: () => this.workers,

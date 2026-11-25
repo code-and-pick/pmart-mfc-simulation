@@ -57,6 +57,31 @@ export class InventoryLedger {
   readonly violations: string[] = [];
   /** 선반 수량이 바뀐 SKU (화면이 다시 그린다) */
   readonly dirty = new Set<string>();
+  /**
+   * 수량이 바뀐 확정 단위마다 — 실서버 재고 스트림(mfc-inventory 0.46.0 stock-changed)과 같은 모양으로 알린다(재고 변동 탭 MOCK, 사용자 2026-11-25).
+   * cause = 실서버 commitType 이름, loc = 바뀐 위치(회수 반입이면 RTN- — 탭이 입고와 가른다)
+   */
+  onChange: ((e: { cause: string; commitId: string; items: { sku: string; H: number; Q: number; E: number; R: number; dA: number; dH: number; version: number }[]; loc: string }) => void) | null = null;
+  private readonly versions = new Map<string, number>();
+
+  private snap(skus: string[]) {
+    return [...new Set(skus)].map((sku) => {
+      const b = this.balances.get(sku);
+      return { sku, H: b?.H ?? 0, A: b ? b.E - b.R : 0 };
+    });
+  }
+
+  private emit(cause: string, before: { sku: string; H: number; A: number }[], loc: string, commitId: string) {
+    if (!this.onChange) return;
+    const items = before.flatMap((x) => {
+      const b = this.balances.get(x.sku);
+      if (!b) return [];
+      const v = (this.versions.get(x.sku) ?? 0) + 1;
+      this.versions.set(x.sku, v);
+      return [{ sku: x.sku, H: b.H, Q: b.Q, E: b.E, R: b.R, dA: b.E - b.R - x.A, dH: b.H - x.H, version: v }];
+    });
+    if (items.length) this.onChange({ cause, commitId, items, loc });
+  }
 
   seed(sku: string, shelf: number, reserve = 0) {
     const h = shelf + reserve;
@@ -88,6 +113,7 @@ export class InventoryLedger {
     const need = new Map<string, number>();
     for (const l of lines) need.set(l.sku, (need.get(l.sku) ?? 0) + l.qty);
     for (const [sku, q] of need) if (this.available(sku) < q) return false;
+    const before = this.snap([...need.keys()]);
     for (const [sku, q] of need) this.must(sku).R += q;
     this.reservations.set(reservationId, {
       reservationId,
@@ -96,12 +122,14 @@ export class InventoryLedger {
       lines: [...need].map(([sku, qty]) => ({ sku, qty, consumed: 0 })),
     });
     this.check([...need.keys()]);
+    this.emit('RESERVE', before, '', this.commitId());
     return true;
   }
 
   // ── 입고 ───────────────────────────────────────────
   /** ConfirmReceipt (TIN): 실제 인수 수량만 H 를 늘린다. */
   receipt(lines: { sku: string; qty: number }[]): string {
+    const before = this.snap(lines.map((l) => l.sku));
     for (const l of lines) {
       const b = this.must(l.sku);
       b.H += l.qty;
@@ -109,7 +137,7 @@ export class InventoryLedger {
       b.unstowed += l.qty;
     }
     this.check(lines.map((l) => l.sku));
-    return this.commitId();
+    return this.done('TIN', before, 'RCV-A-01');
   }
 
   /** PUTAWAY: UNSTOWED → STORED(선반 또는 보충재고). */
@@ -137,6 +165,7 @@ export class InventoryLedger {
   // ── 회수 (IV-10) ────────────────────────────────────
   /** 회수품 실물 반입: H+q·Q+q, 판매적합 E 변화 없음(격리로만 들어감). 반품 위치에 둔다 */
   returnReceipt(lines: { sku: string; qty: number }[]): string {
+    const before = this.snap(lines.map((l) => l.sku));
     for (const l of lines) {
       const b = this.must(l.sku);
       b.H += l.qty;
@@ -144,19 +173,20 @@ export class InventoryLedger {
       b.returnArea += l.qty;
     }
     this.check(lines.map((l) => l.sku));
-    return this.commitId();
+    return this.done('TIN', before, 'RTN-A-01');
   }
 
   /** 회수품 검수 RESALE → RELEASE: Q−q, E+q. 반품 위치에서 미적치로(적치 작업이 선반에 놓는다) */
   releaseReturn(sku: string, qty: number): string {
     const b = this.must(sku);
     if (b.returnArea < qty || b.Q < qty) throw new InventoryError('INVALID_STATE', `반품 위치 격리 수량 부족 ${sku}`);
+    const before = this.snap([sku]);
     b.Q -= qty;
     b.E += qty;
     b.returnArea -= qty;
     b.unstowed += qty;
     this.check([sku]);
-    return this.commitId();
+    return this.done('QUALITY_RELEASE', before, 'RTN-A-01');
   }
 
   /** 격리 이동(QUARANTINE_MOVE): 반품 위치 → 격리 구역. H·Q·E 불변 */
@@ -200,6 +230,7 @@ export class InventoryLedger {
    */
   commitShortage(reservationId: string, sku: string, qty: number): string {
     const b = this.must(sku);
+    const before = this.snap([sku]);
     const take = Math.min(qty, b.E);
     b.E -= take;
     b.R = Math.max(0, b.R - qty);
@@ -216,11 +247,12 @@ export class InventoryLedger {
     const line = r?.lines.find((l) => l.sku === sku);
     if (line) line.qty -= qty;
     this.check([sku]);
-    return this.commitId();
+    return this.done('SHORTAGE', before, '');
   }
 
   /** CommitPackageHandover: H−q, E−q, R−q 한 사건 (IV-08). */
   commitHandover(reservationId: string, lines: { sku: string; qty: number }[]): string {
+    const before = this.snap(lines.map((l) => l.sku));
     for (const l of lines) {
       const b = this.must(l.sku);
       b.H -= l.qty;
@@ -234,7 +266,13 @@ export class InventoryLedger {
     const r = this.reservations.get(reservationId);
     if (r && r.lines.every((l) => l.consumed >= l.qty)) r.state = 'CONSUMED';
     this.check(lines.map((l) => l.sku));
-    return this.commitId();
+    return this.done('HANDOVER', before, '');
+  }
+
+  private done(cause: string, before: { sku: string; H: number; A: number }[], loc: string): string {
+    const id = this.commitId();
+    this.emit(cause, before, loc, id);
+    return id;
   }
 
   private commitId(): string {

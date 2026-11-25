@@ -103,3 +103,26 @@ describe('전체 재고(스냅샷 + 실시간)', () => {
     expect(f.gapAtMs).toBe(200);
   });
 });
+
+describe('MOCK 원장 → 재고 변동(실서버 스트림과 같은 모양)', () => {
+  it('예약 −A, 인계 −H, 회수 반입은 RTN 자리 +H, 검수 정상 +A', async () => {
+    const { InventoryLedger } = await import('../src/backend/mock/inventory');
+    const inv = new InventoryLedger();
+    inv.seed('A', 10);
+    const got: { cause: string; dA: number; dH: number; loc: string }[] = [];
+    inv.onChange = (c) => got.push(...c.items.map((i) => ({ cause: c.cause, dA: i.dA, dH: i.dH, loc: c.loc })));
+    inv.reserve('R1', 'O1', [{ sku: 'A', qty: 2 }]);
+    inv.commitPick([{ sku: 'A', qty: 2 }]);
+    inv.commitPack([{ sku: 'A', qty: 2 }]);
+    inv.commitHandover('R1', [{ sku: 'A', qty: 2 }]);
+    inv.returnReceipt([{ sku: 'A', qty: 1 }]);
+    inv.releaseReturn('A', 1);
+    expect(got).toEqual([
+      { cause: 'RESERVE', dA: -2, dH: 0, loc: '' },
+      { cause: 'HANDOVER', dA: 0, dH: -2, loc: '' },
+      { cause: 'TIN', dA: 0, dH: 1, loc: 'RTN-A-01' },
+      { cause: 'QUALITY_RELEASE', dA: 1, dH: 0, loc: 'RTN-A-01' },
+    ]);
+    expect(inv.violations).toEqual([]);
+  });
+});
