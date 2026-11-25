@@ -1,7 +1,7 @@
 // 재고 변동 탭 — 재고 실시간 스트림으로 주문 예약·인계 차감·취소 해제·회수 검수 정상 증가를 바로 본다(사용자 2026-11-25)
 import { useMemo, useState } from 'react';
 import { useApp } from '../app/context';
-import type { FeedKind, FeedRow } from '../sim/stockFeed';
+import type { FeedKind, FeedRow, SkuNow, StockFeed } from '../sim/stockFeed';
 
 const GROUPS: [string, string, FeedKind[] | null][] = [
   ['all', '전체', null],
@@ -27,6 +27,9 @@ export function StockChanges() {
   const feed = sim.stockFeed;
   const [group, setGroup] = useState('all');
   const [moves, setMoves] = useState(false);
+  // 전체 재고(지금 값, 바뀐 상품이 위·반짝) | 변동 기록(한 줄씩) — 사용자 2026-11-25 "전체 재고에서 바뀌는 것도 보여야지"
+  const [view, setView] = useState<'all' | 'log'>('all');
+  const [q, setQ] = useState('');
   const real = sim.board;
   const fullVer = real?.fullStockVersion ?? 0;
   const names = useMemo(() => {
@@ -75,6 +78,16 @@ export function StockChanges() {
           );
         })}
       </div>
+      <div className="sfd-v">
+        <button className={view === 'all' ? 'on' : ''} onClick={() => setView('all')}>
+          전체 재고
+        </button>
+        <button className={view === 'log' ? 'on' : ''} onClick={() => setView('log')}>
+          변동 기록
+        </button>
+      </div>
+      {view === 'all' ? <AllStock feed={feed} q={q} setQ={setQ} nameOf={nameOf} /> : (
+      <>
       <div className="sfd-f">
         {GROUPS.map(([k, t]) => (
           <button key={k} className={group === k ? 'on' : ''} onClick={() => setGroup(k)}>
@@ -112,6 +125,99 @@ export function StockChanges() {
           </div>
         );
       })}
+      </>
+      )}
     </div>
+  );
+}
+
+/** 막 바뀐 상품을 몇 초 동안 반짝 */
+const FRESH_MS = 60_000;
+
+/** 전체 재고 — 센터 합계 + 상품마다 지금 값. 최근 바뀐 상품이 위(바뀐 양·원인), 나머지는 이름 순 */
+function AllStock({ feed, q, setQ, nameOf }: { feed: StockFeed; q: string; setQ: (v: string) => void; nameOf: (sku: string) => string }) {
+  const now = Date.now();
+  const all = [...feed.skus.values()];
+  const tot = all.reduce((a, x) => ({ H: a.H + x.H, A: a.A + x.A, R: a.R + x.R, Q: a.Q + x.Q, out: a.out + (x.A <= 0 ? 1 : 0) }), { H: 0, A: 0, R: 0, Q: 0, out: 0 });
+  const needle = q.trim().toLowerCase();
+  const name = (x: SkuNow) => x.name ?? nameOf(x.sku);
+  const list = (needle ? all.filter((x) => name(x).toLowerCase().includes(needle) || x.sku.toLowerCase().includes(needle)) : all).sort(
+    (a, b) => (b.changedAtMs ?? 0) - (a.changedAtMs ?? 0) || name(a).localeCompare(name(b)),
+  );
+  const shown = list.slice(0, 300);
+  const snap = feed.snapshot;
+  return (
+    <>
+      <div className="sfd-sum">
+        <div>
+          <b>{tot.A.toLocaleString()}</b>
+          <small>판매 가능</small>
+        </div>
+        <div>
+          <b>{tot.H.toLocaleString()}</b>
+          <small>보유</small>
+        </div>
+        <div>
+          <b>{tot.R.toLocaleString()}</b>
+          <small>예약</small>
+        </div>
+        <div>
+          <b>{tot.Q.toLocaleString()}</b>
+          <small>격리</small>
+        </div>
+        <div className={tot.out ? 'w' : ''}>
+          <b>{tot.out}</b>
+          <small>품절 상품</small>
+        </div>
+      </div>
+      <div className="sfd-snap">
+        {all.length}개 상품
+        {snap?.state === 'busy' && ' · 센터 재고 읽는 중…'}
+        {snap?.state === 'done' && ` · ${hhmmss(snap.atMs)}에 읽은 뒤 실시간`}
+        {snap?.state === 'error' && <span className="bad"> · 센터 재고 읽기 실패({snap.why}) — 바뀐 상품만 보임</span>}
+      </div>
+      <input className="stk-q" value={q} onChange={(e) => setQ(e.target.value)} placeholder="상품 찾기 — 이름 또는 SKU" />
+      <table className="sfd-tbl">
+        <thead>
+          <tr>
+            <th>상품</th>
+            <th>판매 가능</th>
+            <th>보유</th>
+            <th>예약</th>
+            <th>격리</th>
+          </tr>
+        </thead>
+        <tbody>
+          {shown.map((x) => {
+            const fresh = x.changedAtMs !== undefined && now - x.changedAtMs < FRESH_MS;
+            const dA = x.lastAvailableDelta ?? 0;
+            const dH = x.lastOnHandDelta ?? 0;
+            return (
+              <tr key={x.sku} className={`${fresh ? 'fresh' : ''} ${x.A <= 0 ? 'out' : ''}`} title={x.sku}>
+                <td>
+                  <div className="nm">{name(x)}</div>
+                  {x.changedAtMs !== undefined && (
+                    <div className="chg">
+                      {hhmmss(x.changedAtMs)} {x.lastLabel}
+                    </div>
+                  )}
+                </td>
+                <td className="n">
+                  <b>{x.A}</b>
+                  {x.changedAtMs !== undefined && dA !== 0 && <span className={dA > 0 ? 'up' : 'dn'}>{sign(dA)}</span>}
+                </td>
+                <td className="n">
+                  {x.H}
+                  {x.changedAtMs !== undefined && dH !== 0 && <span className={dH > 0 ? 'up' : 'dn'}>{sign(dH)}</span>}
+                </td>
+                <td className="n">{x.R || ''}</td>
+                <td className="n">{x.Q || ''}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      {list.length > shown.length && <div className="note">앞 {shown.length}개만 — 상품 찾기로 좁히세요.</div>}
+    </>
   );
 }

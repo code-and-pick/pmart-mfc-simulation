@@ -83,3 +83,23 @@ describe('재고 변동 기록', () => {
     expect(f.gapAtMs).toBe(5);
   });
 });
+
+describe('전체 재고(스냅샷 + 실시간)', () => {
+  const lot = (onHand: number, reserved: number, quarantined = 0) => ({ onHand, quarantined, sellable: onHand - quarantined, reserved, available: onHand - quarantined - reserved });
+  it('ready 면 스냅샷을 읽으라 하고, LOT 합으로 채우고, 읽는 사이 스트림이 바꾼 SKU 는 덮지 않는다', () => {
+    let t = 100;
+    const f = new StockFeed(500, () => t);
+    f.apply({ type: 'ready', resumed: false });
+    expect(f.needSnapshot).toBe(true);
+    expect(f.gapAtMs).toBeNull();
+    const started = t;
+    t = 200;
+    f.apply({ type: 'stock-changed', eventId: '9', cause: 'RESERVE', occurredAt: '2026-11-25T01:00:00Z', items: [{ sku: 'B', onHandQty: 5, quarantinedQty: 0, sellableQty: 5, reservedQty: 1, availableQty: 4, availableDelta: -1, version: 3 }] });
+    f.setSnapshot('A', [lot(10, 2), lot(3, 0, 1)], started, '사과');
+    f.setSnapshot('B', [lot(5, 0)], started); // 스트림 값이 더 새 것
+    expect(f.skus.get('A')).toMatchObject({ name: '사과', H: 13, Q: 1, E: 12, R: 2, A: 10 });
+    expect(f.skus.get('B')).toMatchObject({ A: 4, R: 1, lastAvailableDelta: -1, lastLabel: '주문 예약' });
+    f.apply({ type: 'resync', reason: 'BACKLOG' });
+    expect(f.gapAtMs).toBe(200);
+  });
+});

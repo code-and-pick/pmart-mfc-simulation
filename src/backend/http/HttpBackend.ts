@@ -259,6 +259,14 @@ export class HttpBackend implements FulfillmentPort {
     return out;
   }
 
+  /** (inventory 0.33.0) 센터 재고 상세 여러 SKU 한 번에 — sku 1~100 */
+  async getCenterStocks(mfcId: string, skus: string[]): Promise<CenterStock[]> {
+    const q = new URLSearchParams();
+    for (const s of skus) q.append('sku', s);
+    const r = await this.request<{ items?: CenterStock[] }>('GET', `/mfcs/${enc(mfcId)}/stocks?${q}`);
+    return r.items ?? [];
+  }
+
   getCenterStock(mfcId: string, sku: string): Promise<CenterStock> {
     return this.request('GET', `/mfcs/${enc(mfcId)}/stock?${new URLSearchParams({ sku })}`);
   }

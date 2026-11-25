@@ -309,6 +309,7 @@ export class Simulation {
         onEvent: (e) => {
           feed.apply(e);
           for (const it of e.items ?? []) this.real?.markStale(it.sku);
+          if (feed.needSnapshot) void this.loadStockSnapshot();
         },
       });
     }
@@ -405,6 +406,37 @@ export class Simulation {
   /** 재고 변동(실서버만) — startLive() 가 스트림을 연다 */
   stockFeed: StockFeed | null = null;
   private stockStream: StockStream | null = null;
+  private snapBusy = false;
+  /**
+   * 전체 재고 스냅샷 — 스트림 ready(이어 받기 아님)·resync 뒤(계약: ready 를 받은 뒤 스냅샷).
+   * 어떤 SKU 가 있는지는 센터 stock-units, 값(H·Q·E·R·A)은 /stocks 100개씩. 그 사이 바뀐 것은 스트림이 이긴다.
+   */
+  private async loadStockSnapshot() {
+    const feed = this.stockFeed;
+    const h = this.realHttp;
+    if (!feed || !h || this.snapBusy) return;
+    this.snapBusy = true;
+    feed.needSnapshot = false;
+    const started = Date.now();
+    feed.snapshotState('busy');
+    try {
+      const units = await h.listAllStockUnits(this.params.mfcId, REAL_LINK.fullStockMaxPages);
+      const names = new Map<string, string>();
+      for (const u of units) if (u.productName) names.set(u.sku, u.productName);
+      const skus = [...new Set([...units.map((u) => u.sku), ...(this.real?.stock.keys() ?? []), ...feed.skus.keys()])];
+      for (let i = 0; i < skus.length; i += 100) {
+        for (const c of await h.getCenterStocks(this.params.mfcId, skus.slice(i, i + 100))) feed.setSnapshot(c.sku, c.lots, started, c.productName ?? names.get(c.sku));
+        feed.version++;
+      }
+      feed.snapshotState('done');
+    } catch (e) {
+      feed.snapshotState('error', (e as Error).message);
+    } finally {
+      this.snapBusy = false;
+    }
+    if (feed.needSnapshot) void this.loadStockSnapshot();
+  }
+
   /** 화면이 뜬 뒤 한 번 — 재고 실시간 스트림 연결(시험은 부르지 않음) */
   startLive() {
     this.stockStream?.start();

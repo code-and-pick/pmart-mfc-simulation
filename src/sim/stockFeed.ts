@@ -43,6 +43,25 @@ export interface FeedRow {
   after: { H: number; Q: number; E: number; R: number; A: number };
 }
 
+/** 센터·SKU 지금 값(전체 재고) — 처음은 스냅샷, 그 뒤는 스트림 */
+export interface SkuNow {
+  sku: string;
+  name?: string;
+  H: number;
+  Q: number;
+  E: number;
+  R: number;
+  A: number;
+  /** 스트림으로 마지막에 바뀐 시각·증감·원인 */
+  changedAtMs?: number;
+  lastAvailableDelta?: number;
+  lastOnHandDelta?: number;
+  lastLabel?: string;
+  lastKind?: FeedKind;
+  /** 스트림이 마지막으로 바꾼 시각(스냅샷이 더 옛 값으로 덮지 않게) */
+  streamMs?: number;
+}
+
 export interface FeedTotal {
   n: number;
   units: number;
@@ -69,6 +88,28 @@ export class StockFeed {
   sinceMs: number | null = null;
   /** 놓친 변동이 있을 수 있었던 마지막 시각(resync·이어 받기 실패) */
   gapAtMs: number | null = null;
+  /** 전체 재고(SKU → 지금 값) */
+  readonly skus = new Map<string, SkuNow>();
+  /** 스냅샷 읽기 — null 안 읽음, 'busy', 끝난 시각(ms) */
+  snapshot: { state: 'busy' | 'done' | 'error'; atMs: number; why?: string } | null = null;
+  /** ready(이어 받기 아님)·resync 뒤 스냅샷을 다시 읽으라는 표시 — 시뮬레이션이 본다 */
+  needSnapshot = false;
+
+  /**
+   * 스냅샷 한 SKU — LOT 합(H·Q·E·R·A). 읽기 시작(startedMs) 뒤에 스트림이 바꾼 SKU 는 덮지 않는다(스트림 값이 더 새 것).
+   */
+  setSnapshot(sku: string, lots: { onHand: number; quarantined: number; sellable: number; reserved: number; available: number }[], startedMs: number, name?: string | null) {
+    const cur = this.skus.get(sku);
+    if (name && cur) cur.name ??= name;
+    if (cur?.streamMs !== undefined && cur.streamMs >= startedMs) return;
+    const v = lots.reduce((a, l) => ({ H: a.H + l.onHand, Q: a.Q + l.quarantined, E: a.E + l.sellable, R: a.R + l.reserved, A: a.A + l.available }), { H: 0, Q: 0, E: 0, R: 0, A: 0 });
+    this.skus.set(sku, { ...cur, sku, name: cur?.name ?? name ?? undefined, ...v });
+  }
+
+  snapshotState(state: 'busy' | 'done' | 'error', why?: string) {
+    this.snapshot = { state, atMs: this.nowMs(), why };
+    this.version++;
+  }
 
   constructor(
     private readonly keep = 500,
@@ -83,8 +124,10 @@ export class StockFeed {
   }
 
   apply(e: StockStreamEvent) {
-    if (e.type === 'resync' || (e.type === 'ready' && e.resumed === false && this.sinceMs !== null && this.rows.length > 0)) {
-      this.gapAtMs = this.nowMs();
+    if (e.type === 'resync' || (e.type === 'ready' && e.resumed === false)) {
+      // 처음 붙을 때(ready)는 스냅샷만, 그 뒤 놓쳤을 수 있으면 표시도
+      if (e.type === 'resync' || this.rows.length > 0 || this.skus.size > 0) this.gapAtMs = this.nowMs();
+      this.needSnapshot = true;
       this.version++;
       return;
     }
@@ -108,6 +151,22 @@ export class StockFeed {
         availableDelta: it.availableDelta,
         onHandDelta,
         after: { H: it.onHandQty, Q: it.quarantinedQty, E: it.sellableQty, R: it.reservedQty, A: it.availableQty },
+      });
+      const prev = this.skus.get(it.sku);
+      this.skus.set(it.sku, {
+        sku: it.sku,
+        name: prev?.name,
+        H: it.onHandQty,
+        Q: it.quarantinedQty,
+        E: it.sellableQty,
+        R: it.reservedQty,
+        A: it.availableQty,
+        changedAtMs: atMs,
+        lastAvailableDelta: it.availableDelta,
+        lastOnHandDelta: onHandDelta,
+        lastLabel: label,
+        lastKind: kind,
+        streamMs: this.nowMs(),
       });
       const t = this.totals.get(kind) ?? { n: 0, units: 0 };
       t.n++;

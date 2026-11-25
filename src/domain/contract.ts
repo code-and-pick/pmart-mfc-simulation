@@ -102,6 +102,8 @@ export type StockQualityState = 'PENDING_INSPECTION' | 'NORMAL' | 'QUARANTINED' 
 export interface CenterStock {
   mfcId: string;
   sku: string;
+  /** (inventory 0.23.0) 상품 관리용 이름, 모르면 null */
+  productName?: string | null;
   lots: { lotId: string; onHand: number; quarantined: number; sellable: number; reserved: number; available: number; expiryDate?: string | null }[];
   units: { locationCode: string; lotId: string; qualityState: StockQualityState; workState: StockWorkState; qty: number }[];
 }
