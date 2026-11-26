@@ -105,7 +105,8 @@ export interface DcArrival {
   cdcId: string;
   tempClass: TmsTrip['tempClass'];
   driver?: string | null;
-  stop: 'ARRIVED' | 'HANDED_OVER';
+  /** DEPARTED = DC 가 정차 출발을 보냈지만 아직 수령 전(pollDcTrips 가 수령 끝난 것·오래된 것은 뺀다) */
+  stop: 'ARRIVED' | 'HANDED_OVER' | 'DEPARTED';
   trfIds: string[];
   /** 그 정차 박스(상차 스캔 LPN) — PDA 하차 때 찍을 바코드 */
   boxes: { lpn: string; trfId: string }[];
@@ -113,13 +114,30 @@ export interface DcArrival {
   handover?: 'MATCHED' | 'MISMATCHED' | null;
   /** 고른 하차 방법(아직이면 null) */
   mode: 'VIRTUAL' | 'PDA' | null;
+  /** 그 정차 TRF 의 입고 예정(읽은 것만) — PDA 수령 때 찍을 송장 라벨·상품 바코드 */
+  trfs?: DcArrivalTrf[];
+}
+
+export interface DcArrivalTrf {
+  trfId: string;
+  /** 송장 라벨 값 `TRF:{trfId}:{version}`(mfc-inbound 0.8.0 BR-53 R10 — PDA 는 trfId 만 비교) */
+  label: string;
+  state: string;
+  /** 수령 가능(출발 기록·품목 있음) — 아니면 R-49 */
+  canReceipt: boolean;
+  products: { sku: string; name: string; expected: number; barcodes: string[] }[];
+}
+
+/** 송장 라벨 값 — 버전은 TRF 버전(없으면 입고 예정 버전) */
+export function trfLabelOf(p: Pick<InboundPromise, 'trfId' | 'trfVersion' | 'version'>): string {
+  return `TRF:${p.trfId}:${p.trfVersion ?? p.version ?? 1}`;
 }
 
 export function dcArrivalsOf(trips: TmsTrip[], mfcId: string, modeOf: (key: string) => 'VIRTUAL' | 'PDA' | null, _name?: (sku: string) => string): DcArrival[] {
   const out: DcArrival[] = [];
   for (const trip of trips) {
     for (const stop of trip.stops) {
-      if (stop.mfcId !== mfcId || (stop.state !== 'ARRIVED' && stop.state !== 'HANDED_OVER')) continue;
+      if (stop.mfcId !== mfcId || (stop.state !== 'ARRIVED' && stop.state !== 'HANDED_OVER' && stop.state !== 'DEPARTED')) continue;
       const key = `${trip.tripId}:${stop.seq}`;
       out.push({
         key,
@@ -128,7 +146,7 @@ export function dcArrivalsOf(trips: TmsTrip[], mfcId: string, modeOf: (key: stri
         cdcId: trip.cdcId,
         tempClass: trip.tempClass,
         driver: trip.driverName,
-        stop: stop.state,
+        stop: stop.state as DcArrival['stop'],
         trfIds: stop.trfIds,
         boxes: (trip.transfers ?? []).filter((x) => x.stopSeq === stop.seq).flatMap((x) => x.lpns.map((lpn) => ({ lpn, trfId: x.trfId }))),
         arrivedAtMs: Date.parse(stop.arrivedAt ?? '') || null,
@@ -137,7 +155,8 @@ export function dcArrivalsOf(trips: TmsTrip[], mfcId: string, modeOf: (key: stri
       });
     }
   }
-  return out.sort((a, b) => (a.stop === b.stop ? (a.arrivedAtMs ?? 0) - (b.arrivedAtMs ?? 0) : a.stop === 'ARRIVED' ? -1 : 1));
+  const rank = { ARRIVED: 0, HANDED_OVER: 1, DEPARTED: 2 } as const;
+  return out.sort((a, b) => rank[a.stop] - rank[b.stop] || (a.arrivedAtMs ?? 0) - (b.arrivedAtMs ?? 0));
 }
 
 export function sumLines(lines: TrackLine[]) {

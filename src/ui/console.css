@@ -1300,3 +1300,8 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .dca-e { font-size: 13px; color: var(--bad); }
 
 .scan-grid { display: flex; flex-direction: column; gap: 8px; }
+
+/* 입고 작업자 따라가기 — 왼쪽 패널 진행 중 입고 */
+.itk-mini { padding: 8px 0 4px; border-top: 1px solid var(--line); }
+.itk-mini-h { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; margin-bottom: 6px; }
+.itk-mini-h span { opacity: 0.8; }

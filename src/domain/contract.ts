@@ -800,6 +800,12 @@ export interface SupplyRequest extends SupplyRequestBody {
   decisionNote?: string | null;
   rejectReason?: string | null;
   linkedReceiptId?: string | null;
+  /** (0.23.0 ADR-0091) 승인이 보급 DC 로 보낸 이관 — 있으면 linkedTrfId 가 입고 예정(/inbound-promises/{trfId}) */
+  linkedTrfId?: string | null;
+  transferCdcId?: string | null;
+  transferDueAt?: string | null;
+  transferSentAt?: string | null;
+  transferError?: string | null;
 }
 
 /** mfc-inbound SupplyRecommendation(0.21.0, MI-4) — recommendedQty null 이면 추천 안 함(reason). null 을 0 으로 채우지 않는다 */

@@ -525,6 +525,23 @@ export const REAL_DC = {
   showBeforeMin: 10,
   /** DC 운행 다시 읽기 간격(ms) — DC 시뮬레이터 "MFC 도착 보내기"를 이만큼 안에 알아챔 [시뮬] */
   pollMs: 8000,
+  /**
+   * 승인된 입고 신청(공급 요청)은 DC 가 TRF 로 받아 보낸다 — 백엔드 R-27 전 임시 다리(DC 시뮬레이터 443ba9e, 설정 "MFC 입고 신청 받기")가 인수.
+   * 켜면 승인 때 서버가 만드는 MFC 입고 예정(RCV-SR-…)은 받지 않는다(화면·수령 모두 막음 — 받으면 DC 입고와 재고 두 번) [시뮬]
+   */
+  supplyViaDc: true,
+  /** 정차 출발(DEPARTED) 뒤에도 PDA 수령 전이면 도착 알림·바코드를 이만큼(도착 시각부터) 남긴다 [시뮬] */
+  keepDepartedHours: 6,
+  /** DC 입고 수령 뒤 재고 반영(APPLIED/REJECTED)을 기다리는 횟수·간격 — 202 만으로 받음이라 하지 않는다 [시뮬] */
+  receiptWaitTries: 8,
+  receiptWaitMs: 1500,
+  /**
+   * 입고 신청 → DC TRF 번호 후보(먼저 맞는 것). ① 서버가 준 linkedTrfId(mfc-inbound 0.23.0 ADR-0091, 승인이 직접 이관)
+   * ② `TRF-{요청 ID}` — 0.23.0 규칙(SupplyRequestService.trfIdOf), 다리도 이 번호로 맞추면 서버 이관과 같은 TRF 라 두 번 안 감
+   * ③ `TRF-SR-{요청 ID}` — 다리 첫 규칙(11-26, 요청 ID 가 SR- 로 시작해 TRF-SR-SR-…), 이미 만든 것 [시뮬]
+   */
+  supplyTrfIds: (supplyRequestId: string, linkedTrfId?: string | null): string[] =>
+    [...new Set([linkedTrfId, `TRF-${supplyRequestId}`, `TRF-SR-${supplyRequestId}`].filter((x): x is string => !!x).map((x) => x.slice(0, 64)))],
 } as const;
 
 /** 입고 추적 탭(사용자 2026-11-26 "DC에서 입고 받은 거 … 추적") [시뮬] — 화면이 열려 있을 때 다시 읽는 간격·센터 재고를 읽는 SKU 수 상한·MOCK 에 남기는 건수 */

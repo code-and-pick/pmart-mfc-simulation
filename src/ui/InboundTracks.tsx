@@ -1,7 +1,7 @@
 // 입고 추적 탭 — DC(CDC) 이관 입고·센터 발주 입고를 한 건씩: 오는 중 → 도착·하차 → 수령·검사 → 적치 → 끝,
 // 품목마다 예정·받음·적치·입고칸 남은 양·놓인 칸, 위에는 오늘 입고로 늘어난 재고(사용자 2026-11-26 "DC에서 입고 받은 거 적치하고, 입고받아서 추가되는 재고 추적")
 import { useEffect, useState } from "react";
-import { useApp } from "../app/context";
+import { useApp, useView } from "../app/context";
 import {
   STEP_KO,
   sumLines,
@@ -41,7 +41,7 @@ function tripLine(t: TripInfo): string {
   return `인계 끝 · 차량 떠남${t.handover === "MISMATCHED" ? " (박스 차이 있음)" : ""}`;
 }
 
-const STEPS: TrackStage[] = [
+export const STEPS: TrackStage[] = [
   "EXPECTED",
   "ARRIVED",
   "RECEIVED",
@@ -51,6 +51,7 @@ const STEPS: TrackStage[] = [
 
 export function InboundTracks() {
   const { sim } = useApp();
+  const ctl = useView();
   const [open, setOpen] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [msg, setMsg] = useState<{
@@ -83,6 +84,14 @@ export function InboundTracks() {
     setMsg(null);
     try {
       // 운행으로 와 있는 차량이면 하차 고르기와 같은 길(PDA = 서버에 안 보냄, 사람이 PDA 앱 하차)
+      // "PDA 로 직접"은 어느 단계에서든 서버에 보내지 않는다 — 인계 뒤에 눌러 도착·수령이 서버로 가 버린 일(사용자 2026-11-26 "난 송장 스캔 안했는데")
+      if (!withVirtual) {
+        const a = sim.dcArrivals.find((x) => x.trfIds.includes(t.id));
+        if (a) sim.setDcUnloadMode(a.key, 'PDA');
+        if (ctl.rightView !== 'scan') ctl.toggleRight('scan');
+        setMsg({ key: t.key, ok: true, text: a && a.stop !== 'ARRIVED' ? 'PDA 입고 → 수령에서 송장(TRF)부터 찍어 주세요(바코드 탭)' : 'PDA 입고 → 하차에서 박스를 찍어 주세요(바코드 탭)' });
+        return;
+      }
       const arrival = sim.dcArrivals.find((a) => a.trfIds.includes(t.id) && a.stop === 'ARRIVED');
       if (arrival) {
         await sim.startDcUnload(arrival.key, withVirtual ? 'VIRTUAL' : 'PDA');
@@ -255,5 +264,44 @@ export function InboundTracks() {
         );
       })}
     </div>
+  );
+}
+
+/** 진행 중인 입고(도착·수령·적치)의 단계 막대 — 입고 작업자를 따라갈 때 왼쪽 패널에(사용자 2026-11-26 "입고 작업과 이런 흐름 … 을 볼 수 있는 탭이 없어") */
+export function InboundFlowMini() {
+  const { sim } = useApp();
+  useEffect(() => {
+    void sim.refreshInboundTracks(0);
+    const t = setInterval(() => void sim.refreshInboundTracks(), 4000);
+    return () => clearInterval(t);
+  }, [sim]);
+  const live = sim.inboundTracks.items.filter((t) => t.stage === "ARRIVED" || t.stage === "RECEIVED" || t.stage === "STOWING");
+  if (!live.length) return <div className="bk-empty">진행 중인 입고 없음</div>;
+  return (
+    <>
+      {live.map((t) => {
+        const at = STEPS.indexOf(t.stage);
+        const s = sumLines(t.lines);
+        return (
+          <div key={t.key} className="itk-mini">
+            <div className="itk-mini-h">
+              <b>{t.from ?? (t.kind === "DC" ? "DC" : "센터 발주")}</b>
+              <span>
+                받음 {s.received}/{s.expected} · 적치 {s.stowed}
+                {s.atDock ? ` · 입고칸 ${s.atDock}` : ""}
+              </span>
+            </div>
+            <div className="itk-steps">
+              {STEPS.map((k, i) => (
+                <span key={k} className={i < at ? "done" : i === at ? "now" : ""}>
+                  <i />
+                  {STEP_KO[k]}
+                </span>
+              ))}
+            </div>
+          </div>
+        );
+      })}
+    </>
   );
 }

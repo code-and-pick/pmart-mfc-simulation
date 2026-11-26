@@ -13,14 +13,18 @@ export function DcArrivals() {
   useTick();
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<{ key: string; text: string } | null>(null);
-  const list = sim.dcArrivals.filter((a) => a.stop === 'ARRIVED');
+  // 도착한 차량 + PDA 로 인계까지 한 차량(수령 전) — 인계 뒤 알림이 사라져 다음 할 일(송장 찍기)을 놓치던 것(사용자 2026-11-27 "화면 넘어감이랑 알림은 완벽해?")
+  const notReceived = (a: (typeof sim.dcArrivals)[number]) => !a.trfs || a.trfs.some((t) => t.state !== 'TIN_POSTED' && t.state !== 'CLOSED');
+  const list = sim.dcArrivals.filter((a) => a.stop === 'ARRIVED' || (a.mode !== 'VIRTUAL' && notReceived(a)));
   if (!list.length) return null;
   const pick = async (key: string, mode: 'VIRTUAL' | 'PDA') => {
     setBusy(key);
     setErr(null);
     try {
       await sim.startDcUnload(key, mode);
-      if (mode === 'PDA' && ctl.rightView !== 'scan') ctl.toggleRight('scan');
+      // PDA = 찍을 바코드 탭, 가상 작업자 = 입고 추적 탭(하차 → 인계 → 수령 → 검사 → 적치를 따라감)
+      const to = mode === 'PDA' ? 'scan' : 'inbound';
+      if (ctl.rightView !== to) ctl.toggleRight(to);
     } catch (e) {
       setErr({ key, text: (e as Error).message });
     } finally {
@@ -32,12 +36,21 @@ export function DcArrivals() {
       {list.map((a) => (
         <div key={a.key} className="dca-c">
           <div className="dca-h">
-            <b>🚚 {cdcName(a.cdcId)} 차량 도착</b>
+            <b>🚚 {cdcName(a.cdcId)} 차량 {a.stop === 'ARRIVED' ? '도착' : a.stop === 'DEPARTED' ? '떠남 · 수령 전' : '인계 끝 · 수령 전'}</b>
             <span>
               {TEMP_KO[a.tempClass]} · 박스 {a.boxes.length}개{a.driver ? ` · ${a.driver}` : ''}
             </span>
           </div>
-          {a.mode === null && (
+          {a.stop !== 'ARRIVED' && (
+            <div className="dca-s">
+              인계 끝({a.handover === 'MISMATCHED' ? '박스 차이 있음' : a.handover ? '박스 맞음' : '결과 모름'}) — PDA 입고 → <b>수령</b>에서 송장(TRF)을 찍고 상품을 세어 주세요.{' '}
+              <button className="link" onClick={() => ctl.rightView !== 'scan' && ctl.toggleRight('scan')}>
+                송장 바코드 보기
+              </button>
+            </div>
+          )}
+          {a.stop === 'ARRIVED' && !notReceived(a) && <div className="dca-s">송장은 이미 수령됨(재고 반영) — 하차 인계만 남았어요</div>}
+          {a.stop === 'ARRIVED' && a.mode === null && (
             <>
               <div className="dca-q">하차를 누가 할까요?</div>
               <div className="dca-a">
@@ -50,8 +63,8 @@ export function DcArrivals() {
               </div>
             </>
           )}
-          {a.mode === 'VIRTUAL' && <div className="dca-s">가상 작업자가 하차 중 — 다 내리면 인계 → 수령 → 검사 → 적치</div>}
-          {a.mode === 'PDA' && (
+          {a.stop === 'ARRIVED' && a.mode === 'VIRTUAL' && <div className="dca-s">가상 작업자가 하차 중 — 다 내리면 인계 → 수령 → 검사 → 적치</div>}
+          {a.stop === 'ARRIVED' && a.mode === 'PDA' && (
             <div className="dca-s">
               PDA 입고 → <b>하차</b>에서 박스 {a.boxes.length}개를 찍어 주세요.{' '}
               <button className="link" onClick={() => ctl.rightView !== 'scan' && ctl.toggleRight('scan')}>

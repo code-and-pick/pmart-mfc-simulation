@@ -1,12 +1,13 @@
 // 왼쪽 패널 — 화면에는 값과 할 일만, 이유·근거는 ⓘ 툴팁과 "?" 도움말(Help.tsx)로(사용자 2026-11-20 "주절주절 … 구리게").
 // 위에서부터: 할 일(실제 주문 넣기 · 재고 채우기 — 확인 버튼 "입고 차량 부르기") → 현장 설정(한 줄 슬라이더) → 가상 작업자 → 고급(실서버 연결, 접힘).
-import { workerShortName, workerRoleName } from '../domain/workerName';
+import { isInboundAccount, workerShortName, workerRoleName } from '../domain/workerName';
+import { InboundFlowMini } from './InboundTracks';
 import { Fragment as Frag, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
 import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
-import { BACKEND_FACTS, REAL_LINK, REAL_ORDER, REAL_WORKERS, INBOUND_ORDER, TEST_INBOUND } from '../config';
+import { BACKEND_FACTS, cdcName, REAL_DC, REAL_LINK, REAL_ORDER, REAL_WORKERS, INBOUND_ORDER, TEST_INBOUND } from '../config';
 import { MODE_KO, type OrderModeChoice, type RealOrderResult } from '../domain/realOrder';
 import { clampOrderQty, RECOMMEND_REASON_KO, orderTotals, splitOrder, upsertLine, type OrderDraftLine } from '../domain/testInbound';
 import type { InitialStockLoad, SupplyRequest } from '../domain/contract';
@@ -340,7 +341,7 @@ export function TestInboundControls() {
     try {
       const reqs = await sim.placeInboundOrder(lines);
       const t = orderTotals(lines);
-      push(`발주 ${t.items}품목 ${t.units}개 → ${reqs.length}건 승인 대기 — 아래 "승인"을 누르면 입고 예정이 생깁니다`);
+      push(`발주 ${t.items}품목 ${t.units}개 → ${reqs.length}건 승인 대기 — 아래 "승인"을 누르면 ${REAL_DC.supplyViaDc ? '칠곡 DC 로 넘어갑니다' : '입고 예정이 생깁니다'}`);
       await refresh();
     } catch (e) {
       push(`발주 실패 — ${why(e)}`, true);
@@ -372,7 +373,9 @@ export function TestInboundControls() {
   const exp = expected ?? [];
   const sumQty = (l: InitialStockLoad) => l.lines.reduce((a, x) => a + x.qty, 0);
   const expUnits = exp.reduce((a, l) => a + sumQty(l), 0);
-  const waiting = exp.filter((l) => !sim.isUnloading(l.receiptId));
+  // 승인된 입고 신청은 칠곡 DC 가 TRF 로 받아 보낸다(R-27 전 DC 시뮬레이터 다리) — 가짜 차량 수령 대상에서 뺀다
+  const viaDc = (l: InitialStockLoad) => REAL_DC.supplyViaDc && l.receiptId.startsWith('RCV-SR-');
+  const waiting = exp.filter((l) => !sim.isUnloading(l.receiptId) && !viaDc(l));
   const recvUnits = (recv ?? []).reduce((a, l) => a + sumQty(l), 0);
   const recvItems = (recv ?? []).reduce((a, l) => a + l.lines.length, 0);
   return (
@@ -425,7 +428,7 @@ export function TestInboundControls() {
             ↻
           </button>
         </div>
-        {exp.length > 0 && (
+        {waiting.length > 0 && (
           // 발주는 입고 예정만 만든다 — 차량·입고 작업자는 수령을 눌러야 움직인다(사용자 2026-11-24 "입고 작업자가 움직이지도 않고 입고차량이 들어오지도 않는데")
           <button className="inb-all" disabled={!!busy || !waiting.length} onClick={() => setRecv(waiting)}>
             🚚 {waiting.length > 1 ? `${waiting.length}건 모두 ` : ''}수령 — 입고 차량 부르기
@@ -440,7 +443,11 @@ export function TestInboundControls() {
               <span>
                 {l.lines.length}품목 {sumQty(l)}개
               </span>
-              {sim.isUnloading(l.receiptId) ? (
+              {viaDc(l) ? (
+                <span className="inb-tag" title={sim.supplyDcStage(l.approvalId)?.trfId ?? 'DC 시뮬레이터 설정 "MFC 입고 신청 받기"가 켜져 있어야 TRF 가 생깁니다'}>
+                  칠곡 DC · {sim.supplyDcStage(l.approvalId)?.text ?? 'TRF 기다림'}
+                </span>
+              ) : sim.isUnloading(l.receiptId) ? (
                 <span className="inb-tag" title="가상 작업자가 승강기에서 입고칸으로 옮기는 중 — 다 내리면 수령">
                   하차 중
                 </span>
@@ -530,7 +537,13 @@ function Decide({ req, mode, onClose, onDone }: { req: SupplyRequest; mode: 'APP
     try {
       if (mode === 'APPROVE') {
         const r = await sim.approveSupply(req, qty, note);
-        onDone(`발주 ${req.supplyRequestId.slice(-6)} 승인 ${units}개 → 입고 예정 ${r.linkedReceiptId?.slice(-6) ?? ''} — 아래 "수령"으로 차량 부르기`);
+        onDone(
+          r.transferCdcId
+            ? `발주 ${req.supplyRequestId.slice(-6)} 승인 ${units}개 → 서버가 ${cdcName(r.transferCdcId)} 로 이관 요청(${r.linkedTrfId ?? 'TRF'}). DC 가 보내면 위 가운데 차량 도착 알림`
+            : REAL_DC.supplyViaDc
+            ? `발주 ${req.supplyRequestId.slice(-6)} 승인 ${units}개 → 칠곡 DC 로(DC 시뮬레이터에 새 TRF 알림). DC 가 보내면 위 가운데 차량 도착 알림`
+            : `발주 ${req.supplyRequestId.slice(-6)} 승인 ${units}개 → 입고 예정 ${r.linkedReceiptId?.slice(-6) ?? ''} — 아래 "수령"으로 차량 부르기`,
+        );
       } else {
         await sim.rejectSupply(req, note.trim());
         onDone(`발주 ${req.supplyRequestId.slice(-6)} 거절 — ${note.trim()}`);
@@ -896,9 +909,21 @@ function BackendSettings() {
  */
 function FollowBasket({ id }: { id: string }) {
   const { sim } = useApp();
+  const view = useView();
   useTick();
   const w = sim.siteWorkers().find((x) => x.id === id);
   if (!w) return null;
+  // 입고 작업자(qc·rcv)는 장바구니가 없다 — 하는 일 + 진행 중 입고 흐름(사용자 2026-11-26 캡처 "입고3 장바구니 … 고를 상품 목록 없음")
+  if (isInboundAccount(w.id))
+    return (
+      <Sec title={`${workerRoleName(w.id, w.state)} 입고 작업`} aside={<button className="link" onClick={() => view.rightView !== 'inbound' && view.toggleRight('inbound')}>입고 추적 →</button>}>
+        <div className="bk-empty">
+          {w.activity}
+          {w.pda?.productName ? ` · ${w.pda.productName}${w.pda.plannedQty != null ? ` × ${w.pda.plannedQty}` : ''}` : ''}
+        </div>
+        <InboundFlowMini />
+      </Sec>
+    );
   const basket = w.pda?.basket;
   const done = basket?.filter((b) => b.state === 'DONE' || b.state === 'SHORT').length ?? 0;
   return (

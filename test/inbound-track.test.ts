@@ -1,6 +1,6 @@
 // 입고 추적(사용자 2026-11-26 "DC에서 입고 받은 거 적치하고, 입고받아서 추가되는 재고 추적")
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PARAMS } from '../src/config';
+import { DEFAULT_PARAMS, REAL_DC } from '../src/config';
 import type { CenterStock, InboundPromise, InboundTask } from '../src/domain/contract';
 import { dcArrivalsOf, packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
 import type { TmsTrip } from '../src/domain/contract';
@@ -122,7 +122,7 @@ describe('DC 간선 운행(TMS) 한 줄', () => {
 });
 
 describe('DC 차량 도착(하차 고르기)', () => {
-  it('이 센터 정차가 ARRIVED·HANDED_OVER 인 것만, 도착한 것이 위, 박스 = 그 정차 상차 LPN', () => {
+  it('이 센터 정차가 ARRIVED·HANDED_OVER·DEPARTED(수령 전 남기기는 pollDcTrips 가 거름) 인 것, 도착 → 인계 → 떠남 순, 박스 = 그 정차 상차 LPN', () => {
     const mk = (id: string, state: 'PLANNED' | 'ARRIVED' | 'HANDED_OVER' | 'DEPARTED', at: string | null): TmsTrip => ({
       tripId: id,
       cdcId: 'CDC01',
@@ -146,10 +146,23 @@ describe('DC 차량 도착(하차 고르기)', () => {
     expect(list.map((a) => [a.tripId, a.stop, a.mode])).toEqual([
       ['T2', 'ARRIVED', 'PDA'],
       ['T1', 'HANDED_OVER', null],
+      ['T4', 'DEPARTED', null],
     ]);
     expect(list[0].boxes).toEqual([
       { lpn: 'T2-B1', trfId: 'TRF-T2' },
       { lpn: 'T2-B2', trfId: 'TRF-T2' },
     ]);
+  });
+});
+
+describe('입고 신청 → DC TRF 번호 후보(REAL_DC.supplyTrfIds)', () => {
+  it('서버 linkedTrfId 먼저, 그다음 0.23.0 규칙 TRF-{id}, 다리 첫 규칙 TRF-SR-{id}', () => {
+    expect(REAL_DC.supplyTrfIds('SR-abc', 'TRF-SR-abc')).toEqual(['TRF-SR-abc', 'TRF-SR-SR-abc']);
+    expect(REAL_DC.supplyTrfIds('SR-abc')).toEqual(['TRF-SR-abc', 'TRF-SR-SR-abc']);
+    expect(REAL_DC.supplyTrfIds('SR-abc', 'TRF-X')).toEqual(['TRF-X', 'TRF-SR-abc', 'TRF-SR-SR-abc']);
+  });
+  it('64자로 자른다', () => {
+    const id = `SR-${'a'.repeat(80)}`;
+    for (const t of REAL_DC.supplyTrfIds(id)) expect(t.length).toBe(64);
   });
 });

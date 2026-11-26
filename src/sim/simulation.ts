@@ -24,8 +24,8 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { CenterStock, InboundPromise, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
-import { dcArrivalsOf, mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundTrack, type MockTruckTrack } from './inboundTrack';
+import type { CenterStock, InboundPromise, InboundReceipt, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
+import { dcArrivalsOf, mockTrack, trfLabelOf, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -862,7 +862,7 @@ export class Simulation {
     const body = { ...(cut.length ? { lines: cut } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
     const key = `sim-sr-ok:${req.supplyRequestId}:${cut.map((c) => `${c.sku}=${c.approvedQty}`).join(',')}`;
     const r = await retryUnknown(() => h.approveSupplyRequest(req.supplyRequestId, req.version, body, key));
-    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → 입고 예정 ${r.linkedReceiptId ?? '?'}`);
+    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → ${r.transferCdcId ? `${cdcName(r.transferCdcId)} 이관 ${r.linkedTrfId ?? '?'}` : REAL_DC.supplyViaDc ? `${cdcName('CDC01')} 로(DC 시뮬레이터 다리)` : `입고 예정 ${r.linkedReceiptId ?? '?'}`}`);
     return r;
   }
 
@@ -911,6 +911,8 @@ export class Simulation {
    */
   async receiveInbound(load: InitialStockLoad, withVirtual: boolean): Promise<{ units: number; at: string; queued: boolean }> {
     this.requireRealHttp();
+    // 입고 신청 승인이 만든 예정은 DC 가 실제로 보낸다 — 이걸 받으면 DC 입고와 재고가 두 번(2026-11-27 점검)
+    if (REAL_DC.supplyViaDc && load.receiptId.startsWith('RCV-SR-')) throw new Error('입고 신청 건은 칠곡 DC 차량으로 받습니다 — 이 예정은 받지 않아요');
     const temp = receiptTemp(load.lines.map((l) => l.sku), (s) => this.skuTemp(s));
     const at = TEST_INBOUND.receivingByTemp[temp];
     const units = load.lines.reduce((a, l) => a + l.qty, 0);
@@ -990,7 +992,7 @@ export class Simulation {
       const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
       const kstDay = (iso?: string | null) => (iso ? new Date(Date.parse(iso) + 9 * 3600_000).toISOString().slice(0, 10) : null);
       const dcs = [...open, ...posted.filter((p) => (p.receipts ?? []).some((x) => recent.has(x.receiptId) || kstDay(x.postedAt ?? x.receivedAt) === today))];
-      const orders = loads.filter((l) => l.state !== 'APPLIED' || recent.has(l.receiptId));
+      const orders = loads.filter((l) => (l.state !== 'APPLIED' || recent.has(l.receiptId)) && !(REAL_DC.supplyViaDc && l.state === 'EXPECTED' && l.receiptId.startsWith('RCV-SR-')));
       // 작업 — 수령된 것만, 수령 ID 마다
       const rids = [...new Set([...dcs.flatMap((p) => (p.receipts ?? []).map((x) => x.receiptId)), ...orders.filter((l) => l.state === 'APPLIED').map((l) => l.receiptId)])];
       const tasksBy = new Map<string, InboundTask[]>();
@@ -1088,6 +1090,10 @@ export class Simulation {
   dcArrivalsVersion = 0;
   private dcPollTimer: ReturnType<typeof setInterval> | null = null;
   private dcPollBusy = false;
+  /** 알림용 — 정차마다 마지막 본 `운행상태/정차상태`, TRF 마다 마지막 입고 예정 상태, 첫 읽기 끝났나 */
+  private dcSeen = new Map<string, string>();
+  private dcTrfState = new Map<string, string>();
+  private dcPolledOnce = false;
 
   /** DC 운행을 주기로 읽는다(실서버, 읽기만) — DC 시뮬레이터가 "MFC 도착 보내기"를 누르면 여기서 차량이 와 서고 하차 고르기가 뜬다 */
   private startDcPoll() {
@@ -1103,7 +1109,21 @@ export class Simulation {
     try {
       const mfc = this.params.mfcId;
       const trips = await h.listMfcInboundTrips(mfc);
-      for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc) for (const id of stop.trfIds) this.dcTrips.set(id, { trip, stop });
+      // 알림 — 배차(상차 중)·DC 출발(오는 중). 첫 읽기는 지난 운행이라 알리지 않음(사용자 2026-11-27 "알림은 완벽해?")
+      for (const trip of trips)
+        for (const stop of trip.stops) {
+          if (stop.mfcId !== mfc) continue;
+          const k = `${trip.tripId}:${stop.seq}`;
+          const was = this.dcSeen.get(k);
+          const now = `${trip.state}/${stop.state}`;
+          if (this.dcPolledOnce && was !== now) {
+            const who = `${cdcName(trip.cdcId)} 차량 ${dcTruckLabel(trip.cdcId, trip.tripId)}`;
+            if (!was && stop.state === 'PLANNED' && trip.state !== 'DEPARTED') this.log(`${who} 배차 — DC 에서 상차 중(TRF ${stop.trfIds.join(', ')})`);
+            if (trip.state === 'DEPARTED' && stop.state === 'PLANNED' && !was?.startsWith('DEPARTED/')) this.log(`${who} DC 출발 — 이 센터로 오는 중${stop.plannedArrivalAt ? ` · 도착 예정 ${new Date(stop.plannedArrivalAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}`);
+          }
+          this.dcSeen.set(k, now);
+          for (const id of stop.trfIds) this.dcTrips.set(id, { trip, stop });
+        }
       this.syncDcTrucks(trips);
       const before = new Map(this.dcArrivals.map((a) => [a.key, a]));
       const next = dcArrivalsOf(trips, mfc, (k) => this.dcUnloadMode.get(k) ?? null, (sku) => this.productName(sku));
@@ -1115,6 +1135,42 @@ export class Simulation {
           this.inboundTracks.readAt = null;
         }
       }
+      // 와 있는 정차의 입고 예정(읽기만) — PDA 수령 화면이 찍으라는 송장 라벨·상품 바코드
+      const ids = [...new Set(next.flatMap((a) => a.trfIds))];
+      const got = new Map<string, InboundPromise>();
+      await runLimited(ids, 4, async (id) => {
+        try {
+          got.set(id, await h.getInboundPromise(id));
+        } catch {
+          // 예정이 아직 없음(DC 출발 전) — 송장 라벨 없이
+        }
+      });
+      for (const a of next)
+        a.trfs = a.trfIds
+          .map((id) => got.get(id))
+          .filter((p): p is InboundPromise => !!p)
+          .map((p) => {
+            // PDA 수령이 서버에서 확정되면 한 번 알림
+            if (this.dcPolledOnce && p.state === 'TIN_POSTED' && this.dcTrfState.get(p.trfId) && this.dcTrfState.get(p.trfId) !== 'TIN_POSTED' && a.mode !== 'VIRTUAL') this.log(`DC 입고 ${p.trfId} 수령 확정(재고 반영) — 다음은 검사·적치(PDA 다음 작업 받기)`);
+            this.dcTrfState.set(p.trfId, p.state);
+            return p;
+          })
+          .map((p) => ({
+            trfId: p.trfId,
+            label: trfLabelOf(p),
+            state: p.state,
+            canReceipt: !!p.departureId && p.lines.length > 0,
+            products: p.lines.map((l) => ({ sku: l.sku, name: l.productName ?? this.productName(l.sku), expected: l.expectedQty, barcodes: l.barcodes ?? [] })),
+          }));
+      // 정차 출발 뒤에도 PDA 수령 전이면 남긴다(차량이 먼저 떠나도 송장·상품 바코드를 찍을 수 있게). 수령 끝·오래된 것은 뺀다
+      const keepMs = REAL_DC.keepDepartedHours * 3600_000;
+      const live = next.filter(
+        (a) =>
+          a.stop !== 'DEPARTED' ||
+          (!!a.arrivedAtMs && Date.now() - a.arrivedAtMs < keepMs && a.mode !== 'VIRTUAL' && !!a.trfs?.length && a.trfs.some((t) => t.canReceipt && t.state !== 'TIN_POSTED' && t.state !== 'CLOSED')),
+      );
+      next.splice(0, next.length, ...live);
+      this.dcPolledOnce = true;
       const changed = JSON.stringify(next) !== JSON.stringify(this.dcArrivals);
       this.dcArrivals = next;
       if (changed) this.dcArrivalsVersion++;
@@ -1137,6 +1193,34 @@ export class Simulation {
       this.dcUnloadMode.set(key, 'VIRTUAL');
       await this.receiveDc(a.trfIds[0], true);
     }
+    this.dcArrivals = this.dcArrivals.map((x) => (x.key === key ? { ...x, mode } : x));
+    this.dcArrivalsVersion++;
+  }
+
+  /** 입고 신청(공급 요청)이 DC 에서 어디까지 왔나 — 그 TRF(REAL_DC.supplyTrfIds 후보)의 운행·정차(마지막 읽기). 운행이 아직 없으면 null */
+  supplyDcStage(supplyRequestId: string, linkedTrfId?: string | null): { trfId: string; text: string } | null {
+    // 후보 번호 그대로, 없으면 온도대 꼬리 붙은 번호(PC3 브랜치 R-27 구현 `TRF-SR-{id}-{온도대}`) — 어느 백엔드 구현이 배포돼도 따라감
+    const cands = REAL_DC.supplyTrfIds(supplyRequestId, linkedTrfId);
+    const trfId = cands.find((id) => this.dcTrips.has(id)) ?? [...this.dcTrips.keys()].find((k) => cands.some((c) => k.startsWith(`${c}-`)));
+    const link = trfId ? this.dcTrips.get(trfId) : undefined;
+    if (!trfId || !link) return null;
+    const { trip, stop } = link;
+    const text =
+      stop.state === 'ARRIVED'
+        ? '도착 — 하차하세요'
+        : stop.state === 'HANDED_OVER'
+          ? '인계 끝 — 수령하세요'
+          : stop.state === 'DEPARTED'
+            ? '받음'
+            : trip.state === 'DEPARTED'
+              ? '오는 중'
+              : 'DC 에서 상차 중';
+    return { trfId, text };
+  }
+
+  /** 하차 방법 표시만 바꾼다(서버에 안 보냄) — PDA 로 직접 */
+  setDcUnloadMode(key: string, mode: 'VIRTUAL' | 'PDA') {
+    this.dcUnloadMode.set(key, mode);
     this.dcArrivals = this.dcArrivals.map((x) => (x.key === key ? { ...x, mode } : x));
     this.dcArrivalsVersion++;
   }
@@ -1225,6 +1309,11 @@ export class Simulation {
       }
       for (const p0 of promises.values()) {
         const p = await h.getInboundPromise(p0.trfId);
+        // 다른 곳(PDA·다른 세션)에서 이미 받은 TRF — 인계만 기록하고 수령은 건너뜀(R-49 로 잘못 알리던 것, 2026-11-27)
+        if (p.state === 'TIN_POSTED' || p.state === 'CLOSED') {
+          this.log(`DC 입고 ${p.trfId} 은 이미 수령됨(${p.state === 'CLOSED' ? '종결' : '재고 반영'}) — 수령은 건너뜀`);
+          continue;
+        }
         if (!canReceipt(p)) {
           receiptBlocked = true;
           this.log(`DC 입고 ${p.trfId} 수령은 대기 — MFC 입고에 DC 출발 기록이 없음(R-49)`);
@@ -1243,9 +1332,36 @@ export class Simulation {
             toLocationCode: TEST_INBOUND.receivingByTemp[(l.temperatureZone ?? this.skuTemp(l.sku)) as InboundTemp],
           }));
         if (!lines.length) continue;
-        const r = await retryUnknown(() => h.recordInboundReceipt(p.trfId, p.version, lines, `sim-dc-rcv:${p.trfId}`));
-        if (r.status === 'REJECTED') this.log(`DC 입고 ${p.trfId} 수령 거절 ${r.nextAction ?? ''}`);
-        else this.log(`DC 입고 ${p.trfId} 수령 ${lines.reduce((a, l) => a + l.normalQty, 0)}개 → 검사·적치`);
+        const units = lines.reduce((a, l) => a + l.normalQty, 0);
+        // 수령은 202 뒤 재고 반영이 따로 끝난다 — 서버가 APPLIED 를 줄 때만 "받음"(LAN 에서 LOCATION_CLOSED 로 나중에 거절된 일, 2026-11-27)
+        const post = async (to: string | null): Promise<InboundReceipt | null> => {
+          const cur = await h.getInboundPromise(p.trfId);
+          const had = new Set((cur.receipts ?? []).map((x) => x.receiptId));
+          const ls = to ? lines.map((l) => ({ ...l, toLocationCode: to })) : lines;
+          const r = await retryUnknown(() => h.recordInboundReceipt(p.trfId, cur.version, ls, to ? `sim-dc-rcv:${p.trfId}:${to}` : `sim-dc-rcv:${p.trfId}`));
+          if (r.status === 'REJECTED') {
+            this.log(`DC 입고 ${p.trfId} 수령 거절 ${r.nextAction ?? ''}`);
+            return null;
+          }
+          let last: InboundReceipt | null = null;
+          for (let i = 0; i < REAL_DC.receiptWaitTries; i++) {
+            const got = await h.getInboundPromise(p.trfId);
+            const mine = (got.receipts ?? []).filter((x) => !had.has(x.receiptId));
+            last = mine[mine.length - 1] ?? null;
+            if (last && (last.inventoryApplyStatus === 'APPLIED' || last.inventoryApplyStatus === 'REJECTED')) return last;
+            await new Promise((res) => setTimeout(res, REAL_DC.receiptWaitMs));
+          }
+          return last;
+        };
+        let got = await post(null);
+        if (got?.inventoryApplyStatus === 'REJECTED' && /LOCATION_CLOSED|LOCATION_NOT_FOUND/.test(got.rejectReason ?? '')) {
+          this.log(`DC 입고 ${p.trfId} 재고 반영 거절(${got.rejectReason}) → ${TEST_INBOUND.receivingLocation} 로 다시`);
+          got = await post(TEST_INBOUND.receivingLocation);
+        }
+        if (!got) continue;
+        if (got.inventoryApplyStatus === 'APPLIED') this.log(`DC 입고 ${p.trfId} 수령 ${units}개 확정(재고 반영) → 검사·적치`);
+        else if (got.inventoryApplyStatus === 'REJECTED') throw new Error(`수령이 재고 반영에서 거절됨 — ${got.rejectReason ?? '사유 없음'}`);
+        else this.log(`DC 입고 ${p.trfId} 수령 보냄 — 재고 반영 결과 아직(${got.inventoryApplyStatus ?? '모름'}), 입고 추적에서 확인`);
       }
       this.inboundTracks.readAt = null;
       return TEST_INBOUND.receivingByTemp[temp];

@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { Layout, Location, Rect } from '../domain/layout';
+import { isInboundAccount } from '../domain/workerName';
 import type { Simulation } from '../sim/simulation';
 
 export type Selection =
@@ -389,7 +390,11 @@ export class ViewController extends Emitter {
     if (s && fly) this.rememberHome();
     this.selection = s;
     // 실서버: 점원을 누르면 오른쪽에 그 점원 주문만(실제 주문·바코드 탭이 그 주문). 다른 걸 고르면 풂
-    if (s?.kind === 'worker' && this.sim.board) {
+    if (s?.kind === 'worker' && this.sim.board && isInboundAccount(s.id)) {
+      // 입고 작업자(qc·rcv)는 주문이 없다 — 입고 추적 탭(하차 → 수령 → 검사 → 적치 흐름)으로. 사용자 2026-11-26 "다른 곳 눌러서 탭 없어지니까 입고 작업과 이런 흐름 … 을 볼 수 있는 탭이 없어"
+      this.workerFilter = null;
+      if (this.rightView !== 'scan') this.rightView = 'inbound';
+    } else if (s?.kind === 'worker' && this.sim.board) {
       const w = this.sim.siteWorkers().find((x) => x.id === s.id);
       const sid = w?.pda?.shipmentId ?? null;
       this.workerFilter = { id: s.id, shipmentId: sid };
