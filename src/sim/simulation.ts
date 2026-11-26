@@ -1019,6 +1019,24 @@ export class Simulation {
           atMs: Date.parse(p.arrivedAt ?? p.departedAt ?? p.plannedArrivalAt ?? '') || null,
         });
       }
+      // 입고 예정이 아직 없는 운행(DC 에서 상차 중 — 출발해야 예정이 생긴다)도 보인다. 상품은 출발 뒤에
+      const known = new Set(dcs.map((p) => p.trfId));
+      for (const [id, link] of this.dcTrips) {
+        if (known.has(id) || link.stop.state === 'DEPARTED' || link.trip.state === 'CANCELLED') continue;
+        items.push({
+          key: `trip:${id}`,
+          kind: 'DC',
+          id,
+          from: cdcName(link.trip.cdcId),
+          trip: tripInfo(link.trip, link.stop),
+          stage: 'EXPECTED',
+          serverState: link.trip.state,
+          lines: [],
+          receiptIds: [],
+          canReceive: link.trip.state === 'DEPARTED',
+          atMs: Date.parse(link.stop.estimatedArrivalAt ?? link.stop.plannedArrivalAt ?? '') || null,
+        });
+      }
       for (const l of orders) {
         const tasks = tasksBy.get(l.receiptId) ?? [];
         const lines = l.lines.map((x) => realLine(x.sku, x.productName, x.qty, x.receivedQty ?? (l.state === 'APPLIED' ? x.qty : 0), tasks, stocks.get(x.sku)));
@@ -1034,7 +1052,8 @@ export class Simulation {
           atMs: Date.parse(tasks.map((t) => t.createdAt ?? '').sort()[0] ?? '') || null,
         });
       }
-      items.sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage] || (b.atMs ?? 0) - (a.atMs ?? 0));
+      // 같은 단계면 최근 것 위 — 오는 중은 먼저 올 것 위
+      items.sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage] || (a.stage === 'EXPECTED' ? (a.atMs ?? Infinity) - (b.atMs ?? Infinity) : (b.atMs ?? 0) - (a.atMs ?? 0)));
       this.inboundTracks = { readAt: Date.now(), items, error: null, loading: false };
     } catch (e) {
       this.inboundTracks = { ...r, error: (e as Error).message, loading: false, readAt: Date.now() };
