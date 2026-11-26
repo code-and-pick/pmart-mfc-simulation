@@ -8,6 +8,8 @@ import { RACK_DEPTH, RACK_HEIGHT, type Layout, type Location, type Rack } from '
 const UP = new THREE.Vector3(0, 1, 0);
 /** 카메라가 보는 점에서 이 거리(m) 안이면 칸 번호를 붙인다 [시뮬] */
 const SLOT_LABEL_DIST = 26;
+/** 한 장(프레임)에 새로 그려 올리는 칸 번호 수 [시뮬] — 넘으면 다음 장에 이어서 */
+const PLACE_PER_FRAME = 20;
 
 function faceNormal(along: 'x' | 'z', face: 1 | -1): THREE.Vector3 {
   return along === 'z' ? new THREE.Vector3(face, 0, 0) : new THREE.Vector3(0, 0, face);
@@ -178,6 +180,9 @@ export class LocationLabels {
         p.mesh.visible = true;
       } else free.push(p);
     }
+    // 한 번에 다시 그리는 수를 PLACE_PER_FRAME 개로 — 160개를 한 장에 그려 GPU 로 올리면 이동 중 한 번씩 멈췄다(사용자 2026-11-26 "이동할 때 가끔씩 느려지는데").
+    // 남으면 다음 장에 이어 그린다. 아직 못 바꾼 라벨은 제 칸 번호 그대로 둔다(틀린 번호가 아님)
+    let placed = 0;
     for (const p of free) {
       const next = want.entries().next();
       if (next.done) {
@@ -185,9 +190,14 @@ export class LocationLabels {
         p.code = null;
         continue;
       }
+      if (placed >= PLACE_PER_FRAME) {
+        this.timer = 0;
+        break;
+      }
       const [code, loc] = next.value;
       want.delete(code);
       this.place(p, loc);
+      placed += 1;
     }
   }
 

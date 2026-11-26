@@ -47,6 +47,7 @@ export function SiteScene({ app }: { app: AppCtx }) {
         <LocationLabelsLayer />
         <Declutter />
         <Picker />
+        <Precompile />
         {PerfProbe && (
           <Suspense fallback={null}>
             <PerfProbe />
@@ -55,6 +56,36 @@ export function SiteScene({ app }: { app: AppCtx }) {
       </AppContext.Provider>
     </Canvas>
   );
+}
+
+/**
+ * 셰이더 미리 만들기 — 처음 화면에 들어온 재질의 셰이더를 이동 중에 만들면 그 장이 멈췄다(사용자 2026-11-26 "이동할 때 가끔씩 느려지는데",
+ * headless 프로파일에서 이동 중 셰이더 만들기 확인). 연 뒤 1초·6초(늦게 붙는 것)에 장면 전체를 숨은 것까지 잠깐 보이게 해 compileAsync 로 미리 만든다.
+ * 보이기는 같은 순간 되돌려서 그려지는 화면은 그대로
+ */
+const PRECOMPILE_AT_MS = [1000, 6000];
+function Precompile() {
+  const { gl, scene, camera } = useThree();
+  useEffect(() => {
+    const run = () => {
+      const hidden: THREE.Object3D[] = [];
+      scene.traverse((o) => {
+        // 인스턴스 색(instanceColor)은 처음 setColorAt 때 생겨 셰이더 종류가 바뀐다(피킹 목표 고리 등 — 첫 작업 때 새로 만들며 멈춤).
+        // 미리 흰색(곱해도 원래 색)으로 만들어 두어 같은 셰이더를 처음부터 쓴다
+        const im = o as THREE.InstancedMesh;
+        if (im.isInstancedMesh && !im.instanceColor) im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(im.instanceMatrix.count * 3).fill(1), 3);
+        if (!o.visible) {
+          hidden.push(o);
+          o.visible = true;
+        }
+      });
+      gl.compileAsync(scene, camera).catch(() => {});
+      for (const o of hidden) o.visible = false;
+    };
+    const ts = PRECOMPILE_AT_MS.map((ms) => setTimeout(run, ms));
+    return () => ts.forEach(clearTimeout);
+  }, [gl, scene, camera]);
+  return null;
 }
 
 /** 3D 배경·안개 — 화면 테마(어둡게/밝게)를 따른다 */
