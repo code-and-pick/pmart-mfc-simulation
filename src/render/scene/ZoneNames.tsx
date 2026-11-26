@@ -2,7 +2,8 @@
 // 공중에 띄우면 작업자를 가려(사용자 "구역 카드가 공중에 떠있으니까 작업자 다 가리잖아. 아까처럼 투명 벽에다가 … 붙여줘")
 // 구역 안쪽 뒷벽(북쪽, 문을 피한 가장 긴 조각)에 붙인다. 뒷벽이 없는 구역(격리·라이더 대기 등)은 바닥에 눕힌다.
 // 빛을 받지 않는 재질(meshBasic)이라 색이 탁해지지 않는다. 벽 숨김·랙 번호 끔과 상관없이 늘 보인다.
-import { useMemo } from 'react';
+import { useMemo, useRef } from 'react';
+import { useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Layout, Zone, ZoneKind } from '../../domain/layout';
 import { SCENE } from '../colors';
@@ -226,14 +227,41 @@ export function zoneTags(L: Layout): Tag[] {
   return out;
 }
 
+/**
+ * 가까이 가면 벽 카드를 흐리게 — 카드 뒤가 가려서(사용자 2026-11-26 "가까이 가면 구역카드 뒤가 가려서 안 보이니까 가까이 가면 구역카드 흐려지게").
+ * 카메라와 카드 판의 가장 가까운 점 거리가 FADE_FAR 이상이면 그대로, FADE_NEAR 이하면 FADE_MIN, 사이는 곧게. 바닥에 누운 카드는 안 가려 그대로
+ */
+const FADE_FAR = 16;
+const FADE_NEAR = 6;
+const FADE_MIN = 0.12;
+
+export function cardOpacity(cam: { x: number; y: number; z: number }, t: Pick<Tag, 'pos' | 'w' | 'h'>): number {
+  const [cx, cy, cz] = t.pos;
+  const dx = Math.max(0, Math.abs(cam.x - cx) - t.w / 2);
+  const dy = Math.max(0, Math.abs(cam.y - cy) - t.h / 2);
+  const d = Math.hypot(dx, dy, cam.z - cz);
+  if (d >= FADE_FAR) return 1;
+  if (d <= FADE_NEAR) return FADE_MIN;
+  return FADE_MIN + ((1 - FADE_MIN) * (d - FADE_NEAR)) / (FADE_FAR - FADE_NEAR);
+}
+
 export function ZoneNames({ L }: { L: Layout }) {
   const tags = useMemo(() => zoneTags(L), [L]);
+  const mats = useRef<(THREE.MeshBasicMaterial | null)[]>([]);
+  useFrame(({ camera }) => {
+    tags.forEach((t, i) => {
+      const m = mats.current[i];
+      if (!m || t.rotX !== 0) return;
+      const o = cardOpacity(camera.position, t);
+      if (Math.abs(m.opacity - o) > 0.005) m.opacity = o;
+    });
+  });
   return (
     <>
-      {tags.map((t) => (
+      {tags.map((t, i) => (
         <mesh key={t.id} position={t.pos} rotation={[t.rotX, 0, 0]} renderOrder={5} raycast={() => null} userData={{ declutterBlock: true }}>
           <planeGeometry args={[t.w, t.h]} />
-          <meshBasicMaterial map={t.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
+          <meshBasicMaterial ref={(m) => { mats.current[i] = m; }} map={t.tex} transparent depthWrite={false} toneMapped={false} polygonOffset polygonOffsetFactor={-2} />
         </mesh>
       ))}
     </>
