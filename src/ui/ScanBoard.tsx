@@ -2,6 +2,7 @@
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
 // - 카트 40대(Code128, 값 = 위치 코드 CRT-A-01~40, 온도 구분 없음 — 백엔드 0cbfecaa)
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
+import { cdcName } from '../config';
 import { OrderNo } from './OrderNo';
 import { useEffect } from 'react';
 import { useApp, useView } from '../app/context';
@@ -274,6 +275,24 @@ export function ScanBoard() {
       <Why label="찍는 법">
         PDA 앱 입력칸의 카메라로 이 화면을 찍거나, PC 브라우저면 입력칸에 바코드 밑 글자를 치고 Enter. QR·바코드는 값이 같습니다. 위치 코드를 누르면 3D 에서 그 칸, "크게"는 화면 가득.
       </Why>
+
+      {/* DC 차량 하차(PDA) — 와 있는 차량의 박스(상차 스캔 LPN). 실물 박스 라벨이 없어 화면을 찍는다(사용자 2026-11-26) */}
+      {sim.dcArrivals
+        .filter((a) => a.stop === 'ARRIVED')
+        .map((a) => (
+          <section key={a.key} className="scan-sec">
+            <div className="scan-sec-h">
+              <b>
+                {cdcName(a.cdcId)} 박스 {a.boxes.length}개 · PDA 하차에서 찍기
+              </b>
+            </div>
+            <div className="scan-grid">
+              {a.boxes.map((b) => (
+                <Barcode key={b.lpn} value={b.lpn} caption={`박스 ${b.lpn}`} height={52} />
+              ))}
+            </div>
+          </section>
+        ))}
 
       {/* ① 고른 주문 — 작업마다 칸 하나 */}
       {/* 주문을 안 고르면 카트 QR 만 남아 "카트 바코드밖에 없다"로 보임(사용자 2026-11-20) — 안내를 크게, 누르면 실제 주문 탭 */}

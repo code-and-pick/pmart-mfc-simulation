@@ -25,7 +25,7 @@ import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
 import type { CenterStock, InboundPromise, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
-import { mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type InboundTrack, type MockTruckTrack } from './inboundTrack';
+import { dcArrivalsOf, mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -61,6 +61,12 @@ import { InboundWorker, type DockItem, type InboundContext, type InboundJob, typ
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
 /** 결과 불명(응답 없음)이면 같은 호출(같은 Idempotency-Key)을 두 번까지 다시 — 서버 확정 거절은 그대로 던진다 */
+/** 그림 DC 차량 이름표(겹치면 안 됨 — 화면 키) — 운행 TO-20261127-001 → "칠곡 DC 11/27", 같은 날 둘째 차부터 "-2" */
+function dcTruckLabel(cdcId: string, tripId: string): string {
+  const m = /(\d{4})(\d{2})(\d{2})-(\d+)$/.exec(tripId);
+  return m ? `${cdcName(cdcId)} ${Number(m[2])}/${Number(m[3])}${Number(m[4]) > 1 ? `-${Number(m[4])}` : ''}` : `${cdcName(cdcId)} ${tripId.slice(-6)}`;
+}
+
 /** 동시에 n 개까지만 부른다(읽기 여러 건) */
 async function runLimited<T>(items: readonly T[], n: number, f: (x: T) => Promise<unknown>): Promise<void> {
   let i = 0;
@@ -469,6 +475,7 @@ export class Simulation {
   /** 화면이 뜬 뒤 한 번 — 재고 실시간 스트림 연결(시험은 부르지 않음) */
   startLive() {
     this.stockStream?.start();
+    this.startDcPoll();
   }
   /** MOCK 화면용 관찰판 — 실서버 화면(주문 카드·구역 재고·바코드)을 MOCK 에서도 보게. 시뮬 동작은 쓰지 않음(사용자 2026-11-20) */
   private mockBoard: RealBoard | null = null;
@@ -1015,7 +1022,7 @@ export class Simulation {
           lines,
           receiptIds: (p.receipts ?? []).map((x) => x.receiptId),
           blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? (link ? '도착·인계는 됨 · 수령은 출발 기록 대기(요청함)' : '아직 못 받음 — 운행 정보도, DC 출발 기록도 없음') : null,
-          canReceive: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && (!!p.departureId || (!!link && link.stop.state !== 'DEPARTED')),
+          canReceive: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && (link ? link.stop.state === 'ARRIVED' || (link.stop.state !== 'PLANNED' && !!p.departureId) : !!p.departureId),
           atMs: Date.parse(p.arrivedAt ?? p.departedAt ?? p.plannedArrivalAt ?? '') || null,
         });
       }
@@ -1033,7 +1040,7 @@ export class Simulation {
           serverState: link.trip.state,
           lines: [],
           receiptIds: [],
-          canReceive: link.trip.state === 'DEPARTED',
+          canReceive: link.stop.state === 'ARRIVED',
           atMs: Date.parse(link.stop.estimatedArrivalAt ?? link.stop.plannedArrivalAt ?? '') || null,
         });
       }
@@ -1074,6 +1081,66 @@ export class Simulation {
   /** 그림 차량(운행 정차마다) — 서버 기록과 무관한 그림. 도착 예정이 가까우면 들어와 서 있고, 정차 출발이면 떠난다 */
   private dcTrucks = new Map<string, Truck>();
 
+  /** 정차마다 고른 하차 방법(tripId:seq →) — 가상 작업자 / PDA(사람이 PDA 앱 "하차"로) */
+  private dcUnloadMode = new Map<string, 'VIRTUAL' | 'PDA'>();
+  /** 화면 — 이 센터에 와 있는 DC 차량(정차 ARRIVED·HANDED_OVER, 정차 출발 전) */
+  dcArrivals: DcArrival[] = [];
+  dcArrivalsVersion = 0;
+  private dcPollTimer: ReturnType<typeof setInterval> | null = null;
+  private dcPollBusy = false;
+
+  /** DC 운행을 주기로 읽는다(실서버, 읽기만) — DC 시뮬레이터가 "MFC 도착 보내기"를 누르면 여기서 차량이 와 서고 하차 고르기가 뜬다 */
+  private startDcPoll() {
+    if (!this.realHttp || this.dcPollTimer) return;
+    void this.pollDcTrips();
+    this.dcPollTimer = setInterval(() => void this.pollDcTrips(), REAL_DC.pollMs);
+  }
+
+  async pollDcTrips() {
+    const h = this.realHttp;
+    if (!h || this.dcPollBusy) return;
+    this.dcPollBusy = true;
+    try {
+      const mfc = this.params.mfcId;
+      const trips = await h.listMfcInboundTrips(mfc);
+      for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc) for (const id of stop.trfIds) this.dcTrips.set(id, { trip, stop });
+      this.syncDcTrucks(trips);
+      const before = new Map(this.dcArrivals.map((a) => [a.key, a]));
+      const next = dcArrivalsOf(trips, mfc, (k) => this.dcUnloadMode.get(k) ?? null, (sku) => this.productName(sku));
+      for (const a of next) {
+        const was = before.get(a.key);
+        if (!was && a.stop === 'ARRIVED') this.log(`${cdcName(a.cdcId)} 차량 도착 — 박스 ${a.boxes.length}개, 하차 방법을 고르세요(가상 작업자 / PDA)`);
+        if (was && was.stop === 'ARRIVED' && a.stop === 'HANDED_OVER') {
+          this.log(`${cdcName(a.cdcId)} 차량 하차 인계 끝${a.handover ? ` — 박스 ${a.handover === 'MATCHED' ? '맞음' : '차이 있음'}` : ''}`);
+          this.inboundTracks.readAt = null;
+        }
+      }
+      const changed = JSON.stringify(next) !== JSON.stringify(this.dcArrivals);
+      this.dcArrivals = next;
+      if (changed) this.dcArrivalsVersion++;
+    } catch {
+      // 다음 주기에 다시(읽기만)
+    } finally {
+      this.dcPollBusy = false;
+    }
+  }
+
+  /** 하차 방법 고르기 — 가상 작업자면 바로 하차 시작(실서버 기록), PDA 면 서버에 아무것도 안 보내고 표시만(사람이 PDA 앱 "하차") */
+  async startDcUnload(key: string, mode: 'VIRTUAL' | 'PDA'): Promise<void> {
+    const a = this.dcArrivals.find((x) => x.key === key);
+    if (!a) throw new Error('그 차량이 목록에 없어요');
+    if (a.stop !== 'ARRIVED') throw new Error('이미 하차 인계가 끝났어요');
+    if (mode === 'PDA') {
+      this.dcUnloadMode.set(key, 'PDA');
+      this.log(`${cdcName(a.cdcId)} 차량 — PDA 로 하차(PDA 입고 → 하차에서 박스 ${a.boxes.length}개를 찍기, 박스 바코드는 바코드 탭)`);
+    } else {
+      this.dcUnloadMode.set(key, 'VIRTUAL');
+      await this.receiveDc(a.trfIds[0], true);
+    }
+    this.dcArrivals = this.dcArrivals.map((x) => (x.key === key ? { ...x, mode } : x));
+    this.dcArrivalsVersion++;
+  }
+
   private syncDcTrucks(trips: TmsTrip[]) {
     const mfc = this.params.mfcId;
     for (const trip of trips) {
@@ -1092,7 +1159,7 @@ export class Simulation {
           continue;
         }
         if (near && !t) {
-          const truck: Truck = { trfId: `${cdcName(trip.cdcId)} ${trip.tripId.slice(-3)}`, lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
+          const truck: Truck = { trfId: dcTruckLabel(trip.cdcId, trip.tripId), lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
           this.trucks.push(truck);
           this.dcTrucks.set(key, truck);
         }
@@ -1101,10 +1168,12 @@ export class Simulation {
   }
 
   /**
-   * DC 차량 받기 — 그 TRF 가 실린 운행의 이 센터 정차를 한 번에(인계는 정차마다 한 번 — TMS 계약):
-   *  ① TMS MFC 도착(정차 PLANNED → ARRIVED) ② 입고 예정 도착 등록(EXPECTED → RECEIVING) ③ 하차(가상 작업자: 승강기 → 입고칸 롤테이너)
-   *  ④ TMS 인계 — 박스 바코드(상차 스캔 LPN) 그대로 ⑤ 수령(TRF 마다, 출발 정보가 있는 것만 — 없으면 R-49 로 남김) ⑥ TMS 정차 출발(차량 떠남).
-   * 검사·적치는 입고 가상 작업자(또는 PDA). withVirtual = false 면 ③ 을 건너뛰고 바로(사람이 하차).
+   * DC 차량 하차(가상 작업자) — 그 TRF 가 실린 운행의 이 센터 정차를 한 번에(인계는 정차마다 한 번 — TMS 계약).
+   * MFC 도착·정차 출발은 DC 시뮬레이터(기사 대신 운영자 단추 "MFC 도착 보내기"·"정차 출발")가 보낸다 — 여기서는 보내지 않는다(사용자 2026-11-26
+   * "Dc 시뮬레이션에서 mfc 도착보내기 누르면 … 하차 시작"). 정차가 ARRIVED 일 때:
+   *  ① 입고 예정 도착 등록(EXPECTED → RECEIVING) ② 하차(가상 작업자: 승강기 → 입고칸 롤테이너) ③ TMS 인계 — 박스 바코드(상차 스캔 LPN) 그대로
+   *  ④ 수령(TRF 마다, 출발 정보가 있는 것만 — 없으면 R-49 로 남김). 검사·적치는 입고 가상 작업자. 운행이 없는 예정(출발 정보만)은 ②·④ 만.
+   * PDA 로 하차하면 이 함수를 부르지 않는다(PDA 앱 "하차"가 인계·수령을 한다).
    */
   async receiveDc(trfId: string, withVirtual: boolean): Promise<{ units: number; queued: boolean; receiptBlocked: boolean }> {
     const h = this.requireRealHttp();
@@ -1128,14 +1197,8 @@ export class Simulation {
     const canReceipt = (p: InboundPromise) => !!p.departureId && p.lines.length > 0 && (p.state === 'EXPECTED' || p.state === 'RECEIVING');
     if (!link && ![...promises.values()].some(canReceipt)) throw new Error('아직 못 받음 — 운행 정보도, DC 출발 기록도 없음');
     const tag = link ? `${cdcName(link.trip.cdcId)} 차량` : `DC 입고 ${trfId}`;
-    // ① TMS MFC 도착
-    if (link && link.stop.state === 'PLANNED') {
-      const { tripId } = link.trip;
-      const seq = link.stop.seq;
-      await retryUnknown(() => h.arriveTripStop(tripId, seq, `sim-tms-arr:${tripId}:${seq}`));
-      this.log(`${tag} 도착 기록(TMS 정차 ${seq})`);
-    }
-    // ② 입고 예정 도착 등록
+    if (link && link.stop.state === 'PLANNED') throw new Error('차량이 아직 안 왔어요 — DC 시뮬레이터에서 "MFC 도착 보내기"를 누르면 하차할 수 있어요');
+    // ① 입고 예정 도착 등록
     for (const p of promises.values()) if (p.state === 'EXPECTED') await this.arriveDc(p.trfId);
     // 하차할 것(그림·롤테이너) — 출발 줄, 없으면 박스 목록
     const unloadLines: { sku: string; qty: number; name?: string | null }[] = [];
@@ -1184,28 +1247,21 @@ export class Simulation {
         if (r.status === 'REJECTED') this.log(`DC 입고 ${p.trfId} 수령 거절 ${r.nextAction ?? ''}`);
         else this.log(`DC 입고 ${p.trfId} 수령 ${lines.reduce((a, l) => a + l.normalQty, 0)}개 → 검사·적치`);
       }
-      if (link) {
-        const { tripId } = link.trip;
-        const seq = link.stop.seq;
-        const cur = await h.getTrip(tripId);
-        if (cur.stops.find((s) => s.seq === seq)?.state === 'HANDED_OVER') {
-          await retryUnknown(() => h.departTripStop(tripId, seq, `sim-tms-dep:${tripId}:${seq}`));
-          this.log(`${tag} 떠남(TMS 정차 출발)`);
-        }
-      }
       this.inboundTracks.readAt = null;
       return TEST_INBOUND.receivingByTemp[temp];
     };
     const key = link ? `${link.trip.tripId}:${link.stop.seq}` : `trf:${trfId}`;
     let truck = this.dcTrucks.get(key);
     if (!truck || truck.state === 'LEAVING' || truck.state === 'GONE') {
-      truck = { trfId: link ? `${cdcName(link.trip.cdcId)} ${link.trip.tripId.slice(-3)}` : `DC ${trfId.slice(-4)}`, lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
+      truck = { trfId: link ? dcTruckLabel(link.trip.cdcId, link.trip.tripId) : `DC ${trfId.slice(-4)}`, lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
       this.trucks.push(truck);
       this.dcTrucks.set(key, truck);
     }
     const tr = truck;
     tr.lines = unloadLines.map((l) => ({ sku: l.sku, qty: l.qty }));
+    // 운행 차량은 DC 쪽 "정차 출발"까지 서 있는다(syncDcTrucks 가 떠나보냄). 운행 없는 것만 하차 끝에 떠남
     const release = () => {
+      if (link) return;
       tr.hold = false;
       tr.scheduledAt = Math.min(tr.scheduledAt, this.time - REAL_TRUCK.dockSec + 5);
     };
@@ -1233,6 +1289,7 @@ export class Simulation {
         this.inboundTracks.readAt = null;
       },
     });
+    if (link) this.dcUnloadMode.set(`${link.trip.tripId}:${link.stop.seq}`, 'VIRTUAL');
     this.log(`${tag} — ${unloadLines.length}품목 ${units}개 하차 맡김(가상 작업자: 승강기 → 입고칸, 다 내리면 인계 → 수령 → 검사 → 적치)`);
     this.ensureInboundVirtual();
     return { units, queued: true, receiptBlocked: [...promises.values()].some((p) => !canReceipt(p)) };

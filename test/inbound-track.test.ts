@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS } from '../src/config';
 import type { CenterStock, InboundPromise, InboundTask } from '../src/domain/contract';
-import { packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
+import { dcArrivalsOf, packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
 import type { TmsTrip } from '../src/domain/contract';
 import { Simulation } from '../src/sim/simulation';
 
@@ -118,5 +118,38 @@ describe('DC 간선 운행(TMS) 한 줄', () => {
     expect(t.boxes).toBe(2);
     expect(t.etaMs).toBe(Date.parse('2026-11-26T10:20:06Z'));
     expect(t.driver).toBe('기사 04A');
+  });
+});
+
+describe('DC 차량 도착(하차 고르기)', () => {
+  it('이 센터 정차가 ARRIVED·HANDED_OVER 인 것만, 도착한 것이 위, 박스 = 그 정차 상차 LPN', () => {
+    const mk = (id: string, state: 'PLANNED' | 'ARRIVED' | 'HANDED_OVER' | 'DEPARTED', at: string | null): TmsTrip => ({
+      tripId: id,
+      cdcId: 'CDC01',
+      tempClass: 'AMBIENT',
+      state: 'DEPARTED',
+      stops: [
+        { seq: 1, mfcId: 'MFC-BJG-01', state, trfIds: [`TRF-${id}`], arrivedAt: at },
+        { seq: 2, mfcId: 'MFC-BNG-01', state: 'ARRIVED', trfIds: ['X'] },
+      ],
+      transfers: [
+        { trfId: `TRF-${id}`, stopSeq: 1, loaded: true, lpns: [`${id}-B1`, `${id}-B2`] },
+        { trfId: 'X', stopSeq: 2, loaded: true, lpns: ['NO'] },
+      ],
+      version: 1,
+    });
+    const list = dcArrivalsOf(
+      [mk('T1', 'HANDED_OVER', '2026-11-26T10:00:00Z'), mk('T2', 'ARRIVED', '2026-11-26T11:00:00Z'), mk('T3', 'PLANNED', null), mk('T4', 'DEPARTED', null)],
+      'MFC-BJG-01',
+      (k) => (k === 'T2:1' ? 'PDA' : null),
+    );
+    expect(list.map((a) => [a.tripId, a.stop, a.mode])).toEqual([
+      ['T2', 'ARRIVED', 'PDA'],
+      ['T1', 'HANDED_OVER', null],
+    ]);
+    expect(list[0].boxes).toEqual([
+      { lpn: 'T2-B1', trfId: 'TRF-T2' },
+      { lpn: 'T2-B2', trfId: 'TRF-T2' },
+    ]);
   });
 });

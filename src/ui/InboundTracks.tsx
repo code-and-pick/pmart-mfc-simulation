@@ -82,6 +82,13 @@ export function InboundTracks() {
     setBusy(t.key);
     setMsg(null);
     try {
+      // 운행으로 와 있는 차량이면 하차 고르기와 같은 길(PDA = 서버에 안 보냄, 사람이 PDA 앱 하차)
+      const arrival = sim.dcArrivals.find((a) => a.trfIds.includes(t.id) && a.stop === 'ARRIVED');
+      if (arrival) {
+        await sim.startDcUnload(arrival.key, withVirtual ? 'VIRTUAL' : 'PDA');
+        setMsg({ key: t.key, ok: true, text: withVirtual ? '가상 작업자가 하차 중 — 다 내리면 인계 → 수령 → 검사 → 적치' : 'PDA 입고 → 하차에서 박스를 찍어 주세요(박스 바코드는 바코드 탭)' });
+        return;
+      }
       const res = await sim.receiveDc(t.id, withVirtual);
       setMsg({
         key: t.key,
@@ -198,13 +205,13 @@ export function InboundTracks() {
                   disabled={busy === t.key}
                   onClick={() => void act(t, true)}
                 >
-                  가상 작업자로 받기
+                  가상 작업자로 하차
                 </button>
                 <button
                   disabled={busy === t.key}
                   onClick={() => void act(t, false)}
                 >
-                  바로 받기(PDA)
+                  PDA 로 직접
                 </button>
               </div>
             )}

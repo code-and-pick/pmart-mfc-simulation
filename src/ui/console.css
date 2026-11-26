@@ -1284,3 +1284,19 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .itk-t td { text-align: right; padding: 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
 .itk-t td.nm { text-align: left; }
 .itk-t td.nm .loc { font: 12.5px Consolas, monospace; color: var(--ok); margin-top: 2px; }
+
+/* DC 차량 도착 알림(2026-11-26) — 3D 위 가운데 */
+.dca { position: fixed; top: 112px; left: 50%; transform: translateX(-50%); z-index: 30; display: flex; flex-direction: column; gap: 8px; width: min(420px, 40vw); }
+.dca-c { background: var(--card); border: 2px solid var(--accent); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); }
+.dca-h { display: flex; align-items: baseline; gap: 8px; }
+.dca-h b { font-size: 16px; }
+.dca-h span { margin-left: auto; font-size: 13.5px; white-space: nowrap; }
+.dca-q { font-size: 14px; }
+.dca-a { display: flex; gap: 8px; }
+.dca-a button { flex: 1; font: inherit; font-size: 14.5px; font-weight: 700; padding: 9px 10px; border-radius: 8px; border: 1px solid var(--accent); background: var(--btn); color: #fff; cursor: pointer; }
+.dca-a button + button { background: var(--card); color: var(--text); border-color: var(--line-strong); }
+.dca-a button:disabled { opacity: 0.5; cursor: default; }
+.dca-s { font-size: 14px; }
+.dca-e { font-size: 13px; color: var(--bad); }
+
+.scan-grid { display: flex; flex-direction: column; gap: 8px; }

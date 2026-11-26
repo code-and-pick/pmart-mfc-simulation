@@ -96,6 +96,50 @@ export function tripInfo(trip: TmsTrip, stop: TmsTrip['stops'][number]): TripInf
   };
 }
 
+/** 이 센터에 와 있는 DC 차량 하나(정차 ARRIVED·HANDED_OVER — 정차 출발 전) */
+export interface DcArrival {
+  /** tripId:seq */
+  key: string;
+  tripId: string;
+  seq: number;
+  cdcId: string;
+  tempClass: TmsTrip['tempClass'];
+  driver?: string | null;
+  stop: 'ARRIVED' | 'HANDED_OVER';
+  trfIds: string[];
+  /** 그 정차 박스(상차 스캔 LPN) — PDA 하차 때 찍을 바코드 */
+  boxes: { lpn: string; trfId: string }[];
+  arrivedAtMs: number | null;
+  handover?: 'MATCHED' | 'MISMATCHED' | null;
+  /** 고른 하차 방법(아직이면 null) */
+  mode: 'VIRTUAL' | 'PDA' | null;
+}
+
+export function dcArrivalsOf(trips: TmsTrip[], mfcId: string, modeOf: (key: string) => 'VIRTUAL' | 'PDA' | null, _name?: (sku: string) => string): DcArrival[] {
+  const out: DcArrival[] = [];
+  for (const trip of trips) {
+    for (const stop of trip.stops) {
+      if (stop.mfcId !== mfcId || (stop.state !== 'ARRIVED' && stop.state !== 'HANDED_OVER')) continue;
+      const key = `${trip.tripId}:${stop.seq}`;
+      out.push({
+        key,
+        tripId: trip.tripId,
+        seq: stop.seq,
+        cdcId: trip.cdcId,
+        tempClass: trip.tempClass,
+        driver: trip.driverName,
+        stop: stop.state,
+        trfIds: stop.trfIds,
+        boxes: (trip.transfers ?? []).filter((x) => x.stopSeq === stop.seq).flatMap((x) => x.lpns.map((lpn) => ({ lpn, trfId: x.trfId }))),
+        arrivedAtMs: Date.parse(stop.arrivedAt ?? '') || null,
+        handover: stop.handover?.result ?? null,
+        mode: modeOf(key),
+      });
+    }
+  }
+  return out.sort((a, b) => (a.stop === b.stop ? (a.arrivedAtMs ?? 0) - (b.arrivedAtMs ?? 0) : a.stop === 'ARRIVED' ? -1 : 1));
+}
+
 export function sumLines(lines: TrackLine[]) {
   return lines.reduce(
     (a, l) => ({ expected: a.expected + l.expected, received: a.received + l.received, inspected: a.inspected + l.inspected, quarantined: a.quarantined + l.quarantined, stowed: a.stowed + l.stowed, atDock: a.atDock + l.atDock }),

@@ -523,6 +523,8 @@ export const cdcName = (id?: string | null): string => (id ? (CDC_NAMES[id] ?? i
 /** 실서버 DC 차량 그림 [시뮬] — 이 센터 정차 도착 예정 몇 분 전부터 차량이 들어와 서 있나(서버 기록과 무관한 그림) */
 export const REAL_DC = {
   showBeforeMin: 10,
+  /** DC 운행 다시 읽기 간격(ms) — DC 시뮬레이터 "MFC 도착 보내기"를 이만큼 안에 알아챔 [시뮬] */
+  pollMs: 8000,
 } as const;
 
 /** 입고 추적 탭(사용자 2026-11-26 "DC에서 입고 받은 거 … 추적") [시뮬] — 화면이 열려 있을 때 다시 읽는 간격·센터 재고를 읽는 SKU 수 상한·MOCK 에 남기는 건수 */

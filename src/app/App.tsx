@@ -7,6 +7,7 @@ import { IssueBar } from '../ui/IssueBar';
 import { Rail } from '../ui/Rail';
 import { RightPanel } from '../ui/RightPanel';
 import { ScanBubbles } from '../ui/ScanBubbles';
+import { DcArrivals } from '../ui/DcArrivals';
 import { TopBar, ViewBar } from '../ui/TopBar';
 import { AppContext, type AppCtx } from './context';
 
@@ -30,6 +31,7 @@ export function App({ app }: { app: AppCtx }) {
         <SiteScene app={app} />
       </div>
       {app.sim.board && <ScanBubbles />}
+      {app.sim.real && <DcArrivals />}
       {/* 뼈대(pmart-rider-simulation 참고): [왼쪽 아이콘 메뉴 | 머리줄 → 확인할 일 → [왼쪽 패널 · 3D · 오른쪽 패널]] */}
       <div id="ui" data-left={view.leftView ? 'open' : 'closed'} data-right={view.rightView ? 'open' : 'closed'}>
         <Rail />
