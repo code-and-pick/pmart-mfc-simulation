@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, INBOUND_ORDER, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
+import { INBOUND_TRACK, INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, INBOUND_ORDER, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, receiptTemp, recommendationLines, splitOrder, type InboundTemp, type OrderDraftLine, type SearchHit } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -24,7 +24,8 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { InboundTask, InitialStockLoad, SupplyRequest } from '../domain/contract';
+import type { CenterStock, InboundPromise, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest } from '../domain/contract';
+import { mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -60,6 +61,14 @@ import { InboundWorker, type DockItem, type InboundContext, type InboundJob, typ
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
 /** 결과 불명(응답 없음)이면 같은 호출(같은 Idempotency-Key)을 두 번까지 다시 — 서버 확정 거절은 그대로 던진다 */
+/** 동시에 n 개까지만 부른다(읽기 여러 건) */
+async function runLimited<T>(items: readonly T[], n: number, f: (x: T) => Promise<unknown>): Promise<void> {
+  let i = 0;
+  await Promise.all(Array.from({ length: Math.min(n, items.length) }, async () => {
+    while (i < items.length) await f(items[i++]);
+  }));
+}
+
 async function retryUnknown<T>(f: () => Promise<T>): Promise<T> {
   for (let i = 0; ; i++) {
     try {
@@ -369,6 +378,7 @@ export class Simulation {
         placeOnDock: (it) => this.placeOnDock(it),
         releaseDock: (it) => this.releaseDock(it),
         onReceived: (t) => this.onTruckReceived(t),
+        onStowed: (trfId, sku, loc, qty) => this.onStowed(trfId, sku, loc, qty),
         onReplenishDone: (sku) => this.replenishActive.delete(sku),
         mfcId: params.mfcId,
         rng: () => this.retRng.next(),
@@ -927,6 +937,172 @@ export class Simulation {
     // 검사·적치는 입고 권한이 있는 계정이 — 피킹포장(mfcw-pp)은 입고 업무가 없다(사용자 2026-11-20)
     this.ensureInboundVirtual();
     return { units, at, queued: true };
+  }
+
+  // ── 입고 추적(DC 이관·센터 발주) — 사용자 2026-11-26 "DC에서 입고 받은 거 적치하고, 입고받아서 추가되는 재고 추적" ──
+  /** 화면이 보는 입고 추적 목록. 실서버는 refreshInboundTracks 가, MOCK 은 입고 차량이 채운다 */
+  inboundTracks: { readAt: number | null; items: InboundTrack[]; error: string | null; loading: boolean } = { readAt: null, items: [], error: null, loading: false };
+  /** MOCK 입고 차량 추적(trfId →) */
+  private mockTracks = new Map<string, MockTruckTrack & { ref: Truck }>();
+
+  /** MOCK 추적 목록 다시 만들기(값이 바뀔 때) */
+  private rebuildMockTracks() {
+    const items = [...this.mockTracks.values()].map((t) => mockTrack({ ...t, truck: t.ref.state }, (s) => this.skuMap.get(s)?.name));
+    items.sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage] || (b.atMs ?? 0) - (a.atMs ?? 0));
+    this.inboundTracks = { readAt: this.nowMs(), items: items.slice(0, INBOUND_TRACK.keep), error: null, loading: false };
+  }
+
+  /**
+   * 실서버 입고 추적 읽기 — 화면이 열려 있을 때 부른다(minGapMs 안이면 건너뜀). 읽기만.
+   * DC 이관: 끝나지 않은 예정 + 수령된 예정 중 오늘 작업이 있는 것. 센터 발주: 수령 전 예정 + 오늘 작업이 있는 수령.
+   * 줄마다 그 입고의 작업(receiptId)·그 LOT 의 센터 재고 단위 행으로 검사·적치·놓인 칸·입고칸 남은 양을 센다.
+   */
+  async refreshInboundTracks(minGapMs: number = INBOUND_TRACK.refreshMs) {
+    if (this.mock) {
+      this.rebuildMockTracks();
+      return;
+    }
+    const h = this.realHttp;
+    const r = this.inboundTracks;
+    if (!h || r.loading || (r.readAt && Date.now() - r.readAt < minGapMs)) return;
+    r.loading = true;
+    try {
+      const mfc = this.params.mfcId;
+      await this.refreshRealInbound(0);
+      const recent = new Set([...this.realInbound.ready, ...this.realInbound.doneToday].map((t) => t.receiptId));
+      const [open, posted, loads] = await Promise.all([
+        h.listInboundPromises(mfc),
+        h.listInboundPromises(mfc, 'TIN_POSTED').catch(() => [] as InboundPromise[]),
+        h.listInitialStockLoads(mfc, ['EXPECTED', 'PENDING', 'APPLIED']),
+      ]);
+      const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
+      const kstDay = (iso?: string | null) => (iso ? new Date(Date.parse(iso) + 9 * 3600_000).toISOString().slice(0, 10) : null);
+      const dcs = [...open, ...posted.filter((p) => (p.receipts ?? []).some((x) => recent.has(x.receiptId) || kstDay(x.postedAt ?? x.receivedAt) === today))];
+      const orders = loads.filter((l) => l.state !== 'APPLIED' || recent.has(l.receiptId));
+      // 작업 — 수령된 것만, 수령 ID 마다
+      const rids = [...new Set([...dcs.flatMap((p) => (p.receipts ?? []).map((x) => x.receiptId)), ...orders.filter((l) => l.state === 'APPLIED').map((l) => l.receiptId)])];
+      const tasksBy = new Map<string, InboundTask[]>();
+      await runLimited(rids, 4, async (rid) => tasksBy.set(rid, await h.listInboundTasks(mfc, undefined, undefined, rid)));
+      // 센터 재고 — 수령된 SKU 만(그 입고 LOT 이 지금 어디에)
+      const dcLines = (p: InboundPromise) => (p.lines.length ? p.lines.map((l) => ({ sku: l.sku, name: l.productName, expected: l.expectedQty, received: l.receivedQty ?? 0 })) : packageLines(p, (s) => this.productName(s)));
+      const skus = new Set<string>();
+      for (const p of dcs) for (const l of dcLines(p)) skus.add(l.sku); // 받기 전 것도 — 상품 이름(재고 사본)
+      for (const l of orders) if (l.state === 'APPLIED') for (const x of l.lines) skus.add(x.sku);
+      const stocks = new Map<string, CenterStock>();
+      await runLimited([...skus].slice(0, INBOUND_TRACK.maxStockSkus), 6, async (s) => {
+        stocks.set(s, await h.getCenterStock(mfc, s));
+      });
+      const items: InboundTrack[] = [];
+      for (const p of dcs) {
+        const tasks = (p.receipts ?? []).flatMap((x) => tasksBy.get(x.receiptId) ?? []);
+        const lines = dcLines(p).map((l) => realLine(l.sku, l.name, l.expected, l.received, tasks, stocks.get(l.sku)));
+        const server = p.state === 'EXPECTED' ? 'EXPECTED' : p.state === 'RECEIVING' ? 'ARRIVED' : p.state === 'TIN_POSTED' ? 'RECEIVED' : 'CANCELLED';
+        items.push({
+          key: `dc:${p.trfId}`,
+          kind: 'DC',
+          id: p.trfId,
+          from: p.fromCdc,
+          stage: this.unloading.has(p.trfId) ? 'ARRIVED' : stageOf(server, lines, tasks.some((t) => t.state === 'READY')),
+          serverState: p.state,
+          lines,
+          receiptIds: (p.receipts ?? []).map((x) => x.receiptId),
+          blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? '아직 못 받음 — DC 출발 기록 없음(요청함)' : null,
+          atMs: Date.parse(p.arrivedAt ?? p.departedAt ?? p.plannedArrivalAt ?? '') || null,
+        });
+      }
+      for (const l of orders) {
+        const tasks = tasksBy.get(l.receiptId) ?? [];
+        const lines = l.lines.map((x) => realLine(x.sku, x.productName, x.qty, x.receivedQty ?? (l.state === 'APPLIED' ? x.qty : 0), tasks, stocks.get(x.sku)));
+        const server = l.state === 'EXPECTED' ? 'EXPECTED' : l.state === 'PENDING' ? 'ARRIVED' : l.state === 'APPLIED' ? 'RECEIVED' : 'CANCELLED';
+        items.push({
+          key: `order:${l.receiptId}`,
+          kind: 'ORDER',
+          id: l.receiptId,
+          stage: this.unloading.has(l.receiptId) ? 'ARRIVED' : stageOf(server, lines, tasks.some((t) => t.state === 'READY')),
+          serverState: l.state,
+          lines,
+          receiptIds: l.state === 'APPLIED' ? [l.receiptId] : [],
+          atMs: Date.parse(tasks.map((t) => t.createdAt ?? '').sort()[0] ?? '') || null,
+        });
+      }
+      items.sort((a, b) => STAGE_ORDER[a.stage] - STAGE_ORDER[b.stage] || (b.atMs ?? 0) - (a.atMs ?? 0));
+      this.inboundTracks = { readAt: Date.now(), items, error: null, loading: false };
+    } catch (e) {
+      this.inboundTracks = { ...r, error: (e as Error).message, loading: false, readAt: Date.now() };
+    }
+  }
+
+  /** DC 이관 도착 등록(EXPECTED → RECEIVING) — 화면 버튼(실서버 쓰기) */
+  async arriveDc(trfId: string): Promise<void> {
+    const h = this.requireRealHttp();
+    const p = await h.getInboundPromise(trfId);
+    if (p.state !== 'EXPECTED') return;
+    await retryUnknown(() => h.recordInboundArrival(trfId, p.version, new Date().toISOString(), `sim-dc-arr:${trfId}`));
+    this.log(`DC 입고 ${trfId} 도착 등록(${p.fromCdc ?? 'DC'} → 하차 시작)`);
+  }
+
+  /**
+   * DC 이관 받기 — 도착 등록이 안 됐으면 먼저 하고, 출발 줄 그대로(남은 양) 줄 온도대의 입고칸으로 수령. 수령은 TRF 하나에 한 번.
+   * withVirtual: 입고 가상 작업자가 승강기에서 입고칸으로 내린 뒤 수령(센터 발주 receiveInbound 와 같은 하차), 아니면 바로 수령(하차·검사·적치는 PDA)
+   */
+  async receiveDc(trfId: string, withVirtual: boolean): Promise<{ units: number; queued: boolean }> {
+    const h = this.requireRealHttp();
+    let p = await h.getInboundPromise(trfId);
+    if (!p.departureId || p.lines.length === 0) throw new Error('아직 못 받음 — DC 출발 기록 없음(요청함)');
+    if (this.unloading.has(trfId)) return { units: 0, queued: true };
+    if (p.state === 'EXPECTED') {
+      await this.arriveDc(trfId);
+      p = await h.getInboundPromise(trfId);
+    }
+    if (p.state !== 'RECEIVING') throw new Error(`지금 상태 ${p.state} — 도착 등록(RECEIVING) 뒤에만 수령`);
+    const tempOf = (l: InboundPromise['lines'][number]): InboundTemp => l.temperatureZone ?? this.skuTemp(l.sku);
+    const left = p.lines.map((l) => ({ l, q: l.expectedQty - (l.receivedQty ?? 0) })).filter((x) => x.q > 0);
+    const lines: PromiseReceiptLine[] = left.map(({ l, q }) => ({
+      sku: l.sku,
+      ...(l.lotId ? { lotId: l.lotId } : {}),
+      ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+      normalQty: q,
+      quarantinedQty: 0,
+      pendingQty: 0,
+      toLocationCode: TEST_INBOUND.receivingByTemp[tempOf(l)],
+    }));
+    const units = lines.reduce((a, l) => a + l.normalQty, 0);
+    const temp = receiptTemp(lines.map((l) => l.sku), (s) => this.skuTemp(s));
+    const post = async () => {
+      const cur = await h.getInboundPromise(trfId);
+      const r = await retryUnknown(() => h.recordInboundReceipt(trfId, cur.version, lines, `sim-dc-rcv:${trfId}`));
+      if (r.status === 'REJECTED') throw new Error(`수령 거절 ${r.nextAction ?? ''}`.trim());
+      this.inboundTracks.readAt = null;
+      return lines[0]?.toLocationCode ?? TEST_INBOUND.receivingLocation;
+    };
+    const truck: Truck = { trfId, lines: lines.map((l) => ({ sku: l.sku, qty: l.normalQty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: withVirtual ? 0 : lines.length, scheduledAt: this.time, hold: withVirtual };
+    this.trucks.push(truck);
+    if (!withVirtual) {
+      await post();
+      this.log(`DC 입고 ${trfId} — ${lines.length}품목 ${units}개 수령 → 검사·적치는 PDA`);
+      return { units, queued: false };
+    }
+    this.unloading.add(trfId);
+    this.unloadQueue.push({
+      receiptId: trfId,
+      temp,
+      at: TEST_INBOUND.receivingByTemp[temp],
+      lines: left.map(({ l, q }) => ({ sku: l.sku, qty: q, name: l.productName })),
+      receive: post,
+      onRoll: (n) => {
+        truck.unloaded += n;
+      },
+      done: (ok, why) => {
+        this.unloading.delete(trfId);
+        truck.hold = false;
+        truck.scheduledAt = Math.min(truck.scheduledAt, this.time - REAL_TRUCK.dockSec + 5);
+        if (!ok) this.log(`DC 입고 ${trfId} 하차 뒤 수령 실패 — ${why}`);
+        this.inboundTracks.readAt = null;
+      },
+    });
+    this.log(`DC 입고 ${trfId} — ${lines.length}품목 ${units}개 하차 맡김(가상 작업자가 승강기 → 입고칸, 다 내리면 수령 → 검사 → 적치)`);
+    this.ensureInboundVirtual();
+    return { units, queued: true };
   }
 
   setVirtualWorkers(n: number) {
@@ -1771,7 +1947,10 @@ export class Simulation {
     const trfId = `TRF-${String(this.truckSeq).padStart(4, '0')}`;
     for (const l of lines) this.inTransit.set(l.sku, (this.inTransit.get(l.sku) ?? 0) + l.qty);
     this.mock.inboundExpect(trfId, lines);
-    this.trucks.push({ trfId, lines, state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time });
+    const truck: Truck = { trfId, lines, state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time };
+    this.trucks.push(truck);
+    this.mockTracks.set(trfId, { trfId, lines, truck: truck.state, ref: truck, received: false, onDock: new Map(), placed: new Map(), atMs: this.nowMs() });
+    for (const k of [...this.mockTracks.keys()].slice(0, Math.max(0, this.mockTracks.size - INBOUND_TRACK.keep))) this.mockTracks.delete(k);
     this.log(`${trfId} 입고 차량 출발 — ${lines.length}품목 ${lines.reduce((a, l) => a + l.qty, 0)}개`);
     return trfId;
   }
@@ -2003,6 +2182,23 @@ export class Simulation {
     this.receiving.delete(t.trfId);
     this.metrics.inbound.trucksReceived += 1;
     for (const l of t.lines) this.inTransit.set(l.sku, Math.max(0, (this.inTransit.get(l.sku) ?? 0) - l.qty));
+    const tr = this.mockTracks.get(t.trfId);
+    if (tr) {
+      tr.received = true;
+      for (const l of t.lines) tr.onDock.set(l.sku, (tr.onDock.get(l.sku) ?? 0) + l.qty);
+    }
+  }
+
+  /** MOCK 적치 한 번 — 입고 추적(놓인 칸·하차 칸 남은 양) */
+  private onStowed(trfId: string, sku: string, loc: string, qty: number) {
+    const tr = this.mockTracks.get(trfId);
+    if (!tr || qty <= 0) return;
+    tr.onDock.set(sku, Math.max(0, (tr.onDock.get(sku) ?? 0) - qty));
+    const list = tr.placed.get(sku) ?? [];
+    const at = list.find((p) => p.loc === loc);
+    if (at) at.qty += qty;
+    else list.push({ loc, qty });
+    tr.placed.set(sku, list);
   }
 
   /** 회수품 반납을 지금 부른다(화면 버튼·정기). 상품은 MOCK 상품에서 고름(고객 반품·전달 실패 반납) */

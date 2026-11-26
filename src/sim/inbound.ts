@@ -72,6 +72,8 @@ export interface InboundContext {
   placeOnDock(item: DockItem): void;
   releaseDock(item: DockItem): void;
   onReceived(truck: Truck): void;
+  /** 적치 한 번(입고 추적 — 어느 칸에 몇 개). 회수품 적치는 trfId 가 입고 차량이 아니라 무시된다 */
+  onStowed?(trfId: string, sku: string, loc: string, qty: number): void;
   onReplenishDone(sku: string): void;
   mfcId: string;
   rng(): number;
@@ -285,6 +287,7 @@ export class InboundWorker extends Agent {
             this.key('put'),
           );
           ctx.metrics.inbound.putawayShelfUnits += q;
+          ctx.onStowed?.(it.trfId, it.sku, loc.code, q);
         }
         if (it.qty - q > 0) toReserve.push({ it, qty: it.qty - q });
       } else {
@@ -313,6 +316,7 @@ export class InboundWorker extends Agent {
           this.key('putR'),
         );
         ctx.metrics.inbound.putawayReserveUnits += r.qty;
+        ctx.onStowed?.(r.it.trfId, r.it.sku, rid, r.qty);
         this.carrying.shift();
       }
     }

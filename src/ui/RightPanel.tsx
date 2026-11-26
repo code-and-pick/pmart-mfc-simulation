@@ -7,6 +7,7 @@ import { ScanBoard } from './ScanBoard';
 import { ScanFocusContext } from './scanFocus';
 import { SiteFlow } from './SiteFlow';
 import { AdminPanel } from './AdminPanel';
+import { InboundTracks } from './InboundTracks';
 import { StockChanges } from './StockChanges';
 
 // 오른쪽 화면은 왼쪽 아이콘 메뉴(Rail)가 고른다 — ViewController.rightView
@@ -199,6 +200,7 @@ function LogBody({ tab }: { tab: Tab }): ReactNode {
   if (tab === 'logs') return <SiteFlow />;
   if (tab === 'admin') return <AdminPanel />;
   if (tab === 'stock') return <StockChanges />;
+  if (tab === 'inbound') return <InboundTracks />;
   if (!s.mock) return s.real ? <RealStockTable /> : null;
   const inv = s.mock.inventory;
   const active = inv
@@ -262,7 +264,7 @@ function Log({ tab }: { tab: Tab }) {
   // 바닥에 붙어 있었으면 새 행이 와도 바닥을 따라간다
   const stick = useRef(true);
   // 3D 에서 자리를 고르면(placeFilter) 주문 목록을 다시 그린다
-  const key = `${controller.placeFilter ?? ''}:${controller.workerFilter?.id ?? ''}:${controller.workerFilter?.shipmentId ?? ''}:${tab}:${tab === 'orders' || tab === 'scan' || tab === 'admin' ? (s.board?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.board?.skuVersion ?? 0}.${s.board?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'logs' ? `${s.board?.polls ?? 0}.${Math.floor(s.nowMs() / 1000)}` : ''}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}:${tab === 'stock' ? `${s.stockFeed?.version ?? 0}.${s.board?.fullStockVersion ?? 0}.${Math.floor(s.nowMs() / 10000)}` : ''}`;
+  const key = `${controller.placeFilter ?? ''}:${controller.workerFilter?.id ?? ''}:${controller.workerFilter?.shipmentId ?? ''}:${tab}:${tab === 'orders' || tab === 'scan' || tab === 'admin' ? (s.board?.polls ?? 0) : ''}:${tab === 'scan' || tab === 'orders' ? `${s.board?.skuVersion ?? 0}.${s.board?.orderViewVersion ?? 0}` : ''}:${s.apiLog.length}:${s.apiLog[s.apiLog.length - 1]?.at}:${s.events.length}:${s.events[s.events.length - 1]?.at}:${s.logs.length}:${tab === 'logs' ? `${s.board?.polls ?? 0}.${Math.floor(s.nowMs() / 1000)}` : ''}:${tab === 'inventory' ? (s.real ? s.real.stockVersion : Math.floor(s.time / 5)) : ''}:${tab === 'stock' ? `${s.stockFeed?.version ?? 0}.${s.board?.fullStockVersion ?? 0}.${Math.floor(s.nowMs() / 10000)}` : ''}:${tab === 'inbound' ? `${s.inboundTracks.readAt ?? 0}.${s.inboundTracks.loading}` : ''}`;
   // 내용이 바뀔 때만 다시 만든다 (4Hz 갱신마다 150행을 새로 그리지 않게)
   const body = useMemo(() => <LogBody tab={tab} />, [key]);
   const lastTab = useRef(tab);
@@ -271,7 +273,7 @@ function Log({ tab }: { tab: Tab }) {
     if (!el) return;
     const tabChanged = lastTab.current !== tab;
     lastTab.current = tab;
-    if (tab !== 'inventory' && tab !== 'orders' && tab !== 'scan' && tab !== 'logs' && tab !== 'admin' && tab !== 'stock' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
+    if (tab !== 'inventory' && tab !== 'orders' && tab !== 'scan' && tab !== 'logs' && tab !== 'admin' && tab !== 'stock' && tab !== 'inbound' && (stick.current || tabChanged)) el.scrollTop = el.scrollHeight;
   }, [key, tab]);
   return (
     <div

@@ -10,6 +10,9 @@ import {
   type CapacityAssignment,
   type OrderFulfillmentView,
   type CenterStock,
+  type InboundPromise,
+  type InboundPromiseState,
+  type PromiseReceiptLine,
   type StockUnitRow,
   type CenterShipment,
   type DeliveryOrderSummary,
@@ -479,6 +482,37 @@ export class HttpBackend implements FulfillmentPort {
     return r.items ?? [];
   }
 
+  /** mfc-inbound listInboundPromises(0.16.0) — CDC(DC) 이관 입고 예정. state 를 비우면 끝나지 않은 것(EXPECTED·RECEIVING). 쪽을 끝까지 */
+  async listInboundPromises(mfcId: string, state?: InboundPromiseState): Promise<InboundPromise[]> {
+    const out: InboundPromise[] = [];
+    let cursor: string | null | undefined;
+    for (let i = 0; i < 20; i++) {
+      const q = new URLSearchParams({ mfcId, size: '100' });
+      if (state) q.set('state', state);
+      if (cursor) q.set('cursor', cursor);
+      const r: { items?: InboundPromise[]; page?: { nextCursor?: string | null } } = await this.request('GET', `/inbound-promises?${q}`);
+      out.push(...(r.items ?? []));
+      cursor = r.page?.nextCursor;
+      if (!cursor) break;
+    }
+    return out;
+  }
+
+  /** mfc-inbound getInboundPromise — 입고 예정 한 건(지금 version·수령) */
+  getInboundPromise(trfId: string): Promise<InboundPromise> {
+    return this.request('GET', `/inbound-promises/${enc(trfId)}`);
+  }
+
+  /** mfc-inbound recordArrival — 차량 도착·하차 시작(EXPECTED → RECEIVING). X-Expected-Version = 예정 version */
+  recordInboundArrival(trfId: string, version: number, arrivedAt: string, idempotencyKey: string): Promise<CommandResponse> {
+    return this.request('POST', `/inbound-promises/${enc(trfId)}/arrivals`, { body: { arrivedAt }, idempotencyKey, expectedVersion: version });
+  }
+
+  /** mfc-inbound recordReceipt — 수령(→ mfc-inventory TIN). 출발(TOUT)을 받은 RECEIVING 예정만. resultId = receiptId */
+  recordInboundReceipt(trfId: string, version: number, lines: PromiseReceiptLine[], idempotencyKey: string): Promise<CommandResponse> {
+    return this.request('POST', `/inbound-promises/${enc(trfId)}/receipts`, { body: { receivedAt: new Date().toISOString(), lines }, idempotencyKey, expectedVersion: version });
+  }
+
   /** mfc-inbound receiveInitialStock — 입고 예정의 현장 수령(상품·수량만, LOT·기한은 품질검사). 202 → 전기 뒤 품질검사 작업 */
   receiveInitialStock(receiptId: string, toLocationCode: string, lines: { sku: string; receivedQty: number }[], idempotencyKey: string): Promise<CommandResponse> {
     return this.request('POST', `/initial-stock-loads/${enc(receiptId)}/receipts`, { body: { toLocationCode, lines }, idempotencyKey });
@@ -571,10 +605,11 @@ export class HttpBackend implements FulfillmentPort {
   }
 
   /** mfc-inbound listInboundTasks — 센터 입고 작업(품질검사·적치) 목록. 상품 이름 포함(withLabels 기본 true) */
-  async listInboundTasks(mfcId: string, state?: 'READY' | 'COMPLETED', taskType?: 'INSPECT' | 'PUTAWAY'): Promise<InboundTask[]> {
+  async listInboundTasks(mfcId: string, state?: 'READY' | 'COMPLETED', taskType?: 'INSPECT' | 'PUTAWAY', receiptId?: string): Promise<InboundTask[]> {
     const q = new URLSearchParams({ mfcId });
     if (state) q.set('state', state);
     if (taskType) q.set('taskType', taskType);
+    if (receiptId) q.set('receiptId', receiptId);
     const r: { items?: InboundTask[] } = await this.request('GET', `/inbound-tasks?${q}`);
     return r.items ?? [];
   }

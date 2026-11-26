@@ -516,6 +516,13 @@ export const INBOUND_ORDER = {
   readyAfterHours: 24,
 };
 
+/** 입고 추적 탭(사용자 2026-11-26 "DC에서 입고 받은 거 … 추적") [시뮬] — 화면이 열려 있을 때 다시 읽는 간격·센터 재고를 읽는 SKU 수 상한·MOCK 에 남기는 건수 */
+export const INBOUND_TRACK = {
+  refreshMs: 8000,
+  maxStockSkus: 80,
+  keep: 30,
+} as const;
+
 export const TEST_INBOUND = {
   /** 수령 위치(입고·검수 구역, mfc-location) — locationCodes SIM_POINT.receiving [확정] */
   receivingLocation: 'RCV-A-01',

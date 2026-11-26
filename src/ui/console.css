@@ -1241,3 +1241,44 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 
 /* 인계 랙 카드 — 줄을 펼치면 목록 높이 제한 없이(카드 전체 높이 60vh 안) */
 .rk.open { max-height: none; overflow: visible; }
+
+/* 입고 추적 탭(2026-11-26) */
+.itk { display: flex; flex-direction: column; gap: 8px; padding: 4px 0 10px; }
+.itk-sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.itk-sum div { background: var(--soft); border: 1px solid var(--line); border-radius: 10px; padding: 8px 6px; text-align: center; }
+.itk-sum b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+.itk-sum small { font-size: 12.5px; white-space: nowrap; }
+.itk-sum .ok b { color: var(--ok); }
+.itk-sum .w b { color: var(--warn); }
+.itk-c { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 8px; }
+.itk-h { display: flex; align-items: baseline; gap: 8px; cursor: pointer; }
+.itk-h b { font-size: 15px; }
+.itk-h span { margin-left: auto; font-size: 14px; white-space: nowrap; }
+.itk-steps { display: grid; grid-template-columns: repeat(5, 1fr); }
+.itk-steps span { position: relative; display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 12.5px; color: var(--muted); white-space: nowrap; }
+.itk-steps span::before { content: ''; position: absolute; top: 5px; left: -50%; width: 100%; height: 2px; background: var(--line); }
+.itk-steps span:first-child::before { display: none; }
+.itk-steps i { position: relative; width: 12px; height: 12px; border-radius: 50%; background: var(--card); border: 2px solid var(--line-strong); box-sizing: border-box; }
+.itk-steps span.done::before, .itk-steps span.now::before { background: var(--ok); }
+.itk-steps span.done i { background: var(--ok); border-color: var(--ok); }
+.itk-steps span.now { color: var(--text); font-weight: 700; }
+.itk-steps span.now i { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+.itk-q { display: flex; align-items: baseline; gap: 14px; font-size: 14px; cursor: pointer; }
+.itk-q b { font-size: 16px; font-variant-numeric: tabular-nums; }
+.itk-q .ok, .itk-t .ok { color: var(--ok); }
+.itk-q .w, .itk-t .w { color: var(--warn); }
+.itk-q .bad { color: var(--bad); }
+.itk-more { margin-left: auto; color: var(--accent); font-size: 13px; white-space: nowrap; }
+.itk-why { font-size: 13px; color: var(--warn); }
+.itk-err { font-size: 13px; color: var(--bad); }
+.itk-ok { font-size: 13px; color: var(--ok); }
+.itk-a { display: flex; gap: 6px; }
+.itk-a button { flex: 1; font: inherit; font-size: 13.5px; font-weight: 600; padding: 7px 10px; border-radius: 8px; border: 1px solid var(--accent); background: var(--btn); color: #fff; cursor: pointer; }
+.itk-a button + button { background: var(--card); color: var(--text); border-color: var(--line); }
+.itk-a button:disabled { opacity: 0.5; cursor: default; }
+.itk-t { width: 100%; border-collapse: collapse; font-size: 13px; }
+.itk-t th { font-weight: 600; text-align: right; padding: 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.itk-t th:first-child { text-align: left; }
+.itk-t td { text-align: right; padding: 4px; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; vertical-align: top; }
+.itk-t td.nm { text-align: left; }
+.itk-t td.nm .loc { font: 12.5px Consolas, monospace; color: var(--ok); margin-top: 2px; }

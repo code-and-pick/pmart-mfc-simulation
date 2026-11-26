@@ -675,6 +675,70 @@ export interface InitialStockLoad {
   lines: { sku: string; productName?: string | null; qty: number; receivedQty?: number | null }[];
 }
 
+/** mfc-inbound InboundPromiseState — (0.22.0) CLOSED = 센터 관리자 입고 종결(LAN 은 아직 0.21 이라 state=CLOSED 조회 400, 11-26 실측) */
+export type InboundPromiseState = 'EXPECTED' | 'RECEIVING' | 'TIN_POSTED' | 'CANCELLED' | 'CLOSED';
+
+/** mfc-inbound Receipt — 입고 예정(TRF) 수령 결과 */
+export interface InboundReceipt {
+  receiptId: string;
+  trfId?: string | null;
+  departureId?: string | null;
+  mfcId?: string;
+  inventoryApplyStatus?: 'CAPTURED' | 'SUBMITTED' | 'PROCESSING' | 'APPLIED' | 'REJECTED' | 'UNKNOWN_RESULT';
+  inventoryCommitId?: string | null;
+  rejectReason?: string | null;
+  discrepancies?: { sku: string; expectedQty: number; receivedQty: number; reason: string }[];
+  receivedAt?: string;
+  postedAt?: string | null;
+}
+
+/**
+ * mfc-inbound InboundPromise(0.16.0~0.22.0) — CDC(DC) → MFC 이관 입고 예정(TRF). EXPECTED → 도착 등록 RECEIVING → 수령 TIN_POSTED.
+ * 수령은 출발(TOUT, departureId)을 받은 예정만(아니면 409). 출발 전이면 lines 는 승인 수량, packages 는 매니페스트 LPN
+ */
+export interface InboundPromise {
+  trfId: string;
+  departureId?: string | null;
+  mfcId: string;
+  fromCdc?: string | null;
+  trfVersion?: number | null;
+  version: number;
+  state: InboundPromiseState;
+  plannedArrivalAt?: string | null;
+  departedAt?: string | null;
+  shipmentManifestId?: string | null;
+  cancelReason?: string | null;
+  eta?: string | null;
+  tripId?: string | null;
+  arrivedAt?: string | null;
+  lines: {
+    sku: string;
+    productName?: string | null;
+    barcodes?: string[];
+    lotId?: string | null;
+    expiryDate?: string | null;
+    temperatureZone?: TemperatureZone | null;
+    expectedQty: number;
+    receivedQty?: number;
+    quarantinedQty?: number;
+    pendingQty?: number;
+  }[];
+  packages?: { lpn?: string | null; parentLpn?: string | null; sku: string; lotId?: string | null; qty: number; expiryDate?: string | null }[];
+  receipts?: InboundReceipt[];
+}
+
+/** mfc-inbound RecordReceiptRequest 한 줄 — 인수 = 정상 + 격리 + 보류, toLocationCode(입고칸) 필수 */
+export interface PromiseReceiptLine {
+  sku: string;
+  lotId?: string;
+  expiryDate?: string;
+  normalQty: number;
+  quarantinedQty: number;
+  pendingQty: number;
+  toLocationCode: string;
+  discrepancyReason?: 'NOT_RECEIVED' | 'SHORT' | 'OVER' | 'DAMAGED' | 'TEMPERATURE';
+}
+
 /** mfc-inbound SupplyRequestState — (0.21.0, MI-4) APPROVED·REJECTED = 센터 관리자 승인·거절 */
 export type SupplyRequestState = 'DRAFT' | 'SUBMITTED' | 'ACKNOWLEDGED' | 'WITHDRAWN' | 'APPROVED' | 'REJECTED';
 
