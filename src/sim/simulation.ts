@@ -9,7 +9,7 @@
 //  - 하차·검수·수령 등록·적치·보충      → 현장(입고 작업자 PDA) — 적치·보충 단말 API 는 계약 공백(R-10)
 
 import { assignInboundNumbers } from '../domain/workerName';
-import { INBOUND_TRACK, INBOUND_UNLOAD, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, INBOUND_ORDER, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
+import { cdcName, INBOUND_TRACK, INBOUND_UNLOAD, REAL_DC, TRUCK_QUEUE_GAP, BACKEND_FACTS, DEFAULT_PARAMS, INBOUND_ORDER, MOCK_BUNDLE, MOCK_HIGH_TURNOVER_TOP, REAL_LINK, REAL_TRUCK, REAL_WORKERS, RETURN_FLOW, TEST_INBOUND, type SimParams, MFC_SITES, activeSite } from '../config';
 import { QUARANTINE_OF, ReturnRider, quarantineSlot, returnSlot, type ReturnItem } from './returns';
 import { inboundCandidates, receiptTemp, recommendationLines, splitOrder, type InboundTemp, type OrderDraftLine, type SearchHit } from '../domain/testInbound';
 import { buildCatalog, type Sku } from '../domain/catalog';
@@ -24,8 +24,8 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { CenterStock, InboundPromise, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest } from '../domain/contract';
-import { mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, type InboundTrack, type MockTruckTrack } from './inboundTrack';
+import type { CenterStock, InboundPromise, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
+import { mockTrack, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -970,11 +970,16 @@ export class Simulation {
       const mfc = this.params.mfcId;
       await this.refreshRealInbound(0);
       const recent = new Set([...this.realInbound.ready, ...this.realInbound.doneToday].map((t) => t.receiptId));
-      const [open, posted, loads] = await Promise.all([
+      const [open, posted, loads, trips] = await Promise.all([
         h.listInboundPromises(mfc),
         h.listInboundPromises(mfc, 'TIN_POSTED').catch(() => [] as InboundPromise[]),
         h.listInitialStockLoads(mfc, ['EXPECTED', 'PENDING', 'APPLIED']),
+        h.listMfcInboundTrips(mfc).catch(() => [] as TmsTrip[]),
       ]);
+      // DC 간선 운행(TMS) — TRF 마다 이 센터 정차. 그림 차량도 맞춘다
+      this.dcTrips = new Map();
+      for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc) for (const id of stop.trfIds) this.dcTrips.set(id, { trip, stop });
+      this.syncDcTrucks(trips);
       const today = new Date(Date.now() + 9 * 3600_000).toISOString().slice(0, 10);
       const kstDay = (iso?: string | null) => (iso ? new Date(Date.parse(iso) + 9 * 3600_000).toISOString().slice(0, 10) : null);
       const dcs = [...open, ...posted.filter((p) => (p.receipts ?? []).some((x) => recent.has(x.receiptId) || kstDay(x.postedAt ?? x.receivedAt) === today))];
@@ -996,17 +1001,21 @@ export class Simulation {
       for (const p of dcs) {
         const tasks = (p.receipts ?? []).flatMap((x) => tasksBy.get(x.receiptId) ?? []);
         const lines = dcLines(p).map((l) => realLine(l.sku, l.name, l.expected, l.received, tasks, stocks.get(l.sku)));
-        const server = p.state === 'EXPECTED' ? 'EXPECTED' : p.state === 'RECEIVING' ? 'ARRIVED' : p.state === 'TIN_POSTED' ? 'RECEIVED' : 'CANCELLED';
+        const link = this.dcTrips.get(p.trfId);
+        const stopIn = link && link.stop.state !== 'PLANNED';
+        const server = p.state === 'EXPECTED' ? (stopIn ? 'ARRIVED' : 'EXPECTED') : p.state === 'RECEIVING' ? 'ARRIVED' : p.state === 'TIN_POSTED' ? 'RECEIVED' : 'CANCELLED';
         items.push({
           key: `dc:${p.trfId}`,
           kind: 'DC',
           id: p.trfId,
-          from: p.fromCdc,
+          from: cdcName(p.fromCdc),
+          trip: link ? tripInfo(link.trip, link.stop) : null,
           stage: this.unloading.has(p.trfId) ? 'ARRIVED' : stageOf(server, lines, tasks.some((t) => t.state === 'READY')),
           serverState: p.state,
           lines,
           receiptIds: (p.receipts ?? []).map((x) => x.receiptId),
-          blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? '아직 못 받음 — DC 출발 기록 없음(요청함)' : null,
+          blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? (link ? '도착·인계는 됨 · 수령은 출발 기록 대기(요청함)' : '아직 못 받음 — 운행 정보도, DC 출발 기록도 없음') : null,
+          canReceive: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && (!!p.departureId || (!!link && link.stop.state !== 'DEPARTED')),
           atMs: Date.parse(p.arrivedAt ?? p.departedAt ?? p.plannedArrivalAt ?? '') || null,
         });
       }
@@ -1038,71 +1047,176 @@ export class Simulation {
     const p = await h.getInboundPromise(trfId);
     if (p.state !== 'EXPECTED') return;
     await retryUnknown(() => h.recordInboundArrival(trfId, p.version, new Date().toISOString(), `sim-dc-arr:${trfId}`));
-    this.log(`DC 입고 ${trfId} 도착 등록(${p.fromCdc ?? 'DC'} → 하차 시작)`);
+    this.log(`DC 입고 ${trfId} 도착 등록(${cdcName(p.fromCdc)} → 하차 시작)`);
+  }
+
+  /** DC 간선 운행(TMS) — trfId → 운행·이 센터 정차(마지막 읽기) */
+  private dcTrips = new Map<string, { trip: TmsTrip; stop: TmsTrip['stops'][number] }>();
+  /** 그림 차량(운행 정차마다) — 서버 기록과 무관한 그림. 도착 예정이 가까우면 들어와 서 있고, 정차 출발이면 떠난다 */
+  private dcTrucks = new Map<string, Truck>();
+
+  private syncDcTrucks(trips: TmsTrip[]) {
+    const mfc = this.params.mfcId;
+    for (const trip of trips) {
+      if (trip.state !== 'DEPARTED' && trip.state !== 'COMPLETED') continue;
+      for (const stop of trip.stops) {
+        if (stop.mfcId !== mfc) continue;
+        const key = `${trip.tripId}:${stop.seq}`;
+        const eta = Date.parse(stop.estimatedArrivalAt ?? stop.plannedArrivalAt ?? '') || Infinity;
+        const near = stop.state === 'ARRIVED' || stop.state === 'HANDED_OVER' || (stop.state === 'PLANNED' && eta - Date.now() <= REAL_DC.showBeforeMin * 60_000);
+        const t = this.dcTrucks.get(key);
+        if (stop.state === 'DEPARTED') {
+          if (t && t.hold) {
+            t.hold = false;
+            t.scheduledAt = Math.min(t.scheduledAt, this.time - REAL_TRUCK.dockSec + 5);
+          }
+          continue;
+        }
+        if (near && !t) {
+          const truck: Truck = { trfId: `${cdcName(trip.cdcId)} ${trip.tripId.slice(-3)}`, lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
+          this.trucks.push(truck);
+          this.dcTrucks.set(key, truck);
+        }
+      }
+    }
   }
 
   /**
-   * DC 이관 받기 — 도착 등록이 안 됐으면 먼저 하고, 출발 줄 그대로(남은 양) 줄 온도대의 입고칸으로 수령. 수령은 TRF 하나에 한 번.
-   * withVirtual: 입고 가상 작업자가 승강기에서 입고칸으로 내린 뒤 수령(센터 발주 receiveInbound 와 같은 하차), 아니면 바로 수령(하차·검사·적치는 PDA)
+   * DC 차량 받기 — 그 TRF 가 실린 운행의 이 센터 정차를 한 번에(인계는 정차마다 한 번 — TMS 계약):
+   *  ① TMS MFC 도착(정차 PLANNED → ARRIVED) ② 입고 예정 도착 등록(EXPECTED → RECEIVING) ③ 하차(가상 작업자: 승강기 → 입고칸 롤테이너)
+   *  ④ TMS 인계 — 박스 바코드(상차 스캔 LPN) 그대로 ⑤ 수령(TRF 마다, 출발 정보가 있는 것만 — 없으면 R-49 로 남김) ⑥ TMS 정차 출발(차량 떠남).
+   * 검사·적치는 입고 가상 작업자(또는 PDA). withVirtual = false 면 ③ 을 건너뛰고 바로(사람이 하차).
    */
-  async receiveDc(trfId: string, withVirtual: boolean): Promise<{ units: number; queued: boolean }> {
+  async receiveDc(trfId: string, withVirtual: boolean): Promise<{ units: number; queued: boolean; receiptBlocked: boolean }> {
     const h = this.requireRealHttp();
-    let p = await h.getInboundPromise(trfId);
-    if (!p.departureId || p.lines.length === 0) throw new Error('아직 못 받음 — DC 출발 기록 없음(요청함)');
-    if (this.unloading.has(trfId)) return { units: 0, queued: true };
-    if (p.state === 'EXPECTED') {
-      await this.arriveDc(trfId);
-      p = await h.getInboundPromise(trfId);
+    const mfc = this.params.mfcId;
+    if (this.unloading.has(trfId)) return { units: 0, queued: true, receiptBlocked: false };
+    let link = this.dcTrips.get(trfId);
+    if (link) {
+      const trip = await h.getTrip(link.trip.tripId);
+      const stop = trip.stops.find((s) => s.mfcId === mfc && s.trfIds.includes(trfId));
+      link = stop ? { trip, stop } : undefined;
     }
-    if (p.state !== 'RECEIVING') throw new Error(`지금 상태 ${p.state} — 도착 등록(RECEIVING) 뒤에만 수령`);
-    const tempOf = (l: InboundPromise['lines'][number]): InboundTemp => l.temperatureZone ?? this.skuTemp(l.sku);
-    const left = p.lines.map((l) => ({ l, q: l.expectedQty - (l.receivedQty ?? 0) })).filter((x) => x.q > 0);
-    const lines: PromiseReceiptLine[] = left.map(({ l, q }) => ({
-      sku: l.sku,
-      ...(l.lotId ? { lotId: l.lotId } : {}),
-      ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
-      normalQty: q,
-      quarantinedQty: 0,
-      pendingQty: 0,
-      toLocationCode: TEST_INBOUND.receivingByTemp[tempOf(l)],
-    }));
-    const units = lines.reduce((a, l) => a + l.normalQty, 0);
-    const temp = receiptTemp(lines.map((l) => l.sku), (s) => this.skuTemp(s));
-    const post = async () => {
-      const cur = await h.getInboundPromise(trfId);
-      const r = await retryUnknown(() => h.recordInboundReceipt(trfId, cur.version, lines, `sim-dc-rcv:${trfId}`));
-      if (r.status === 'REJECTED') throw new Error(`수령 거절 ${r.nextAction ?? ''}`.trim());
+    const trfIds = link ? link.stop.trfIds : [trfId];
+    const promises = new Map<string, InboundPromise>();
+    for (const id of trfIds) {
+      try {
+        promises.set(id, await h.getInboundPromise(id));
+      } catch {
+        // 입고 예정이 아직 없는 TRF — 인계만
+      }
+    }
+    const canReceipt = (p: InboundPromise) => !!p.departureId && p.lines.length > 0 && (p.state === 'EXPECTED' || p.state === 'RECEIVING');
+    if (!link && ![...promises.values()].some(canReceipt)) throw new Error('아직 못 받음 — 운행 정보도, DC 출발 기록도 없음');
+    const tag = link ? `${cdcName(link.trip.cdcId)} 차량` : `DC 입고 ${trfId}`;
+    // ① TMS MFC 도착
+    if (link && link.stop.state === 'PLANNED') {
+      const { tripId } = link.trip;
+      const seq = link.stop.seq;
+      await retryUnknown(() => h.arriveTripStop(tripId, seq, `sim-tms-arr:${tripId}:${seq}`));
+      this.log(`${tag} 도착 기록(TMS 정차 ${seq})`);
+    }
+    // ② 입고 예정 도착 등록
+    for (const p of promises.values()) if (p.state === 'EXPECTED') await this.arriveDc(p.trfId);
+    // 하차할 것(그림·롤테이너) — 출발 줄, 없으면 박스 목록
+    const unloadLines: { sku: string; qty: number; name?: string | null }[] = [];
+    for (const p of promises.values()) {
+      if (p.lines.length) for (const l of p.lines) unloadLines.push({ sku: l.sku, qty: l.expectedQty - (l.receivedQty ?? 0), name: l.productName });
+      else for (const l of packageLines(p, (s) => this.productName(s))) unloadLines.push({ sku: l.sku, qty: l.expected, name: l.name });
+    }
+    const units = unloadLines.reduce((a, l) => a + Math.max(0, l.qty), 0);
+    const temp: InboundTemp = link?.trip.tempClass ?? receiptTemp(unloadLines.map((l) => l.sku), (s) => this.skuTemp(s));
+    let receiptBlocked = false;
+    // ④~⑥ 하차가 끝난 뒤
+    const finish = async (): Promise<string> => {
+      if (link) {
+        const { tripId } = link.trip;
+        const seq = link.stop.seq;
+        const cur = await h.getTrip(tripId);
+        const st = cur.stops.find((s) => s.seq === seq);
+        if (st?.state === 'ARRIVED') {
+          const transfers = st.trfIds.map((id) => ({ trfId: id, receivedLpns: (cur.transfers ?? []).filter((x) => x.trfId === id && x.stopSeq === seq).flatMap((x) => x.lpns) }));
+          const after = await retryUnknown(() => h.handoverTripStop(tripId, seq, transfers, `sim-tms-ho:${tripId}:${seq}`));
+          const ho = after.stops.find((s) => s.seq === seq)?.handover;
+          this.log(`${tag} 인계 — 박스 ${transfers.reduce((a, x) => a + x.receivedLpns.length, 0)}개 스캔${ho ? ` · ${ho.result === 'MATCHED' ? '맞음' : '차이 있음'}` : ''}`);
+        }
+      }
+      for (const p0 of promises.values()) {
+        const p = await h.getInboundPromise(p0.trfId);
+        if (!canReceipt(p)) {
+          receiptBlocked = true;
+          this.log(`DC 입고 ${p.trfId} 수령은 대기 — MFC 입고에 DC 출발 기록이 없음(R-49)`);
+          continue;
+        }
+        const lines: PromiseReceiptLine[] = p.lines
+          .map((l) => ({ l, q: l.expectedQty - (l.receivedQty ?? 0) }))
+          .filter((x) => x.q > 0)
+          .map(({ l, q }) => ({
+            sku: l.sku,
+            ...(l.lotId ? { lotId: l.lotId } : {}),
+            ...(l.expiryDate ? { expiryDate: l.expiryDate } : {}),
+            normalQty: q,
+            quarantinedQty: 0,
+            pendingQty: 0,
+            toLocationCode: TEST_INBOUND.receivingByTemp[(l.temperatureZone ?? this.skuTemp(l.sku)) as InboundTemp],
+          }));
+        if (!lines.length) continue;
+        const r = await retryUnknown(() => h.recordInboundReceipt(p.trfId, p.version, lines, `sim-dc-rcv:${p.trfId}`));
+        if (r.status === 'REJECTED') this.log(`DC 입고 ${p.trfId} 수령 거절 ${r.nextAction ?? ''}`);
+        else this.log(`DC 입고 ${p.trfId} 수령 ${lines.reduce((a, l) => a + l.normalQty, 0)}개 → 검사·적치`);
+      }
+      if (link) {
+        const { tripId } = link.trip;
+        const seq = link.stop.seq;
+        const cur = await h.getTrip(tripId);
+        if (cur.stops.find((s) => s.seq === seq)?.state === 'HANDED_OVER') {
+          await retryUnknown(() => h.departTripStop(tripId, seq, `sim-tms-dep:${tripId}:${seq}`));
+          this.log(`${tag} 떠남(TMS 정차 출발)`);
+        }
+      }
       this.inboundTracks.readAt = null;
-      return lines[0]?.toLocationCode ?? TEST_INBOUND.receivingLocation;
+      return TEST_INBOUND.receivingByTemp[temp];
     };
-    const truck: Truck = { trfId, lines: lines.map((l) => ({ sku: l.sku, qty: l.normalQty })), state: 'APPROACHING', x: this.truckSpawnX(), unloaded: withVirtual ? 0 : lines.length, scheduledAt: this.time, hold: withVirtual };
-    this.trucks.push(truck);
-    if (!withVirtual) {
-      await post();
-      this.log(`DC 입고 ${trfId} — ${lines.length}품목 ${units}개 수령 → 검사·적치는 PDA`);
-      return { units, queued: false };
+    const key = link ? `${link.trip.tripId}:${link.stop.seq}` : `trf:${trfId}`;
+    let truck = this.dcTrucks.get(key);
+    if (!truck || truck.state === 'LEAVING' || truck.state === 'GONE') {
+      truck = { trfId: link ? `${cdcName(link.trip.cdcId)} ${link.trip.tripId.slice(-3)}` : `DC ${trfId.slice(-4)}`, lines: [], state: 'APPROACHING', x: this.truckSpawnX(), unloaded: 0, scheduledAt: this.time, hold: true };
+      this.trucks.push(truck);
+      this.dcTrucks.set(key, truck);
     }
+    const tr = truck;
+    tr.lines = unloadLines.map((l) => ({ sku: l.sku, qty: l.qty }));
+    const release = () => {
+      tr.hold = false;
+      tr.scheduledAt = Math.min(tr.scheduledAt, this.time - REAL_TRUCK.dockSec + 5);
+    };
+    if (!withVirtual) {
+      tr.unloaded = tr.lines.length;
+      await finish();
+      release();
+      return { units, queued: false, receiptBlocked };
+    }
+    tr.unloaded = 0;
     this.unloading.add(trfId);
     this.unloadQueue.push({
       receiptId: trfId,
       temp,
       at: TEST_INBOUND.receivingByTemp[temp],
-      lines: left.map(({ l, q }) => ({ sku: l.sku, qty: q, name: l.productName })),
-      receive: post,
+      lines: unloadLines,
+      receive: finish,
       onRoll: (n) => {
-        truck.unloaded += n;
+        tr.unloaded += n;
       },
       done: (ok, why) => {
         this.unloading.delete(trfId);
-        truck.hold = false;
-        truck.scheduledAt = Math.min(truck.scheduledAt, this.time - REAL_TRUCK.dockSec + 5);
-        if (!ok) this.log(`DC 입고 ${trfId} 하차 뒤 수령 실패 — ${why}`);
+        release();
+        if (!ok) this.log(`${tag} 하차 뒤 인계·수령 실패 — ${why}`);
         this.inboundTracks.readAt = null;
       },
     });
-    this.log(`DC 입고 ${trfId} — ${lines.length}품목 ${units}개 하차 맡김(가상 작업자가 승강기 → 입고칸, 다 내리면 수령 → 검사 → 적치)`);
+    this.log(`${tag} — ${unloadLines.length}품목 ${units}개 하차 맡김(가상 작업자: 승강기 → 입고칸, 다 내리면 인계 → 수령 → 검사 → 적치)`);
     this.ensureInboundVirtual();
-    return { units, queued: true };
+    return { units, queued: true, receiptBlocked: [...promises.values()].some((p) => !canReceipt(p)) };
   }
 
   setVirtualWorkers(n: number) {

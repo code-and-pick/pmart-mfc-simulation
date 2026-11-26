@@ -4,7 +4,7 @@
 // MOCK 은 입고 차량·하차 칸·적치 기록에서 같은 모양을 만든다.
 //  - 수령(TIN) = 보유 H+q(검사 전), 검사 정상 → 적치(PUTAWAY)에서 판매 가능 E+q (mfc-inventory 0.33~ "E 는 검수·적치 뒤에만 는다")
 
-import type { CenterStock, InboundPromise, InboundTask } from '../domain/contract';
+import type { CenterStock, InboundPromise, InboundTask, TmsTrip } from '../domain/contract';
 
 export type TrackStage = 'EXPECTED' | 'ARRIVED' | 'RECEIVED' | 'STOWING' | 'DONE' | 'CANCELLED';
 
@@ -58,8 +58,42 @@ export interface InboundTrack {
   receiptIds: string[];
   /** 수령을 못 하는 까닭(예: 출발 정보 없음) */
   blockedWhy?: string | null;
+  /** 받기 버튼을 보일까(실서버 DC — 도착·인계 또는 수령할 수 있음) */
+  canReceive?: boolean;
+  /** DC 간선 운행(TMS) — 차량·기사·도착 예정·이 센터 정차 상태 */
+  trip?: TripInfo | null;
   /** 정렬·표시 시각(ms) */
   atMs?: number | null;
+}
+
+export interface TripInfo {
+  tripId: string;
+  /** 운행: 상차 전·운행 중·끝 */
+  trip: TmsTrip['state'];
+  /** 이 센터 정차: 오는 중(PLANNED)·도착·인계·떠남 */
+  stop: TmsTrip['stops'][number]['state'];
+  driver?: string | null;
+  plate?: string | null;
+  departedAtMs?: number | null;
+  etaMs?: number | null;
+  delayed?: boolean;
+  boxes: number;
+  handover?: 'MATCHED' | 'MISMATCHED' | null;
+}
+
+export function tripInfo(trip: TmsTrip, stop: TmsTrip['stops'][number]): TripInfo {
+  return {
+    tripId: trip.tripId,
+    trip: trip.state,
+    stop: stop.state,
+    driver: trip.driverName,
+    plate: trip.plateNo,
+    departedAtMs: Date.parse(trip.departedAt ?? '') || null,
+    etaMs: Date.parse(stop.arrivedAt ?? stop.estimatedArrivalAt ?? stop.plannedArrivalAt ?? '') || null,
+    delayed: stop.delayed ?? trip.delayed,
+    boxes: (trip.transfers ?? []).filter((x) => x.stopSeq === stop.seq).reduce((a, x) => a + x.lpns.length, 0),
+    handover: stop.handover?.result ?? null,
+  };
 }
 
 export function sumLines(lines: TrackLine[]) {
@@ -128,7 +162,7 @@ export function mockTrack(t: MockTruckTrack, nameOf: (sku: string) => string | u
     key: `mock:${t.trfId}`,
     kind: 'DC',
     id: t.trfId,
-    from: '가상 DC',
+    from: '칠곡 DC',
     stage: stageOf(server, lines, open),
     serverState: t.received ? 'TIN_POSTED' : t.truck === 'APPROACHING' ? 'EXPECTED' : 'RECEIVING',
     lines,

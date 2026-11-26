@@ -2,7 +2,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS } from '../src/config';
 import type { CenterStock, InboundPromise, InboundTask } from '../src/domain/contract';
-import { packageLines, realLine, stageOf, sumLines } from '../src/sim/inboundTrack';
+import { packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
+import type { TmsTrip } from '../src/domain/contract';
 import { Simulation } from '../src/sim/simulation';
 
 const task = (p: Partial<InboundTask>): InboundTask => ({ taskId: 'T', taskType: 'INSPECT', mfcId: 'M', receiptId: 'R1', sku: 'E-00000001', lotId: 'L1', locationCode: 'RCV-A-02', plannedQty: 6, doneQty: 0, state: 'READY', version: 1, ...p });
@@ -91,4 +92,31 @@ describe('MOCK 입고 차량 추적', () => {
     expect(sum.atDock).toBe(0);
     for (const l of t.lines) expect(l.placed.reduce((a, p) => a + p.qty, 0)).toBe(l.received);
   }, 180_000);
+});
+
+describe('DC 간선 운행(TMS) 한 줄', () => {
+  it('이 센터 정차의 상태·도착 예정·박스 수(그 정차 상차 LPN)', () => {
+    const trip: TmsTrip = {
+      tripId: 'TO-20261126-001',
+      cdcId: 'CDC01',
+      tempClass: 'AMBIENT',
+      state: 'DEPARTED',
+      driverName: '기사 04A',
+      departedAt: '2026-11-26T08:20:06Z',
+      stops: [
+        { seq: 1, mfcId: 'MFC-BJG-01', state: 'PLANNED', trfIds: ['TRF-1'], plannedArrivalAt: '2026-11-26T20:00:00Z', estimatedArrivalAt: '2026-11-26T10:20:06Z' },
+        { seq: 2, mfcId: 'MFC-BNG-01', state: 'PLANNED', trfIds: ['TRF-2'] },
+      ],
+      transfers: [
+        { trfId: 'TRF-1', stopSeq: 1, loaded: true, lpns: ['L1', 'L2'] },
+        { trfId: 'TRF-2', stopSeq: 2, loaded: true, lpns: ['L3'] },
+      ],
+      version: 3,
+    };
+    const t = tripInfo(trip, trip.stops[0]);
+    expect(t.stop).toBe('PLANNED');
+    expect(t.boxes).toBe(2);
+    expect(t.etaMs).toBe(Date.parse('2026-11-26T10:20:06Z'));
+    expect(t.driver).toBe('기사 04A');
+  });
 });

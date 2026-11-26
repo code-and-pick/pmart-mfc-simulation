@@ -727,6 +727,41 @@ export interface InboundPromise {
   receipts?: InboundReceipt[];
 }
 
+/**
+ * transport-execution 0.2.0~0.3.0 Trip — DC(CDC) → MFC 간선 운행(시뮬레이터가 읽는 칸만). 운행 SCHEDULED → CHECKED_IN → LOADED → DEPARTED → COMPLETED,
+ * 정차 PLANNED → ARRIVED(MFC 도착) → HANDED_OVER(하차 박스 스캔 인계, 그 MFC 운영자) → DEPARTED. 인계 증빙은 TIN 이 아니다(수령은 mfc-inbound).
+ */
+export interface TmsTrip {
+  tripId: string;
+  cdcId: string;
+  shipDate?: string;
+  routeId?: string;
+  tempClass: 'AMBIENT' | 'CHILLED' | 'FROZEN';
+  vehicleId?: string;
+  plateNo?: string | null;
+  driverName?: string | null;
+  state: 'SCHEDULED' | 'CHECKED_IN' | 'LOADED' | 'DEPARTED' | 'COMPLETED' | 'CANCELLED';
+  delayed?: boolean;
+  plannedDepartureAt?: string;
+  departedAt?: string | null;
+  departureId?: string | null;
+  stops: {
+    seq: number;
+    mfcId: string;
+    state: 'PLANNED' | 'ARRIVED' | 'HANDED_OVER' | 'DEPARTED';
+    trfIds: string[];
+    plannedArrivalAt?: string;
+    estimatedArrivalAt?: string | null;
+    arrivedAt?: string | null;
+    handedOverAt?: string | null;
+    departedAt?: string | null;
+    delayed?: boolean;
+    handover?: { handoverId: string; result: 'MATCHED' | 'MISMATCHED'; shippedBoxes?: number; receivedBoxes?: number; missingLpns?: string[]; extraLpns?: string[] } | null;
+  }[];
+  transfers?: { trfId: string; stopSeq: number; loaded: boolean; lpns: string[]; rtCount?: number | null }[];
+  version: number;
+}
+
 /** mfc-inbound RecordReceiptRequest 한 줄 — 인수 = 정상 + 격리 + 보류, toLocationCode(입고칸) 필수 */
 export interface PromiseReceiptLine {
   sku: string;

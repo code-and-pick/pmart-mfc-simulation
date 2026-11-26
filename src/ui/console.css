@@ -1270,6 +1270,8 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .itk-q .bad { color: var(--bad); }
 .itk-more { margin-left: auto; color: var(--accent); font-size: 13px; white-space: nowrap; }
 .itk-why { font-size: 13px; color: var(--warn); }
+.itk-trip { font-size: 13.5px; }
+.itk-trip.late { color: var(--warn); }
 .itk-err { font-size: 13px; color: var(--bad); }
 .itk-ok { font-size: 13px; color: var(--ok); }
 .itk-a { display: flex; gap: 6px; }

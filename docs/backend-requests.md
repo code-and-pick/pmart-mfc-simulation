@@ -57,11 +57,13 @@
   - `state` EXPECTED, `fromCdc` CDC01, `shipmentManifestId` MAN-TRF-SIM-MWXA84EQ, `tripId` TO-20261126-001, `packages` 3줄(LPN-SIM-MWXA84EQ-1, B-00000006·07·21 각 2개, 기한 2027-05-25).
   - **`departureId` null, `departedAt` null, `lines` 빈 배열**, `sources` 에 `cdc-outbound-service` 하나뿐.
   - CDC 쪽 기록(`pmart-backend docs/cdc/HANDOVER.md` 214줄, 11-26)은 이 TRF 가 출차·출발 검증 ACKNOWLEDGED·Transit q 2 — 출발했다.
+- **TMS 쪽은 정상(11-26 19시 반, 읽기만)**: `GET /mfcs/MFC-BJG-01/inbound-trips` → 운행 `TO-20261126-001` DEPARTED, `departureId` DEP-c5b97d11-…, `outboundLinkage` ACKNOWLEDGED, 부산진구 정차 1 PLANNED(TRF-SIM-MWXA84EQ, 상차 LPN 1개, 예상 도착 19:20 KST). 즉 출발 사실은 TMS·cdc-outbound 에 있는데 mfc-inbound 입고 예정에만 안 붙었다.
 - **문제**: 계약상 수령(`POST /inbound-promises/{trfId}/receipts`)은 출발(TOUT, `departureId`)을 받은 예정만 된다(아니면 409 INVALID_STATE). 매니페스트(`TransferShipmentManifestIssued`)만 반영되고 cdc-inventory `TransferDeparted`(cdc.inventory.v1)가 반영되지 않은 것으로 보인다 → DC 입고를 받을 수 없다.
 - **요청**:
   1. 이 TRF 에 `TransferDeparted` 가 왔는지·반영 안 된 까닭(구독 토픽·toMfc 매핑·순서 — 매니페스트가 먼저 온 경우) 확인, 반영되면 `departureId`·`departedAt`·출발 줄(`lines` expectedQty·lotId·expiryDate)이 채워지는지.
   2. 앞으로 CDC 시뮬레이터가 보내는 TRF 가 MFC 수령까지 이어지는지(출발 사건 → EXPECTED + lines) 한 번 끝까지 확인.
 - **참고(낮음)**: `GET /inbound-promises?state=CLOSED` → 400 "Failed to convert 'state'" — 0.22.0(MI-5 종결)이 LAN 에 아직 없는 것으로 보임. 시뮬레이터는 CLOSED 를 부르지 않는다(끝나지 않은 것 + TIN_POSTED 만 읽음).
+- **시뮬레이터가 한 것(11-26, 사용자 "가상 dc가 아니고 실제로 dc 만들었어. dc시뮬레이션 서버랑 연동되게 해")**: CDC 시뮬레이터(칠곡 DC, LAN)는 출차까지 하고 멈춘다 → MFC 정차부터 이 시뮬레이터가: TMS `GET /mfcs/{mfcId}/inbound-trips` 로 오는 운행을 보고(도착 예정 10분 전부터 그림 차량), "받기"를 누르면 ① TMS 정차 도착 `POST /trips/{id}/stops/{seq}/arrivals` ② 입고 예정 도착 등록 ③ 가상 작업자 하차 ④ TMS 인계 `…/handovers`(상차 LPN 그대로) ⑤ 수령(출발 정보가 있을 때만 — 지금은 이 요청 때문에 대기) ⑥ TMS 정차 출발 `…/departures`. 인계 증빙은 TIN 이 아니므로 수령은 R-49 해소 뒤에 같은 버튼으로.
 - **시뮬레이터가 한 것(11-26)**: 오른쪽 "입고 추적" 탭 — DC 이관(`/inbound-promises`)·센터 발주(`/initial-stock-loads`)를 한 건씩 오는 중 → 도착·하차 → 수령·검사 → 적치 → 끝, 품목마다 예정·받음·적치·입고칸·놓인 칸(그 입고 작업 `GET /inbound-tasks?receiptId=` 의 LOT 을 센터 재고 `GET /mfcs/{mfcId}/stock?sku=` 단위 행에서 찾음). DC 예정은 "가상 작업자로 받기"(도착 등록 → 승강기 하차 → 수령, 그다음 검사·적치는 입고 가상 작업자) / "바로 수령(PDA)". 출발 정보가 없으면 버튼 대신 이 요청 번호를 띄운다.
 
 ### R-48 MFC 입고 발주 — 발주 수량 추천 API·사용자 지정 발주 정식 경로 — **계약 나옴·시뮬레이터 맞춤**(추천 API LAN 200 확인 11-25, 지금은 전부 INSUFFICIENT_HISTORY) (2026-11-24, 사용자 → 백엔드)

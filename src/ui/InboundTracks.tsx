@@ -2,7 +2,23 @@
 // 품목마다 예정·받음·적치·입고칸 남은 양·놓인 칸, 위에는 오늘 입고로 늘어난 재고(사용자 2026-11-26 "DC에서 입고 받은 거 적치하고, 입고받아서 추가되는 재고 추적")
 import { useEffect, useState } from 'react';
 import { useApp } from '../app/context';
-import { STEP_KO, sumLines, type InboundTrack, type TrackStage } from '../sim/inboundTrack';
+import { STEP_KO, sumLines, type InboundTrack, type TrackStage, type TripInfo } from '../sim/inboundTrack';
+
+const hhmm = (ms: number) => new Date(ms).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false });
+
+/** 운행 한 줄 — 차량이 지금 어디쯤(TMS) */
+function tripLine(t: TripInfo): string {
+  const who = t.driver ? ` · ${t.driver.startsWith('기사') ? t.driver : `기사 ${t.driver}`}` : '';
+  const box = t.boxes ? ` · 박스 ${t.boxes}개` : '';
+  if (t.trip === 'SCHEDULED' || t.trip === 'CHECKED_IN' || t.trip === 'LOADED') return `DC 에서 상차 중${box}`;
+  if (t.stop === 'PLANNED') {
+    if (!t.etaMs) return `오는 중${who}${box}`;
+    return t.etaMs <= Date.now() ? `차량 와 있음${who}${box}` : `오는 중 · 도착 예정 ${hhmm(t.etaMs)}${t.delayed ? ' (늦음)' : ''}${who}${box}`;
+  }
+  if (t.stop === 'ARRIVED') return `차량 도착 · 하차 중${who}${box}`;
+  if (t.stop === 'HANDED_OVER') return `인계 끝(${t.handover === 'MISMATCHED' ? '박스 차이 있음' : '박스 맞음'}) · 차량 출발 전`;
+  return `인계 끝 · 차량 떠남${t.handover === 'MISMATCHED' ? ' (박스 차이 있음)' : ''}`;
+}
 
 const STEPS: TrackStage[] = ['EXPECTED', 'ARRIVED', 'RECEIVED', 'STOWING', 'DONE'];
 
@@ -31,7 +47,7 @@ export function InboundTracks() {
     setMsg(null);
     try {
       const res = await sim.receiveDc(t.id, withVirtual);
-      setMsg({ key: t.key, ok: true, text: res.queued ? `가상 작업자가 하차 중 — 다 내리면 수령 → 검사 → 적치` : `수령 ${res.units}개 — 검사·적치는 PDA` });
+      setMsg({ key: t.key, ok: true, text: `${res.queued ? '가상 작업자가 하차 중 — 다 내리면 인계 → 수령 → 검사 → 적치' : '도착·인계 기록함 — 검사·적치는 PDA'}${res.receiptBlocked ? ' (수령은 출발 기록 대기)' : ''}` });
       void sim.refreshInboundTracks(0);
     } catch (e) {
       setMsg({ key: t.key, ok: false, text: (e as Error).message });
@@ -60,7 +76,7 @@ export function InboundTracks() {
       {items.map((t) => {
         const s = sumLines(t.lines);
         const at = STEPS.indexOf(t.stage);
-        const canReceive = sim.mode !== 'mock' && t.kind === 'DC' && (t.serverState === 'EXPECTED' || t.serverState === 'RECEIVING') && !t.blockedWhy && t.stage !== 'ARRIVED';
+        const canReceive = sim.mode !== 'mock' && !!t.canReceive && !sim.isUnloading(t.id);
         return (
           <div key={t.key} className={`itk-c s-${t.stage}`}>
             <div className="itk-h" title={t.id} onClick={() => setOpen(open === t.key ? null : t.key)}>
@@ -69,6 +85,7 @@ export function InboundTracks() {
                 {t.lines.length}품목 {s.expected.toLocaleString()}개
               </span>
             </div>
+            {t.trip && <div className={`itk-trip ${t.trip.delayed ? 'late' : ''}`}>{tripLine(t.trip)}</div>}
             {t.stage === 'CANCELLED' ? (
               <div className="itk-why">취소·종결됨</div>
             ) : (
@@ -107,7 +124,7 @@ export function InboundTracks() {
                   가상 작업자로 받기
                 </button>
                 <button disabled={busy === t.key} onClick={() => void act(t, false)}>
-                  바로 수령(PDA)
+                  바로 받기(PDA)
                 </button>
               </div>
             )}

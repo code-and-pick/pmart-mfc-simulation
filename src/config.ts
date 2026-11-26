@@ -516,6 +516,15 @@ export const INBOUND_ORDER = {
   readyAfterHours: 24,
 };
 
+/** DC(CDC) 센터 이름 [확정 — CDC 시뮬레이터 CLAUDE.md "칠곡 중앙물류센터(칠곡 DC)", 백엔드 센터 ID CDC01] */
+export const CDC_NAMES: Record<string, string> = { CDC01: '칠곡 DC' };
+export const cdcName = (id?: string | null): string => (id ? (CDC_NAMES[id] ?? id) : 'DC');
+
+/** 실서버 DC 차량 그림 [시뮬] — 이 센터 정차 도착 예정 몇 분 전부터 차량이 들어와 서 있나(서버 기록과 무관한 그림) */
+export const REAL_DC = {
+  showBeforeMin: 10,
+} as const;
+
 /** 입고 추적 탭(사용자 2026-11-26 "DC에서 입고 받은 거 … 추적") [시뮬] — 화면이 열려 있을 때 다시 읽는 간격·센터 재고를 읽는 SKU 수 상한·MOCK 에 남기는 건수 */
 export const INBOUND_TRACK = {
   refreshMs: 8000,

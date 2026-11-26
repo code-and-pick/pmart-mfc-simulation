@@ -13,6 +13,7 @@ import {
   type InboundPromise,
   type InboundPromiseState,
   type PromiseReceiptLine,
+  type TmsTrip,
   type StockUnitRow,
   type CenterShipment,
   type DeliveryOrderSummary,
@@ -496,6 +497,37 @@ export class HttpBackend implements FulfillmentPort {
       if (!cursor) break;
     }
     return out;
+  }
+
+  // ── TMS transport-execution 0.2.0~ — DC(CDC) 간선 운행의 MFC 정차(도착·인계·출발). 직원(OPERATOR)이 기사 대신 입력(기사 앱 없음) ──
+  /** MFC 도착 예정 운행(그 MFC 정차가 있는 운행) — 쪽(page·hasNext) 끝까지 */
+  async listMfcInboundTrips(mfcId: string): Promise<TmsTrip[]> {
+    const out: TmsTrip[] = [];
+    for (let page = 0; page < 20; page++) {
+      const r: { items?: TmsTrip[]; hasNext?: boolean } = await this.request('GET', `/mfcs/${enc(mfcId)}/inbound-trips?${new URLSearchParams({ page: String(page), size: '50' })}`);
+      out.push(...(r.items ?? []));
+      if (!r.hasNext) break;
+    }
+    return out;
+  }
+
+  getTrip(tripId: string): Promise<TmsTrip> {
+    return this.request('GET', `/trips/${enc(tripId)}`);
+  }
+
+  /** MFC 도착(정차 PLANNED → ARRIVED) */
+  arriveTripStop(tripId: string, stopSeq: number, idempotencyKey: string): Promise<TmsTrip> {
+    return this.request('POST', `/trips/${enc(tripId)}/stops/${stopSeq}/arrivals`, { body: { at: new Date().toISOString() }, idempotencyKey });
+  }
+
+  /** 인계 — 하차 박스 바코드 스캔(ARRIVED → HANDED_OVER). 출고 상차 스캔과 대조해 MATCHED/MISMATCHED */
+  handoverTripStop(tripId: string, stopSeq: number, transfers: { trfId: string; receivedLpns: string[] }[], idempotencyKey: string): Promise<TmsTrip> {
+    return this.request('POST', `/trips/${enc(tripId)}/stops/${stopSeq}/handovers`, { body: { at: new Date().toISOString(), receiverName: '시뮬 입고', transfers }, idempotencyKey });
+  }
+
+  /** 정차 출발(HANDED_OVER → DEPARTED) — 차량이 MFC 를 떠남 */
+  departTripStop(tripId: string, stopSeq: number, idempotencyKey: string): Promise<TmsTrip> {
+    return this.request('POST', `/trips/${enc(tripId)}/stops/${stopSeq}/departures`, { body: { at: new Date().toISOString() }, idempotencyKey });
   }
 
   /** mfc-inbound getInboundPromise — 입고 예정 한 건(지금 version·수령) */
