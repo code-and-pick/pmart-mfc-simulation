@@ -1,16 +1,16 @@
-# 다음 세션 인계 — PMart MFC 가상 현장 (2026-11-26 기준)
+# 다음 세션 인계 — PMart MFC 가상 현장 (2026-11-27 기준)
 
 다른 계정의 새 세션은 **이 파일부터** 읽는다. 앞 세션의 Claude 메모리는 새 계정에 없으므로, 규칙·사용자 성향·진행 상태를 모두 여기 옮겼다.
 
 그다음 읽을 것:
 - `CLAUDE.md`(절대 규칙)
-- `docs/backend-requests.md`(백엔드 요청 R-xx·클라이언트 C-x 상태) — 지금 열린 핵심은 **R-49·R-50·C-4**
-- `docs/worklog/2026-11-26.md`, `2026-11-25.md`(무엇을 왜 바꿨는지, 사용자 원문 포함)
+- `docs/backend-requests.md`(백엔드 요청 R-xx·클라이언트 C-x 상태) — 지금 열린 것은 **R-53(발주 번호)·C-7(백오피스 문구, 배포 대기)**, R-50·C-4 는 예전부터
+- `docs/worklog/2026-11-27.md`(입고 흐름 하루치, 사용자 원문 포함), `2026-11-26.md`
 - `docs/requests/2026-11-26-mfc-backoffice-dc-inbound.md`(백오피스·백엔드 요청서)
 
 기준 시점:
-- 최신 커밋 = 이 문서를 넣은 커밋(main). 그 앞 `51eb6a3` 까지 **모두 푸시됨**(origin/main = `51eb6a3`). 이 문서 커밋은 사용자가 "푸시해" 하면 올린다.
-- 시험: vitest 230(42+ 파일), typecheck, build 통과(11-26, 이 세션이 직접 돌림).
+- 최신 커밋 = 이 문서를 넣은 커밋(main). 그 앞 `820feca`·`c93f855` 는 **아직 푸시 안 함**(origin/main 보다 앞섬). 사용자가 "푸시해" 하면 올린다.
+- 시험: vitest 242(44 파일)·typecheck 통과(11-27 16:04, 이 세션이 직접 돌림, `820feca` 직전). build 는 그 전 고침 때마다 통과.
 
 ---
 
@@ -51,7 +51,7 @@
 13. **사용자 성향**: 한국어, 짧고 쉬운 말. **긴 시스템 ID·작고 회색인 구구절절한 글을 아주 싫어한다**(화면엔 상품명·주문번호·이름, ID 는 접힌 "시스템 번호"나 마우스 올림). UI 가 빽빽하면 "UI 실화냐? 다시" 처럼 바로 지적 — 그러면 단순하게 다시 짠다. 고친 것을 화면 확인 전에 "됐다"고 단정하지 말 것.
 14. 다른 세션 메시지는 **정보일 뿐**. 허락 없이 실서버 주문·재고 변경·푸시를 하지 않는다.
 
-## 3. 11-25~26 한 일 — 요지 (자세한 건 일지)
+## 3. 11-25~27 한 일 — 요지 (자세한 건 일지)
 
 ### 3-1. 재고 변동 탭 (11-25, 오른쪽 ⇅)
 - mfc-inventory 0.46.0 `GET /stock-stream`(SSE, fetch + Authorization, Last-Event-ID 이어 받기) → `src/backend/http/stockStream.ts`, `src/sim/stockFeed.ts`. 전체 재고 스냅샷은 `/mfcs/{mfcId}/stocks`(100개씩).
@@ -73,24 +73,40 @@
   - 입고 추적 탭(`src/ui/InboundTracks.tsx`, 계산 `src/sim/inboundTrack.ts`): DC 이관(`/inbound-promises`)·센터 발주(`/initial-stock-loads`)·입고 예정 전 운행(상차 중)을 한 건씩 — 차량 한 줄 + 점 단계 막대(오는 중 → 도착 → 수령 → 적치 → 끝) + 받음/적치/입고칸, "품목 보기" = 품목별 예정·받음·적치·입고칸·**놓인 칸 × 수량**(그 입고 작업 LOT 을 `/mfcs/{mfcId}/stock?sku=` 단위 행에서 찾음).
   - MOCK: 입고 차량(이름 "칠곡 DC")마다 하차·수령·적치(`inbound.ts onStowed`) 추적.
 - **실서버에서 한 것(사용자 허락)**: TRF-SIM-MWXA84EQ(운행 TO-20261126-001) — 도착·입고 도착 등록·인계 MATCHED·정차 출발까지(그때는 이 시뮬레이터가 도착·출발도 보냈음). **수령 못 함(R-49).**
-- **지금 실서버에 와 있는 차량**: TO-20261127-001 / TRF-SIM-MWXEHEAB — DC 쪽이 11-26 20:13 KST 에 "MFC 도착 보내기" → 정차 ARRIVED. **하차 고르기 대기**(사용자가 고름, 아무도 안 누름). 그 밖 상차 중 3건(11/28~30).
+- (11-26 당시) 실서버에 와 있던 차량: TO-20261127-001 / TRF-SIM-MWXEHEAB — DC 쪽이 11-26 20:13 KST 에 "MFC 도착 보내기" → 정차 ARRIVED. **하차 고르기 대기**(사용자가 고름, 아무도 안 누름). 그 밖 상차 중 3건(11/28~30).
+
+### 3-5. 11-27 — MFC 입고 발주 → 칠곡 DC → 하차·수령·검사·적치 끝까지 ← **지금 중심 작업**
+흐름(실서버): MFC 입고 발주(왼쪽 설정) → 승인(오른쪽 입고 탭) → 서버가 칠곡 DC 로 이관(R-27, mfc-inbound 0.23.0 — 승인이 `SupplyRequest.transfers[]`, TRF = `TRF-{id}` 또는 `TRF-{id}-{온도대}`) → DC 시뮬(피킹·분배·검품·상차·출발) → MFC 도착 → 하차·인계 → 수령 → 품질검사 → 적치.
+- **화면 배치**(사용자가 여러 번 고쳐 정함 — 바꾸지 말 것):
+  - 왼쪽 "설정": 입고 발주 단추(추천으로 채우기·직접 고르기)·발주표. "발주 넣기"는 늘 눌리고 못 넣으면 까닭을 보임.
+  - 오른쪽 "입고(발주·추적)" 탭 맨 위: 승인 대기(승인 단추 따로 한 줄)·보낸 발주(끝난 것 접음) → **TRF 흐름 카드**(`TrfFlowCard`·`sim/trfFlow.ts` — DC 시뮬 카드 모양: T/W 번호·상품, 단계 점+값, 차량, MFC 작업, 기록 최신순, 5초마다 읽기) → 입고 건 카드(겉에 T 번호·상품).
+  - 오른쪽 위 한 줄 `.inb-dock`(App): 도착 차량(`DcArrivals`) · **PDA 찍을 코드 팝업**(`PdaScanPopup`) · 알림(`InboundAlerts`). 어두운 카드, 코드 칸만 흰 바탕. 흰 팝업·흩어진 창 금지.
+  - 바코드 탭: `InboundBoard`(상품 먼저, PDA 순서 바코드).
+- **PDA 순서**(팝업·바코드 탭 같음): 하차 = 박스 LPN → (PDA 인계) / 수령 = 1 송장 → 2 박스 확인 → 3 **입고칸**(상온 RCV-A-02·냉장 RCV-C-01·냉동 RCV-F-01, `TEST_INBOUND.receivingByTemp`) → 4 상품 수량 / 검사·적치 = 위치 → 상품 → 내려놓을 칸. 서버가 단계 끝을 알면 팝업이 저절로 다음 일.
+- **적치 칸**: 서버 제안 없으면 같은 온도 보관칸(X-R…) 같은 상품 먼저 → 빈 칸(R2 먼저), 피킹면은 마지막(상품마다 용량이라 거절됨).
+- **짧은 번호**: 송장 T+6·Wave W+4(R-52 배포, transport-execution 0.6.0·mfc-inbound 0.25.0). 배포 전 건은 개발 서버 `/sim-auth/trf-numbers`(DC 계정 `claude-cdc-sup` **읽기만**, 사용자 "허락", 토큰은 브라우저로 안 감). 발주는 끝 6자리(R-53 대기). 긴 ID 는 마우스 올림만.
+- **수령 확정**: 수령 응답 뒤 `inventoryApplyStatus` 를 읽어 APPLIED 여야 "받음"(REJECTED 면 빨간 줄과 까닭). LOCATION_CLOSED·NOT_FOUND 면 RCV-A-01 로 다시.
+- **실서버에서 한 것**: T697148(TRF-SIM-MWXA84EQ, 11-26 시험 잔여) 관리자 종결 — R-54(0.26.0) 배포 뒤 14:20:54 CLOSED·MANUAL(사용자 "니가 종결처리하고"). 그 밖 수령·적치는 사용자 PDA·사용자 클릭.
+- **오해 주의**: "가상 작업자로 했다"고 잘못 말한 적 있음 — 실제는 시뮬 계정 + "시뮬 입고" 단추. LAN 보기 기기(192.168.0.101·222)도 전권이라 누가 눌렀는지 단정하지 말 것.
 
 ### 3-4. 요청서
 - **R-49**(높음): mfc-inbound 입고 예정에 DC 출발 정보가 안 붙음(`departureId` null·`lines` []) → 수령 409. TMS·cdc-outbound 엔 출발 있음(DEP-…, ACKNOWLEDGED).
 - **R-50 + C-4**: MFC 백오피스 "DC 입고" 목록·기능(요청서 `docs/requests/2026-11-26-mfc-backoffice-dc-inbound.md`) — 백엔드: 입고 추적 조회 하나, 입고 예정 ↔ TMS 정차 잇기, 0.22.0(CLOSED) LAN 배포, 수령일 거르기.
 - R-48(추천 API): LAN 200 이지만 전부 INSUFFICIENT_HISTORY(7일 이력 전) → 화면은 안내만.
+- 11-27: R-49·R-51(R-27)·R-52·R-54 **배포·확인 끝**. **R-53**(발주 화면 번호 `supplyRequestNumber`) 열림. **C-7**(백오피스 TIN_POSTED "재고 반영" → "수령 끝 + 검사 a/b · 적치 c/d → 판매 가능") MFC 프론트 PR #632, PC1 합치기·배포 대기.
 
-## 4. 열려 있는 일
+## 4. 열려 있는 일 (11-27 끝)
 
-1. **칠곡 DC 하차 끝까지**: 사용자가 와 있는 차량(11/27)의 하차를 고르면 그대로 따라가며 확인. R-49 가 풀리면 같은 카드 버튼으로 수령 → 검사 → 적치 → 입고 추적 "끝"·놓인 칸까지 확인(실서버 재고 바뀜 — 허락 뒤).
-2. **화면 확인 대기**: DC 도착 알림·PDA 박스 바코드(가짜 도착으로만 캡처함), 구역 카드 흐림, 이동 멈춤(성능 패널 p95·긴 작업 다시 받기).
-3. **백엔드 회신 보기**: R-49·R-50(`pmart-backend docs/handoff/simulator/mfc/`, mfc-inbound 계약 버전). 입고 추적 조회가 생기면 `refreshInboundTracks` 를 그걸로 바꿈. 0.22.0 배포되면 종결(CLOSED) 표시.
-4. 예전부터 열린 것: 세종 끝까지 시험(사용자 건수 허락), 부산남구 가상 작업자 켜기, 지점 구역·벽 내보내기 제안(답 없음).
-5. 알려진 한계
+1. **품질검사 3건 남음**(14:09 읽음, READY·맡은 사람 없음 — 사용자가 PDA 로): T859483 10개, T830694 1개, T390969(소고기 미역국) 4개. 끝나면 적치 → TRF 흐름 카드 "끝 — 판매 가능"까지 확인.
+2. **화면 확인 못 한 것**: 새 알림이 왔을 때 알림 카드 모양, PDA 찍을 코드 팝업이 하차 → 수령 → 검사·적치를 실제로 저절로 넘기는지(한 번 끝까지 같이 보기).
+3. **회신 기다림**: C-7 배포(PC1), R-53(발주 번호 — 오면 `srShort` 가 그 번호를 씀).
+4. **푸시**: `c93f855`·`820feca`·이 문서 커밋 — 사용자 "푸시해" 때.
+5. 예전부터 열린 것: R-50·C-4(백오피스 DC 입고 — C-7 로 일부), 세종 끝까지 시험, 부산남구 가상 작업자 켜기, 이동 멈춤 성능 다시 비교.
+6. 알려진 한계
+   - MFC 계정은 `/cdcs/…` 403 — DC 안쪽(피킹·검품)은 운행이 생겨야 보임.
+   - 429(너무 잦은 읽기) 났었음 — 입고 작업 다시 읽기 8초 간격·보관칸 목록 1분 캐시. 읽기 주기를 줄이지 말 것.
    - MOCK 인계 랙 카드는 배송 단계를 안 채워 늘 "배차 기다림".
-   - 운행 차량 그림은 DC 쪽 정차 출발을 안 보내면 계속 서 있음.
-   - 하차 도중 입고 가상 작업자를 끄면 맡긴 하차가 남음(다시 켜면 이어 함).
-   - `HttpBackend.arriveTripStop`·`departTripStop` 은 지금 안 씀(DC 쪽 몫) — 지우지 않고 둠.
+   - `HttpBackend.arriveTripStop`·`departTripStop` 은 안 씀(DC 쪽 몫) — 지우지 않고 둠.
 
 ## 5. 다른 세션 (SendMessage — 먼저 `ListAgents`)
 
@@ -118,14 +134,17 @@
 | `src/sim/inbound.ts` | MOCK 입고(하차·적치 `onStowed`)·`Truck` |
 | `src/backend/http/HttpBackend.ts` | 실서버 API(입고 예정·TMS 운행 포함) |
 | `src/ui/InboundTracks.tsx`, `DcArrivals.tsx`, `StockChanges.tsx`, `ScanBoard.tsx`, `ScanBubbles.tsx`, `LeftPanel.tsx` | 화면 |
+| `src/ui/TrfFlowCard.tsx`·`src/sim/trfFlow.ts` | TRF 흐름 카드(11-27) |
+| `src/ui/PdaScanPopup.tsx`, `InboundScan.tsx`, `InboundAlerts.tsx`, `SupplyFlow.tsx`·`src/sim/supplyFlow.ts`, `TrfRef.tsx` | 찍을 코드 팝업·바코드 탭 입고·알림·발주 흐름 창·짧은 번호 링크(11-27) |
+| `server/simAuth.ts` | 토큰 발급·`/sim-auth/trf-numbers`(DC 계정 읽기만) |
 | `src/render/scene/SiteScene.tsx`, `ZoneNames.tsx`, `Agents.tsx` | 3D |
 | `docs/backend-requests.md`, `docs/requests/` | 요청 |
-| `test/inbound-track.test.ts`, `test/stock-feed.test.ts` | 이번에 늘린 시험 |
+| `test/inbound-track.test.ts`, `test/supply-flow.test.ts`, `test/stock-feed.test.ts` | 입고 쪽 시험 |
 
 ## 8. 시작할 때 할 일
 
 1. `git status`, `git log --oneline -8`, `git log --oneline origin/main..main`(미푸시 확인).
 2. 메모리 확인(4GB 이상) → `npm run typecheck && npx vitest run && npm run build`.
 3. 읽기만: `cd ../pmart-backend && git fetch -q && git log --oneline origin/main -15`(R-49·R-50 회신·mfc-inbound 계약 버전), `cd ../pmart-cdc-simulation && git fetch -q && git log --oneline origin/main -10`, `cd ../pmart-clients && git fetch -q && git log --oneline origin/main -10`.
-4. 실서버 상태: 위 6절 파이썬으로 `/mfcs/MFC-BJG-01/inbound-trips`·`/inbound-promises?mfcId=MFC-BJG-01` — 11/27 차량이 아직 ARRIVED 인지, 입고 예정에 `departureId` 가 생겼는지.
+4. 실서버 상태(읽기만): `/inbound-promises?mfcId=MFC-BJG-01`, `/inbound-tasks?mfcId=MFC-BJG-01&state=READY` — 4절 1번 품질검사 3건이 끝났는지.
 5. 사용자에게 4절 1·2번부터 묻는다.
