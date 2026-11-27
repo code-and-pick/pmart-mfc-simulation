@@ -3,6 +3,7 @@
 // DC 안쪽(할당·Wave·피킹·검품)은 MFC 계정이 못 읽는다(cdc-outbound /cdcs/CDC01/transfers 403) — 운행이 생기면(배차) 그 뒤부터 보인다.
 // React 없음(시험이 화면 없이 돈다).
 import type { InboundPromise, InboundTask, SupplyRequest, SupplyTransfer, TmsTrip } from '../domain/contract';
+import { srShort } from './inboundTrack';
 
 export type FlowState = 'done' | 'now' | 'wait' | 'warn';
 export interface FlowStep {
@@ -29,7 +30,7 @@ export function supplyFlowSteps(
 ): FlowStep[] {
   const steps: FlowStep[] = [];
   const reqQty = sum(t.lines.map((l) => l.qty));
-  steps.push({ key: 'order', title: '발주', state: 'done', at: req.submittedAt, lines: [`발주 ${req.supplyRequestId}`, ...t.lines.map((l) => `${name(l.sku)} × ${l.qty}`)] });
+  steps.push({ key: 'order', title: '발주', state: 'done', at: req.submittedAt, lines: [srShort(req.supplyRequestId), ...t.lines.map((l) => `${name(l.sku)} × ${l.qty}`)] });
   const cut = (req.approvedLines ?? []).filter((l) => l.approvedQty !== l.requestedQty);
   steps.push({
     key: 'approve',

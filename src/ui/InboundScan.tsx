@@ -4,7 +4,7 @@
 //  → "여기 UI좀 제대로 해라. 번호도 섞여있고 순서도 섞여있고 뭐가 뭔지도 모르겠잖아")
 import { useEffect, useState } from 'react';
 import { useApp } from '../app/context';
-import { cdcName } from '../config';
+import { cdcName, TEST_INBOUND } from '../config';
 import { inboundJobs, type InboundJob, type InboundJobStage, type InboundScanItem } from '../sim/inboundTrack';
 import { Barcode } from './Barcode';
 import { TrfRef } from './TrfRef';
@@ -74,7 +74,7 @@ function JobCard({ j }: { j: InboundJob }) {
         ? '가상 작업자가 하차 중 — 찍을 것 없음'
         : `PDA 입고 → 하차: 박스 ${a?.boxes.length ?? 0}개를 찍고 인계`
       : j.stage === 'RECEIVE'
-        ? 'PDA 입고 → 수령: 송장 → 박스 확인 → 상품 수량'
+        ? 'PDA 입고 → 수령: 송장 → 박스 확인 → 입고칸 → 상품 수량'
         : j.stage === 'TASKS'
           ? pdaTasks.length
             ? `PDA ${TASK_KO[pdaTasks[0].task.taskType]} 중 — ${pdaTasks[0].task.productName ?? pdaTasks[0].task.sku}`
@@ -161,7 +161,10 @@ function JobCard({ j }: { j: InboundJob }) {
                 <Barcode key={b.lpn} value={b.lpn} caption={b.lpn} height={44} />
               ))}
           </Step>
-          <Step n={3} title="상품 수량" hint="상품 바코드">
+          <Step n={3} title="입고칸" hint={`${{ AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' }[a.tempClass]} 입고칸 스캔 — 다른 코드를 찍으면 서버가 거절`}>
+            <Barcode value={TEST_INBOUND.receivingByTemp[a.tempClass]} caption={TEST_INBOUND.receivingByTemp[a.tempClass]} height={44} />
+          </Step>
+          <Step n={4} title="상품 수량" hint="상품 바코드">
             {(j.trf?.products ?? []).flatMap((p) => (p.barcodes.length ? p.barcodes.map((v) => <Barcode key={`${p.sku}:${v}`} value={v} kind={kindOf(v)} caption={`${p.name} × ${p.expected}`} height={44} />) : [<div key={p.sku} className="note">{p.name} 바코드 없음</div>]))}
           </Step>
           {j.trf && !j.trf.canReceipt && <div className="note warn">DC 출발 기록이 아직 없어 수령 확정은 서버가 막습니다.</div>}

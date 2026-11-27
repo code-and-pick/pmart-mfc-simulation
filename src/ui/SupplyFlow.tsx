@@ -6,6 +6,7 @@ import { useApp } from '../app/context';
 import type { SupplyRequest, SupplyTransfer } from '../domain/contract';
 import type { FlowStep } from '../sim/supplyFlow';
 import { TrfRef } from './TrfRef';
+import { srShort } from '../sim/inboundTrack';
 
 const kst = (iso?: string | null) => {
   if (!iso) return '';
@@ -44,7 +45,7 @@ export function SupplyFlowView({ req, t }: { req: SupplyRequest; t: SupplyTransf
       <div className="sf-sum">
         <div>
           <span>발주</span>
-          <b className="mono">{req.supplyRequestId}</b>
+          <b title={req.supplyRequestId}>{srShort(req.supplyRequestId).replace('발주 ', '')}</b>
         </div>
         <div>
           <span>송장</span>

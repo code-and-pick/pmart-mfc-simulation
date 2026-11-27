@@ -123,6 +123,8 @@ export interface DcArrivalTrf {
   /** 송장 라벨 값 `TRF:{trfId}:{version}`(mfc-inbound 0.8.0 BR-53 R10 — PDA 는 trfId 만 비교) */
   label: string;
   state: string;
+  /** 수령이 서버에서 거절됐으면 까닭(예 INVENTORY_REJECTED:LOCATION_NOT_REGISTERED) */
+  rejected?: string | null;
   /** 수령 가능(출발 기록·품목 있음) — 아니면 R-49 */
   canReceipt: boolean;
   products: { sku: string; name: string; expected: number; barcodes: string[] }[];
@@ -287,7 +289,8 @@ export function inboundSourceOf(receiptId: string, trfOf: (rid: string) => strin
   if (receiptId.startsWith('RCV-TRF-')) return { key: receiptId, label: `DC 입고(TRF 확인 중) ${receiptId.slice(-6)}` };
   if (receiptId.startsWith('RCV-SR-')) return { key: receiptId, label: `센터 발주 ${receiptId.slice(-6)}` };
   if (receiptId.startsWith('RCV-INIT-')) return { key: receiptId, label: `초기 입고 ${receiptId.slice(-6)}` };
-  if (/^(RET|RTN|RR)-/.test(receiptId)) return { key: receiptId, label: `회수품 ${receiptId.slice(-6)}` };
+  // 회수품 반입(RRC-…, mfc-inbound return-receipts) — 반품·오배송·배송 실패로 돌아온 상품(사용자 2026-11-27 "쉐림프? 이거 무슨 작업인데")
+  if (/^(RET|RTN|RR|RRC)-/.test(receiptId)) return { key: receiptId, label: `회수품 반입 ${receiptId.slice(-6)}` };
   return { key: receiptId, label: `입고 ${receiptId.slice(-6)}` };
 }
 
@@ -384,4 +387,9 @@ export function inboundJobs(arrivals: DcArrival[], items: InboundScanItem[], don
 /** 송장 짧은 이름 — 화면 번호(T+6)가 있으면 그것, 없으면 "TRF …끝6자리"(요청 R-52 전) */
 export function trfShort(trfId: string, trfNumber?: string | null): string {
   return trfNumber || `TRF …${trfId.slice(-6)}`;
+}
+
+/** 발주(공급 요청) 짧은 이름 — 서버에 화면 번호가 없어(요청 R-53) 끝 6자리 "발주 017efb". 화면 번호가 생기면 그것 */
+export function srShort(supplyRequestId: string, number?: string | null): string {
+  return number || `발주 ${supplyRequestId.slice(-6)}`;
 }

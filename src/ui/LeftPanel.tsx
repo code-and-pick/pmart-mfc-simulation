@@ -4,6 +4,7 @@ import { isInboundAccount, workerShortName, workerRoleName } from '../domain/wor
 import { InboundFlowMini } from './InboundTracks';
 import { SupplyFlowView } from './SupplyFlow';
 import { MINI_STEPS } from '../sim/supplyFlow';
+import { srShort } from '../sim/inboundTrack';
 import { Fragment as Frag, lazy, Suspense, useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useApp, useTick, useView } from '../app/context';
@@ -276,7 +277,11 @@ function ResultLog({ rows, children }: { rows: OrderLog[]; children?: (l: OrderL
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
 /** 입고·검수 구역 카드(Cards)에서도 쓴다 — 사용자 2026-11-20 "왼쪽에 있다는 문구 없애고 버튼 만들어" */
-export function TestInboundControls() {
+/**
+ * part: 'buttons' = 왼쪽 설정의 발주 단추(추천으로 채우기·직접 고르기)와 발주표, 'lists' = 오른쪽 입고 탭의 승인 대기·보낸 발주·입고 예정.
+ * (사용자 2026-11-27 "얘네는 설정 왼쪽 탭으로 다시 옮겨줘" — 단추만 왼쪽, 목록은 오른쪽). 발주를 넣으면 sim.supplyVersion 이 올라 목록이 다시 읽는다
+ */
+export function TestInboundControls({ part }: { part?: 'buttons' | 'lists' } = {}) {
   const { sim, controller } = useApp();
   useTick();
   const [draft, setDraft] = useState<OrderDraftLine[] | null>(null);
@@ -309,12 +314,13 @@ export function TestInboundControls() {
     }
   };
   useEffect(() => {
+    if (part === 'buttons') return;
     void refresh();
     // 하차 끝나 수령되면 목록에서 빠진다 — 가끔 다시 읽는다
     const t = setInterval(() => void refresh(), 20_000);
     return () => clearInterval(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sim.params.mfcId]);
+  }, [sim.params.mfcId, part, sim.supplyVersion]);
 
   const recommend = async (base: OrderDraftLine[]) => {
     setBusy('서버 발주 추천 읽는 중…');
@@ -387,12 +393,30 @@ export function TestInboundControls() {
   const waiting = exp.filter((l) => !sim.isUnloading(l.receiptId) && !viaDc(l));
   const recvUnits = (recv ?? []).reduce((a, l) => a + sumQty(l), 0);
   const recvItems = (recv ?? []).reduce((a, l) => a + l.lines.length, 0);
+  // 진행 중 / 끝(수령 뒤 검사·적치까지 끝) — 끝난 것은 접음
+  if (part === 'buttons')
+    return (
+      <Sec title="입고 발주" aside="센터 발주">
+        <div className="act-split">
+          <Act icon="🧮" title="추천으로 채우기" sub="서버 발주 추천" disabled={!!busy} onClick={() => recommend([])} />
+          <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
+        </div>
+        {busy && <div className="busy">{busy}</div>}
+        <div className="note">승인·진행은 오른쪽 <b>입고</b> 탭</div>
+        {draft && <OrderDraft initial={draft} busy={!!busy} onRecommend={recommend} onOrder={order} onClose={() => setDraft(null)} />}
+        <ResultLog rows={log} />
+      </Sec>
+    );
+  const sentDone = (sent ?? []).filter(({ t, promise }) => sim.dcSupplyMini(t, promise).done);
+  const sentLive = (sent ?? []).filter((x) => !sentDone.includes(x));
   return (
-    <Sec title="입고 발주" aside="센터 발주">
-      <div className="act-split">
-        <Act icon="🧮" title="추천으로 채우기" sub="서버 발주 추천" disabled={!!busy} onClick={() => recommend([])} />
-        <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
-      </div>
+    <Sec title="입고 발주" aside={part === 'lists' ? '발주 넣기는 왼쪽 설정' : '센터 발주'}>
+      {part !== 'lists' && (
+        <div className="act-split">
+          <Act icon="🧮" title="추천으로 채우기" sub="서버 발주 추천" disabled={!!busy} onClick={() => recommend([])} />
+          <Act icon="✍" title="직접 고르기" sub="상품·수량 지정" disabled={!!busy} onClick={() => setDraft([])} />
+        </div>
+      )}
       {busy && <div className="busy">{busy}</div>}
       <div className="inb-exp">
         <div className="inb-exp-h">
@@ -437,16 +461,16 @@ export function TestInboundControls() {
         <div className="inb-exp">
           <div className="inb-exp-h">
             <b>칠곡 DC 로 보낸 발주</b>
-            <span>{sent!.length}건 · 최근 {REAL_DC.supplyShowDays}일</span>
+            <span>진행 {sentLive.length}건{sentDone.length ? ` · 끝 ${sentDone.length}` : ''}</span>
           </div>
           {/* 한 건 = 세 줄: 발주 번호·온도대·수량 / 상품 / 진행(색) — 한 줄에 몰아 글자가 세로로 깨지던 것(사용자 2026-11-27 "UI 좀 다듬어라") */}
           {/* 한 건 = 두 줄: 상품 × 수량 · 단계 칩 / 발주·송장·온도대(작게) — 누르면 흐름 자세히(사용자 2026-11-27 "여기 UI좀 어떻게 해봐 복잡하잖아") */}
-          {sent!.map(({ req, t, promise }) => {
+          {sentLive.map(({ req, t, promise }) => {
             const st = sim.dcSupplyMini(t, promise);
             const first = t.lines[0];
             return (
               <button key={t.trfId} className="inb-sent2" onClick={() => setFlow({ req, t })} title={`${st.text}
-발주 ${req.supplyRequestId}
+${srShort(req.supplyRequestId)} (${req.supplyRequestId})
 송장 ${t.trfId} — 누르면 흐름 자세히`}>
                 <span className="inb-sent2-what">
                   {first ? `${sim.productName(first.sku)} × ${first.qty}` : '상품 없음'}
@@ -460,6 +484,31 @@ export function TestInboundControls() {
               </button>
             );
           })}
+          {/* 끝난 발주는 접어 둔다(사용자 2026-11-27 "끝난 게 왜 …") */}
+          {sentDone.length > 0 && (
+            <details className="inb-done-fold">
+              <summary>끝난 발주 {sentDone.length}</summary>
+            {sentDone.map(({ req, t, promise }) => {
+            const st = sim.dcSupplyMini(t, promise);
+            const first = t.lines[0];
+            return (
+              <button key={t.trfId} className="inb-sent2" onClick={() => setFlow({ req, t })} title={`${st.text}
+${srShort(req.supplyRequestId)} (${req.supplyRequestId})
+송장 ${t.trfId} — 누르면 흐름 자세히`}>
+                <span className="inb-sent2-what">
+                  {first ? `${sim.productName(first.sku)} × ${first.qty}` : '상품 없음'}
+                  {t.lines.length > 1 ? ` 외 ${t.lines.length - 1}` : ''}
+                </span>
+                <span className={`inb-sent2-chip ${st.tone} at${st.at}`}>{st.done ? '끝' : MINI_STEPS[st.at]}</span>
+                <span className="inb-sent2-sub">
+                  발주 {req.supplyRequestId.slice(-6)} · {sim.trfInfo(t.trfId).short} · {TEMP_KO[t.temperatureZone]}
+                </span>
+                <span className="inb-sent2-more">›</span>
+              </button>
+            );
+          })}
+            </details>
+          )}
         </div>
       )}
       <div className="inb-exp">
@@ -667,16 +716,24 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
   const [msg, setMsg] = useState('');
   const [confirm, setConfirm] = useState(false);
   useEffect(() => setLines(props.initial), [props.initial]);
+  const [catTry, setCatTry] = useState(0);
   useEffect(() => {
-    sim.inboundCatalog().then(setCatalog, (e: Error) => setMsg(`상품 목록 읽기 실패 — ${e.message}`));
-  }, [sim]);
+    sim.inboundCatalog().then(setCatalog, (e: Error) => setMsg(`상품 목록 읽기 실패 — ${e.message} (아래 "다시 읽기" 또는 상품 번호 B-00000000 을 직접)`));
+  }, [sim, catTry]);
   const label = (c: { sku: string; name: string }) => `${c.name} · ${c.sku}`;
-  const picked = catalog?.find((x) => label(x) === pick || x.sku === pick.trim()) ?? null;
+  // 고른 상품 — 목록 글 그대로·상품 번호·이름 일부(하나만 맞을 때). 목록을 못 읽었어도 상품 번호는 받는다(사용자 2026-11-27 "발주넣기 또 안 눌리잖아")
+  const q = pick.trim();
+  const skuIn = q.match(/[EB]-\d{8}/)?.[0] ?? null;
+  const partial = q.length >= 2 ? (catalog ?? []).filter((x) => x.name.includes(q)) : [];
+  const picked =
+    catalog?.find((x) => label(x) === pick || (skuIn && x.sku === skuIn)) ??
+    (partial.length === 1 ? partial[0] : null) ??
+    (skuIn ? { sku: skuIn, name: sim.productName(skuIn) } : null);
   /** 입력칸의 상품을 발주표에 — 넣은 뒤 발주표를 돌려준다(못 넣으면 null) */
   const add = async (): Promise<OrderDraftLine[] | null> => {
     const c = picked;
     if (!c) {
-      setMsg('목록에 있는 상품을 고르세요(센터 취급·판매 중)');
+      setMsg(!q ? '상품을 고르세요 — 이름 일부를 치면 목록이 뜹니다' : partial.length > 1 ? `"${q}" 에 맞는 상품이 ${partial.length}개 — 목록에서 하나를 고르세요` : `"${q}" 에 맞는 상품이 없어요(센터 취급·판매 중인 것만)`);
       return null;
     }
     setMsg('재고 읽는 중…');
@@ -700,7 +757,10 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
       if (!next) return;
       ls = next;
     }
-    if (!ls.length) return;
+    if (!ls.length) {
+      if (!q) setMsg('발주표가 비었어요 — 상품을 고르고 "추가"(또는 바로 "발주 넣기")');
+      return;
+    }
     if (confirm) props.onOrder(ls);
     else setConfirm(true);
   };
@@ -718,11 +778,17 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
         <input type="number" min={1} max={INBOUND_ORDER.maxQty} value={qty} onChange={(e) => setQty(clampOrderQty(Number(e.target.value)))} aria-label="수량" />
         <button onClick={() => void add()}>추가</button>
       </div>
+      {/* 무엇이 골라졌는지 바로 보이게 */}
+      {q && <div className={`inb-picked ${picked ? 'ok' : 'no'}`}>{picked ? `→ ${picked.name} · ${picked.sku} × ${qty}` : partial.length > 1 ? `→ ${partial.length}개가 맞아요 — 목록에서 하나를 고르세요` : '→ 맞는 상품 없음'}</div>}
+      {catalog === null && msg.startsWith('상품 목록 읽기 실패') && (
+        <button className="link" onClick={() => { setMsg(''); setCatTry((n) => n + 1); }}>
+          상품 목록 다시 읽기
+        </button>
+      )}
       <button className="inb-rec" disabled={props.busy} onClick={() => props.onRecommend(lines)}>
         🧮 추천값으로 채우기{' '}
         <Tip text="서버 발주 수량 추천 — 하루 판매(인계 실적 평균) × (주기 + 납기 + 안전 일수) = 목표, 목표 − (지금 판매 가능 + 입고 예정) 만큼. 추천 0 은 빼고, 추천 안 한 상품(인계 실적 7일 미만 등)은 사유만 아래 기록에. 직접 넣은 줄은 그대로 둡니다" />
       </button>
-      {msg && <div className="busy">{msg}</div>}
       {lines.length > 0 && (
         <table className="ask-tbl">
           <thead>
@@ -792,10 +858,13 @@ function OrderDraft(props: { initial: OrderDraftLine[]; busy: boolean; onRecomme
           · 발주 {parts}건(온도대마다)
         </dd>
       </dl>
+      {msg && <div className="inb-msg">{msg}</div>}
+      {props.busy && <div className="busy">다른 일을 하는 중 — 끝나면 눌립니다</div>}
       {confirm && <div className="ask-warn">⚠ 실서버에 센터 발주를 넣습니다(승인 대기). 승인하면 서버가 칠곡 DC 로 이관(TRF)을 요청하고, DC 가 보내 차량이 도착하면 하차·수령 때 재고가 들어옵니다. 같은 상품의 승인 전 발주가 있으면 서버가 거절합니다.</div>}
       <div className="ask-acts">
         <button onClick={props.onClose}>취소</button>
-        <button className="go" disabled={(!lines.length && !picked) || props.busy} onClick={() => void order()}>
+        {/* 늘 눌린다 — 못 넣으면 까닭을 위 글로(조용히 꺼져 있던 것) */}
+        <button className="go" disabled={props.busy} onClick={() => void order()} title={props.busy ? '다른 일이 끝나길 기다리는 중' : undefined}>
           {confirm ? '📋 정말 발주 넣기' : '📋 발주 넣기'}
         </button>
       </div>
@@ -1064,7 +1133,8 @@ export function LeftPanel() {
       ) : (
         <>
           {!injected && <RealOrderControls />}
-          {!injected && <TestInboundControls />}
+          {/* 발주 단추는 왼쪽 설정, 승인·진행 목록은 오른쪽 입고 탭(사용자 2026-11-27) */}
+          {!injected && <TestInboundControls part="buttons" />}
           <VirtualWorkers />
           {/* 이미 실서버 — "고급 · 실서버 연결" 칸은 뺌(사용자 2026-11-20 "이미 실서번데 고급 실서버 연결 버튼은 왜 있는 거야?"). MOCK 전환은 머리줄 스위치, 조회가 끊기면 한 줄만 */}
           <RealConnWarning />

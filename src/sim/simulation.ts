@@ -26,7 +26,8 @@ import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backe
 import { Rng } from '../util/rng';
 import type { CenterStock, InboundPromise, InboundReceipt, StockUnitRow, SupplyTransfer, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
 import { supplyFlowSteps, supplyMiniStage, type FlowStep } from './supplyFlow';
-import { trfShort } from './inboundTrack';
+import { trfFlowView, type TrfFlowView } from './trfFlow';
+import { srShort, trfShort } from './inboundTrack';
 import type { InboundAlert } from './inboundTrack';
 import { dcArrivalsOf, inboundScanItems, mockTrack, trfLabelOf, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundScanDone, type InboundScanItem, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
@@ -853,7 +854,8 @@ export class Simulation {
       const body = { mfcId: this.params.mfcId, requestedReadyAt: ready, urgency: 'NORMAL' as const, reason, lines: part.lines.map((l) => ({ sku: l.sku, qty: l.qty })) };
       const req = await retryUnknown(() => h.createSupplyRequest(body, `sim-sr:${tag}:${part.temp}:${i}`));
       out.push(req);
-      this.log(`입고 발주 ${req.supplyRequestId} — ${TEMP_KO[part.temp]} ${part.lines.length}품목 ${part.lines.reduce((a, l) => a + l.qty, 0)}개 승인 대기`);
+      this.supplyVersion++;
+      this.log(`입고 ${srShort(req.supplyRequestId)} — ${TEMP_KO[part.temp]} ${part.lines.length}품목 ${part.lines.reduce((a, l) => a + l.qty, 0)}개 승인 대기`);
     }
     return out;
   }
@@ -876,7 +878,53 @@ export class Simulation {
       if (promise) this.noteTrf(promise.trfId, promise);
       out.push({ ...r, promise });
     });
-    return rows.map((r) => out.find((o) => o.t.trfId === r.t.trfId)!);
+    this.loadTrfNumbers(rows.map((r) => r.t.trfId));
+    const list = rows.map((r) => out.find((o) => o.t.trfId === r.t.trfId)!);
+    this.lastSupplies = list;
+    return list;
+  }
+  private lastSupplies: { req: SupplyRequest; t: SupplyTransfer; promise: InboundPromise | null }[] = [];
+
+  /** 입고 추적 "TRF 흐름" 칩 — 최근 DC 송장(운행에 실린 것 + 보낸 발주 + 입고 추적 DC 건), 지금 일하는 건이 앞 */
+  flowTrfIds(): { trfId: string; live: boolean }[] {
+    const ids = new Map<string, boolean>();
+    const busy = new Set(this.inboundScan.items.filter((x) => !!x.task.assigneeId && x.source.trfId).map((x) => x.source.trfId!));
+    for (const a of this.dcArrivals) for (const id of a.trfIds) ids.set(id, true);
+    for (const id of busy) ids.set(id, true);
+    for (const x of this.inboundScan.items) if (x.source.trfId && !ids.has(x.source.trfId)) ids.set(x.source.trfId, false);
+    for (const s of this.lastSupplies) if (!ids.has(s.t.trfId)) ids.set(s.t.trfId, false);
+    for (const t of this.inboundTracks.items) if (t.kind === 'DC' && !ids.has(t.id)) ids.set(t.id, false);
+    const out = [...ids.entries()].map(([trfId, live]) => ({ trfId, live }));
+    this.loadTrfNumbers(out.map((x) => x.trfId));
+    return out.slice(0, 12);
+  }
+
+  /** 송장 하나 흐름(읽기만) — 입고 예정·운행·작업·재고 기록·발주 */
+  async trfFlow(trfId: string): Promise<TrfFlowView> {
+    const h = this.requireRealHttp();
+    const mfc = this.params.mfcId;
+    const [promise, trips] = await Promise.all([h.getInboundPromise(trfId).catch(() => null), h.listMfcInboundTrips(mfc).catch(() => [] as TmsTrip[])]);
+    let link: { trip: TmsTrip; stop: TmsTrip['stops'][number] } | null = null;
+    for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc && stop.trfIds.includes(trfId)) link = { trip, stop };
+    const tasks: InboundTask[] = [];
+    for (const r of promise?.receipts ?? []) tasks.push(...(await h.listInboundTasks(mfc, undefined, undefined, r.receiptId).catch(() => [] as InboundTask[])));
+    const skus = [...new Set(tasks.map((t) => t.sku))].slice(0, 6);
+    const ledger = (await Promise.all(skus.map((s) => h.stockLedger(mfc, s, 50).catch(() => [])))).flat();
+    const refs = new Set([...tasks.map((t) => t.taskId), ...(promise?.receipts ?? []).map((r) => r.receiptId)]);
+    const supply = this.lastSupplies.find((x) => x.t.trfId === trfId) ?? null;
+    if (promise) this.noteTrf(trfId, promise);
+    this.loadTrfNumbers([trfId]);
+    return trfFlowView({
+      trfId,
+      promise,
+      link,
+      tasks,
+      ledger: ledger.filter((e) => e.sourceRef && refs.has(e.sourceRef)),
+      supply: supply ? { req: supply.req, t: supply.t } : null,
+      name: (s) => this.productName(s),
+      who: (id) => (id ? (this.board?.workerName(id) ?? undefined) : undefined),
+      mfcName: this.centerLabel,
+    });
   }
 
   /** 목록 한 줄 — 6칸 단계와 글(운행은 DC 운행 읽기 마지막 값) */
@@ -901,7 +949,11 @@ export class Simulation {
     for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc && stop.trfIds.includes(t.trfId)) link = { trip, stop };
     const tasks: InboundTask[] = [];
     for (const r of promise?.receipts ?? []) tasks.push(...(await h.listInboundTasks(mfc, undefined, undefined, r.receiptId).catch(() => [] as InboundTask[])));
-    return supplyFlowSteps(fresh, ft, link, promise, tasks, (s) => this.productName(s));
+    this.loadTrfNumbers([t.trfId]);
+    const no = this.trfInfo(t.trfId);
+    const label = `${no.short}${no.waveNumber ? ` · ${no.waveNumber}` : ''}`;
+    // 긴 송장 ID 는 화면 번호로(사용자 2026-11-27 "짧은 정해진 번호로")
+    return supplyFlowSteps(fresh, ft, link, promise, tasks, (s) => this.productName(s)).map((st) => ({ ...st, lines: st.lines.map((l) => l.split(t.trfId).join(label)) }));
   }
 
   /** 이관 하나가 지금 어디(서버 이관 기록 + 운행 마지막 읽기) */
@@ -917,6 +969,9 @@ export class Simulation {
     return { text: s ?? 'DC 가 받음 — 피킹·배차 기다림', tone: s === '받음' ? 'ok' : 'run' };
   }
 
+  /** 발주·승인·거절이 있을 때 오른다 — 오른쪽 입고 탭 목록이 다시 읽게(왼쪽 단추와 따로 그려짐) */
+  supplyVersion = 0;
+
   /** 승인 대기 발주(SUBMITTED) */
   async pendingSupply(): Promise<SupplyRequest[]> {
     return this.requireSupHttp().listSupplyRequests(this.params.mfcId, ['SUBMITTED']);
@@ -929,7 +984,8 @@ export class Simulation {
     const body = { ...(cut.length ? { lines: cut } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
     const key = `sim-sr-ok:${req.supplyRequestId}:${cut.map((c) => `${c.sku}=${c.approvedQty}`).join(',')}`;
     const r = await retryUnknown(() => h.approveSupplyRequest(req.supplyRequestId, req.version, body, key));
-    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → ${r.transfers?.length ? `${cdcName(r.transfers[0].cdcId)} 이관 ${r.transfers.map((t) => t.trfId).join(', ')}` : r.transferCdcId ? `${cdcName(r.transferCdcId)} 이관 ${r.linkedTrfId ?? '?'}` : REAL_DC.supplyViaDc ? `${cdcName('CDC01')} 로(DC 시뮬레이터 다리)` : `입고 예정 ${r.linkedReceiptId ?? '?'}`}`);
+    this.supplyVersion++;
+    this.log(`${srShort(req.supplyRequestId)} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → ${r.transfers?.length ? `${cdcName(r.transfers[0].cdcId)} 이관 ${r.transfers.map((t) => t.trfId).join(', ')}` : r.transferCdcId ? `${cdcName(r.transferCdcId)} 이관 ${r.linkedTrfId ?? '?'}` : REAL_DC.supplyViaDc ? `${cdcName('CDC01')} 로(DC 시뮬레이터 다리)` : `입고 예정 ${r.linkedReceiptId ?? '?'}`}`);
     return r;
   }
 
@@ -937,7 +993,8 @@ export class Simulation {
   async rejectSupply(req: SupplyRequest, reason: string): Promise<SupplyRequest> {
     const h = this.requireSupHttp();
     const r = await retryUnknown(() => h.rejectSupplyRequest(req.supplyRequestId, req.version, reason, `sim-sr-no:${req.supplyRequestId}`));
-    this.log(`발주 ${req.supplyRequestId} 거절 — ${reason}`);
+    this.supplyVersion++;
+    this.log(`${srShort(req.supplyRequestId)} 거절 — ${reason}`);
     return r;
   }
 
@@ -1090,7 +1147,8 @@ export class Simulation {
           serverState: p.state,
           lines,
           receiptIds: (p.receipts ?? []).map((x) => x.receiptId),
-          blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? (link ? '도착·인계는 됨 · 수령은 출발 기록 대기(요청함)' : '아직 못 받음 — 운행 정보도, DC 출발 기록도 없음') : null,
+          // 0.23.0 은 승인 때 예정이 생김 — 출발 전이면 "DC 작업 중"(오류처럼 빨갛게 보이던 것)
+          blockedWhy: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && !p.departureId ? (link && (link.stop.state !== 'PLANNED') ? '도착·인계는 됨 · 수령은 출발 기록 대기(요청함)' : null) : null,
           canReceive: (p.state === 'EXPECTED' || p.state === 'RECEIVING') && (link ? link.stop.state === 'ARRIVED' || (link.stop.state !== 'PLANNED' && !!p.departureId) : !!p.departureId),
           atMs: Date.parse(p.arrivedAt ?? p.departedAt ?? p.plannedArrivalAt ?? '') || null,
         });
@@ -1160,8 +1218,31 @@ export class Simulation {
   private trfNos = new Map<string, { trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null }>();
   noteTrf(trfId: string, x: { trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null }) {
     const cur = this.trfNos.get(trfId) ?? {};
-    this.trfNos.set(trfId, { trfNumber: x.trfNumber ?? cur.trfNumber, waveId: x.waveId ?? cur.waveId, waveNumber: x.waveNumber ?? cur.waveNumber });
+    // 빈 글자("")도 "번호 없음" — transport-execution 은 trfIds 와 자리를 맞추려 null 대신 ""(CCdc 2026-11-27). 있던 번호를 지우지 않게
+    const v = (a?: string | null, b?: string | null) => (a ? a : b);
+    this.trfNos.set(trfId, { trfNumber: v(x.trfNumber, cur.trfNumber), waveId: v(x.waveId, cur.waveId), waveNumber: v(x.waveNumber, cur.waveNumber) });
   }
+  /** 화면 번호가 없는 송장을 개발 서버 /sim-auth/trf-numbers 로 채운다(DC 계정 읽기만, 사용자 2026-11-27 "허락"). 실서버 모드에서만, 한 번에 30개 */
+  private trfNoAsked = new Map<string, number>();
+  loadTrfNumbers(ids: Iterable<string>) {
+    if (!this.realHttp || typeof fetch === 'undefined') return;
+    const now = Date.now();
+    const need = [...new Set(ids)].filter((id) => !this.trfNos.get(id)?.waveNumber && now - (this.trfNoAsked.get(id) ?? 0) > 60_000).slice(0, 30);
+    if (!need.length) return;
+    for (const id of need) this.trfNoAsked.set(id, now);
+    const q = need.map((id) => `id=${encodeURIComponent(id)}`).join('&');
+    void fetch(`/sim-auth/trf-numbers?${q}`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((b: { items?: { trfId: string; trfNumber: string | null; waveId: string | null; waveNumber: string | null }[] } | null) => {
+        for (const x of b?.items ?? []) this.noteTrf(x.trfId, x);
+        if (b?.items?.length) {
+          this.dcArrivalsVersion++;
+          this.inboundScan = { ...this.inboundScan, version: this.inboundScan.version + 1 };
+        }
+      })
+      .catch(() => undefined);
+  }
+
   trfInfo(trfId: string): { trfId: string; trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null; short: string } {
     const x = this.trfNos.get(trfId) ?? {};
     return { trfId, ...x, short: trfShort(trfId, x.trfNumber) };
@@ -1225,6 +1306,7 @@ export class Simulation {
         for (const p of [...open, ...posted]) for (const x of p.receipts ?? []) this.receiptTrf.set(x.receiptId, p.trfId);
       }
       const items = inboundScanItems(tasks, units, (rid) => this.receiptTrf.get(rid), this.reserveCodes());
+      this.loadTrfNumbers([...this.receiptTrf.values()]);
       // 목록에서 빠진 작업 = 끝났거나 예외 — 서버에서 한 번 읽어 COMPLETED 면 "끝"으로 남기고 알림(사용자 2026-11-27 "작업 끝내기 하면 작업 완료 처리해주고 화면에도").
       // PDA "작업 끝내기"는 서버에 아무것도 안 보낸다(첫 화면으로) — 완료는 "적치했어요"(putaways)에서 서버가 이미 정한다
       const nowIds = new Set(items.map((x) => x.task.taskId));
@@ -1337,6 +1419,7 @@ export class Simulation {
         }
       });
       for (const p of got.values()) this.noteTrf(p.trfId, p);
+      this.loadTrfNumbers([...this.dcTrips.keys()]);
       for (const trip of trips) for (const x of trip.transfers ?? []) this.noteTrf(x.trfId, x);
       for (const a of next)
         a.trfs = a.trfIds
@@ -1356,6 +1439,8 @@ export class Simulation {
             label: trfLabelOf(p),
             state: p.state,
             canReceipt: !!p.departureId && p.lines.length > 0,
+            // 마지막 수령이 거절이고 반영된 수령이 없으면 그 까닭(PDA 다시 수령 안내)
+            rejected: !(p.receipts ?? []).some((r) => r.inventoryApplyStatus === 'APPLIED') ? ((p.receipts ?? []).filter((r) => r.inventoryApplyStatus === 'REJECTED').pop()?.rejectReason ?? null) : null,
             products: p.lines.map((l) => ({ sku: l.sku, name: l.productName ?? this.productName(l.sku), expected: l.expectedQty, barcodes: l.barcodes ?? [] })),
           }));
       // 정차 출발 뒤에도 PDA 수령 전이면 남긴다(차량이 먼저 떠나도 송장·상품 바코드를 찍을 수 있게). 수령 끝·오래된 것은 뺀다

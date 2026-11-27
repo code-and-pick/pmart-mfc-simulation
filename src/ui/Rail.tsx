@@ -9,7 +9,7 @@ const REAL_RIGHT: [RightView, string, string][] = [
   ['admin', '⚑', '관리'],
   ['inventory', '▦', '재고'],
   ['stock', '⇅', '재고 변동'],
-  ['inbound', '⇣', '입고 추적'],
+  ['inbound', '⇣', '입고'],
   ['scan', '▥', '바코드'],
   ['api', '⧉', 'API'],
 ];
@@ -19,7 +19,7 @@ const MOCK_RIGHT: [RightView, string, string][] = [
   ['events', '⇄', '이벤트'],
   ['inventory', '▦', '재고'],
   ['stock', '⇅', '재고 변동'],
-  ['inbound', '⇣', '입고 추적'],
+  ['inbound', '⇣', '입고'],
   ['scan', '▥', '바코드'],
 ];
 const LEFT: [LeftView, string, string][] = [

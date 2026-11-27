@@ -3,7 +3,7 @@
 // (사용자 2026-11-26 "Dc 시뮬레이션에서 mfc 도착보내기 누르면 mfc시뮬레이션에 연동돼서 입고재고 도착했다고 하차 시작 … PDA로 직접 또는 가상작업자 중에 선택")
 import { useState } from 'react';
 import { useApp, useTick, useView } from '../app/context';
-import { cdcName } from '../config';
+import { cdcName, TEST_INBOUND } from '../config';
 import { TrfRef } from './TrfRef';
 
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
@@ -35,28 +35,55 @@ export function DcArrivals() {
   return (
     <div className="dca">
       {list.map((a) => (
-        <div key={a.key} className="dca-c">
+        <div key={a.key} className={`dca-c${a.stop === 'ARRIVED' ? ' arrived' : ''}`}>
           <div className="dca-h">
-            <b>🚚 {cdcName(a.cdcId)} 차량 {a.stop === 'ARRIVED' ? '도착' : a.stop === 'DEPARTED' ? '떠남 · 수령 전' : '인계 끝 · 수령 전'}</b>
-            <span>
-              {TEMP_KO[a.tempClass]} · 박스 {a.boxes.length}개{a.driver ? ` · ${a.driver}` : ''}
-            </span>
+            <b>🚚 {cdcName(a.cdcId)} 차량 {a.stop === 'ARRIVED' ? '도착' : a.stop === 'DEPARTED' ? '떠남' : '인계 끝'}</b>
+            <span className={`dca-chip ${a.stop === 'ARRIVED' ? 'act' : 'run'}`}>{a.stop === 'ARRIVED' ? '하차' : '수령 전'}</span>
           </div>
-          {/* 어느 운행·송장인지(사용자 2026-11-27 "도착 번호나 trf 번호가 안 떠서 내가 지금 무슨 작업 중인지 모르겠다") */}
-          <div className="dca-id">
-            운행 <b>{a.tripId}</b> · 정차 {a.seq}
+          {/* 이름표·값 두 칸 — 번호는 줄 하나에 하나(사용자 2026-11-27 "이건 UI 왜 이런데") */}
+          <dl className="dca-kv">
+            <div>
+              <dt>운행</dt>
+              <dd>
+                {a.tripId} · 정차 {a.seq}
+              </dd>
+            </div>
             {a.trfIds.map((id) => (
               <div key={id}>
-                송장 <b><TrfRef trfId={id} cdcId={a.cdcId} /></b>
-                {a.trfs?.find((t) => t.trfId === id)?.products.length ? ` — ${a.trfs.find((t) => t.trfId === id)!.products.map((p) => `${p.name} ${p.expected}`).join(', ')}` : ''}
+                <dt>송장</dt>
+                <dd>
+                  <TrfRef trfId={id} cdcId={a.cdcId} />
+                </dd>
               </div>
             ))}
-          </div>
+            {(a.trfs ?? []).flatMap((t) => t.products).map((p) => (
+              <div key={p.sku}>
+                <dt>상품</dt>
+                <dd>
+                  {p.name} <b>× {p.expected}</b>
+                </dd>
+              </div>
+            ))}
+            <div>
+              <dt>차량</dt>
+              <dd>
+                {TEMP_KO[a.tempClass]} · 박스 {a.boxes.length}개{a.driver ? ` · ${a.driver}` : ''}
+                {a.handover ? ` · 인계 ${a.handover === 'MATCHED' ? '박스 맞음' : '박스 차이'}` : ''}
+              </dd>
+            </div>
+          </dl>
+          {(a.trfs ?? []).filter((t) => t.rejected).map((t) => (
+            <div key={t.trfId} className="dca-warn">
+              수령 거절 — {/LOCATION_NOT_REGISTERED|LOCATION_CLOSED/.test(t.rejected ?? '') ? `입고칸이 잘못 찍혔어요. PDA 수령에서 ${TEMP_KO[a.tempClass]} 입고칸을 "변경" → ${TEST_INBOUND.receivingByTemp[a.tempClass]} 를 찍고 다시 등록` : t.rejected}
+            </div>
+          ))}
           {a.stop !== 'ARRIVED' && (
-            <div className="dca-s">
-              인계 끝({a.handover === 'MISMATCHED' ? '박스 차이 있음' : a.handover ? '박스 맞음' : '결과 모름'}) — PDA 입고 → <b>수령</b>에서 송장(TRF)을 찍고 상품을 세어 주세요.{' '}
+            <div className="dca-next">
+              <span>
+                다음 · PDA 입고 → <b>수령</b>: 송장 → 박스 확인 → 입고칸 {TEST_INBOUND.receivingByTemp[a.tempClass]} → 상품 수량
+              </span>
               <button className="link" onClick={() => ctl.rightView !== 'scan' && ctl.toggleRight('scan')}>
-                송장 바코드 보기
+                바코드 ›
               </button>
             </div>
           )}

@@ -51,12 +51,27 @@
 
 ## 열린 요청
 
+### R-54 출발 기록 없는 입고 예정도 관리자 종결 — 중간 (2026-11-27, 시뮬레이터 → mfc-inbound)
+- 사용자 2026-11-27 "pda에 T697148 입고 이어하기가 나오는데 이거 완료안됐나?" → "니가 종결처리하고 백오피스에도 다 연동되게 처리해줘".
+- 대상: T697148 = `TRF-SIM-MWXA84EQ`(2026-11-26 DC 시뮬 시험 송장) — RECEIVING(v2), 도착 등록 11-26 19:34 KST, `departureId` null, 상품 줄 0, 박스(packages) 3, 수령 없음. R-49 해결 전에 생겨 출발 사실이 안 붙음 → 수령도 못 하고 끝나지도 않아 PDA "입고 이어 하기"·백오피스에 계속 남음.
+- 해 봄(사용자 허락, 13:1x): `POST /inbound-promises/TRF-SIM-MWXA84EQ/closures`(claude-mfc-sup, 사유 "시험 잔여 …") → **409 INVALID_STATE** "CDC 출발(TOUT) 사실을 아직 받지 못한 예정은 종결하지 않습니다"(계약 0.22.0 그대로).
+- 부탁(둘 중 하나):
+  1. 관리자 종결을 출발 사실 없는 예정에도 허용(예: 사유 필수 + 수령 없음일 때 CLOSED, cdc-inventory 알림은 출발 없으면 건너뜀 — 미정산이 없으니) — 계약 변경.
+  2. 이 한 건만 LAN DB 로 CLOSED(사용자 지시 있음 — 위 원문).
+- 끝나면: PDA 이어 하기·MFC 백오피스 입고 목록에서 빠지고, 시뮬레이터 입고 탭도 종결로 보임(같은 API 를 읽음).
+
+### R-53 공급 요청(발주)에도 화면 번호 — 낮음 (2026-11-27, 시뮬레이터 → mfc-inbound)
+- 사용자 2026-11-27 "SR-d34ddcb6-2fe8-4b20-b44e-d51f27017efb 발주 번호 짧게 바꿔". TRF(T+6)·Wave(W+4)처럼 ADR-0070·0085 화면 번호가 공급 요청엔 없음(계약 SupplyRequest 에 번호 필드 없음 — 읽어 확인, MFC 백오피스도 시스템 ID 만 상세 아래에).
+- 부탁: `SupplyRequest.supplyRequestNumber`(글자 하나 + 숫자, 무작위·안 겹침·안 바뀜 — 같은 규칙) 추가, 목록·상세·검색에.
+- 시뮬레이터: 그 전엔 "발주 017efb"(끝 6자리), 번호가 오면 그것(`srShort`).
+
 ### R-52 MFC 가 읽는 응답에 송장·Wave 화면 번호(T+6·W+4) — 중간 (2026-11-27, 시뮬레이터 → mfc-inbound·transport-execution)
 - 사용자 2026-11-27 "TRF 식별값이랑 WAVE 식별값 백오피스에서 짧게 정했으니까 T286575 W6307 이렇게 뜨게 해" → "trf랑 wave 식별값 말고 짧은 정해진 번호로 나오게 하라니까".
 - 지금: 화면 번호는 cdc-outbound(`trfNumber`·`waveNumber`, ADR-0070·0085)·transport-planning(`TransportRequest.trfNumber`)에만 있고 둘 다 `/cdcs/{cdcId}/…` 라 MFC 계정(claude-mfc-sup·wrk)은 403(읽어 확인). MFC 시뮬레이터·MFC 백오피스·MFC PDA 는 긴 ID(`TRF-SR-d34ddcb6-…`)만 보임.
 - 부탁(추가만, 기존 필드 그대로):
   1. mfc-inbound `InboundPromise` 에 `trfNumber`·`waveId`·`waveNumber`(이관 인수·출발 사건에서 사본), `SupplyRequest.transfers[]` 에 `trfNumber`(인수 응답에서).
   2. transport-execution `GET /mfcs/{mfcId}/inbound-trips` 의 `transfers[]` 에 `trfNumber`(운행에 이미 trfId 가 있으니 사본).
+- **진행(2026-11-27)**: mfc-inbound 몫 = MFC 백엔드 PR #548(0.25.0, InboundPromise·SupplyRequest.transfers 에 trfNumber·waveId·waveNumber). TMS·DC 몫 = 사용자 결정으로 cdc 세션 — transport-execution 0.6.0(inbound-trips·trips transfers[]·stops[] 에 trfNumber, 출발했으면 departureNumber)·cdc-outbound 0.33.0(transfer-intakes 조회·매니페스트 사건에 번호), R-30 다음, 배포 PC1. 그 전엔 시뮬레이터 개발 서버가 DC 계정으로 번호만 읽음(사용자 허락, `/sim-auth/trf-numbers`).
 - 시뮬레이터는 이미 받을 준비: 필드가 오면 `T286575 W6307` 로 보이고 누르면 DC 백오피스(`https://192.168.0.40:8447/c/CDC01/trf-wave/trf/{trfId}`·`…/waves/{waveId}`). 그 전엔 "TRF …끝6자리".
 
 ### R-51 입고 신청 승인 → DC 이관을 서버가 직접(0.23.0 ADR-0091) LAN 배포·보급 DC 켜기 — 높음 (2026-11-27, 시뮬레이터 → mfc-inbound)
@@ -542,6 +557,14 @@ PDA 포장 ⑤단계에서 봉투를 출하대기 랙에 올리고 랙(`DSP-A-01
 | 주문 현장 기록 | 고른 주문의 `GET /work-orders?orderId=`(fulfillment 0.10.0) — 작업·담당·시작/끝·결품·포장·인계 | **11-17 완료** — 화면 확인 전 |
 
 ## 클라이언트(PDA 앱)에 알릴 것 — 백엔드 요청 아님, 사용자가 전달
+
+### C-7 MFC 백오피스 "DC 이관 입고" — "재고 반영"이 적치 끝처럼 읽힘 (2026-11-27, 시뮬레이터 → MFC 프론트, 낮음~중간)
+- 사용자 2026-11-27(백오피스 캡처 + 시뮬레이터 "품질검사 0/10") "이미 적치 끝난 것도 많은데 MFC시뮬레이션에는 이렇게 뜨네 서로 연동이 실시간으로 안 되고 있는 것 같은데" → 서버 대조 결과 연동은 맞음(T859483·T830694·T390969 모두 TIN_POSTED, 품질검사 0/10·0/1·0/4 READY 안 받음, 14:09). 백오피스 문구 때문에 적치까지 끝난 것으로 읽힘 → "응"(요청서).
+- 근거(pmart-clients origin/main): ① 목록 상태 `messages.ts` stateName `TIN_POSTED: '재고 반영'` — 수령이 재고에 들어간 것(입고칸)인데 검사·적치 진행이 안 보임. ② 상세 `DcInboundTab.tsx placeOf` 단계 "출발 → 도착 → 수령 → 적치 → 재고 반영" — 5단계 "재고 반영"은 실제로는 적치가 다 끝난 때(putawayLeft === 0)인데 이름이 수령 때 일과 같음.
+- 부탁:
+  1. 목록 상태: TIN_POSTED 를 "수령 끝"으로, 옆에 검사·적치 진행("검사 0/10"·"적치 3/10", 다 끝나면 "판매 가능") — 상세가 이미 읽는 `GET /inbound-tasks?receiptId=` 로.
+  2. 상세 단계: "출발 → 도착 → 수령(재고 반영) → 검사·적치 → 판매 가능" — 마지막 이름을 "판매 가능(적치 끝)"으로.
+- 시뮬레이터는 "수령 → 품질검사 → 적치 → 끝 — 판매 가능"으로 보임(같은 서버 값).
 `../pmart-clients` 도 읽기만 한다. 시뮬레이터 화면과 맞물리는 PDA 앱 동작 중 고칠 만한 것을 적는다.
 
 | # | 내용 | 근거 | 시뮬레이터 대응 |

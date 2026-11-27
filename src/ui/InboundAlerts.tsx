@@ -22,7 +22,8 @@ export function InboundAlerts() {
       {list.map((a) => (
         <div
           key={a.id}
-          className={`ia-c ${a.tone}`}
+          // 색 클래스는 t- 접두어 — "act" 가 왼쪽 패널 단추 .act 와 겹쳐 카드가 가로로 깨지던 것(사용자 2026-11-27 캡처)
+          className={`ia-c t-${a.tone}`}
           role="alert"
           onClick={() => {
             if (a.view && ctl.rightView !== a.view) ctl.toggleRight(a.view);
@@ -42,12 +43,35 @@ export function InboundAlerts() {
               ✕
             </button>
           </div>
-          {a.lines.map((l, i) => (
-            <div key={i} className="ia-l">
-              {l}
-            </div>
-          ))}
-          {a.view && <div className="ia-go">{a.view === 'scan' ? '바코드 탭에서 보기 ›' : '입고 추적에서 보기 ›'}</div>}
+          {/* 송장·운행은 이름표 + 값 두 칸, 상품은 굵게, "다음:"은 아래 강조 줄 — 고정폭 글자 덩어리로 보이던 것(사용자 2026-11-27 "UI 구려") */}
+          <dl className="ia-kv">
+            {a.lines
+              .filter((l) => /^(송장|운행|박스|보냄) /.test(l))
+              .map((l, i) => {
+                const [k, ...v] = l.split(' ');
+                return (
+                  <div key={i}>
+                    <dt>{k}</dt>
+                    <dd>{v.join(' ')}</dd>
+                  </div>
+                );
+              })}
+          </dl>
+          {a.lines
+            .filter((l) => !/^(송장|운행|박스|보냄) /.test(l) && !l.startsWith('다음:'))
+            .map((l, i) => (
+              <div key={i} className="ia-p">
+                {l}
+              </div>
+            ))}
+          {a.lines
+            .filter((l) => l.startsWith('다음:'))
+            .map((l, i) => (
+              <div key={i} className="ia-next">
+                {l.replace(/^다음:\s*/, '다음 · ')}
+              </div>
+            ))}
+          {a.view && <div className="ia-go">{a.view === 'scan' ? '바코드 탭 ›' : '입고 탭 ›'}</div>}
         </div>
       ))}
     </div>

@@ -32,8 +32,8 @@ class AuthError extends Error {
   }
 }
 
-async function issue(account: string): Promise<SimToken> {
-  const file = passwordFileFor(account);
+async function issue(account: string, fileOverride?: string): Promise<SimToken> {
+  const file = fileOverride ?? passwordFileFor(account);
   if (!file) throw new AuthError(403, 'ACCOUNT_NOT_ALLOWED', `${account} 는 시뮬레이터 계정 목록에 없음`);
   const hit = cache.get(account);
   if (hit && Date.parse(hit.accessTokenExpiresAt) - Date.now() > REUSE_MARGIN_SEC * 1000) return hit;
@@ -95,6 +95,33 @@ function send(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
+/**
+ * 송장·Wave 화면 번호(T+6·W+4)만 — DC 관리자 계정(claude-cdc-sup)으로 개발 서버가 cdc-outbound 를 읽어 세 값만 돌려준다.
+ * 사용자 2026-11-27 "허락"(DC 계정으로 읽기만 — MFC 계정은 /cdcs/… 403, 백엔드 R-52 전 임시). 토큰은 브라우저에 주지 않고(/sim-auth/tokens 목록에도 없음), GET 하나만.
+ */
+const CDC_READ_ACCOUNT = 'claude-cdc-sup';
+const CDC_READ_FILE = 'keycloak-claude-cdc-sup-password';
+const GATEWAY = process.env.PMART_GATEWAY ?? 'http://192.168.0.40:8080';
+const trfNoCache = new Map<string, { at: number; v: { trfId: string; trfNumber: string | null; waveId: string | null; waveNumber: string | null } | null }>();
+async function trfNumbers(cdcId: string, ids: string[]) {
+  const out = [];
+  for (const id of ids.slice(0, 30)) {
+    const hit = trfNoCache.get(id);
+    // 번호는 바뀌지 않음(ADR-0085) — 있으면 계속, Wave 가 아직 없으면 1분 뒤 다시
+    if (hit && (hit.v?.waveId || Date.now() - hit.at < 60_000)) {
+      if (hit.v) out.push(hit.v);
+      continue;
+    }
+    const t = await issue(CDC_READ_ACCOUNT, CDC_READ_FILE);
+    const r = await fetch(`${GATEWAY}/api/v1/cdcs/${encodeURIComponent(cdcId)}/transfers/${encodeURIComponent(id)}`, { headers: { Authorization: `Bearer ${t.accessToken}`, Accept: 'application/json', 'X-Source-System': 'mfc-simulator' } }).catch(() => null);
+    const b = r && r.ok ? ((await r.json().catch(() => null)) as { trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null } | null) : null;
+    const v = b ? { trfId: id, trfNumber: b.trfNumber ?? null, waveId: b.waveId ?? null, waveNumber: b.waveNumber ?? null } : null;
+    trfNoCache.set(id, { at: Date.now(), v });
+    if (v) out.push(v);
+  }
+  return out;
+}
+
 /** 다른 기기(LAN)에서 온 요청이 백엔드로 넘어가도 되는 방법 — 읽기만 */
 const LAN_METHODS = new Set(['GET', 'HEAD']);
 
@@ -119,6 +146,19 @@ export function simAuthPlugin(): Plugin {
           .catch((e: unknown) => {
             const code = e instanceof AuthError ? e.code : 'INTERNAL';
             server.config.logger.warn(`[sim-auth] LAN 조회 토큰: ${code}`);
+            send(res, 502, { code });
+          });
+      });
+
+      server.middlewares.use('/sim-auth/trf-numbers', (req, res) => {
+        if (req.method !== 'GET') return send(res, 405, { code: 'METHOD_NOT_ALLOWED' });
+        const q = new URL(req.url ?? '', 'http://x').searchParams;
+        const ids = q.getAll('id').filter((x) => /^[A-Za-z0-9_-]{1,64}$/.test(x));
+        trfNumbers(q.get('cdcId') ?? 'CDC01', ids)
+          .then((items) => send(res, 200, { items }))
+          .catch((e: unknown) => {
+            const code = e instanceof AuthError ? e.code : 'INTERNAL';
+            server.config.logger.warn(`[sim-auth] 송장 번호: ${code}`);
             send(res, 502, { code });
           });
       });

@@ -15,7 +15,7 @@ const WALLS: { o: number; text: string }[] = [
   { o: 0.32, text: '벽' },
   { o: 0, text: '벽 숨김' },
 ];
-const VIEW_KO: Record<RightView, string> = { orders: '실제 주문', inventory: '재고', stock: '재고 변동', inbound: '입고 추적', scan: '바코드', api: 'API 호출', events: '계약 이벤트', logs: '현장 흐름', admin: '관리' };
+const VIEW_KO: Record<RightView, string> = { orders: '실제 주문', inventory: '재고', stock: '재고 변동', inbound: '입고(발주·추적)', scan: '바코드', api: 'API 호출', events: '계약 이벤트', logs: '현장 흐름', admin: '관리' };
 
 export function TopBar() {
   const { sim, ticker } = useApp();
@@ -39,12 +39,12 @@ export function TopBar() {
               <>
                 {truck && (
                   <span className="chip inb-now-chip" title={`${truck.tripId} · ${truck.trfIds.join(', ')}`}>
-                    하차 · 운행 {truck.tripId} · {truck.trfIds.join(', ')}
+                    하차 · 운행 {truck.tripId} · {truck.trfIds.map((x) => sim.trfInfo(x).short).join(', ')}
                   </span>
                 )}
                 {now && (
                   <span className="chip inb-now-chip" title={now.task.taskId}>
-                    PDA {now.task.taskType === 'INSPECT' ? '품질검사' : now.task.taskType === 'PUTAWAY' ? '적치' : '격리 이동'} · {now.source.label} · {now.task.productName ?? now.task.sku}
+                    PDA {now.task.taskType === 'INSPECT' ? '품질검사' : now.task.taskType === 'PUTAWAY' ? '적치' : '격리 이동'} · {now.source.trfId ? sim.trfInfo(now.source.trfId).short : now.source.label} · {now.task.productName ?? now.task.sku}
                   </span>
                 )}
               </>

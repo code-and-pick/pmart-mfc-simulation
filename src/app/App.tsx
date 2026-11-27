@@ -9,6 +9,7 @@ import { RightPanel } from '../ui/RightPanel';
 import { ScanBubbles } from '../ui/ScanBubbles';
 import { DcArrivals } from '../ui/DcArrivals';
 import { InboundAlerts } from '../ui/InboundAlerts';
+import { PdaScanPopup } from '../ui/PdaScanPopup';
 import { TopBar, ViewBar } from '../ui/TopBar';
 import { AppContext, type AppCtx } from './context';
 
@@ -32,8 +33,14 @@ export function App({ app }: { app: AppCtx }) {
         <SiteScene app={app} />
       </div>
       {app.sim.board && <ScanBubbles />}
-      {app.sim.real && <DcArrivals />}
-      {app.sim.real && <InboundAlerts />}
+      {/* 입고 띄움 창은 한 줄로 — 오른쪽 패널 옆에 위에서부터 할 일 차량 → 지금 찍을 코드 → 알림(사용자 2026-11-27 "팝업창이 다 곳곳에 지마음대로 뜨네 정신 없게") */}
+      {app.sim.real && (
+        <div className="inb-dock" data-right={view.rightView ? 'open' : 'closed'}>
+          <DcArrivals />
+          <PdaScanPopup />
+          <InboundAlerts />
+        </div>
+      )}
       {/* 뼈대(pmart-rider-simulation 참고): [왼쪽 아이콘 메뉴 | 머리줄 → 확인할 일 → [왼쪽 패널 · 3D · 오른쪽 패널]] */}
       <div id="ui" data-left={view.leftView ? 'open' : 'closed'} data-right={view.rightView ? 'open' : 'closed'}>
         <Rail />

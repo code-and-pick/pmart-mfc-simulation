@@ -1128,3 +1128,16 @@ export interface StockStreamEvent {
   units?: { sku: string; lotId: string; locationCode: string; qualityState: string; workState: string; delta: number }[];
   holds?: { sku: string; lotId: string; locationCode: string; delta: number }[];
 }
+
+/** mfc-inventory StockLedgerEntry(stock-ledger, 최신순) — 확정 한 건: 원인·작업자·시각·출처(작업·수령 ID)·위치별 증감 */
+export interface StockLedgerEntry {
+  commitId: string;
+  cause: string;
+  occurredAt: string;
+  actorOperatorId?: string | null;
+  sourceRef?: string | null;
+  sourceSystem?: string | null;
+  orderId?: string | null;
+  delta?: { H: number; Q: number; E: number; R: number };
+  entries: { delta: number; locationCode: string; lotId: string; lotNo?: string | null; symbol: string; workState?: string; qualityState?: string }[];
+}

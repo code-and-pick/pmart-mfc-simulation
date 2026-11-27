@@ -2,6 +2,9 @@
 // 품목마다 예정·받음·적치·입고칸 남은 양·놓인 칸, 위에는 오늘 입고로 늘어난 재고(사용자 2026-11-26 "DC에서 입고 받은 거 적치하고, 입고받아서 추가되는 재고 추적")
 import { useEffect, useState } from "react";
 import { useApp, useView } from "../app/context";
+import { TrfFlowCard } from "./TrfFlowCard";
+import { TrfRef } from "./TrfRef";
+import { TestInboundControls } from "./LeftPanel";
 import {
   STEP_KO,
   sumLines,
@@ -113,6 +116,10 @@ export function InboundTracks() {
   };
   return (
     <div className="itk">
+      {/* 송장 하나 흐름 — DC 시뮬 TRF 흐름 카드 모양(사용자 2026-11-27) */}
+      {/* 입고 발주(추천·직접·승인·보낸 발주) — 왼쪽 설정에서 옮김 */}
+      {sim.mode !== "mock" && !sim.realTokens?.serverInjected && <TestInboundControls part="lists" />}
+      {sim.mode !== "mock" && <TrfFlowCard />}
       <div className="itk-sum">
         <div>
           <b>+{got.received.toLocaleString()}</b>
@@ -127,7 +134,12 @@ export function InboundTracks() {
           <small>아직 입고칸</small>
         </div>
       </div>
-      {r.error && <div className="itk-err">읽기 실패 — {r.error}</div>}
+      {r.error && (
+        <div className="itk-err">
+          읽기 실패 — {r.error}
+          {/503|Unable to find instance/.test(r.error) ? " (서버가 다시 뜨는 중일 수 있어요 — 자동으로 다시 읽습니다)" : ""}
+        </div>
+      )}
       {!items.length && (
         <div className="note">
           {r.loading || r.readAt === null
@@ -149,10 +161,16 @@ export function InboundTracks() {
               title={t.id}
               onClick={() => setOpen(open === t.key ? null : t.key)}
             >
+              {/* 겉에 송장 번호·상품 — 일일이 눌러 보지 않게(사용자 2026-11-27 "무슨 trf인지 번호가 겉에 안 적혀 있으면 … 일일이 다 클릭해봐야 하니?") */}
               <b>
-                {t.kind === "DC"
-                  ? `DC 입고${t.from ? ` · ${t.from}` : ""}`
-                  : "센터 발주 입고"}
+                {t.kind === "DC" ? (
+                  <>
+                    <TrfRef trfId={t.id} wave={false} />
+                    <span className="itk-from">{t.from ? ` · ${t.from}` : ""}</span>
+                  </>
+                ) : (
+                  `센터 발주 입고 ${t.id.slice(-6)}`
+                )}
               </b>
               <span>
                 {t.lines.length
@@ -160,10 +178,19 @@ export function InboundTracks() {
                   : "상품은 DC 출발 뒤"}
               </span>
             </div>
-            {t.trip && (
+            {t.lines.length > 0 && (
+              <div className="itk-prod">
+                {t.lines.slice(0, 2).map((l) => `${l.name ?? l.sku} × ${l.expected}`).join(" · ")}
+                {t.lines.length > 2 ? ` 외 ${t.lines.length - 2}` : ""}
+              </div>
+            )}
+            {t.trip ? (
               <div className={`itk-trip ${t.trip.delayed ? "late" : ""}`}>
                 {tripLine(t.trip)}
               </div>
+            ) : (
+              t.kind === "DC" &&
+              t.stage === "EXPECTED" && <div className="itk-trip">DC 작업 중(피킹·검품) — 배차 전</div>
             )}
             {t.stage === "CANCELLED" ? (
               <div className="itk-why">취소·종결됨</div>

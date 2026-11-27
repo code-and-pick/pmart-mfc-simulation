@@ -25,6 +25,7 @@ import {
   type InboundTask,
   type InitialStockLoad,
   type SupplyRequest,
+  type StockLedgerEntry,
   type SupplyRequestBody,
   type SupplyRequestState,
   type SupplyRecommendations,
@@ -452,6 +453,12 @@ export class HttpBackend implements FulfillmentPort {
   /** createSupplyRequest — 발주(줄 1~200) → SUBMITTED. 같은 센터·SKU 미해결 요청이 있으면 409 DUPLICATE_OPEN_REQUEST */
   createSupplyRequest(body: SupplyRequestBody, idempotencyKey: string): Promise<SupplyRequest> {
     return this.request('POST', '/supply-requests', { body, idempotencyKey });
+  }
+
+  /** mfc-inventory stock-ledger — SKU 재고 확정 기록(최신순, 한 쪽 ≤100). 입고 흐름 "기록"(수령·검사·적치 시각·작업자) */
+  async stockLedger(mfcId: string, sku: string, size = 50): Promise<StockLedgerEntry[]> {
+    const r: { items?: StockLedgerEntry[] } = await this.request('GET', `/mfcs/${enc(mfcId)}/stock-ledger?${new URLSearchParams({ sku, size: String(size) })}`);
+    return r.items ?? [];
   }
 
   /** getSupplyRequest — 발주 한 건(0.23.0 transfers 포함) */

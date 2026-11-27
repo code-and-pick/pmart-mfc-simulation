@@ -1400,18 +1400,27 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-sent-st { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; }
 .inb-sent-st .inb-sent-more { float: none; white-space: nowrap; }
 
-/* 입고 알림 카드(InboundAlerts.tsx) — 오른쪽 위, 오른쪽 패널 왼쪽 */
+/* 입고 알림 카드(InboundAlerts.tsx) — 오른쪽 위, 앱 카드 모양(이름표·값 두 칸, 상품 굵게, 다음 할 일 강조) */
 .ia { position: fixed; top: 92px; right: 430px; z-index: 60; display: flex; flex-direction: column; gap: 8px; width: 330px; pointer-events: none; }
-.ia-c { pointer-events: auto; cursor: pointer; background: #1b1f2a; color: #e8eaed; border: 1px solid #3c4043; border-left: 5px solid #1a73e8; border-radius: 8px; padding: 8px 10px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35); font-size: 12.5px; animation: ia-in 0.25s ease-out; }
-.ia-c.act { border-left-color: #f9ab00; box-shadow: 0 0 0 2px rgba(249, 171, 0, 0.45), 0 6px 20px rgba(0, 0, 0, 0.35); }
-.ia-c.ok { border-left-color: #188038; }
-.ia-c.warn { border-left-color: #d93025; }
-.ia-h { display: flex; align-items: baseline; gap: 6px; margin-bottom: 3px; }
-.ia-h b { flex: 1; font-size: 13.5px; }
-.ia-h span { font-size: 11px; color: #9aa0a6; }
-.ia-x { background: transparent; border: 0; color: #9aa0a6; cursor: pointer; font-size: 13px; padding: 0 2px; }
-.ia-l { color: #bdc1c6; word-break: break-all; font-family: ui-monospace, Consolas, monospace; font-size: 11.5px; }
-.ia-go { margin-top: 4px; color: #8ab4f8; font-size: 12px; }
+.ia-c { display: block; pointer-events: auto; cursor: pointer; background: var(--card, #1b1f2a); color: var(--text, #e8eaed); border: 1px solid var(--line-strong, #3c4043); border-radius: 10px; padding: 10px 12px 9px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); font-size: 12.5px; animation: ia-in 0.25s ease-out; position: relative; overflow: hidden; }
+.ia-c::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: #1a73e8; }
+.ia-c.t-act::before { background: #f9ab00; }
+.ia-c.t-act { border-color: rgba(249, 171, 0, 0.6); }
+.ia-c.t-ok::before { background: #34a853; }
+.ia-c.t-warn::before { background: #ea4335; }
+.ia-c:hover { border-color: var(--accent, #1a73e8); }
+.ia-h { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.ia-h b { flex: 1; font-size: 13px; font-weight: 700; word-break: keep-all; }
+.ia-h span { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ia-x { background: transparent; border: 0; color: var(--muted); cursor: pointer; font-size: 12px; padding: 0 2px; line-height: 1; }
+.ia-x:hover { color: var(--text); }
+.ia-kv { margin: 0 0 4px; display: grid; gap: 2px; }
+.ia-kv > div { display: grid; grid-template-columns: 34px 1fr; gap: 8px; }
+.ia-kv dt { color: var(--muted); font-size: 11.5px; }
+.ia-kv dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; word-break: break-all; }
+.ia-p { font-weight: 600; margin: 2px 0; }
+.ia-next { margin-top: 6px; padding: 4px 8px; border-radius: 6px; background: rgba(26, 115, 232, 0.14); font-size: 12px; }
+.ia-go { margin-top: 6px; color: #8ab4f8; font-size: 11.5px; text-align: right; }
 @keyframes ia-in { from { transform: translateX(16px); opacity: 0; } to { transform: none; opacity: 1; } }
 .trf-ref a { color: #8ab4f8; text-decoration: none; font-weight: 600; } .trf-ref a:hover { text-decoration: underline; }
 
@@ -1438,3 +1447,105 @@ details.sec > summary h4 { justify-content: flex-start; gap: 6px; }
 .inb-sent2-chip.ok { background: #188038; }
 .inb-sent2-sub { grid-area: sub; font-size: 11px; color: var(--muted); }
 .inb-sent2-more { grid-area: more; align-self: center; color: var(--muted); }
+.inb-picked { font-size: 12px; margin: 4px 0 6px; }
+.inb-picked.ok { color: #81c995; }
+.inb-picked.no { color: #fdd663; }
+.inb-msg { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: rgba(249, 171, 0, 0.16); margin: 6px 0; }
+
+/* 입고 추적 "TRF 흐름" 카드(TrfFlowCard.tsx) — DC 시뮬레이터 카드 모양 */
+.tf { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-bottom: 10px; }
+.tf-head { display: flex; justify-content: space-between; gap: 8px; }
+.tf-no { font-size: 17px; font-weight: 700; }
+.tf-no .trf-ref a { color: #8ab4f8; font-weight: 700; }
+.tf-sub { font-size: 12px; color: var(--muted); margin-top: 1px; }
+.tf-wave { color: #8ab4f8; font-weight: 600; text-decoration: none; }
+.tf-prod { font-size: 13px; font-weight: 600; margin-top: 2px; }
+.tf-head-r { display: flex; align-items: flex-start; gap: 6px; }
+.tf-badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(127, 127, 127, 0.22); white-space: nowrap; }
+.tf-fold { background: transparent; border: 1px solid var(--line); border-radius: 6px; color: inherit; cursor: pointer; padding: 0 6px; }
+.tf-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 8px 0 4px; }
+.tf-chips button { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 10px; border-radius: 12px; border: 1px solid var(--line); background: transparent; color: inherit; cursor: pointer; }
+.tf-chips button.on { border-color: #1a73e8; color: #8ab4f8; font-weight: 700; }
+.tf-live { width: 7px; height: 7px; border-radius: 50%; background: #1a73e8; }
+.tf-h { display: flex; justify-content: space-between; align-items: baseline; margin: 10px 0 6px; }
+.tf-h b { font-size: 13px; }
+.tf-h span { font-size: 11.5px; color: var(--muted); }
+.tf-steps { list-style: none; margin: 0; padding: 0; }
+.tf-step { display: grid; grid-template-columns: 24px 1fr auto; align-items: center; gap: 8px; padding: 4px 0; position: relative; font-size: 13px; }
+.tf-step:not(:last-child)::after { content: ''; position: absolute; left: 11px; top: 26px; height: calc(100% - 18px); width: 2px; background: var(--line); }
+.tf-step > i { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; font-style: normal; font-size: 11px; font-weight: 700; background: rgba(127, 127, 127, 0.25); color: var(--muted); z-index: 1; }
+.tf-step.done > i { color: #fff; background: #188038; }
+.tf-step.done.k-order > i, .tf-step.done.k-send > i { background: #5f6368; }
+.tf-step.done.k-dc > i { background: #1a73e8; }
+.tf-step.done.k-depart > i { background: #188038; }
+.tf-step.done.k-arrive > i { background: #12b5cb; }
+.tf-step.done.k-handover > i { background: #a142f4; }
+.tf-step.done.k-receive > i { background: #f29900; }
+.tf-step.done.k-inspect > i { background: #e8710a; }
+.tf-step.done.k-putaway > i { background: #d93025; }
+.tf-step.now > i { color: #fff; background: #1a73e8; box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.35); }
+.tf-step.warn > i { color: #000; background: #f9ab00; }
+.tf-step.now { background: rgba(26, 115, 232, 0.1); border-radius: 6px; }
+.tf-step.wait b { color: var(--muted); font-weight: 500; }
+.tf-step > span { font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tf-veh { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; margin-top: 10px; display: flex; flex-direction: column; gap: 2px; }
+.tf-veh b { font-size: 13px; }
+.tf-veh span { font-size: 11.5px; color: var(--muted); }
+.tf-task { border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; font-size: 12.5px; }
+.tf-task-h { display: flex; justify-content: space-between; }
+.tf-task-h .ok { color: #81c995; font-weight: 700; font-size: 11.5px; }
+.tf-task-h .run { color: #8ab4f8; font-weight: 700; font-size: 11.5px; }
+.tf-task-b { display: flex; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.tf-task-b b { color: inherit; }
+.tf-task-w { font-size: 11px; color: var(--muted); }
+.tf-ev { list-style: none; margin: 0; padding: 0; }
+.tf-ev li { display: grid; grid-template-columns: 62px 1fr; gap: 8px; padding: 5px 0; border-top: 1px solid var(--line); font-size: 12.5px; }
+.tf-ev li > span { color: var(--muted); font-variant-numeric: tabular-nums; }
+.tf-ev small { display: block; color: var(--muted); font-size: 11px; }
+.itk-h .trf-ref a { font-size: 14px; }
+.itk-from { font-weight: 500; color: var(--muted); font-size: 12px; }
+.itk-prod { font-size: 12.5px; font-weight: 600; margin: 2px 0 4px; }
+
+/* PDA 입고 찍을 코드 팝업(PdaScanPopup.tsx) — 앱과 같은 어두운 카드, 코드 칸만 흰 바탕(카메라가 읽게). 사용자 2026-11-27 "갑자기 웬 하얀색 팝업" */
+.psp { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; width: 360px; background: var(--card, #1b1f2a); color: var(--text, #e8eaed); border-radius: 12px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45); padding: 10px 12px; border: 1px solid var(--line-strong, #3c4043); }
+.psp.mini { width: auto; min-width: 300px; }
+.psp-h { display: flex; align-items: center; gap: 8px; }
+.psp-h b { font-size: 14px; color: #8ab4f8; }
+.psp-h span { flex: 1; font-size: 12px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.psp-h button { background: transparent; border: 0; cursor: pointer; font-size: 13px; color: var(--muted); }
+.psp-step { display: flex; align-items: baseline; gap: 8px; margin: 8px 0 6px; }
+.psp-step b { font-size: 14px; }
+.psp-step span { font-size: 12px; color: var(--muted); }
+.psp-code { display: flex; justify-content: center; padding: 8px; background: #fff; border-radius: 8px; }
+.psp-code .bc, .psp-code .bc * { color: #202124; }
+.psp-nav { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; }
+.psp-nav button { padding: 5px 12px; border-radius: 8px; border: 1px solid var(--line-strong, #3c4043); background: transparent; color: inherit; cursor: pointer; font-size: 12.5px; font-weight: 600; }
+.psp-nav button:not(:disabled):last-child { background: var(--accent, #1a73e8); border-color: var(--accent, #1a73e8); color: #fff; }
+.psp-nav button:disabled { opacity: 0.35; cursor: default; }
+.psp-nav span { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.psp-wait { font-size: 11.5px; color: var(--muted); margin-top: 6px; text-align: center; }
+.inb-done-fold > summary { cursor: pointer; font-size: 12px; color: var(--muted); padding: 6px 2px; border-top: 1px solid var(--line); }
+
+/* 도착 알림(DcArrivals) — 알림 카드와 같은 모양: 제목 + 단계 칩 / 이름표·값 / 거절 경고 / 다음 할 일 */
+.dca-c { border: 1px solid var(--line-strong, #3c4043); border-left: 4px solid #1a73e8; gap: 6px; padding: 10px 12px; }
+.dca-c.arrived { border-left-color: #f9ab00; box-shadow: 0 0 0 2px rgba(249, 171, 0, 0.35), 0 8px 24px rgba(0, 0, 0, 0.3); }
+.dca-h { align-items: center; }
+.dca-h b { font-size: 14.5px; }
+.dca-chip { margin-left: auto; font-size: 11.5px !important; font-weight: 700; padding: 1px 8px; border-radius: 10px; background: #1a73e8; color: #fff; }
+.dca-chip.act { background: #f9ab00; color: #000; }
+.dca-kv { margin: 0; display: grid; gap: 3px; }
+.dca-kv > div { display: grid; grid-template-columns: 34px 1fr; gap: 8px; font-size: 12.5px; }
+.dca-kv dt { color: var(--muted); font-size: 11.5px; }
+.dca-kv dd { margin: 0; font-weight: 600; word-break: break-all; }
+.dca-kv dd b { white-space: nowrap; }
+.dca-warn { font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: rgba(234, 67, 53, 0.16); color: #f28b82; }
+.dca-next { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; background: rgba(26, 115, 232, 0.14); }
+.dca-next .link { white-space: nowrap; }
+
+/* 입고 띄움 창 한 줄(App .inb-dock) — 오른쪽 패널 왼쪽에 세로로: 도착 차량 → 찍을 코드 → 알림. 각 창은 제자리(fixed)를 버리고 이 줄 안에 */
+.inb-dock { position: fixed; top: 160px; right: 380px; z-index: 60; width: 360px; display: flex; flex-direction: column; gap: 8px; max-height: calc(100vh - 176px); overflow-y: auto; pointer-events: none; scrollbar-width: thin; }
+.inb-dock[data-right='closed'] { right: 16px; }
+.inb-dock > * { pointer-events: auto; }
+.inb-dock .dca { position: static; transform: none; top: auto; left: auto; width: auto; }
+.inb-dock .psp { position: static; transform: none; left: auto; bottom: auto; width: auto; }
+.inb-dock .ia { position: static; top: auto; right: auto; width: auto; pointer-events: auto; }
