@@ -240,3 +240,148 @@ export function packageLines(p: InboundPromise, nameOf: (sku: string) => string)
   for (const k of p.packages ?? []) m.set(k.sku, (m.get(k.sku) ?? 0) + k.qty);
   return [...m].map(([sku, expected]) => ({ sku, name: nameOf(sku), expected, received: 0 }));
 }
+
+/** 바코드 탭 — 열린 입고 작업 하나와 찍을 것(PDA 순서: 출발 칸 → 상품 → 놓을 칸) */
+export interface InboundScanItem {
+  task: InboundTask;
+  remain: number;
+  /** 놓을 칸 — 적치·격리 이동만. why: 서버 추천 / 서버 추천 없음 → 같은 상품이 있는 칸 */
+  dest: { code: string; qty: number | null; why: 'SUGGESTED' | 'SAME_SKU' | 'EMPTY_RESERVE' | 'PICK_FACE' | 'QUARANTINE' }[];
+  /** 어느 입고 건인가 — 탭 묶음 키·이름(DC 입고면 TRF 번호) */
+  source: InboundSource;
+}
+
+/** 입고 알림 카드 하나 */
+export interface InboundAlert {
+  id: number;
+  /** 같은 일을 두 번 알리지 않는 키 */
+  key: string;
+  at: number;
+  tone: 'info' | 'act' | 'ok' | 'warn';
+  title: string;
+  /** 번호는 줄 하나에 하나 */
+  lines: string[];
+  /** 닫을 때까지 남김(도착 등 할 일) */
+  sticky?: boolean;
+  /** 누르면 열 오른쪽 탭 */
+  view?: 'scan' | 'inbound';
+}
+
+/** 바코드 탭 — 방금 끝난 입고 작업(목록에서 빠진 뒤 서버가 COMPLETED) */
+export interface InboundScanDone {
+  task: InboundTask;
+  source: InboundSource;
+  atMs: number;
+}
+
+export interface InboundSource {
+  key: string;
+  label: string;
+  trfId?: string | null;
+}
+
+/** 수령 ID → 입고 건(DC 입고 = TRF, 그 밖은 수령 종류). trfOf 는 수령 ID → trfId(입고 예정 receipts 에서) */
+export function inboundSourceOf(receiptId: string, trfOf: (rid: string) => string | undefined): InboundSource {
+  const trf = trfOf(receiptId);
+  if (trf) return { key: trf, label: trf, trfId: trf };
+  if (receiptId.startsWith('RCV-TRF-')) return { key: receiptId, label: `DC 입고(TRF 확인 중) ${receiptId.slice(-6)}` };
+  if (receiptId.startsWith('RCV-SR-')) return { key: receiptId, label: `센터 발주 ${receiptId.slice(-6)}` };
+  if (receiptId.startsWith('RCV-INIT-')) return { key: receiptId, label: `초기 입고 ${receiptId.slice(-6)}` };
+  if (/^(RET|RTN|RR)-/.test(receiptId)) return { key: receiptId, label: `회수품 ${receiptId.slice(-6)}` };
+  return { key: receiptId, label: `입고 ${receiptId.slice(-6)}` };
+}
+
+const NOT_SHELF = /^(RCV|QRT|CRT|PK|PACK|DSP|STG)-/;
+const QRT_BY_TEMP = { AMBIENT: 'QRT-A-01', CHILLED: 'QRT-C-01', FROZEN: 'QRT-F-01' } as const;
+
+/**
+ * 열린 입고 작업의 놓을 칸 — 서버 추천(suggestedPlacements → suggestedToLocations)이 먼저.
+ * 비면(LAN 큰 상품 추천 버그, MFC 백엔드 2026-11-27) 서버 추천 순서(mfc-inventory 0.47 ③)를 흉내 내되 피킹 칸은 뺀다 — 피킹 칸은 상품마다 들어갈 수가 정해져
+ * 꽉 차면 거절(LOCATION_CAPACITY_EXCEEDED, 사용자 PDA 2026-11-27 A-H2-07-1-01·A-H1-03-5-01 "할 때마다 이러면 곤란한데"). 그 온도대 보충재고 칸 중
+ * ① 그 상품이 있는 칸 ② 빈 칸(큰 상품 바닥 팔레트 X-R2 먼저) 3곳. 보충재고 칸이 없을 때만 그 상품이 있는 피킹 칸(꽉 찼을 수 있음). 참고값 — 서버가 목적지를 검사한다
+ */
+export function inboundScanItems(
+  tasks: InboundTask[],
+  units: { sku: string; locationCode: string; qty: number }[],
+  trfOf: (rid: string) => string | undefined = () => undefined,
+  reserveCodes: readonly string[] = [],
+): InboundScanItem[] {
+  const used = new Set(units.filter((u) => u.qty > 0).map((u) => u.locationCode));
+  return tasks
+    .map((task) => ({ task, remain: task.plannedQty - task.doneQty - (task.exceptedQty ?? 0) }))
+    .filter((x) => x.task.state === 'READY' && x.remain > 0)
+    .map(({ task, remain }) => {
+      let dest: InboundScanItem['dest'] = [];
+      if (task.taskType === 'QUARANTINE_MOVE') {
+        const s = (task.suggestedToLocations ?? []).filter((c) => c.startsWith('QRT-'));
+        dest = (s.length ? s : [QRT_BY_TEMP[task.storageType ?? 'AMBIENT']]).map((code) => ({ code, qty: null, why: 'QUARANTINE' as const }));
+      } else if (task.taskType === 'PUTAWAY') {
+        if (task.suggestedPlacements?.length) dest = task.suggestedPlacements.map((p) => ({ code: p.locationCode, qty: p.qty, why: 'SUGGESTED' as const }));
+        else if (task.suggestedToLocations?.length) dest = task.suggestedToLocations.map((code) => ({ code, qty: null, why: 'SUGGESTED' as const }));
+        else {
+          const letter = { AMBIENT: 'A', CHILLED: 'C', FROZEN: 'F' }[task.storageType ?? 'AMBIENT'];
+          const isReserve = (c: string) => c.startsWith(`${letter}-R`) && /^[ACF]-R\d/.test(c);
+          const mine = new Map<string, number>();
+          for (const u of units) if (u.sku === task.sku && u.qty > 0 && !NOT_SHELF.test(u.locationCode) && u.locationCode !== task.locationCode) mine.set(u.locationCode, (mine.get(u.locationCode) ?? 0) + u.qty);
+          const sameReserve = [...mine.entries()].filter(([c]) => isReserve(c)).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+          const empty = reserveCodes.filter((c) => isReserve(c) && !used.has(c)).sort((a, b) => Number(!/-R2-/.test(a)) - Number(!/-R2-/.test(b)) || a.localeCompare(b));
+          const picks = [...mine.entries()].filter(([c]) => !isReserve(c)).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+          const res = [...sameReserve.map((code) => ({ code, qty: null, why: 'SAME_SKU' as const })), ...empty.map((code) => ({ code, qty: null, why: 'EMPTY_RESERVE' as const }))].slice(0, 3);
+          dest = res.length ? res : picks.slice(0, 3).map((code) => ({ code, qty: null, why: 'PICK_FACE' as const }));
+        }
+      }
+      return { task, remain, dest, source: inboundSourceOf(task.receiptId, trfOf) };
+    })
+    .sort((a, b) => Number(!!b.task.assigneeId) - Number(!!a.task.assigneeId) || (a.task.createdAt ?? '').localeCompare(b.task.createdAt ?? ''));
+}
+
+/**
+ * 바코드 탭 "입고" — 입고 건(DC 송장 TRF 하나, 또는 그 밖의 수령 하나)마다 한 카드.
+ * 와 있는 DC 차량(정차)·그 송장의 입고 예정·열린 검사·적치 작업·방금 끝난 작업을 한데 모아 지금 단계를 정한다
+ * (사용자 2026-11-27 "번호도 섞여있고 순서도 섞여있고 뭐가 뭔지도 모르겠잖아")
+ */
+export type InboundJobStage = 'UNLOAD' | 'RECEIVE' | 'TASKS' | 'DONE';
+export interface InboundJob {
+  key: string;
+  /** DC 입고면 송장 번호 */
+  trfId: string | null;
+  /** DC 입고가 아니면 "초기 입고 …" 같은 이름 */
+  label: string;
+  arrival: DcArrival | null;
+  trf: DcArrivalTrf | null;
+  open: InboundScanItem[];
+  done: InboundScanDone[];
+  stage: InboundJobStage;
+  /** PDA 가 받아 둔 검사·적치가 있음 */
+  pdaBusy: boolean;
+}
+
+const JOB_ORDER: Record<InboundJobStage, number> = { UNLOAD: 0, RECEIVE: 1, TASKS: 2, DONE: 3 };
+
+export function inboundJobs(arrivals: DcArrival[], items: InboundScanItem[], done: InboundScanDone[]): InboundJob[] {
+  const jobs = new Map<string, InboundJob>();
+  const get = (key: string, trfId: string | null, label: string) => {
+    let j = jobs.get(key);
+    if (!j) jobs.set(key, (j = { key, trfId, label, arrival: null, trf: null, open: [], done: [], stage: 'DONE', pdaBusy: false }));
+    return j;
+  };
+  for (const a of arrivals)
+    for (const id of a.trfIds) {
+      const j = get(id, id, id);
+      j.arrival = a;
+      j.trf = a.trfs?.find((t) => t.trfId === id) ?? null;
+    }
+  for (const it of items) get(it.source.key, it.source.trfId ?? null, it.source.label).open.push(it);
+  for (const d of done) get(d.source.key, d.source.trfId ?? null, d.source.label).done.push(d);
+  for (const j of jobs.values()) {
+    j.pdaBusy = j.open.some((x) => !!x.task.assigneeId);
+    const received = !j.trf || j.trf.state === 'TIN_POSTED' || j.trf.state === 'CLOSED';
+    j.stage = j.arrival?.stop === 'ARRIVED' ? 'UNLOAD' : j.arrival && !received ? 'RECEIVE' : j.open.length ? 'TASKS' : 'DONE';
+  }
+  return [...jobs.values()].sort((a, b) => Number(b.pdaBusy) - Number(a.pdaBusy) || JOB_ORDER[a.stage] - JOB_ORDER[b.stage] || a.key.localeCompare(b.key));
+}
+
+/** 송장 짧은 이름 — 화면 번호(T+6)가 있으면 그것, 없으면 "TRF …끝6자리"(요청 R-52 전) */
+export function trfShort(trfId: string, trfNumber?: string | null): string {
+  return trfNumber || `TRF …${trfId.slice(-6)}`;
+}

@@ -698,6 +698,10 @@ export interface InboundReceipt {
  */
 export interface InboundPromise {
   trfId: string;
+  /** (요청 R-52) cdc-outbound 화면 번호 T+6·Wave — 서버가 아직 안 줌 */
+  trfNumber?: string | null;
+  waveId?: string | null;
+  waveNumber?: string | null;
   departureId?: string | null;
   mfcId: string;
   fromCdc?: string | null;
@@ -758,7 +762,7 @@ export interface TmsTrip {
     delayed?: boolean;
     handover?: { handoverId: string; result: 'MATCHED' | 'MISMATCHED'; shippedBoxes?: number; receivedBoxes?: number; missingLpns?: string[]; extraLpns?: string[] } | null;
   }[];
-  transfers?: { trfId: string; stopSeq: number; loaded: boolean; lpns: string[]; rtCount?: number | null }[];
+  transfers?: { trfId: string; trfNumber?: string | null; stopSeq: number; loaded: boolean; lpns: string[]; rtCount?: number | null }[];
   version: number;
 }
 
@@ -806,6 +810,22 @@ export interface SupplyRequest extends SupplyRequestBody {
   transferDueAt?: string | null;
   transferSentAt?: string | null;
   transferError?: string | null;
+  /** (0.23.0 R-27) 승인이 만든 이관 — 온도대마다 하나. 하나면 `TRF-{id}`, 여럿이면 `TRF-{id}-{온도대}`. 같은 trfId 의 입고 예정. 보급 DC 없으면 빈 배열 */
+  transfers?: SupplyTransfer[];
+}
+
+export interface SupplyTransfer {
+  trfId: string;
+  /** (요청 R-52) cdc-outbound 화면 번호 T+6·Wave — 서버가 아직 안 줌 */
+  trfNumber?: string | null;
+  waveId?: string | null;
+  waveNumber?: string | null;
+  temperatureZone: 'AMBIENT' | 'CHILLED' | 'FROZEN';
+  cdcId: string;
+  dueAt: string;
+  sentAt?: string | null;
+  error?: string | null;
+  lines: { sku: string; qty: number }[];
 }
 
 /** mfc-inbound SupplyRecommendation(0.21.0, MI-4) — recommendedQty null 이면 추천 안 함(reason). null 을 0 으로 채우지 않는다 */

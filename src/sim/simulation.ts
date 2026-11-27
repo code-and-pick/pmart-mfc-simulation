@@ -24,8 +24,11 @@ import { HttpBackend } from '../backend/http/HttpBackend';
 import { TokenSource } from '../backend/http/tokens';
 import type { ApiCallRecord, DomainEventRecord, FulfillmentPort } from '../backend/port';
 import { Rng } from '../util/rng';
-import type { CenterStock, InboundPromise, InboundReceipt, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
-import { dcArrivalsOf, mockTrack, trfLabelOf, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundTrack, type MockTruckTrack } from './inboundTrack';
+import type { CenterStock, InboundPromise, InboundReceipt, StockUnitRow, SupplyTransfer, InboundTask, InitialStockLoad, PromiseReceiptLine, SupplyRequest, TmsTrip } from '../domain/contract';
+import { supplyFlowSteps, supplyMiniStage, type FlowStep } from './supplyFlow';
+import { trfShort } from './inboundTrack';
+import type { InboundAlert } from './inboundTrack';
+import { dcArrivalsOf, inboundScanItems, mockTrack, trfLabelOf, packageLines, realLine, STAGE_ORDER, stageOf, tripInfo, type DcArrival, type InboundScanDone, type InboundScanItem, type InboundTrack, type MockTruckTrack } from './inboundTrack';
 import type { SiteContext } from './context';
 import { Metrics } from './metrics';
 import { RealBoard, type RealTask } from './realBoard';
@@ -810,7 +813,12 @@ export class Simulation {
 
   /** 상품 이름(search 사본) — 발주 줄은 SKU·수량만 와서 */
   productName(sku: string): string {
-    return this.searchCache?.hits.find((h) => h.representativeSku === sku)?.name ?? sku;
+    return this.searchCache?.hits.find((h) => h.representativeSku === sku)?.name ?? this.extraNames.get(sku) ?? sku;
+  }
+  /** 검색 사본에 없는 상품 이름(입고 예정 줄 productName 등) */
+  private extraNames = new Map<string, string>();
+  rememberName(sku: string, name: string) {
+    this.extraNames.set(sku, name);
   }
 
   /**
@@ -850,6 +858,65 @@ export class Simulation {
     return out;
   }
 
+  /** DC 로 보낸 발주(0.23.0 R-27) — 최근 승인된 공급 요청의 이관(TRF)마다 한 줄, 새것이 위 */
+  async dcSupplies(): Promise<{ req: SupplyRequest; t: SupplyTransfer; promise: InboundPromise | null }[]> {
+    const since = Date.now() - REAL_DC.supplyShowDays * 86_400_000;
+    const reqs = await this.requireSupHttp().listSupplyRequests(this.params.mfcId, ['APPROVED']);
+    const rows = reqs
+      .filter((r) => (r.transfers?.length ?? 0) > 0 && Date.parse(r.decidedAt ?? r.submittedAt ?? '') >= since)
+      .sort((a, b) => (b.decidedAt ?? '').localeCompare(a.decidedAt ?? ''))
+      .flatMap((req) => (req.transfers ?? []).map((t) => ({ req, t })));
+    // 입고 예정 — 상품 이름(SKU 대신)·수령 상태(0.23.0 은 승인 때 바로 생김)
+    const h = this.requireRealHttp();
+    const out: { req: SupplyRequest; t: SupplyTransfer; promise: InboundPromise | null }[] = [];
+    await runLimited(rows, 4, async (r) => {
+      const promise = await h.getInboundPromise(r.t.trfId).catch(() => null);
+      for (const l of promise?.lines ?? []) if (l.productName) this.rememberName(l.sku, l.productName);
+      this.noteTrf(r.t.trfId, r.t);
+      if (promise) this.noteTrf(promise.trfId, promise);
+      out.push({ ...r, promise });
+    });
+    return rows.map((r) => out.find((o) => o.t.trfId === r.t.trfId)!);
+  }
+
+  /** 목록 한 줄 — 6칸 단계와 글(운행은 DC 운행 읽기 마지막 값) */
+  dcSupplyMini(t: SupplyTransfer, promise: InboundPromise | null): ReturnType<typeof supplyMiniStage> & { done: boolean } {
+    const m = supplyMiniStage(t, this.dcTrips.get(t.trfId) ?? null, promise);
+    // 수령 뒤 열린 검사·적치가 없으면 끝(바코드 탭 입고 작업 읽기 기준)
+    const done = m.at === 5 && this.inboundScan.readAt !== null && !this.inboundScan.items.some((x) => x.source.trfId === t.trfId);
+    return done ? { at: 5, text: '검사·적치까지 끝 — 판매 가능', tone: 'ok', done } : { ...m, tone: m.at === 5 ? 'run' : m.tone, done };
+  }
+
+  /** 입고 신청 한 건 흐름(발주 → 승인 → DC 로 → 운행 → 도착 → 인계 → 수령 → 검사 → 적치) — 그때그때 서버에서 읽음(읽기만) */
+  async supplyFlow(req: SupplyRequest, t: SupplyTransfer): Promise<FlowStep[]> {
+    const h = this.requireRealHttp();
+    const mfc = this.params.mfcId;
+    const [fresh, trips, promise] = await Promise.all([
+      this.requireSupHttp().getSupplyRequest(req.supplyRequestId).catch(() => req),
+      h.listMfcInboundTrips(mfc).catch(() => [] as TmsTrip[]),
+      h.getInboundPromise(t.trfId).catch(() => null),
+    ]);
+    const ft = fresh.transfers?.find((x) => x.trfId === t.trfId) ?? t;
+    let link: { trip: TmsTrip; stop: TmsTrip['stops'][number] } | null = null;
+    for (const trip of trips) for (const stop of trip.stops) if (stop.mfcId === mfc && stop.trfIds.includes(t.trfId)) link = { trip, stop };
+    const tasks: InboundTask[] = [];
+    for (const r of promise?.receipts ?? []) tasks.push(...(await h.listInboundTasks(mfc, undefined, undefined, r.receiptId).catch(() => [] as InboundTask[])));
+    return supplyFlowSteps(fresh, ft, link, promise, tasks, (s) => this.productName(s));
+  }
+
+  /** 이관 하나가 지금 어디(서버 이관 기록 + 운행 마지막 읽기) */
+  dcTransferStage(t: SupplyTransfer): string {
+    return this.dcTransferState(t).text;
+  }
+
+  /** 화면 — 진행 글과 색(warn = 서버가 다시 보내는 중, ok = 받음). 서버는 실패해도 transfer_next_try_at 으로 다시 보낸다(0.23.0) — "실패"로 단정하지 않는다 */
+  dcTransferState(t: SupplyTransfer): { text: string; tone: 'warn' | 'run' | 'ok' } {
+    if (t.error && !t.sentAt) return { text: `DC 로 보내는 중 — 서버가 다시 시도 중(지난 시도: ${/UNKNOWN_RESULT/.test(t.error) ? '결과 모름' : t.error.slice(0, 40)})`, tone: 'warn' };
+    if (!t.sentAt) return { text: 'DC 로 보내는 중', tone: 'run' };
+    const s = this.supplyDcStage(t.trfId, t.trfId)?.text;
+    return { text: s ?? 'DC 가 받음 — 피킹·배차 기다림', tone: s === '받음' ? 'ok' : 'run' };
+  }
+
   /** 승인 대기 발주(SUBMITTED) */
   async pendingSupply(): Promise<SupplyRequest[]> {
     return this.requireSupHttp().listSupplyRequests(this.params.mfcId, ['SUBMITTED']);
@@ -862,7 +929,7 @@ export class Simulation {
     const body = { ...(cut.length ? { lines: cut } : {}), ...(note.trim() ? { note: note.trim() } : {}) };
     const key = `sim-sr-ok:${req.supplyRequestId}:${cut.map((c) => `${c.sku}=${c.approvedQty}`).join(',')}`;
     const r = await retryUnknown(() => h.approveSupplyRequest(req.supplyRequestId, req.version, body, key));
-    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → ${r.transferCdcId ? `${cdcName(r.transferCdcId)} 이관 ${r.linkedTrfId ?? '?'}` : REAL_DC.supplyViaDc ? `${cdcName('CDC01')} 로(DC 시뮬레이터 다리)` : `입고 예정 ${r.linkedReceiptId ?? '?'}`}`);
+    this.log(`발주 ${req.supplyRequestId} 승인${cut.length ? `(${cut.length}줄 줄임)` : ''} → ${r.transfers?.length ? `${cdcName(r.transfers[0].cdcId)} 이관 ${r.transfers.map((t) => t.trfId).join(', ')}` : r.transferCdcId ? `${cdcName(r.transferCdcId)} 이관 ${r.linkedTrfId ?? '?'}` : REAL_DC.supplyViaDc ? `${cdcName('CDC01')} 로(DC 시뮬레이터 다리)` : `입고 예정 ${r.linkedReceiptId ?? '?'}`}`);
     return r;
   }
 
@@ -1088,6 +1155,105 @@ export class Simulation {
   /** 화면 — 이 센터에 와 있는 DC 차량(정차 ARRIVED·HANDED_OVER, 정차 출발 전) */
   dcArrivals: DcArrival[] = [];
   dcArrivalsVersion = 0;
+
+  /** 송장 화면 번호·Wave(서버가 주면 — 요청 R-52). 입고 예정·발주 이관·운행에서 모은다 */
+  private trfNos = new Map<string, { trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null }>();
+  noteTrf(trfId: string, x: { trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null }) {
+    const cur = this.trfNos.get(trfId) ?? {};
+    this.trfNos.set(trfId, { trfNumber: x.trfNumber ?? cur.trfNumber, waveId: x.waveId ?? cur.waveId, waveNumber: x.waveNumber ?? cur.waveNumber });
+  }
+  trfInfo(trfId: string): { trfId: string; trfNumber?: string | null; waveId?: string | null; waveNumber?: string | null; short: string } {
+    const x = this.trfNos.get(trfId) ?? {};
+    return { trfId, ...x, short: trfShort(trfId, x.trfNumber) };
+  }
+
+  /** 입고 알림 카드(화면 오른쪽 위) — 배차·출발·도착·인계·수령·검사·적치 끝. sticky 는 닫을 때까지, 아니면 화면이 잠시 뒤 지움 */
+  alerts: InboundAlert[] = [];
+  alertsVersion = 0;
+  private alertSeq = 0;
+  pushAlert(a: Omit<InboundAlert, 'id' | 'at'>) {
+    if (this.alerts.some((x) => x.key === a.key)) return;
+    this.alerts = [{ ...a, id: ++this.alertSeq, at: Date.now() }, ...this.alerts].slice(0, 8);
+    this.alertsVersion++;
+  }
+  dismissAlert(id: number) {
+    this.alerts = this.alerts.filter((x) => x.id !== id);
+    this.alertsVersion++;
+  }
+
+  /** 바코드 탭 "입고 검사·적치" — 센터의 열린 입고 작업과 놓을 칸(사용자 2026-11-27 "너한테 적치 입고 바코드가 없는데") */
+  inboundScan: { items: InboundScanItem[]; done: InboundScanDone[]; readAt: number | null; error: string | null; version: number } = { items: [], done: [], readAt: null, error: null, version: 0 };
+  private inboundScanBusy = false;
+  private receiptTrf = new Map<string, string>();
+  private reserveUnits = new Map<string, { at: number; rows: StockUnitRow[] }>();
+  /** 이 센터 보충재고 칸 코드(X-R…) — 평면 칸·바닥 팔레트에서(locationCodes 대응표) */
+  private reserveCodes(): string[] {
+    const out = new Set<string>();
+    for (const loc of this.layout.locations) {
+      const c = this.codes.toBackend(loc.code);
+      if (c && /^[ACF]-R\d/.test(c)) out.add(c);
+    }
+    for (const rs of this.layout.reserves) {
+      const c = this.codes.toBackend(rs.id);
+      if (c && /^[ACF]-R\d/.test(c)) out.add(c);
+    }
+    return [...out];
+  }
+  async refreshInboundScan(minGapMs = 8000): Promise<void> {
+    const h = this.realHttp;
+    if (!h || this.inboundScanBusy || (this.inboundScan.readAt && Date.now() - this.inboundScan.readAt < minGapMs)) return;
+    this.inboundScanBusy = true;
+    try {
+      const mfc = this.params.mfcId;
+      const tasks = await h.listInboundTasks(mfc, 'READY');
+      const noHintTasks = tasks.filter((t) => t.taskType === 'PUTAWAY' && !t.suggestedPlacements?.length && !t.suggestedToLocations?.length);
+      const noHint = [...new Set(noHintTasks.map((t) => t.sku))].slice(0, 100);
+      const stocks = noHint.length ? await h.getCenterStocks(mfc, noHint) : [];
+      const units = stocks.flatMap((s) => s.units.map((u) => ({ sku: s.sku, locationCode: u.locationCode, qty: u.qty })));
+      // 서버 추천이 빈 적치 — 그 온도대 보충재고 칸에 무엇이 있나(빈 칸 찾기)
+      // 보충재고 칸 점유는 1분 사본(LAN 429 RATE_LIMITED — 사용자 2026-11-27 캡처, 읽기를 줄임)
+      const letters = [...new Set(noHintTasks.map((t) => ({ AMBIENT: 'A', CHILLED: 'C', FROZEN: 'F' })[t.storageType ?? 'AMBIENT']))];
+      for (const l of letters) {
+        const c = this.reserveUnits.get(l);
+        const rows = c && Date.now() - c.at < 60_000 ? c.rows : await h.listAllStockUnits(mfc, 3, `${l}-R`);
+        if (!c || c.rows !== rows) this.reserveUnits.set(l, { at: Date.now(), rows });
+        for (const u of rows) units.push({ sku: u.sku, locationCode: u.locationCode, qty: u.qty });
+      }
+      // 수령 ID → TRF(입고 예정 receipts) — 모르는 DC 수령이 있을 때만 다시 읽음
+      if (tasks.some((t) => t.receiptId.startsWith('RCV-TRF-') && !this.receiptTrf.has(t.receiptId))) {
+        const [open, posted] = await Promise.all([h.listInboundPromises(mfc), h.listInboundPromises(mfc, 'TIN_POSTED').catch(() => [] as InboundPromise[])]);
+        for (const p of [...open, ...posted]) for (const x of p.receipts ?? []) this.receiptTrf.set(x.receiptId, p.trfId);
+      }
+      const items = inboundScanItems(tasks, units, (rid) => this.receiptTrf.get(rid), this.reserveCodes());
+      // 목록에서 빠진 작업 = 끝났거나 예외 — 서버에서 한 번 읽어 COMPLETED 면 "끝"으로 남기고 알림(사용자 2026-11-27 "작업 끝내기 하면 작업 완료 처리해주고 화면에도").
+      // PDA "작업 끝내기"는 서버에 아무것도 안 보낸다(첫 화면으로) — 완료는 "적치했어요"(putaways)에서 서버가 이미 정한다
+      const nowIds = new Set(items.map((x) => x.task.taskId));
+      const now = Date.now();
+      let done = this.inboundScan.done.filter((d) => now - d.atMs < INBOUND_TRACK.doneKeepMs);
+      for (const gone of this.inboundScan.items.filter((x) => !nowIds.has(x.task.taskId))) {
+        try {
+          const t = await h.getInboundTask(gone.task.taskId);
+          if (t.state !== 'COMPLETED') continue;
+          done = [{ task: t, source: gone.source, atMs: now }, ...done.filter((d) => d.task.taskId !== t.taskId)];
+          const kind = t.taskType === 'INSPECT' ? '품질검사' : t.taskType === 'PUTAWAY' ? '적치' : '격리 이동';
+          this.log(`✅ ${kind} 끝 — ${gone.source.label} · ${t.productName ?? t.sku} ${t.doneQty}개${t.assigneeId ? ` · ${this.board?.workerName(t.assigneeId) ?? ''}` : ''}`);
+          this.pushAlert({ key: `${t.taskId}:done`, tone: 'ok', title: `✅ ${kind} 끝`, lines: [gone.source.trfId ? `송장 ${this.trfInfo(gone.source.trfId).short}` : gone.source.label, `${t.productName ?? t.sku} ${t.doneQty}개`], view: 'scan' });
+          if (!items.some((x) => x.source.key === gone.source.key)) {
+            this.log(`✅ ${gone.source.label} 입고 작업 모두 끝(검사·적치)`);
+            this.pushAlert({ key: `${gone.source.key}:alldone`, tone: 'ok', title: '✅ 입고 끝 — 판매 가능', lines: [gone.source.trfId ? `송장 ${this.trfInfo(gone.source.trfId).short}` : gone.source.label, ...[...new Map(done.filter((d) => d.source.key === gone.source.key).map((d) => [d.task.sku, `${d.task.productName ?? d.task.sku} ${d.task.doneQty}개`])).values()], '검사·적치 모두 끝'], sticky: true, view: 'inbound' });
+          }
+        } catch {
+          // 다음 읽기에 다시 보지 않음(목록에서 빠졌으니) — 알림만 놓침
+        }
+      }
+      const changed = JSON.stringify(items) !== JSON.stringify(this.inboundScan.items) || done.length !== this.inboundScan.done.length;
+      this.inboundScan = { items, done, readAt: now, error: null, version: this.inboundScan.version + (changed ? 1 : 0) };
+    } catch (e) {
+      this.inboundScan = { ...this.inboundScan, error: e instanceof Error ? e.message : String(e), version: this.inboundScan.version + 1 };
+    } finally {
+      this.inboundScanBusy = false;
+    }
+  }
   private dcPollTimer: ReturnType<typeof setInterval> | null = null;
   private dcPollBusy = false;
   /** 알림용 — 정차마다 마지막 본 `운행상태/정차상태`, TRF 마다 마지막 입고 예정 상태, 첫 읽기 끝났나 */
@@ -1118,8 +1284,33 @@ export class Simulation {
           const now = `${trip.state}/${stop.state}`;
           if (this.dcPolledOnce && was !== now) {
             const who = `${cdcName(trip.cdcId)} 차량 ${dcTruckLabel(trip.cdcId, trip.tripId)}`;
-            if (!was && stop.state === 'PLANNED' && trip.state !== 'DEPARTED') this.log(`${who} 배차 — DC 에서 상차 중(TRF ${stop.trfIds.join(', ')})`);
-            if (trip.state === 'DEPARTED' && stop.state === 'PLANNED' && !was?.startsWith('DEPARTED/')) this.log(`${who} DC 출발 — 이 센터로 오는 중${stop.plannedArrivalAt ? ` · 도착 예정 ${new Date(stop.plannedArrivalAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })}` : ''}`);
+            const ids = [`운행 ${trip.tripId} · 정차 ${stop.seq}`, ...stop.trfIds.map((x) => `송장 ${this.trfInfo(x).short}`)];
+            const boxes = (trip.transfers ?? []).filter((x) => x.stopSeq === stop.seq).reduce((n, x) => n + x.lpns.length, 0);
+            const wasStop = was?.split('/')[1];
+            if (!was && stop.state === 'PLANNED' && trip.state !== 'DEPARTED') {
+              this.log(`${who} 배차 — DC 에서 상차 중(TRF ${stop.trfIds.join(', ')})`);
+              this.pushAlert({ key: `${k}:plan`, tone: 'info', title: `${cdcName(trip.cdcId)} 배차 — DC 에서 상차 중`, lines: ids, view: 'inbound' });
+            }
+            if (trip.state === 'DEPARTED' && stop.state === 'PLANNED' && !was?.startsWith('DEPARTED/')) {
+              const eta = stop.estimatedArrivalAt ?? stop.plannedArrivalAt;
+              const etaKo = eta ? new Date(eta).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false }) : null;
+              this.log(`${who} DC 출발 — 이 센터로 오는 중${etaKo ? ` · 도착 예정 ${etaKo}` : ''}`);
+              this.pushAlert({ key: `${k}:depart`, tone: 'info', title: `${cdcName(trip.cdcId)} 출발 — 오는 중${etaKo ? ` · ${etaKo} 도착 예정` : ''}`, lines: [...ids, `박스 ${boxes}개`], view: 'inbound' });
+            }
+            // 도착 — 읽는 사이에 인계까지 끝났어도(도착을 못 봄) 알린다(사용자 2026-11-27 "알림이랑 하차작업 팝업 좀 바로바로 띄워")
+            const arrivedNow = stop.state === 'ARRIVED' || ((stop.state === 'HANDED_OVER' || stop.state === 'DEPARTED') && (wasStop === 'PLANNED' || !wasStop));
+            if (arrivedNow && wasStop !== 'ARRIVED' && wasStop !== 'HANDED_OVER' && wasStop !== 'DEPARTED') {
+              this.pushAlert({
+                key: `${k}:arrive`,
+                tone: stop.state === 'ARRIVED' ? 'act' : 'info',
+                title: stop.state === 'ARRIVED' ? `🚚 ${cdcName(trip.cdcId)} 차량 도착 — 하차하세요` : `🚚 ${cdcName(trip.cdcId)} 차량 도착 · 하차 인계 이미 끝`,
+                lines: [...ids, `박스 ${boxes}개${stop.arrivedAt ? ` · ${new Date(stop.arrivedAt).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', hour12: false })} 도착` : ''}`],
+                sticky: true,
+                view: 'scan',
+              });
+            }
+            if ((stop.state === 'HANDED_OVER' || stop.state === 'DEPARTED') && stop.handover && wasStop !== 'HANDED_OVER' && wasStop !== 'DEPARTED')
+              this.pushAlert({ key: `${k}:handover`, tone: stop.handover.result === 'MATCHED' ? 'ok' : 'warn', title: `하차 인계 끝 — 박스 ${stop.handover.result === 'MATCHED' ? '맞음' : '차이 있음'}`, lines: [...ids, `보냄 ${stop.handover.shippedBoxes ?? '?'} · 받음 ${stop.handover.receivedBoxes ?? '?'}`], view: 'scan' });
           }
           this.dcSeen.set(k, now);
           for (const id of stop.trfIds) this.dcTrips.set(id, { trip, stop });
@@ -1145,13 +1336,18 @@ export class Simulation {
           // 예정이 아직 없음(DC 출발 전) — 송장 라벨 없이
         }
       });
+      for (const p of got.values()) this.noteTrf(p.trfId, p);
+      for (const trip of trips) for (const x of trip.transfers ?? []) this.noteTrf(x.trfId, x);
       for (const a of next)
         a.trfs = a.trfIds
           .map((id) => got.get(id))
           .filter((p): p is InboundPromise => !!p)
           .map((p) => {
             // PDA 수령이 서버에서 확정되면 한 번 알림
-            if (this.dcPolledOnce && p.state === 'TIN_POSTED' && this.dcTrfState.get(p.trfId) && this.dcTrfState.get(p.trfId) !== 'TIN_POSTED' && a.mode !== 'VIRTUAL') this.log(`DC 입고 ${p.trfId} 수령 확정(재고 반영) — 다음은 검사·적치(PDA 다음 작업 받기)`);
+            if (this.dcPolledOnce && p.state === 'TIN_POSTED' && this.dcTrfState.get(p.trfId) && this.dcTrfState.get(p.trfId) !== 'TIN_POSTED') {
+              if (a.mode !== 'VIRTUAL') this.log(`DC 입고 ${p.trfId} 수령 확정(재고 반영) — 다음은 검사·적치(PDA 다음 작업 받기)`);
+              this.pushAlert({ key: `${p.trfId}:receipt`, tone: 'ok', title: '수령 확정 — 재고 반영', lines: [`송장 ${this.trfInfo(p.trfId).short}`, ...p.lines.map((l) => `${l.productName ?? this.productName(l.sku)} ${l.receivedQty ?? 0}/${l.expectedQty}`), '다음: 검사·적치(PDA 다음 작업 받기)'], view: 'scan' });
+            }
             this.dcTrfState.set(p.trfId, p.state);
             return p;
           })
@@ -1171,6 +1367,8 @@ export class Simulation {
       );
       next.splice(0, next.length, ...live);
       this.dcPolledOnce = true;
+      // 머리줄 "지금 하는 입고 일"·끝난 작업 알림이 바코드 탭을 안 열어도 돌게(같은 주기)
+      void this.refreshInboundScan();
       const changed = JSON.stringify(next) !== JSON.stringify(this.dcArrivals);
       this.dcArrivals = next;
       if (changed) this.dcArrivalsVersion++;

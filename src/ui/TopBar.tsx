@@ -29,6 +29,27 @@ export function TopBar() {
       <div className="brand">
         <span className="title">MFC 가상 현장</span>
         {view.rightView && <span className="sub">{VIEW_KO[view.rightView]}</span>}
+        {/* 바코드·입고 추적 탭이면 지금 PDA 가 받아 둔 입고 작업의 TRF(사용자 2026-11-27 "오른쪽 탭에 어떤 trf 작업인지 뜨게") */}
+        {/* 지금 하는 입고 일 — 와 있는 DC 차량(운행·송장) 또는 PDA 가 받아 둔 검사·적치(TRF). 어느 탭이든(사용자 2026-11-27 "도착 번호나 trf 번호가 안 떠서 내가 지금 무슨 작업 중인지 모르겠다") */}
+        {sim.real &&
+          (() => {
+            const now = sim.inboundScan.items.find((x) => !!x.task.assigneeId);
+            const truck = sim.dcArrivals.find((a) => a.stop === 'ARRIVED');
+            return (
+              <>
+                {truck && (
+                  <span className="chip inb-now-chip" title={`${truck.tripId} · ${truck.trfIds.join(', ')}`}>
+                    하차 · 운행 {truck.tripId} · {truck.trfIds.join(', ')}
+                  </span>
+                )}
+                {now && (
+                  <span className="chip inb-now-chip" title={now.task.taskId}>
+                    PDA {now.task.taskType === 'INSPECT' ? '품질검사' : now.task.taskType === 'PUTAWAY' ? '적치' : '격리 이동'} · {now.source.label} · {now.task.productName ?? now.task.sku}
+                  </span>
+                )}
+              </>
+            );
+          })()}
         <span className="chip" title={`센터 ${sim.centerId}`}>
           {sim.centerLabel}
         </span>

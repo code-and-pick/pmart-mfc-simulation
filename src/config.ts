@@ -518,20 +518,32 @@ export const INBOUND_ORDER = {
 
 /** DC(CDC) 센터 이름 [확정 — CDC 시뮬레이터 CLAUDE.md "칠곡 중앙물류센터(칠곡 DC)", 백엔드 센터 ID CDC01] */
 export const CDC_NAMES: Record<string, string> = { CDC01: '칠곡 DC' };
+
+/**
+ * DC 백오피스(cdc-backoffice) — 송장·Wave 화면 번호(T+6·W+4, cdc-outbound ADR-0070·0085)를 누르면 그 화면으로.
+ * 주소 = 사용자 2026-11-27 예시 링크 https://192.168.0.40:8447/c/CDC01/trf-wave/waves/WAVE-… [확정], 송장 경로는 pmart-clients cdc-backoffice trfWavePath(…/trf-wave/trf/{trfId}) [확정]
+ */
+export const CDC_BACKOFFICE = {
+  base: 'https://192.168.0.40:8447',
+  trfPath: (cdcId: string, trfId: string) => `/c/${cdcId}/trf-wave/trf/${encodeURIComponent(trfId)}`,
+  wavePath: (cdcId: string, waveId: string) => `/c/${cdcId}/trf-wave/waves/${encodeURIComponent(waveId)}`,
+} as const;
 export const cdcName = (id?: string | null): string => (id ? (CDC_NAMES[id] ?? id) : 'DC');
 
 /** 실서버 DC 차량 그림 [시뮬] — 이 센터 정차 도착 예정 몇 분 전부터 차량이 들어와 서 있나(서버 기록과 무관한 그림) */
 export const REAL_DC = {
   showBeforeMin: 10,
   /** DC 운행 다시 읽기 간격(ms) — DC 시뮬레이터 "MFC 도착 보내기"를 이만큼 안에 알아챔 [시뮬] */
-  pollMs: 8000,
+  pollMs: 5000,
   /**
-   * 승인된 입고 신청(공급 요청)은 DC 가 TRF 로 받아 보낸다 — 백엔드 R-27 전 임시 다리(DC 시뮬레이터 443ba9e, 설정 "MFC 입고 신청 받기")가 인수.
-   * 켜면 승인 때 서버가 만드는 MFC 입고 예정(RCV-SR-…)은 받지 않는다(화면·수령 모두 막음 — 받으면 DC 입고와 재고 두 번) [시뮬]
+   * 승인된 입고 신청(공급 요청)은 DC 가 TRF 로 받아 보낸다 — 2026-11-27 부터 서버(mfc-inbound 0.23.0 R-27)가 직접 이관(`transfers[]`), DC 시뮬레이터 임시 다리는 지움(aa404ed).
+   * 켜 두면 그 전 승인이 만든 MFC 입고 예정(RCV-SR-…)은 받지 않는다(화면·수령 모두 막음 — 받으면 DC 입고와 재고 두 번) [시뮬]
    */
   supplyViaDc: true,
   /** 정차 출발(DEPARTED) 뒤에도 PDA 수령 전이면 도착 알림·바코드를 이만큼(도착 시각부터) 남긴다 [시뮬] */
   keepDepartedHours: 6,
+  /** 왼쪽 "칠곡 DC 로 보낸 발주"에 승인 뒤 며칠까지 보이나(APPROVED 는 끝 상태라 계속 쌓임) [시뮬] */
+  supplyShowDays: 3,
   /** DC 입고 수령 뒤 재고 반영(APPLIED/REJECTED)을 기다리는 횟수·간격 — 202 만으로 받음이라 하지 않는다 [시뮬] */
   receiptWaitTries: 8,
   receiptWaitMs: 1500,
@@ -549,6 +561,8 @@ export const INBOUND_TRACK = {
   refreshMs: 8000,
   maxStockSkus: 80,
   keep: 30,
+  /** 바코드 탭 "방금 끝난 작업"(✅)을 남기는 시간(ms) [시뮬] */
+  doneKeepMs: 30 * 60_000,
 } as const;
 
 export const TEST_INBOUND = {

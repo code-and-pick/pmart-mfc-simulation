@@ -2,7 +2,6 @@
 // - 인쇄용 전체 라벨: 백엔드가 만든 카트·위치 라벨(개발 서버 /labels/ — 읽기만)
 // - 카트 40대(Code128, 값 = 위치 코드 CRT-A-01~40, 온도 구분 없음 — 백엔드 0cbfecaa)
 // - 실서버: 고른 주문 PICK 의 지시 칸(Code128)·상품(EAN-13, GET /skus/{sku} 의 barcodes)·LOT 라벨(QR `LOT:{lotId}`), PACK 의 포장 위치
-import { cdcName } from '../config';
 import { OrderNo } from './OrderNo';
 import { useEffect } from 'react';
 import { useApp, useView } from '../app/context';
@@ -11,6 +10,7 @@ import { BACKEND_FACTS } from '../config';
 import type { TaskLine, TaskPick } from '../domain/contract';
 import type { RealTask } from '../sim/realBoard';
 import { Barcode } from './Barcode';
+import { InboundBoard } from './InboundScan';
 import { OrderTimeline } from './OrderTimeline';
 import { TASK_STATE_KO } from './RealPanel';
 import { useScanFocus } from './scanFocus';
@@ -276,65 +276,8 @@ export function ScanBoard() {
         PDA 앱 입력칸의 카메라로 이 화면을 찍거나, PC 브라우저면 입력칸에 바코드 밑 글자를 치고 Enter. QR·바코드는 값이 같습니다. 위치 코드를 누르면 3D 에서 그 칸, "크게"는 화면 가득.
       </Why>
 
-      {/* DC 차량 하차·수령(PDA) — 와 있는 차량(정차 출발 전). PDA 순서: 하차 = 박스(LPN) → 인계, 수령 = 송장 TRF → 박스 확인 → 상품 수량.
-          인계 뒤(HANDED_OVER)에도 수령에서 송장·박스를 다시 찍으므로 남긴다. 실물 라벨이 없어 화면을 찍는다(사용자 2026-11-26) */}
-      {sim.dcArrivals
-        .filter((a) => a.mode !== 'VIRTUAL')
-        .map((a) => {
-          const done = a.stop !== 'ARRIVED' && !!a.trfs?.length && a.trfs.every((t) => t.state === 'TIN_POSTED' || t.state === 'CLOSED');
-          // 수령까지 끝난 차량 — 찍을 것 없음. 숨기면 "아무것도 안 뜬다"로 보여(사용자 2026-11-26) 정차 출발 전까지 한 줄로 남긴다
-          if (done)
-            return (
-              <section key={a.key} className="scan-sec">
-                <div className="scan-sec-h">
-                  <b>{cdcName(a.cdcId)} 차량 · 수령 끝</b>
-                </div>
-                <div className="note">송장 {a.trfIds.join(', ')} — 하차 인계·수령이 서버에 끝나 찍을 바코드가 없습니다. PDA 가 아직 송장 스캔 화면이면 뒤로 갔다 다시 들어가세요. 차량은 DC 쪽 정차 출발 때 떠납니다.</div>
-              </section>
-            );
-          return (
-          <section key={a.key} className="scan-sec">
-            <div className="scan-sec-h">
-              <b>
-                {cdcName(a.cdcId)} 차량 · {a.stop === 'ARRIVED' ? 'PDA 하차' : 'PDA 수령'}
-              </b>
-              <span>{a.stop === 'ARRIVED' ? '박스를 찍어 인계' : '인계 끝 — 입고 수령으로'}</span>
-            </div>
-            <div className="sub">{a.stop === 'ARRIVED' ? '① 하차' : '하차(끝)'} · 박스 {a.boxes.length}개</div>
-            <div className="bc-grid">
-              {a.boxes.map((b) => (
-                <Barcode key={b.lpn} value={b.lpn} caption={`박스 ${b.lpn}`} height={52} />
-              ))}
-            </div>
-            {a.trfIds.map((id) => {
-              const t = a.trfs?.find((x) => x.trfId === id);
-              return (
-                <div className="scan-stop" key={id}>
-                  <div className="sub">② 수령 · 송장 {id}</div>
-                  {t ? (
-                    <>
-                      <div className="bc-grid">
-                        <Barcode value={t.label} caption={`송장 ${id} (수령 첫 단계)`} height={52} />
-                      </div>
-                      <div className="sub">③ 박스 확인 — 위 박스를 다시 · ④ 상품 수량</div>
-                      <div className="bc-grid">
-                        {t.products.flatMap((x) =>
-                          x.barcodes.length
-                            ? x.barcodes.map((v) => <Barcode key={`${x.sku}:${v}`} value={v} kind={kindOf(v)} caption={`${x.name} × ${x.expected}`} height={44} />)
-                            : [<div key={x.sku} className="note warn">{x.name} 바코드 없음(입고 예정 품목)</div>],
-                        )}
-                      </div>
-                      {!t.canReceipt && <div className="note warn">이 입고 예정은 DC 출발 기록·품목이 아직 없어 수령(확정)이 서버에서 막힙니다(R-49). 송장·박스 확인까지는 됩니다.</div>}
-                    </>
-                  ) : (
-                    <div className="note">입고 예정 읽는 중… (없으면 DC 출발 전이라 송장이 아직 없음)</div>
-                  )}
-                </div>
-              );
-            })}
-          </section>
-          );
-        })}
+      {/* 입고 — 입고 건(송장 TRF)마다 카드: 무슨 건 → 단계 → 지금 할 일 → 지금 찍을 바코드(PDA 순서) */}
+      {real && <InboundBoard />}
 
       {/* ① 고른 주문 — 작업마다 칸 하나 */}
       {/* 주문을 안 고르면 카트 QR 만 남아 "카트 바코드밖에 없다"로 보임(사용자 2026-11-20) — 안내를 크게, 누르면 실제 주문 탭 */}

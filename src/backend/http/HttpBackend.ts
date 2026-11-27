@@ -250,11 +250,12 @@ export class HttpBackend implements FulfillmentPort {
 
   /** mfc-inventory getCenterStock — SKU 하나의 위치·상태별 수량(그 센터 운영자). SKU 마다 한 번씩만 부른다(SIM-5) */
   /** mfc-inventory listStockUnits(0.33.0, R-15) — 센터 전체를 nextCursor 가 null 일 때까지(최대 maxPages 쪽) */
-  async listAllStockUnits(mfcId: string, maxPages: number): Promise<StockUnitRow[]> {
+  async listAllStockUnits(mfcId: string, maxPages: number, locationPrefix?: string): Promise<StockUnitRow[]> {
     const out: StockUnitRow[] = [];
     let cursor: string | null = null;
     for (let p = 0; p < maxPages; p++) {
       const q = new URLSearchParams({ size: '200' });
+      if (locationPrefix) q.set('locationPrefix', locationPrefix);
       if (cursor) q.set('cursor', cursor);
       const r: { items?: StockUnitRow[]; nextCursor?: string | null } = await this.request('GET', `/mfcs/${enc(mfcId)}/stock-units?${q}`);
       out.push(...(r.items ?? []));
@@ -451,6 +452,11 @@ export class HttpBackend implements FulfillmentPort {
   /** createSupplyRequest — 발주(줄 1~200) → SUBMITTED. 같은 센터·SKU 미해결 요청이 있으면 409 DUPLICATE_OPEN_REQUEST */
   createSupplyRequest(body: SupplyRequestBody, idempotencyKey: string): Promise<SupplyRequest> {
     return this.request('POST', '/supply-requests', { body, idempotencyKey });
+  }
+
+  /** getSupplyRequest — 발주 한 건(0.23.0 transfers 포함) */
+  getSupplyRequest(id: string): Promise<SupplyRequest> {
+    return this.request('GET', `/supply-requests/${enc(id)}`);
   }
 
   /** listSupplyRequests — 그 센터 발주 목록(state 비우면 끝나지 않은 것). 한 쪽(≤200)만 */

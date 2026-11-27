@@ -4,6 +4,7 @@
 import { useState } from 'react';
 import { useApp, useTick, useView } from '../app/context';
 import { cdcName } from '../config';
+import { TrfRef } from './TrfRef';
 
 const TEMP_KO = { AMBIENT: '상온', CHILLED: '냉장', FROZEN: '냉동' } as const;
 
@@ -40,6 +41,16 @@ export function DcArrivals() {
             <span>
               {TEMP_KO[a.tempClass]} · 박스 {a.boxes.length}개{a.driver ? ` · ${a.driver}` : ''}
             </span>
+          </div>
+          {/* 어느 운행·송장인지(사용자 2026-11-27 "도착 번호나 trf 번호가 안 떠서 내가 지금 무슨 작업 중인지 모르겠다") */}
+          <div className="dca-id">
+            운행 <b>{a.tripId}</b> · 정차 {a.seq}
+            {a.trfIds.map((id) => (
+              <div key={id}>
+                송장 <b><TrfRef trfId={id} cdcId={a.cdcId} /></b>
+                {a.trfs?.find((t) => t.trfId === id)?.products.length ? ` — ${a.trfs.find((t) => t.trfId === id)!.products.map((p) => `${p.name} ${p.expected}`).join(', ')}` : ''}
+              </div>
+            ))}
           </div>
           {a.stop !== 'ARRIVED' && (
             <div className="dca-s">

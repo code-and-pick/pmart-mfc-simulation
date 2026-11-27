@@ -2,7 +2,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PARAMS, REAL_DC } from '../src/config';
 import type { CenterStock, InboundPromise, InboundTask } from '../src/domain/contract';
-import { dcArrivalsOf, packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
+import { dcArrivalsOf, inboundJobs, inboundScanItems, inboundSourceOf, packageLines, realLine, stageOf, sumLines, tripInfo } from '../src/sim/inboundTrack';
 import type { TmsTrip } from '../src/domain/contract';
 import { Simulation } from '../src/sim/simulation';
 
@@ -164,5 +164,79 @@ describe('입고 신청 → DC TRF 번호 후보(REAL_DC.supplyTrfIds)', () => {
   it('64자로 자른다', () => {
     const id = `SR-${'a'.repeat(80)}`;
     for (const t of REAL_DC.supplyTrfIds(id)) expect(t.length).toBe(64);
+  });
+});
+
+describe('DC 로 보낸 발주 한 줄의 단계(0.23.0 R-27 transfers)', () => {
+  const sim = new Simulation({ ...DEFAULT_PARAMS });
+  const t = { trfId: 'TRF-SR-x', temperatureZone: 'AMBIENT' as const, cdcId: 'CDC01', dueAt: '2026-11-28T01:00:00Z', lines: [{ sku: 'B-1', qty: 1 }] };
+  it('보내는 중 · 다시 시도 중(실패로 단정 안 함) · DC 가 받음(운행 전)', () => {
+    expect(sim.dcTransferStage({ ...t, sentAt: null })).toBe('DC 로 보내는 중');
+    expect(sim.dcTransferStage({ ...t, sentAt: null, error: 'UNKNOWN_RESULT: x' })).toBe('DC 로 보내는 중 — 서버가 다시 시도 중(지난 시도: 결과 모름)');
+    expect(sim.dcTransferStage({ ...t, sentAt: '2026-11-27T00:03:31Z' })).toBe('DC 가 받음 — 피킹·배차 기다림');
+  });
+});
+
+describe('바코드 탭 입고 작업 — 놓을 칸(inboundScanItems)', () => {
+  const base = { mfcId: 'M', receiptId: 'R', lotId: 'L', locationCode: 'RCV-A-02', state: 'READY' as const, version: 1 };
+  it('서버 추천이 먼저, 없으면 같은 상품이 놓인 칸(입고·격리 칸 빼고, 보충재고 칸 먼저·많은 순), 받아 둔 작업이 위, 끝난 양은 뺌', () => {
+    const items = inboundScanItems(
+      [
+        { ...base, taskId: 'P1', taskType: 'PUTAWAY', sku: 'S1', plannedQty: 2, doneQty: 0, suggestedPlacements: [{ locationCode: 'A-H1-01-1-01', qty: 2 }] },
+        { ...base, taskId: 'P2', taskType: 'PUTAWAY', sku: 'S2', plannedQty: 2, doneQty: 1, assigneeId: 'OP-x', suggestedPlacements: [] },
+        { ...base, taskId: 'I1', taskType: 'INSPECT', sku: 'S3', plannedQty: 5, doneQty: 5 },
+      ],
+      [
+        { sku: 'S2', locationCode: 'RCV-A-02', qty: 1 },
+        { sku: 'S2', locationCode: 'A-R2-01-1-01', qty: 2 },
+        { sku: 'S2', locationCode: 'A-H2-07-1-01', qty: 12 },
+      ],
+    );
+    expect(items.map((x) => [x.task.taskId, x.remain, x.dest.map((d) => `${d.code}:${d.why}`)])).toEqual([
+      ['P2', 1, ['A-R2-01-1-01:SAME_SKU']],
+      ['P1', 2, ['A-H1-01-1-01:SUGGESTED']],
+    ]);
+  });
+});
+
+describe('입고 작업의 입고 건(탭) — inboundSourceOf', () => {
+  it('DC 수령은 TRF 번호, 모르면 확인 중, 그 밖은 수령 종류', () => {
+    const trf = (rid: string) => (rid === 'RCV-TRF-a' ? 'TRF-SIM-MWXELMKQ' : undefined);
+    expect(inboundSourceOf('RCV-TRF-a', trf)).toEqual({ key: 'TRF-SIM-MWXELMKQ', label: 'TRF-SIM-MWXELMKQ', trfId: 'TRF-SIM-MWXELMKQ' });
+    expect(inboundSourceOf('RCV-TRF-bbbbbbbb', trf).label).toBe('DC 입고(TRF 확인 중) bbbbbb');
+    expect(inboundSourceOf('RCV-INIT-01953d40', trf).label).toBe('초기 입고 953d40');
+  });
+});
+
+describe('서버 추천이 빈 적치 — 피킹 칸 대신 보충재고 칸', () => {
+  const t = { taskId: 'P', taskType: 'PUTAWAY' as const, mfcId: 'M', receiptId: 'R', lotId: 'L', locationCode: 'RCV-A-02', state: 'READY' as const, version: 1, sku: 'B-7', plannedQty: 2, doneQty: 0, storageType: 'AMBIENT' as const, suggestedPlacements: [] };
+  it('그 상품 보충재고 칸이 없으면 같은 온도대 빈 보충재고 칸(바닥 팔레트 R2 먼저), 다른 상품이 있는 칸·다른 온도대는 뺌, 피킹 칸(꽉 찼던 A-H1)은 안 냄', () => {
+    const [it] = inboundScanItems([t], [{ sku: 'B-7', locationCode: 'A-H1-03-5-01', qty: 12 }, { sku: 'X', locationCode: 'A-R2-01-1-01', qty: 3 }], undefined, ['A-R1-01-1-01', 'A-R2-01-1-01', 'A-R2-02-1-01', 'C-R1-01-1-01']);
+    expect(it.dest.map((d) => `${d.code}:${d.why}`)).toEqual(['A-R2-02-1-01:EMPTY_RESERVE', 'A-R1-01-1-01:EMPTY_RESERVE']);
+  });
+  it('보충재고 칸이 하나도 없을 때만 피킹 칸(꽉 찼을 수 있음)', () => {
+    const [it] = inboundScanItems([t], [{ sku: 'B-7', locationCode: 'A-H1-03-5-01', qty: 12 }], undefined, []);
+    expect(it.dest.map((d) => `${d.code}:${d.why}`)).toEqual(['A-H1-03-5-01:PICK_FACE']);
+  });
+});
+
+describe('바코드 탭 입고 건(inboundJobs) — 송장마다 한 카드·단계', () => {
+  const arr = (stop: 'ARRIVED' | 'HANDED_OVER', trfState: string) => ({
+    key: 'TO-1:1', tripId: 'TO-1', seq: 1, cdcId: 'CDC01', tempClass: 'AMBIENT' as const, stop, trfIds: ['TRF-A'], boxes: [{ lpn: 'L1', trfId: 'TRF-A' }], arrivedAtMs: 1, mode: null,
+    trfs: [{ trfId: 'TRF-A', label: 'TRF:TRF-A:2', state: trfState, canReceipt: true, products: [] }],
+  });
+  const task = (id: string, trf: string, assignee?: string) => ({
+    task: { taskId: id, taskType: 'PUTAWAY' as const, mfcId: 'M', receiptId: 'R', sku: 'S', lotId: 'L', locationCode: 'RCV-A-02', plannedQty: 1, doneQty: 0, state: 'READY' as const, version: 1, assigneeId: assignee },
+    remain: 1, dest: [], source: { key: trf, label: trf, trfId: trf },
+  });
+  it('도착 = 하차, 인계 뒤 수령 전 = 수령, 수령 뒤 작업 있으면 검사·적치, PDA 가 받은 건이 첫 탭', () => {
+    expect(inboundJobs([arr('ARRIVED', 'EXPECTED')], [], [])[0].stage).toBe('UNLOAD');
+    expect(inboundJobs([arr('HANDED_OVER', 'RECEIVING')], [], [])[0].stage).toBe('RECEIVE');
+    expect(inboundJobs([arr('HANDED_OVER', 'TIN_POSTED')], [task('T1', 'TRF-A')], [])[0].stage).toBe('TASKS');
+    const jobs = inboundJobs([arr('ARRIVED', 'EXPECTED')], [task('T2', 'TRF-B', 'OP-1')], []);
+    expect(jobs.map((j) => [j.key, j.stage, j.pdaBusy])).toEqual([
+      ['TRF-B', 'TASKS', true],
+      ['TRF-A', 'UNLOAD', false],
+    ]);
   });
 });

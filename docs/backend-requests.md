@@ -51,6 +51,14 @@
 
 ## 열린 요청
 
+### R-52 MFC 가 읽는 응답에 송장·Wave 화면 번호(T+6·W+4) — 중간 (2026-11-27, 시뮬레이터 → mfc-inbound·transport-execution)
+- 사용자 2026-11-27 "TRF 식별값이랑 WAVE 식별값 백오피스에서 짧게 정했으니까 T286575 W6307 이렇게 뜨게 해" → "trf랑 wave 식별값 말고 짧은 정해진 번호로 나오게 하라니까".
+- 지금: 화면 번호는 cdc-outbound(`trfNumber`·`waveNumber`, ADR-0070·0085)·transport-planning(`TransportRequest.trfNumber`)에만 있고 둘 다 `/cdcs/{cdcId}/…` 라 MFC 계정(claude-mfc-sup·wrk)은 403(읽어 확인). MFC 시뮬레이터·MFC 백오피스·MFC PDA 는 긴 ID(`TRF-SR-d34ddcb6-…`)만 보임.
+- 부탁(추가만, 기존 필드 그대로):
+  1. mfc-inbound `InboundPromise` 에 `trfNumber`·`waveId`·`waveNumber`(이관 인수·출발 사건에서 사본), `SupplyRequest.transfers[]` 에 `trfNumber`(인수 응답에서).
+  2. transport-execution `GET /mfcs/{mfcId}/inbound-trips` 의 `transfers[]` 에 `trfNumber`(운행에 이미 trfId 가 있으니 사본).
+- 시뮬레이터는 이미 받을 준비: 필드가 오면 `T286575 W6307` 로 보이고 누르면 DC 백오피스(`https://192.168.0.40:8447/c/CDC01/trf-wave/trf/{trfId}`·`…/waves/{waveId}`). 그 전엔 "TRF …끝6자리".
+
 ### R-51 입고 신청 승인 → DC 이관을 서버가 직접(0.23.0 ADR-0091) LAN 배포·보급 DC 켜기 — 높음 (2026-11-27, 시뮬레이터 → mfc-inbound)
 - **배경**: 사용자 2026-11-27 "입고발주 넣으면 … dc에서 trf 신청받은 후 … 입고 검수까지 … 연동이 되고 있는지 다시 제대로 확인해" → "찾은 거 문제 없게 바꿔". DC 시뮬레이터와 LAN 에서 처음부터 끝까지 돌림: 공급 요청 `SR-4987104b-3ba5-4c66-9ea0-feb62bf8a9ca`(부산진구, B-00000006·B-00000007 각 2) 승인 → DC 시뮬 임시 다리가 `TRF-SR-SR-4987…` 인수 → 피킹·분류·검품·상차·출발 → 운행 `TO-20261201-001` 정차 1 ARRIVED(08:18:49 KST). MFC 입고 예정은 EXPECTED·departureId·줄 2·박스 2로 받을 수 있는 상태.
 - **문제(읽어 확인)**: LAN 은 아직 0.22.0 동작 — 승인이 initial_stock_load `RCV-SR-ff6ea56d-4441-4ccc-a723-766204fadaf6`(EXPECTED, 2·2)도 만든다. 같은 물건이 DC 이관 입고 예정에도 있어서
